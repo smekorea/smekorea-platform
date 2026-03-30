@@ -240,31 +240,19 @@
     window.location.href = 'input.html?' + params.toString();
   }
 
-  function jsonp(url, params) {
-    return new Promise(function(resolve) {
-      var cbName = 'cb_' + Date.now();
-      params.callback = cbName;
-      var script = document.createElement('script');
-      script.src = url + '?' + new URLSearchParams(params).toString();
-      window[cbName] = function() {
-        delete window[cbName];
-        if (document.body.contains(script)) document.body.removeChild(script);
-        resolve();
-      };
-      script.onerror = function() {
-        delete window[cbName];
-        if (document.body.contains(script)) document.body.removeChild(script);
-        resolve();
-      };
-      document.body.appendChild(script);
-      setTimeout(resolve, 3000);
+  async function gasPost(data) {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(data)
     });
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   async function markComplete(shipDate, customer, manager) {
     try {
-      await jsonp(SCRIPT_URL, { action: 'complete', shipDate, customer, manager });
-      await new Promise(r => setTimeout(r, 500));
+      await gasPost({ action: 'complete', shipDate, customer, manager });
       loadData();
     } catch(e) { console.error(e); }
   }
@@ -307,23 +295,8 @@
 
   async function loadData() {
     try {
-      const rows = await new Promise(function(resolve, reject) {
-        var cbName = 'cb_load_' + Date.now();
-        var script = document.createElement('script');
-        script.src = SCRIPT_URL + '?callback=' + cbName + '&t=' + Date.now();
-        window[cbName] = function(data) {
-          delete window[cbName];
-          if (document.body.contains(script)) document.body.removeChild(script);
-          resolve(data);
-        };
-        script.onerror = function() {
-          delete window[cbName];
-          if (document.body.contains(script)) document.body.removeChild(script);
-          reject(new Error('load failed'));
-        };
-        document.body.appendChild(script);
-        setTimeout(function() { resolve([]); }, 5000);
-      });
+      const res = await fetch(SCRIPT_URL + '?t=' + Date.now());
+      const rows = await res.json();
       const dataRows = rows.slice(1).map(r => { r[1] = normalizeDate(r[1]); return r; });
 
       const todayStr = getDateStr(0), tomorrowStr = getDateStr(1);
