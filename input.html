@@ -316,6 +316,27 @@
     window.location.href = 'display.html';
   }
 
+  function jsonp(url, params) {
+    return new Promise(function(resolve) {
+      var cbName = 'cb_' + Date.now();
+      params.callback = cbName;
+      var script = document.createElement('script');
+      script.src = url + '?' + new URLSearchParams(params).toString();
+      window[cbName] = function() {
+        delete window[cbName];
+        document.body.removeChild(script);
+        resolve();
+      };
+      script.onerror = function() {
+        delete window[cbName];
+        document.body.removeChild(script);
+        resolve();
+      };
+      document.body.appendChild(script);
+      setTimeout(resolve, 3000);
+    });
+  }
+
   function showToast(msg, isError) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -351,9 +372,7 @@
         ? { action: 'update', origDate: origData.shipDate, origCustomer: origData.customer, origManager: origData.manager, shipDate, customer, note, inputBy: dept.value, manager, arrivalTime, packDone }
         : { shipDate, customer, note, inputBy: dept.value, manager, arrivalTime, packDone };
 
-      const url = SCRIPT_URL + '?' + new URLSearchParams(body).toString();
-      await fetch(url, { mode: 'no-cors' });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await jsonp(SCRIPT_URL, body);
 
       if (editMode) {
         showToast('✓ 수정이 완료되었습니다');
