@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMEKOREA 출하 현황판</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060d1a;
+    --surface: #0d1829;
+    --surface2: #111f35;
+    --border: #1a2d4a;
+    --accent: #00c2ff;
+    --accent2: #00ff9d;
+    --warn: #ffb800;
+    --text: #e2e8f0;
+    --muted: #4a6080;
+    --today: rgba(0,194,255,0.08);
+    --tomorrow: rgba(0,255,157,0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse at 10% 0%, rgba(0,194,255,0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at 90% 100%, rgba(0,255,157,0.05) 0%, transparent 50%);
+  }
+
+  /* 상단 헤더 */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 40px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,24,41,0.8);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #0066aa);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 2px;
+    margin-top: 2px;
+  }
+
+  .clock-area {
+    text-align: right;
+  }
+
+  .clock {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 32px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    line-height: 1;
+  }
+
+  .date-str {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .refresh-badge {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* 메인 콘텐츠 */
+  .main {
+    flex: 1;
+    padding: 32px 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .today-dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .tomorrow-dot { background: var(--accent2); box-shadow: 0 0 10px var(--accent2); }
+
+  .section-label {
+    font-size: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .today-title { color: var(--accent); }
+  .tomorrow-title { color: var(--accent2); }
+
+  .count-badge {
+    margin-left: auto;
+    font-size: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  /* 카드 */
+  .ship-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: fadeIn 0.4s ease;
+    transition: transform 0.2s;
+  }
+
+  .ship-card:hover { transform: translateY(-2px); }
+
+  .ship-card.today-card {
+    border-left: 3px solid var(--accent);
+    background: var(--today);
+  }
+
+  .ship-card.tomorrow-card {
+    border-left: 3px solid var(--accent2);
+    background: var(--tomorrow);
+  }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .customer-name {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+
+  .dept-tag {
+    font-size: 11px;
+    font-family: 'Share Tech Mono', monospace;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .dept-tag.material {
+    background: rgba(0,194,255,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(0,194,255,0.3);
+  }
+
+  .dept-tag.dev {
+    background: rgba(0,255,157,0.12);
+    color: var(--accent2);
+    border: 1px solid rgba(0,255,157,0.3);
+  }
+
+  .note-text {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.5;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+
+  .note-text.has-note { color: var(--warn); }
+
+  .reg-time {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* 빈 상태 */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    gap: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+  }
+
+  .empty-icon { font-size: 36px; opacity: 0.4; }
+  .empty-text { font-size: 14px; }
+
+  /* 로딩 */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  /* 하단 상태바 */
+  .statusbar {
+    padding: 12px 40px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-badge">SME<br>KOR</div>
+    <div>
+      <div class="logo-text">SMEKOREA 출하 현황판</div>
+      <div class="logo-sub">SHIPPING DISPLAY SYSTEM</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:24px;">
+    <div class="refresh-badge" id="refreshCountdown">다음 갱신: 30초</div>
+    <div class="clock-area">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="date-str" id="dateStr">----. --. --.</div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- 오늘 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-dot today-dot"></div>
+      <div>
+        <div class="section-label">TODAY</div>
+        <div class="section-title today-title">오늘 출하</div>
+      </div>
+      <div class="count-badge" id="todayCount">0건</div>
+    </div>
+    <div id="todayList">
+      <div class="loading"><div class="spinner"></div> 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 내일 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-dot tomorrow-dot"></div>
+      <div>
+        <div class="section-label">TOMORROW</div>
+        <div class="section-title tomorrow-title">내일 출하</div>
+      </div>
+      <div class="count-badge" id="tomorrowCount">0건</div>
+    </div>
+    <div id="tomorrowList">
+      <div class="loading"><div class="spinner"></div> 불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <div><span class="status-dot"></span>실시간 연동 중 · Google Sheets</div>
+  <div id="lastUpdate">마지막 갱신: -</div>
+  <div>SMEKOREA Platform v1.0</div>
+</div>
+
+<script>
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwilhcycOmd9lTpfegX8yuTh2Sl9qQiuW5ZHa-Xo7EAZBZiPzxxUrZ6prGXrKZP40tX/exec';
+
+  // 시계
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+
+    const days = ['일','월','화','수','목','금','토'];
+    const y = now.getFullYear();
+    const mo = String(now.getMonth()+1).padStart(2,'0');
+    const d = String(now.getDate()).padStart(2,'0');
+    const day = days[now.getDay()];
+    document.getElementById('dateStr').textContent = `${y}. ${mo}. ${d}. (${day})`;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // 날짜 문자열
+  function getDateStr(offset) {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().split('T')[0];
+  }
+
+  function formatDate(str) {
+    if (!str) return '';
+    const parts = str.split('-');
+    if (parts.length === 3) return `${parts[0]}.${parts[1]}.${parts[2]}`;
+    return str;
+  }
+
+  function renderCard(row, type) {
+    const [regTime, shipDate, customer, note, inputBy] = row;
+    const deptClass = inputBy === '자재구매' ? 'material' : 'dev';
+    const hasNote = note && note.trim() !== '';
+    return `
+      <div class="ship-card ${type}-card">
+        <div class="card-top">
+          <div class="customer-name">${customer || '-'}</div>
+          <div class="dept-tag ${deptClass}">${inputBy || '-'}</div>
+        </div>
+        ${hasNote ? `<div class="note-text has-note">⚠ ${note}</div>` : `<div class="note-text">특이사항 없음</div>`}
+        <div class="reg-time">등록: ${regTime || '-'}</div>
+      </div>
+    `;
+  }
+
+  function renderEmpty(msg) {
+    return `<div class="empty-state">
+      <div class="empty-icon">📦</div>
+      <div class="empty-text">${msg}</div>
+    </div>`;
+  }
+
+  async function loadData() {
+    try {
+      const res = await fetch(SCRIPT_URL + '?t=' + Date.now());
+      const rows = await res.json();
+
+      const today = getDateStr(0);
+      const tomorrow = getDateStr(1);
+
+      const dataRows = rows.slice(1); // 헤더 제외
+
+      const todayRows = dataRows.filter(r => r[1] === today);
+      const tomorrowRows = dataRows.filter(r => r[1] === tomorrow);
+
+      document.getElementById('todayCount').textContent = todayRows.length + '건';
+      document.getElementById('tomorrowCount').textContent = tomorrowRows.length + '건';
+
+      document.getElementById('todayList').innerHTML =
+        todayRows.length > 0
+          ? todayRows.map(r => renderCard(r, 'today')).join('')
+          : renderEmpty('오늘 출하 일정이 없습니다');
+
+      document.getElementById('tomorrowList').innerHTML =
+        tomorrowRows.length > 0
+          ? tomorrowRows.map(r => renderCard(r, 'tomorrow')).join('')
+          : renderEmpty('내일 출하 일정이 없습니다');
+
+      const now = new Date();
+      document.getElementById('lastUpdate').textContent =
+        `마지막 갱신: ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+    } catch (err) {
+      document.getElementById('todayList').innerHTML = renderEmpty('데이터 로딩 실패 — 네트워크 확인');
+      document.getElementById('tomorrowList').innerHTML = renderEmpty('데이터 로딩 실패 — 네트워크 확인');
+    }
+  }
+
+  // 30초 자동 갱신
+  let countdown = 30;
+  loadData();
+
+  setInterval(() => {
+    countdown--;
+    document.getElementById('refreshCountdown').textContent = `다음 갱신: ${countdown}초`;
+    if (countdown <= 0) {
+      countdown = 30;
+      loadData();
+    }
+  }, 1000);
+</script>
+</body>
+</html>
