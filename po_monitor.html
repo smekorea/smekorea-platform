@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMEKOREA — PO Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f0f4f9; --surface:#fff; --border:#d0daea;
+    --accent:#c8001e; --accent2:#1a56db; --accent3:#0e9f6e;
+    --amber:#d97706; --purple:#7c3aed;
+    --text:#1a2233; --muted:#7a8baa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:'Noto Sans KR',sans-serif;min-height:100vh;
+    background-image:
+      radial-gradient(ellipse at 0% 0%,rgba(200,0,30,0.05) 0%,transparent 50%),
+      radial-gradient(ellipse at 100% 100%,rgba(26,86,219,0.04) 0%,transparent 50%);
+  }
+
+  /* ── 탑바 ── */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:11px 28px;background:var(--surface);
+    border-bottom:2px solid var(--border);
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    position:sticky;top:0;z-index:50;
+  }
+  .logo-wrap{display:flex;align-items:center;gap:10px;}
+  .logo-box{
+    width:38px;height:38px;background:var(--accent);border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Share Tech Mono',monospace;font-size:13px;
+    font-weight:900;color:#fff;letter-spacing:-1px;
+    box-shadow:0 3px 10px rgba(200,0,30,0.3);
+  }
+  .co-name{font-size:14px;font-weight:700;}
+  .co-sub{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;}
+  .topbar-right{display:flex;align-items:center;gap:10px;}
+  .live-badge{
+    display:flex;align-items:center;gap:6px;
+    background:rgba(14,159,110,0.08);border:1px solid rgba(14,159,110,0.25);
+    border-radius:20px;padding:5px 12px;
+    font-size:10px;font-family:'Share Tech Mono',monospace;
+    color:var(--accent3);font-weight:700;letter-spacing:1px;
+  }
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--accent3);animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  .back-btn{
+    display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;
+    background:var(--surface);border:1px solid var(--border);
+    text-decoration:none;color:var(--muted);
+    font-size:11px;font-family:'Share Tech Mono',monospace;transition:all .18s;
+  }
+  .back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .refresh-btn{
+    display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;
+    background:var(--surface);border:1px solid var(--border);
+    color:var(--muted);font-size:11px;font-family:'Share Tech Mono',monospace;
+    cursor:pointer;transition:all .18s;
+  }
+  .refresh-btn:hover{border-color:var(--accent3);color:var(--accent3);}
+
+  /* ── 법인 탭 ── */
+  .tab-bar{
+    display:flex;gap:0;padding:12px 28px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+  }
+  .tab-btn{
+    padding:8px 20px;border:none;border-radius:8px;
+    background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;
+    font-size:13px;font-weight:500;color:var(--muted);transition:all .18s;
+  }
+  .tab-btn.active{background:var(--text);color:#fff;font-weight:700;}
+  .tab-btn.gsmein.active{background:var(--accent);}
+  .tab-btn.smeglobal.active{background:var(--accent2);}
+  .tab-btn.smecn.active{background:var(--accent3);}
+
+  /* ── 컨텐츠 ── */
+  .content{padding:20px 28px;display:flex;flex-direction:column;gap:20px;}
+
+  /* ── 섹션 공통 ── */
+  .sec{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  .sec-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;border-bottom:1px solid var(--border);
+    background:linear-gradient(90deg,#f8fafc,var(--surface));
+  }
+  .sec-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .sec-title .icon{font-size:16px;}
+  .sec-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .sec-body{padding:16px 20px;}
+
+  /* ── 책임구분 KPI ── */
+  .resp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+  .resp-card{
+    border-radius:12px;padding:16px;text-align:center;
+    border:1.5px solid;cursor:pointer;transition:transform .15s,box-shadow .15s;
+  }
+  .resp-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.1);}
+  .resp-card .r-icon{font-size:24px;margin-bottom:6px;}
+  .resp-card .r-count{font-size:28px;font-weight:900;font-family:'Share Tech Mono',monospace;line-height:1;}
+  .resp-card .r-label{font-size:10px;font-weight:700;letter-spacing:0.5px;margin-top:4px;}
+  .resp-card .r-sub{font-size:9px;margin-top:2px;opacity:0.7;}
+  .r-normal  {background:rgba(14,159,110,0.07);border-color:rgba(14,159,110,0.25);color:var(--accent3);}
+  .r-corp    {background:rgba(217,119,6,0.07);border-color:rgba(217,119,6,0.25);color:var(--amber);}
+  .r-hq      {background:rgba(200,0,30,0.07);border-color:rgba(200,0,30,0.25);color:var(--accent);}
+  .r-maker   {background:rgba(124,58,237,0.07);border-color:rgba(124,58,237,0.25);color:var(--purple);}
+  .r-air     {background:rgba(26,86,219,0.07);border-color:rgba(26,86,219,0.25);color:var(--accent2);}
+
+  /* ── D-Day 납기 현황 ── */
+  .dday-list{display:flex;flex-direction:column;gap:8px;}
+  .dday-item{
+    display:flex;align-items:center;gap:12px;
+    padding:12px 14px;border-radius:10px;border:1px solid var(--border);
+    transition:background .15s;cursor:pointer;
+  }
+  .dday-item:hover{background:#f8fafc;}
+  .dday-item.urgent{border-color:rgba(200,0,30,0.3);background:rgba(200,0,30,0.03);}
+  .dday-item.warn  {border-color:rgba(217,119,6,0.3);background:rgba(217,119,6,0.03);}
+  .dday-item.safe  {border-color:rgba(14,159,110,0.2);background:rgba(14,159,110,0.02);}
+
+  .dday-badge{
+    min-width:56px;text-align:center;padding:6px 8px;border-radius:8px;
+    font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:900;
+    flex-shrink:0;
+  }
+  .dday-badge.urgent{background:rgba(200,0,30,0.1);color:var(--accent);}
+  .dday-badge.warn  {background:rgba(217,119,6,0.1);color:var(--amber);}
+  .dday-badge.safe  {background:rgba(14,159,110,0.1);color:var(--accent3);}
+
+  .dday-info{flex:1;min-width:0;}
+  .dday-pono{font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--muted);}
+  .dday-mkpn{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dday-meta{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;}
+  .dday-tag{
+    font-size:10px;padding:2px 7px;border-radius:4px;
+    font-family:'Share Tech Mono',monospace;font-weight:600;border:1px solid;
+  }
+
+  .dday-right{text-align:right;flex-shrink:0;}
+  .dday-remain{font-size:13px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+  .dday-etd{font-size:10px;color:var(--muted);margin-top:2px;font-family:'Share Tech Mono',monospace;}
+
+  /* ── AIR 현황 ── */
+  .air-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .air-entity{border-radius:10px;border:1px solid var(--border);padding:14px;}
+  .air-entity-name{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .air-bar-wrap{margin-bottom:8px;}
+  .air-bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;}
+  .air-bar-track{height:8px;background:#f0f4f9;border-radius:4px;overflow:hidden;}
+  .air-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+  .air-cause-list{display:flex;flex-direction:column;gap:4px;margin-top:10px;}
+  .air-cause{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 10px;border-radius:6px;font-size:11px;
+  }
+
+  /* ── PSI 테이블 ── */
+  .psi-filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .psi-filter select, .psi-filter input{
+    height:32px;padding:0 10px;border:1.5px solid var(--border);
+    border-radius:7px;font-family:'Noto Sans KR',sans-serif;
+    font-size:12px;outline:none;background:var(--surface);
+    transition:border-color .18s;
+  }
+  .psi-filter select:focus, .psi-filter input:focus{border-color:var(--accent2);}
+  .psi-wrap{overflow-x:auto;}
+  .psi-table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
+  .psi-table th{
+    padding:8px 12px;background:#f0f4f9;
+    font-family:'Share Tech Mono',monospace;font-size:10px;
+    color:var(--muted);letter-spacing:0.5px;
+    border-bottom:1px solid var(--border);text-align:center;
+  }
+  .psi-table th.left{text-align:left;}
+  .psi-table td{padding:9px 12px;border-bottom:1px solid #f5f7fa;text-align:center;}
+  .psi-table td.left{text-align:left;font-weight:600;}
+  .psi-table tr:hover td{background:#f8fafc;}
+  .psi-p{color:var(--accent2);font-weight:700;}
+  .psi-s{color:var(--amber);font-weight:700;}
+  .psi-i{color:var(--accent3);font-weight:700;}
+  .psi-legend{display:flex;gap:16px;margin-bottom:10px;}
+  .psi-leg{display:flex;align-items:center;gap:5px;font-size:11px;}
+  .psi-dot{width:8px;height:8px;border-radius:50%;}
+
+  /* 배지 */
+  .badge{display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+  .b-gsmein  {background:rgba(200,0,30,0.09);color:var(--accent);}
+  .b-smeglobal{background:rgba(26,86,219,0.09);color:var(--accent2);}
+  .b-smecn   {background:rgba(14,159,110,0.09);color:var(--accent3);}
+  .b-vssl    {background:rgba(26,86,219,0.08);color:var(--accent2);}
+  .b-air     {background:rgba(200,0,30,0.08);color:var(--accent);}
+
+  /* 빈상태 */
+  .empty{text-align:center;padding:32px;color:var(--muted);font-size:13px;}
+
+  /* 2단 레이아웃 */
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+
+  @media(max-width:900px){
+    .resp-grid{grid-template-columns:repeat(3,1fr);}
+    .air-grid{grid-template-columns:1fr;}
+    .row2{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<!-- 탑바 -->
+<div class="topbar">
+  <div class="logo-wrap">
+    <div class="logo-box">SME</div>
+    <div>
+      <div class="co-name">SMEKOREA</div>
+      <div class="co-sub">PO MONITOR</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <button class="refresh-btn" onclick="loadAll()">↺ 새로고침</button>
+    <a class="back-btn" href="po_hub.html">← PO 허브</a>
+  </div>
+</div>
+
+<!-- 법인 탭 -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchEntity('ALL',this)">전체</button>
+  <button class="tab-btn gsmein" onclick="switchEntity('GSMEIN',this)">🇮🇳 GSMEIN</button>
+  <button class="tab-btn smeglobal" onclick="switchEntity('SMEGLOBAL',this)">🇹🇭 SMEGLOBAL</button>
+  <button class="tab-btn smecn" onclick="switchEntity('SMECN',this)">🇨🇳 SME Tianjin</button>
+</div>
+
+<div class="content">
+
+  <!-- ① 책임구분 KPI -->
+  <div class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-title"><span class="icon">📊</span> 책임구분 현황 / Responsibility Summary</div>
+        <div class="sec-sub">클릭 시 해당 항목만 필터링됩니다</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;" id="lastUpdate">—</div>
+    </div>
+    <div class="sec-body">
+      <div class="resp-grid">
+        <div class="resp-card r-normal" onclick="filterByResp('normal')">
+          <div class="r-icon">✅</div>
+          <div class="r-count" id="cnt-normal">—</div>
+          <div class="r-label">정상</div>
+          <div class="r-sub">Normal</div>
+        </div>
+        <div class="resp-card r-corp" onclick="filterByResp('corp')">
+          <div class="r-icon">⚠</div>
+          <div class="r-count" id="cnt-corp">—</div>
+          <div class="r-label">법인 긴급요청</div>
+          <div class="r-sub">Corp Urgent</div>
+        </div>
+        <div class="resp-card r-hq" onclick="filterByResp('unordered')">
+          <div class="r-icon">🔴</div>
+          <div class="r-count" id="cnt-hq">—</div>
+          <div class="r-label">본사 미발주</div>
+          <div class="r-sub">HQ Not Ordered</div>
+        </div>
+        <div class="resp-card r-maker" onclick="filterByResp('maker')">
+          <div class="r-icon">🟣</div>
+          <div class="r-count" id="cnt-maker">—</div>
+          <div class="r-label">메이커 귀책</div>
+          <div class="r-sub">Maker Delay</div>
+        </div>
+        <div class="resp-card r-air" onclick="filterByResp('air')">
+          <div class="r-icon">✈</div>
+          <div class="r-count" id="cnt-air">—</div>
+          <div class="r-label">긴급 AIR</div>
+          <div class="r-sub">Emergency AIR</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 납기 D-Day + AIR 현황 -->
+  <div class="row2">
+
+    <!-- 납기 D-Day -->
+    <div class="sec">
+      <div class="sec-head">
+        <div>
+          <div class="sec-title"><span class="icon">⏰</span> 납기 임박 / ETD Alert</div>
+          <div class="sec-sub">ETD 요청일 기준 D-Day 순 정렬</div>
+        </div>
+        <select id="dday-filter" onchange="renderDDay()" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);">
+          <option value="30">D-30 이내</option>
+          <option value="60">D-60 이내</option>
+          <option value="90">D-90 이내</option>
+          <option value="999">전체</option>
+        </select>
+      </div>
+      <div class="sec-body">
+        <div class="dday-list" id="ddayList">
+          <div class="empty">데이터 로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AIR 발송 현황 -->
+    <div class="sec">
+      <div class="sec-head">
+        <div>
+          <div class="sec-title"><span class="icon">✈</span> AIR 발송 현황 / AIR Shipment</div>
+          <div class="sec-sub">법인별 AIR 비율 및 원인 분류</div>
+        </div>
+      </div>
+      <div class="sec-body">
+        <div class="air-grid" id="airGrid">
+          <div class="empty">데이터 로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ③ 메이커별 PSI -->
+  <div class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-title"><span class="icon">📈</span> 메이커별 월별 PSI</div>
+        <div class="sec-sub">Purchase(발주) · Stock(잔량) · Invoice(출하) 월별 현황</div>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div class="psi-filter">
+        <select id="psi-maker" onchange="renderPSI()">
+          <option value="">전체 메이커</option>
+          <option value="SMART">SMART</option>
+          <option value="MURATA">MURATA</option>
+          <option value="JST">JST</option>
+          <option value="ROHM">ROHM</option>
+          <option value="DIODES">DIODES</option>
+        </select>
+        <select id="psi-year" onchange="renderPSI()">
+          <option value="2026">2026년</option>
+          <option value="2025">2025년</option>
+        </select>
+        <select id="psi-entity-psi" onchange="renderPSI()">
+          <option value="">전체 법인</option>
+          <option value="GSMEIN">GSMEIN</option>
+          <option value="SMEGLOBAL">SMEGLOBAL</option>
+          <option value="SMECN">SME Tianjin</option>
+        </select>
+      </div>
+      <div class="psi-legend">
+        <div class="psi-leg"><div class="psi-dot" style="background:var(--accent2)"></div><span style="font-size:11px;">P · 발주수량</span></div>
+        <div class="psi-leg"><div class="psi-dot" style="background:var(--amber)"></div><span style="font-size:11px;">S · 잔량(주문-출하)</span></div>
+        <div class="psi-leg"><div class="psi-dot" style="background:var(--accent3)"></div><span style="font-size:11px;">I · 출하수량</span></div>
+      </div>
+      <div class="psi-wrap">
+        <table class="psi-table" id="psiTable">
+          <thead>
+            <tr>
+              <th class="left">Maker / 품번</th>
+              <th>1월</th><th>2월</th><th>3월</th><th>4월</th>
+              <th>5월</th><th>6월</th><th>7월</th><th>8월</th>
+              <th>9월</th><th>10월</th><th>11월</th><th>12월</th>
+              <th>합계</th>
+            </tr>
+          </thead>
+          <tbody id="psiBody">
+            <tr><td colspan="14" class="empty">조건을 선택하면 PSI 데이터가 표시됩니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 미발주 경보 -->
+  <div class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-title"><span class="icon">🚨</span> 본사 미발주 경보 / HQ Order Alert</div>
+        <div class="sec-sub">PO 접수 후 본사 발주 미완료 건 — 즉시 조치 필요</div>
+      </div>
+      <span id="alertCount" style="font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--accent);font-weight:700;"></span>
+    </div>
+    <div class="sec-body">
+      <div class="psi-wrap">
+        <table class="psi-table" id="alertTable">
+          <thead>
+            <tr>
+              <th class="left">법인</th>
+              <th class="left">PO No.</th>
+              <th class="left">Maker P/N</th>
+              <th class="left">Maker</th>
+              <th>주문수량</th>
+              <th>ETD 요청일</th>
+              <th>D-Day</th>
+              <th>운송</th>
+              <th>경과일</th>
+            </tr>
+          </thead>
+          <tbody id="alertBody">
+            <tr><td colspan="9" class="empty">데이터 로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL';
+  if (sessionStorage.getItem('po_auth') !== '1') { window.location.href = 'po_hub.html'; }
+
+  let currentEntity = 'ALL';
+  let allPOData = [];
+
+  // ── 탭 전환 ──
+  function switchEntity(entity, btn) {
+    currentEntity = entity;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderAll();
+  }
+
+  // ── 전체 로드 ──
+  async function loadAll() {
+    try {
+      const res = await fetch(`${SCRIPT_URL}?action=po_monitor`);
+      allPOData = await res.json() || [];
+    } catch(e) {
+      allPOData = getSampleData();
+    }
+    renderAll();
+    document.getElementById('lastUpdate').textContent =
+      'Updated: ' + new Date().toLocaleTimeString('ko-KR');
+  }
+
+  function renderAll() {
+    const data = currentEntity === 'ALL'
+      ? allPOData
+      : allPOData.filter(r => r.entity === currentEntity);
+    renderKPI(data);
+    renderDDay(data);
+    renderAIR(data);
+    renderAlerts(data);
+    renderPSI();
+  }
+
+  // ── KPI ──
+  function renderKPI(data) {
+    const cnt = (resp) => data.filter(r => r.resp === resp).length;
+    document.getElementById('cnt-normal').textContent    = cnt('complete');
+    document.getElementById('cnt-corp').textContent      = cnt('corp');
+    document.getElementById('cnt-hq').textContent        = cnt('unordered');
+    document.getElementById('cnt-maker').textContent     = cnt('maker');
+    document.getElementById('cnt-air').textContent       = data.filter(r=>r.mode==='AIR').length;
+  }
+
+  // ── D-Day 납기 임박 ──
+  function renderDDay(data) {
+    if (!data) data = currentEntity==='ALL' ? allPOData : allPOData.filter(r=>r.entity===currentEntity);
+    const days = Number(document.getElementById('dday-filter').value);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const list = document.getElementById('ddayList');
+
+    const filtered = data
+      .filter(r => r.etd && r.resp !== 'complete')
+      .map(r => {
+        const etd = new Date(r.etd); etd.setHours(0,0,0,0);
+        const diff = Math.round((etd - today) / 86400000);
+        return {...r, diff};
+      })
+      .filter(r => r.diff <= days)
+      .sort((a,b) => a.diff - b.diff)
+      .slice(0, 15);
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="empty">납기 임박 항목이 없습니다 (D-${days} 이내)</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(r => {
+      const cls = r.diff <= 7 ? 'urgent' : r.diff <= 20 ? 'warn' : 'safe';
+      const dday = r.diff < 0 ? `D+${Math.abs(r.diff)}` : r.diff === 0 ? 'D-DAY' : `D-${r.diff}`;
+      const entityBadge = `<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
+      const modeBadge = r.mode==='AIR'
+        ? `<span class="badge b-air">✈AIR</span>`
+        : `<span class="badge b-vssl">🚢VSSL</span>`;
+      const remain = (r.qty||0) - (r.shipped||0);
+      return `<div class="dday-item ${cls}">
+        <div class="dday-badge ${cls}">${dday}</div>
+        <div class="dday-info">
+          <div class="dday-pono">${r.pono}</div>
+          <div class="dday-mkpn">${r.mkpn} · ${r.maker}</div>
+          <div class="dday-meta">${entityBadge}${modeBadge}</div>
+        </div>
+        <div class="dday-right">
+          <div class="dday-remain" style="color:${remain>0?'var(--amber)':'var(--accent3)'}">
+            잔량 ${remain.toLocaleString()}
+          </div>
+          <div class="dday-etd">ETD ${r.etd}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── AIR 현황 ──
+  function renderAIR(data) {
+    const grid = document.getElementById('airGrid');
+    const entities = currentEntity === 'ALL'
+      ? ['GSMEIN','SMEGLOBAL','SMECN']
+      : [currentEntity];
+
+    const colors = {GSMEIN:'var(--accent)',SMEGLOBAL:'var(--accent2)',SMECN:'var(--accent3)'};
+    const flags  = {GSMEIN:'🇮🇳',SMEGLOBAL:'🇹🇭',SMECN:'🇨🇳'};
+
+    grid.innerHTML = entities.map(ent => {
+      const entData = data.filter(r => r.entity === ent);
+      const total = entData.length;
+      const airData = entData.filter(r => r.mode === 'AIR');
+      const airPct = total ? Math.round(airData.length/total*100) : 0;
+
+      // 원인 분류
+      const causes = [
+        {label:'법인 긴급요청', cnt: airData.filter(r=>r.resp==='corp').length,     color:'var(--amber)'},
+        {label:'본사 미발주',   cnt: airData.filter(r=>r.resp==='unordered').length, color:'var(--accent)'},
+        {label:'메이커 귀책',   cnt: airData.filter(r=>r.resp==='maker').length,     color:'var(--purple)'},
+        {label:'기타',          cnt: airData.filter(r=>!['corp','unordered','maker'].includes(r.resp)).length, color:'var(--muted)'},
+      ].filter(c => c.cnt > 0);
+
+      const barColor = airPct >= 30 ? 'var(--accent)' : airPct >= 15 ? 'var(--amber)' : 'var(--accent3)';
+
+      return `<div class="air-entity">
+        <div class="air-entity-name">
+          ${flags[ent]} <span style="color:${colors[ent]};font-weight:900;">${ent}</span>
+        </div>
+        <div class="air-bar-wrap">
+          <div class="air-bar-label">
+            <span>AIR 비율</span>
+            <span style="font-weight:700;color:${barColor}">${airPct}% (${airData.length}/${total}건)</span>
+          </div>
+          <div class="air-bar-track">
+            <div class="air-bar-fill" style="width:${airPct}%;background:${barColor};"></div>
+          </div>
+        </div>
+        <div class="air-cause-list">
+          ${causes.map(c => `
+            <div class="air-cause" style="background:rgba(0,0,0,0.03);">
+              <span style="color:${c.color};font-weight:600;">${c.label}</span>
+              <span style="font-family:'Share Tech Mono',monospace;font-weight:700;">${c.cnt}건</span>
+            </div>`).join('')}
+          ${!causes.length ? '<div style="text-align:center;color:var(--muted);font-size:12px;">AIR 발송 없음</div>' : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── PSI 테이블 ──
+  function renderPSI() {
+    const maker  = document.getElementById('psi-maker').value;
+    const year   = document.getElementById('psi-year').value;
+    const entity = document.getElementById('psi-entity-psi').value;
+    const tbody  = document.getElementById('psiBody');
+
+    const data = allPOData.filter(r =>
+      (!entity || r.entity === entity) &&
+      (!maker  || r.maker === maker)
+    );
+
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="14" class="empty">해당 조건의 데이터가 없습니다</td></tr>';
+      return;
+    }
+
+    // 메이커별 집계
+    const makers = [...new Set(data.map(r => r.maker))].slice(0, 10);
+    const months = [1,2,3,4,5,6,7,8,9,10,11,12];
+
+    tbody.innerHTML = makers.map(mk => {
+      const mkData = data.filter(r => r.maker === mk);
+      const P = months.map(m => mkData.filter(r => r.date?.startsWith(`${year}-${String(m).padStart(2,'0')}`)).reduce((s,r)=>s+(r.qty||0),0));
+      const I = months.map(m => mkData.filter(r => r.shipdate?.startsWith(`${year}-${String(m).padStart(2,'0')}`)).reduce((s,r)=>s+(r.shipped||0),0));
+      const S = months.map((m,i) => P[i] - I[i]);
+      const totalP = P.reduce((a,b)=>a+b,0);
+      const totalI = I.reduce((a,b)=>a+b,0);
+      const totalS = totalP - totalI;
+
+      const fmt = n => n ? n.toLocaleString() : '—';
+      const cell = (val, cls) => `<td class="${cls}">${fmt(val)}</td>`;
+
+      return `
+        <tr style="border-top:2px solid var(--border);">
+          <td class="left" rowspan="3" style="font-weight:700;">${mk}</td>
+          <td class="left" style="font-size:10px;color:var(--accent2);font-weight:700;">P</td>
+          ${P.map(v=>cell(v,'psi-p')).join('')}
+          ${cell(totalP,'psi-p')}
+        </tr>
+        <tr>
+          <td class="left" style="font-size:10px;color:var(--amber);font-weight:700;">S</td>
+          ${S.map(v=>cell(v,'psi-s')).join('')}
+          ${cell(totalS,'psi-s')}
+        </tr>
+        <tr>
+          <td class="left" style="font-size:10px;color:var(--accent3);font-weight:700;">I</td>
+          ${I.map(v=>cell(v,'psi-i')).join('')}
+          ${cell(totalI,'psi-i')}
+        </tr>`;
+    }).join('');
+  }
+
+  // ── 미발주 경보 ──
+  function renderAlerts(data) {
+    const alerts = data.filter(r => r.resp === 'unordered');
+    document.getElementById('alertCount').textContent =
+      alerts.length ? `⚠ ${alerts.length}건 즉시 조치 필요` : '이상 없음';
+
+    const tbody = document.getElementById('alertBody');
+    if (!alerts.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">✅ 미발주 경보 없음</td></tr>';
+      return;
+    }
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    tbody.innerHTML = alerts.map(r => {
+      const etd = new Date(r.etd); etd.setHours(0,0,0,0);
+      const dday = Math.round((etd - today) / 86400000);
+      const order = new Date(r.date); order.setHours(0,0,0,0);
+      const elapsed = Math.round((today - order) / 86400000);
+      const ddayStr = dday < 0 ? `<span style="color:var(--accent);font-weight:700;">D+${Math.abs(dday)}</span>` :
+                      dday === 0 ? `<span style="color:var(--accent);font-weight:700;">D-DAY</span>` :
+                      `<span style="color:${dday<=14?'var(--accent)':'var(--amber)'}">D-${dday}</span>`;
+      const entityBadge = `<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
+      const modeBadge = r.mode==='AIR'?`<span class="badge b-air">✈AIR</span>`:`<span class="badge b-vssl">🚢VSSL</span>`;
+      return `<tr>
+        <td>${entityBadge}</td>
+        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.pono}</td>
+        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn}</td>
+        <td class="left">${r.maker}</td>
+        <td>${(r.qty||0).toLocaleString()}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.etd}</td>
+        <td>${ddayStr}</td>
+        <td>${modeBadge}</td>
+        <td style="font-weight:700;color:${elapsed>7?'var(--accent)':'var(--amber)'};">${elapsed}일 경과</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── 책임구분 필터 ──
+  function filterByResp(resp) {
+    const data = currentEntity==='ALL' ? allPOData : allPOData.filter(r=>r.entity===currentEntity);
+    const filtered = data.filter(r => r.resp === resp || (resp==='air' && r.mode==='AIR'));
+    renderDDay(filtered);
+    renderAlerts(filtered);
+  }
+
+  // ── 샘플 데이터 ──
+  function getSampleData() {
+    const today = new Date();
+    const addDays = (d, n) => {
+      const r = new Date(d); r.setDate(r.getDate()+n);
+      return r.toISOString().slice(0,10);
+    };
+    return [
+      {entity:'GSMEIN',   date:'2026-01-20', pono:'GSMEIN-260120-001',   lgpn:'0RH1201L622', mkpn:'RC-98TRJ1K20',  maker:'SMART', qty:15000, shipped:10000, etd:addDays(today,5),  mode:'VSSL', resp:'corp',      shipdate:''},
+      {entity:'GSMEIN',   date:'2026-01-20', pono:'GSMEIN-260120-001',   lgpn:'0RH3300L622', mkpn:'RC-98TRJ330R',  maker:'SMART', qty:15000, shipped:15000, etd:addDays(today,30), mode:'VSSL', resp:'complete',   shipdate:'2026-04-10'},
+      {entity:'GSMEIN',   date:'2026-02-08', pono:'GSMEIN-260208-001',   lgpn:'EBC64595501', mkpn:'CSR02TRFR042',  maker:'SMART', qty:8000,  shipped:0,     etd:addDays(today,12), mode:'AIR',  resp:'unordered',  shipdate:''},
+      {entity:'SMEGLOBAL',date:'2026-02-01', pono:'SMEGLOBAL-260201-001',lgpn:'0RD1002G609', mkpn:'RD-94T1J10K0',  maker:'SMART', qty:20000, shipped:5000,  etd:addDays(today,20), mode:'VSSL', resp:'maker',      shipdate:''},
+      {entity:'SMEGLOBAL',date:'2026-03-06', pono:'SMEGLOBAL-260306-001',lgpn:'0RH2001L422', mkpn:'RC-98TRF2K00',  maker:'SMART', qty:12000, shipped:12000, etd:addDays(today,45), mode:'VSSL', resp:'complete',   shipdate:'2026-05-01'},
+      {entity:'SMECN',    date:'2026-02-10', pono:'SMECN-260210-001',    lgpn:'0RH1502L422', mkpn:'RC-98TRF15K0',  maker:'SMART', qty:30000, shipped:10000, etd:addDays(today,3),  mode:'AIR',  resp:'corp',      shipdate:''},
+      {entity:'SMECN',    date:'2026-03-20', pono:'SMECN-260320-001',    lgpn:'0RJ5100E672', mkpn:'RC-98TRJ510R',  maker:'SMART', qty:9000,  shipped:0,     etd:addDays(today,25), mode:'VSSL', resp:'unordered',  shipdate:''},
+      {entity:'GSMEIN',   date:'2026-03-21', pono:'GSMEIN-260321-001',   lgpn:'0RD1001F609', mkpn:'RD-96T1J1K00',  maker:'SMART', qty:50000, shipped:30000, etd:addDays(today,8),  mode:'AIR',  resp:'maker',     shipdate:'2026-04-05'},
+    ];
+  }
+
+  // 초기 로드 + 30초 자동 새로고침
+  loadAll();
+  setInterval(loadAll, 30000);
+</script>
+</body>
+</html>

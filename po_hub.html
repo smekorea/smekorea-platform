@@ -81,9 +81,39 @@
     .hq-grid{grid-template-columns:1fr;}
     .summary-bar{flex-wrap:wrap;justify-content:center;}
   }
+  /* ── 비밀번호 오버레이 ── */
+  .pw-overlay{position:fixed;inset:0;background:rgba(26,34,51,0.55);backdrop-filter:blur(4px);z-index:999;display:flex;align-items:center;justify-content:center;}
+  .pw-overlay.hide{display:none;}
+  .pw-box{background:#fff;border-radius:20px;padding:40px 36px;width:340px;box-shadow:0 24px 64px rgba(0,0,0,0.2);animation:fadeDown .3s ease;text-align:center;}
+  .pw-icon{font-size:40px;margin-bottom:14px;}
+  .pw-title{font-size:18px;font-weight:900;color:var(--text);margin-bottom:4px;}
+  .pw-sub{font-size:12px;color:var(--muted);margin-bottom:24px;}
+  .pw-input{width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:10px;font-size:22px;font-family:'Share Tech Mono',monospace;letter-spacing:8px;text-align:center;outline:none;transition:border-color .18s;background:#f8fafc;}
+  .pw-input:focus{border-color:var(--accent2);background:#fff;}
+  .pw-input.error{border-color:var(--accent);animation:shake .3s ease;}
+  .pw-error{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:12px;min-height:18px;}
+  .pw-btn{width:100%;padding:13px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;box-shadow:0 4px 14px rgba(200,0,30,0.25);transition:background .18s;margin-top:8px;}
+  .pw-btn:hover{background:#a80019;}
+  .pw-back{display:block;margin-top:14px;font-size:12px;color:var(--muted);text-decoration:none;transition:color .18s;cursor:pointer;}
+  .pw-back:hover{color:var(--accent2);}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 </style>
 </head>
 <body>
+
+<!-- 비밀번호 오버레이 -->
+<div class="pw-overlay" id="pwOverlay">
+  <div class="pw-box">
+    <div class="pw-icon">🔐</div>
+    <div class="pw-title">접근 제한</div>
+    <div class="pw-sub">PO 관리 시스템 · 비밀번호를 입력해주세요<br>PO Management System — Enter Password</div>
+    <input class="pw-input" type="password" id="pwInput" maxlength="20"
+           placeholder="••••" onkeydown="if(event.key==='Enter')checkPW()">
+    <div class="pw-error" id="pwError"></div>
+    <button class="pw-btn" onclick="checkPW()">확인 / Confirm</button>
+    <a class="pw-back" onclick="history.back()">← 메인으로 돌아가기</a>
+  </div>
+</div>
 
 <div class="topbar">
   <div class="logo-wrap">
@@ -112,10 +142,12 @@
 
 <div class="entity-grid">
 
-  <a class="entity-card" href="po_smeglobal.html" style="--c:#1a56db;">
+  <div class="entity-card" onclick="showReady('SMEGLOBAL')" style="--c:#1a56db;cursor:pointer;">
     <div class="e-header">
       <div>
-        <div class="e-name">SMEGLOBAL</div>
+        <div class="e-name">SMEGLOBAL
+          <span style="font-size:10px;font-weight:700;color:#1a56db;font-family:'Share Tech Mono',monospace;background:rgba(26,86,219,0.1);border:1px solid rgba(26,86,219,0.25);border-radius:4px;padding:2px 7px;margin-left:6px;">준비중</span>
+        </div>
         <div class="e-branch">THAI-BRANCHES</div>
       </div>
     </div>
@@ -128,7 +160,7 @@
       <span class="t-tag t-vssl">🚢 VSSL 15D</span>
       <span class="t-tag t-air">✈ AIR 3D</span>
     </div>
-  </a>
+  </div>
 
   <a class="entity-card" href="po_gsmein.html" style="--c:#c8001e;">
     <div class="e-header">
@@ -148,10 +180,12 @@
     </div>
   </a>
 
-  <a class="entity-card" href="po_smecn.html" style="--c:#0e9f6e;">
+  <div class="entity-card" onclick="showReady('SME Tianjin')" style="--c:#0e9f6e;cursor:pointer;">
     <div class="e-header">
       <div>
-        <div class="e-name">SME Tianjin</div>
+        <div class="e-name">SME Tianjin
+          <span style="font-size:10px;font-weight:700;color:#0e9f6e;font-family:'Share Tech Mono',monospace;background:rgba(14,159,110,0.1);border:1px solid rgba(14,159,110,0.25);border-radius:4px;padding:2px 7px;margin-left:6px;">준비중</span>
+        </div>
         <div class="e-branch" style="color:#0e9f6e;">CHINA-BRANCHES</div>
       </div>
     </div>
@@ -164,7 +198,7 @@
       <span class="t-tag t-vssl">🚢 VSSL 10D</span>
       <span class="t-tag t-air">✈ AIR 3D</span>
     </div>
-  </a>
+  </div>
 
 </div>
 
@@ -191,8 +225,47 @@
 
 <div class="footer">© 2026 SMEKOREA · PO MANAGEMENT SYSTEM · Platform v1.1</div>
 
+<!-- 준비중 팝업 -->
+<div id="readyOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,34,51,0.5);z-index:300;align-items:center;justify-content:center;display:none;">
+  <div style="background:#fff;border-radius:20px;padding:40px 36px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);animation:fadeDown .25s ease;">
+    <div style="font-size:40px;margin-bottom:14px;">🔧</div>
+    <div style="font-size:17px;font-weight:900;color:#1a2233;margin-bottom:6px;" id="readyName">—</div>
+    <div style="font-size:13px;color:#7a8baa;margin-bottom:6px;">현재 준비중입니다</div>
+    <div style="font-size:12px;color:#7a8baa;margin-bottom:24px;">GSMEIN(인도법인) 안정화 후 순차 오픈 예정</div>
+    <button onclick="document.getElementById('readyOverlay').style.display='none'"
+      style="width:100%;padding:12px;border-radius:10px;border:none;background:#c8001e;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+      확인
+    </button>
+  </div>
+</div>
+
 <script>
   const SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL';
+
+  // ── 비밀번호 ── (변경 시 아래 PW 값만 수정)
+  const PW = 'sme2026';
+
+  function checkPW() {
+    const val = document.getElementById('pwInput').value;
+    const input = document.getElementById('pwInput');
+    const errEl = document.getElementById('pwError');
+    if (val === PW) {
+      sessionStorage.setItem('po_auth','1');
+      document.getElementById('pwOverlay').classList.add('hide');
+      errEl.textContent = '';
+    } else {
+      input.classList.add('error');
+      errEl.textContent = '⚠ 비밀번호가 올바르지 않습니다 / Incorrect password';
+      input.value = '';
+      setTimeout(() => input.classList.remove('error'), 400);
+    }
+  }
+
+  // 세션 인증 확인
+  if (sessionStorage.getItem('po_auth') === '1') {
+    document.getElementById('pwOverlay').classList.add('hide');
+  }
+
   async function loadSummary() {
     try {
       const res = await fetch(`${SCRIPT_URL}?action=po_summary`);
@@ -214,6 +287,15 @@
     } catch(e) {}
   }
   loadSummary();
+
+  // ── 준비중 팝업 ──
+  function showReady(name) {
+    document.getElementById('readyName').textContent = name;
+    document.getElementById('readyOverlay').style.display = 'flex';
+  }
+  document.getElementById('readyOverlay').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
 </script>
 </body>
 </html>
