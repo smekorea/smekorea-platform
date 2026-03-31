@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSMEIN — PO 입력</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef2f7; --surface: #fff; --border: #d0daea;
+    --accent: #c8001e; --accent2: #1a56db; --text: #1a2233;
+    --muted: #7a8baa; --success: #0e9f6e; --warn: #d97706;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh; padding: 32px 20px 60px;
+    background-image:
+      radial-gradient(ellipse at 0% 0%, rgba(200,0,30,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 100%, rgba(26,86,219,0.05) 0%, transparent 50%);
+  }
+
+  /* ── 헤더 ── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 860px; margin: 0 auto 28px;
+  }
+  .logo-wrap { display: flex; align-items: center; gap: 12px; }
+  .logo-box {
+    width: 44px; height: 44px; background: var(--accent); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Share Tech Mono', monospace; font-size: 15px;
+    font-weight: 900; color: #fff; letter-spacing: -1px;
+    box-shadow: 0 4px 14px rgba(200,0,30,0.3);
+  }
+  .company-name { font-size: 17px; font-weight: 700; }
+  .company-sub { font-size: 9px; color: var(--muted); font-family: 'Share Tech Mono', monospace; letter-spacing: 2px; margin-top: 2px; }
+  .back-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 14px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    text-decoration: none; color: var(--muted);
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.5px; transition: all 0.18s;
+  }
+  .back-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .page-header { text-align: center; margin-bottom: 28px; animation: fadeDown 0.45s ease; }
+  .entity-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(200,0,30,0.07); border: 1px solid rgba(200,0,30,0.2);
+    border-radius: 50px; padding: 5px 14px; margin-bottom: 12px;
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+    color: var(--accent); font-weight: 700; letter-spacing: 1px;
+  }
+  .entity-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .page-title { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+  .page-title span { color: var(--accent); }
+  .page-sub { font-size: 12px; color: var(--muted); margin-top: 5px; }
+
+  /* ── 탭 ── */
+  .tab-wrap {
+    display: flex; gap: 0; max-width: 860px; margin: 0 auto 24px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 5px; animation: fadeUp 0.45s ease 0.05s both;
+  }
+  .tab-btn {
+    flex: 1; padding: 10px; border: none; border-radius: 9px;
+    background: none; cursor: pointer; font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px; font-weight: 500; color: var(--muted);
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    background: var(--accent); color: #fff; font-weight: 700;
+    box-shadow: 0 3px 10px rgba(200,0,30,0.25);
+  }
+
+  /* ── 카드 ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; max-width: 860px; margin: 0 auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.07); animation: fadeUp 0.45s ease 0.1s both;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  /* ── 업로드 영역 ── */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 48px 32px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: #f8fafc; position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent2); background: rgba(26,86,219,0.04);
+  }
+  .upload-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .upload-icon { font-size: 44px; margin-bottom: 12px; }
+  .upload-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .upload-sub { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .upload-sub em { color: var(--accent2); font-style: normal; font-weight: 600; }
+
+  .upload-actions {
+    display: flex; gap: 10px; margin-top: 20px; justify-content: center;
+  }
+  .btn-outline {
+    padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: 1.5px solid var(--border); background: var(--surface);
+    color: var(--muted); cursor: pointer; font-family: 'Noto Sans KR', sans-serif;
+    transition: all 0.18s; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-outline:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* 파일 선택됨 */
+  .file-selected {
+    display: none; align-items: center; gap: 12px;
+    background: rgba(26,86,219,0.06); border: 1.5px solid rgba(26,86,219,0.2);
+    border-radius: 10px; padding: 14px 18px; margin-top: 16px;
+  }
+  .file-selected.show { display: flex; }
+  .file-icon { font-size: 24px; }
+  .file-name { font-size: 14px; font-weight: 600; color: var(--accent2); }
+  .file-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .file-remove {
+    margin-left: auto; background: none; border: none; cursor: pointer;
+    font-size: 16px; color: var(--muted); transition: color 0.15s;
+  }
+  .file-remove:hover { color: var(--accent); }
+
+  /* ── 미리보기 테이블 ── */
+  .preview-wrap { display: none; }
+  .preview-wrap.show { display: block; }
+
+  .preview-info {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+  }
+  .preview-count {
+    font-size: 13px; font-weight: 700; color: var(--text);
+  }
+  .preview-count span { color: var(--accent2); }
+  .error-count {
+    font-size: 12px; padding: 4px 10px; border-radius: 6px;
+    background: rgba(200,0,30,0.08); color: var(--accent);
+    border: 1px solid rgba(200,0,30,0.2); font-weight: 600;
+  }
+  .error-count.hide { display: none; }
+
+  .table-wrap {
+    overflow-x: auto; border-radius: 10px;
+    border: 1px solid var(--border); margin-bottom: 20px;
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 12px; white-space: nowrap;
+  }
+  thead th {
+    background: #f0f4f9; padding: 10px 12px;
+    text-align: left; font-weight: 700; color: var(--muted);
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+  }
+  tbody tr { border-bottom: 1px solid #f0f4f9; transition: background 0.1s; }
+  tbody tr:hover { background: #f8fafc; }
+  tbody tr.row-error { background: rgba(200,0,30,0.04); }
+  tbody td { padding: 9px 12px; color: var(--text); }
+  tbody td.err { color: var(--accent); font-weight: 600; }
+  .row-num {
+    color: var(--muted); font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; width: 36px;
+  }
+  .badge {
+    display: inline-flex; padding: 2px 7px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; font-family: 'Share Tech Mono', monospace;
+  }
+  .badge-vssl { background: rgba(26,86,219,0.1); color: var(--accent2); }
+  .badge-air  { background: rgba(200,0,30,0.1);  color: var(--accent); }
+  .badge-ok   { background: rgba(14,159,110,0.1); color: var(--success); }
+  .badge-err  { background: rgba(200,0,30,0.1);  color: var(--accent); }
+
+  /* ── 버튼 ── */
+  .btn-group { display: flex; gap: 10px; margin-top: 8px; }
+  .btn {
+    flex: 1; padding: 14px; border-radius: 9px; border: none;
+    font-family: 'Noto Sans KR', sans-serif; font-size: 15px;
+    font-weight: 700; cursor: pointer; transition: all 0.18s;
+  }
+  .btn-primary {
+    background: var(--accent); color: #fff;
+    box-shadow: 0 4px 12px rgba(200,0,30,0.25);
+  }
+  .btn-primary:hover { background: #a80019; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: #f8fafc; color: var(--muted);
+    border: 1.5px solid var(--border); flex: 0 0 auto; padding: 14px 20px;
+  }
+  .btn-secondary:hover { background: var(--border); }
+
+  /* ── 직접 입력 탭 ── */
+  .field { margin-bottom: 18px; }
+  label {
+    display: block; font-size: 11px; font-weight: 700;
+    letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-bottom: 7px;
+  }
+  label .req { color: var(--accent); margin-left: 2px; }
+  label .eng { color: var(--accent2); font-size: 10px; margin-left: 4px; font-weight: 500; }
+  input[type="text"], input[type="date"], input[type="number"], select, textarea {
+    width: 100%; background: #f8fafc; border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px; padding: 11px 14px; outline: none;
+    transition: border-color 0.18s, background 0.18s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent2); background: #fff;
+    box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.6; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  /* ── 조회 탭 ── */
+  .search-bar {
+    display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .search-bar input, .search-bar select {
+    flex: 1; min-width: 140px; font-size: 13px; padding: 9px 12px;
+  }
+  .search-bar .btn-search {
+    padding: 9px 18px; border-radius: 8px; border: none;
+    background: var(--accent2); color: #fff; font-size: 13px;
+    font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif;
+    transition: background 0.18s; white-space: nowrap;
+  }
+  .search-bar .btn-search:hover { background: #1344b0; }
+
+  .empty-state {
+    text-align: center; padding: 48px 0; color: var(--muted);
+  }
+  .empty-state .empty-icon { font-size: 40px; margin-bottom: 10px; }
+  .empty-state p { font-size: 13px; }
+
+  /* ── 토스트 ── */
+  .toast {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--success); color: #fff; font-weight: 700; font-size: 14px;
+    padding: 13px 28px; border-radius: 50px;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 100; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--accent); }
+  .toast.warn  { background: var(--warn); }
+
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<!-- 탑바 -->
+<div class="topbar">
+  <div class="logo-wrap">
+    <div class="logo-box">SME</div>
+    <div>
+      <div class="company-name">SMEKOREA</div>
+      <div class="company-sub">PO MANAGEMENT</div>
+    </div>
+  </div>
+  <a class="back-btn" href="po_hub.html">← PO 허브</a>
+</div>
+
+<!-- 페이지 헤더 -->
+<div class="page-header">
+  <div class="entity-badge"><div class="dot"></div>GSMEIN · INDIA-Branches</div>
+  <h1 class="page-title">PO <span>입력 / 조회</span></h1>
+  <p class="page-sub">Purchase Order Entry & Inquiry — GSMEIN (India, Noida)</p>
+</div>
+
+<!-- 탭 -->
+<div class="tab-wrap">
+  <button class="tab-btn active" onclick="switchTab('upload')">📤 엑셀 업로드 / Upload</button>
+  <button class="tab-btn" onclick="switchTab('manual')">✏ 직접 입력 / Manual Entry</button>
+  <button class="tab-btn" onclick="switchTab('list')">📋 PO 조회 / Inquiry</button>
+</div>
+
+<!-- ══════════ 탭 1: 엑셀 업로드 ══════════ -->
+<div id="tab-upload" class="card">
+
+  <!-- 업로드 존 -->
+  <div id="uploadZone" class="upload-zone"
+       ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="onFileSelect(event)">
+    <div class="upload-icon">📂</div>
+    <div class="upload-title">엑셀 파일을 드래그하거나 클릭하여 선택<br>
+      <span style="font-size:14px;color:var(--muted);">Drag & drop or click to select Excel file</span>
+    </div>
+    <div class="upload-sub" style="margin-top:10px;">
+      표준 양식 <em>법인_PO입력</em> 시트 기준 · .xlsx / .xls 지원<br>
+      Standard form <em>법인_PO입력</em> sheet required
+    </div>
+  </div>
+
+  <!-- 파일 선택됨 표시 -->
+  <div class="file-selected" id="fileSelected">
+    <div class="file-icon">📊</div>
+    <div>
+      <div class="file-name" id="fileName">—</div>
+      <div class="file-size" id="fileSize">—</div>
+    </div>
+    <button class="file-remove" onclick="clearFile()" title="파일 제거">✕</button>
+  </div>
+
+  <!-- 업로드 액션 버튼 -->
+  <div class="upload-actions">
+    <button class="btn-outline" onclick="downloadTemplate()">⬇ 표준 양식 다운로드 / Download Template</button>
+    <button class="btn-outline" id="parseBtn" onclick="parseFile()" style="display:none">
+      🔍 미리보기 / Preview
+    </button>
+  </div>
+
+  <!-- 미리보기 -->
+  <div class="preview-wrap" id="previewWrap" style="margin-top:24px;">
+    <div class="preview-info">
+      <div class="preview-count">미리보기 / Preview — <span id="rowCount">0</span>행 · <span id="errCount2">0</span>건 오류</div>
+      <div class="error-count hide" id="errBadge">⚠ 오류 <span id="errNum">0</span>건 확인 필요</div>
+    </div>
+    <div class="table-wrap">
+      <table id="previewTable">
+        <thead>
+          <tr>
+            <th class="row-num">#</th>
+            <th>법인 / Entity</th>
+            <th>주문일자 / Order Date</th>
+            <th>PO No.</th>
+            <th>LG P/N</th>
+            <th>Maker P/N</th>
+            <th>ERP코드</th>
+            <th>Description</th>
+            <th>Maker</th>
+            <th>수량 / Qty</th>
+            <th>ETD 요청일</th>
+            <th>ETA 희망일</th>
+            <th>운송 / Mode</th>
+            <th>비고 / Remark</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="clearFile()">↩ 다시 선택</button>
+      <button class="btn btn-primary" id="submitBtn" onclick="submitPO()">✓ Google Sheets에 등록 / Register</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════ 탭 2: 직접 입력 ══════════ -->
+<div id="tab-manual" class="card" style="display:none;">
+
+  <div class="row2">
+    <div class="field">
+      <label>주문일자 <span class="req">*</span><span class="eng">Order Date</span></label>
+      <input type="date" id="m-date">
+    </div>
+    <div class="field">
+      <label>PO No. <span class="req">*</span></label>
+      <input type="text" id="m-pono" placeholder="GSMEIN-260401-001">
+    </div>
+  </div>
+
+  <div class="row3">
+    <div class="field">
+      <label>LG P/N <span class="req">*</span></label>
+      <input type="text" id="m-lgpn" placeholder="0RH1201L622">
+    </div>
+    <div class="field">
+      <label>Maker P/N <span class="req">*</span></label>
+      <input type="text" id="m-mkpn" placeholder="RC-98TRJ1K20">
+    </div>
+    <div class="field">
+      <label>ERP품번코드<span class="eng">ERP Code</span></label>
+      <input type="text" id="m-erp" placeholder="9001-001 (선택)">
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="field">
+      <label>Description <span class="req">*</span></label>
+      <input type="text" id="m-desc" placeholder="RESISTOR CHIP">
+    </div>
+    <div class="field">
+      <label>Maker <span class="req">*</span></label>
+      <input type="text" id="m-maker" placeholder="SMART">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Specification</label>
+    <input type="text" id="m-spec" placeholder="NCR10EZHJ122 1.2KOHM 5% 1/8W 2012">
+  </div>
+
+  <div class="row3">
+    <div class="field">
+      <label>주문수량 <span class="req">*</span><span class="eng">Order Qty</span></label>
+      <input type="number" id="m-qty" placeholder="15000" min="1">
+    </div>
+    <div class="field">
+      <label>ETD 요청일 <span class="req">*</span></label>
+      <input type="date" id="m-etd">
+    </div>
+    <div class="field">
+      <label>ETA 희망일 <span class="req">*</span></label>
+      <input type="date" id="m-eta">
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="field">
+      <label>운송구분 <span class="req">*</span><span class="eng">Shipment Mode</span></label>
+      <select id="m-mode">
+        <option value="">선택 / Select</option>
+        <option value="VSSL">🚢 VSSL (선박 · 50일)</option>
+        <option value="AIR">✈ AIR (항공 · 3일)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>비고<span class="eng">Remark</span></label>
+      <input type="text" id="m-remark" placeholder="특이사항 / Special notes">
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="btn-group">
+    <button class="btn btn-secondary" onclick="clearManual()">초기화 / Clear</button>
+    <button class="btn btn-primary" onclick="submitManual()">✓ 등록 / Register</button>
+  </div>
+
+</div>
+
+<!-- ══════════ 탭 3: PO 조회 ══════════ -->
+<div id="tab-list" class="card" style="display:none;">
+
+  <div class="search-bar">
+    <input type="text" id="s-pono" placeholder="PO No. 검색...">
+    <input type="text" id="s-mkpn" placeholder="Maker P/N 검색...">
+    <input type="month" id="s-month">
+    <select id="s-mode">
+      <option value="">전체 운송</option>
+      <option value="VSSL">VSSL</option>
+      <option value="AIR">AIR</option>
+    </select>
+    <button class="btn-search" onclick="searchPO()">🔍 조회</button>
+  </div>
+
+  <div id="listWrap">
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <p>조회 버튼을 눌러 PO 목록을 불러오세요<br>
+        <span style="font-size:11px;color:var(--muted);">Press Search to load PO list</span></p>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- SheetJS CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  const SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL'; // Apps Script 배포 후 교체
+  const ENTITY = 'GSMEIN';
+
+  // ── 탭 전환 ──
+  function switchTab(tab) {
+    ['upload','manual','list'].forEach(t => {
+      document.getElementById('tab-'+t).style.display = t === tab ? 'block' : 'none';
+    });
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', ['upload','manual','list'][i] === tab);
+    });
+  }
+
+  // ── 토스트 ──
+  function showToast(msg, type='') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' '+type : '') + ' show';
+    setTimeout(() => t.className = 'toast', 3500);
+  }
+
+  // ── 파일 드래그&드롭 ──
+  function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('drag-over'); }
+  function onDragLeave(e) { document.getElementById('uploadZone').classList.remove('drag-over'); }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('uploadZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  }
+  function onFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) processFile(file);
+  }
+
+  let currentData = [];
+  let currentFile = null;
+
+  function processFile(file) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      showToast('⚠ Excel 파일(.xlsx)만 지원됩니다', 'error'); return;
+    }
+    currentFile = file;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = (file.size/1024).toFixed(1) + ' KB';
+    document.getElementById('fileSelected').classList.add('show');
+    document.getElementById('parseBtn').style.display = 'flex';
+    document.getElementById('previewWrap').classList.remove('show');
+  }
+
+  function clearFile() {
+    currentFile = null; currentData = [];
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileSelected').classList.remove('show');
+    document.getElementById('parseBtn').style.display = 'none';
+    document.getElementById('previewWrap').classList.remove('show');
+  }
+
+  // ── 엑셀 파싱 ──
+  function parseFile() {
+    if (!currentFile) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        // 법인_PO입력 시트 찾기
+        const sheetName = wb.SheetNames.find(n => n.includes('PO입력') || n.includes('PO Entry')) || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+        // 헤더 행 찾기 (법인구분 or Entity 포함)
+        let headerRow = -1;
+        for (let i=0; i<Math.min(10, raw.length); i++) {
+          if (raw[i].some(c => String(c).includes('법인구분') || String(c).includes('Entity'))) {
+            headerRow = i; break;
+          }
+        }
+        if (headerRow < 0) { showToast('⚠ 표준 양식이 아닙니다. 법인_PO입력 시트를 확인해주세요', 'error'); return; }
+
+        // 헤더 이후 데이터 파싱 (샘플행 제외)
+        const dataRows = raw.slice(headerRow + 2).filter(r => r.some(c => c !== ''));
+        currentData = dataRows.map((r, idx) => ({
+          row:      idx + 1,
+          entity:   String(r[0] || '').trim() || 'GSMEIN',
+          date:     formatDate(r[1]),
+          pono:     String(r[2] || '').trim(),
+          lgpn:     String(r[3] || '').trim(),
+          mkpn:     String(r[4] || '').trim(),
+          erp:      String(r[5] || '').trim(),
+          desc:     String(r[6] || '').trim(),
+          spec:     String(r[7] || '').trim(),
+          maker:    String(r[8] || '').trim(),
+          qty:      Number(r[9]) || 0,
+          etd:      formatDate(r[10]),
+          eta:      formatDate(r[11]),
+          mode:     String(r[12] || '').trim().toUpperCase(),
+          remark:   String(r[13] || '').trim(),
+        }));
+
+        renderPreview();
+      } catch(err) {
+        showToast('⚠ 파일 읽기 실패: ' + err.message, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(currentFile);
+  }
+
+  function formatDate(val) {
+    if (!val) return '';
+    if (val instanceof Date) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth()+1).padStart(2,'0');
+      const d = String(val.getDate()).padStart(2,'0');
+      return `${y}-${m}-${d}`;
+    }
+    return String(val).trim();
+  }
+
+  // ── 유효성 검사 ──
+  function validateRow(r) {
+    const errs = [];
+    if (!r.pono)  errs.push('PO No.');
+    if (!r.lgpn && !r.mkpn) errs.push('LG P/N 또는 Maker P/N');
+    if (!r.maker) errs.push('Maker');
+    if (!r.qty || r.qty <= 0) errs.push('수량');
+    if (!r.etd)   errs.push('ETD');
+    if (!r.mode || !['VSSL','AIR'].includes(r.mode)) errs.push('운송구분(VSSL/AIR)');
+    return errs;
+  }
+
+  // ── 미리보기 렌더 ──
+  function renderPreview() {
+    const tbody = document.getElementById('previewBody');
+    tbody.innerHTML = '';
+    let errTotal = 0;
+
+    currentData.forEach(r => {
+      const errs = validateRow(r);
+      if (errs.length) errTotal++;
+      const isErr = errs.length > 0;
+      const tr = document.createElement('tr');
+      if (isErr) tr.classList.add('row-error');
+
+      const modeBadge = r.mode === 'VSSL'
+        ? `<span class="badge badge-vssl">VSSL</span>`
+        : r.mode === 'AIR'
+        ? `<span class="badge badge-air">AIR</span>`
+        : `<span class="badge badge-err">${r.mode || '?'}</span>`;
+
+      const statusBadge = isErr
+        ? `<span class="badge badge-err">⚠ ${errs.join(', ')}</span>`
+        : `<span class="badge badge-ok">✓ OK</span>`;
+
+      tr.innerHTML = `
+        <td class="row-num">${r.row}</td>
+        <td>${r.entity}</td>
+        <td>${r.date}</td>
+        <td class="${!r.pono?'err':''}">${r.pono || '—'}</td>
+        <td>${r.lgpn || '—'}</td>
+        <td class="${!r.mkpn?'err':''}">${r.mkpn || '—'}</td>
+        <td>${r.erp || '—'}</td>
+        <td>${r.desc}</td>
+        <td class="${!r.maker?'err':''}">${r.maker || '—'}</td>
+        <td style="text-align:right">${r.qty ? r.qty.toLocaleString() : '—'}</td>
+        <td class="${!r.etd?'err':''}">${r.etd || '—'}</td>
+        <td>${r.eta || '—'}</td>
+        <td>${modeBadge}</td>
+        <td>${r.remark || '—'}</td>
+        <td>${statusBadge}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('rowCount').textContent = currentData.length;
+    document.getElementById('errCount2').textContent = errTotal;
+    document.getElementById('errNum').textContent = errTotal;
+    document.getElementById('errBadge').classList.toggle('hide', errTotal === 0);
+    document.getElementById('previewWrap').classList.add('show');
+    document.getElementById('submitBtn').disabled = errTotal > 0;
+    if (errTotal > 0) showToast(`⚠ ${errTotal}건 오류를 확인해주세요`, 'warn');
+    else showToast(`✓ ${currentData.length}건 확인 완료. 등록 버튼을 눌러주세요`);
+  }
+
+  // ── Google Sheets 등록 ──
+  async function submitPO() {
+    if (!currentData.length) return;
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = '등록 중... / Registering...';
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({ action: 'po_upload', entity: ENTITY, rows: currentData })
+      });
+      await new Promise(r => setTimeout(r, 1200));
+      showToast(`✓ ${currentData.length}건 등록 완료 / Registration complete`);
+      setTimeout(() => clearFile(), 2000);
+    } catch(e) {
+      showToast('⚠ 등록 실패. 네트워크를 확인해주세요', 'error');
+    }
+    btn.disabled = false; btn.textContent = '✓ Google Sheets에 등록 / Register';
+  }
+
+  // ── 직접 입력 ──
+  function clearManual() {
+    ['m-date','m-pono','m-lgpn','m-mkpn','m-erp','m-desc','m-spec',
+     'm-maker','m-qty','m-etd','m-eta','m-remark'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('m-mode').value = '';
+  }
+
+  async function submitManual() {
+    const get = id => document.getElementById(id).value.trim();
+    const row = {
+      entity: ENTITY, date: get('m-date'), pono: get('m-pono'),
+      lgpn: get('m-lgpn'), mkpn: get('m-mkpn'), erp: get('m-erp'),
+      desc: get('m-desc'), spec: get('m-spec'), maker: get('m-maker'),
+      qty: Number(get('m-qty')), etd: get('m-etd'), eta: get('m-eta'),
+      mode: get('m-mode'), remark: get('m-remark'),
+    };
+    const errs = validateRow(row);
+    if (errs.length) { showToast('⚠ 필수항목 확인: ' + errs.join(', '), 'error'); return; }
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({ action: 'po_upload', entity: ENTITY, rows: [row] })
+      });
+      await new Promise(r => setTimeout(r, 1000));
+      showToast('✓ 등록 완료 / Registration complete');
+      clearManual();
+    } catch(e) {
+      showToast('⚠ 등록 실패. 네트워크를 확인해주세요', 'error');
+    }
+  }
+
+  // ── PO 조회 ──
+  async function searchPO() {
+    const pono  = document.getElementById('s-pono').value.trim();
+    const mkpn  = document.getElementById('s-mkpn').value.trim();
+    const month = document.getElementById('s-month').value;
+    const mode  = document.getElementById('s-mode').value;
+
+    document.getElementById('listWrap').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중... / Loading...</p></div>';
+
+    try {
+      const params = new URLSearchParams({ action:'po_list', entity:ENTITY, pono, mkpn, month, mode });
+      const res = await fetch(`${SCRIPT_URL}?${params}`);
+      const data = await res.json();
+      renderList(data || []);
+    } catch(e) {
+      renderList([]);
+    }
+  }
+
+  function renderList(rows) {
+    if (!rows.length) {
+      document.getElementById('listWrap').innerHTML =
+        '<div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다 / No results found</p></div>';
+      return;
+    }
+    let html = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>주문일자</th><th>PO No.</th><th>LG P/N</th><th>Maker P/N</th>
+        <th>Maker</th><th>주문수량</th><th>출하수량</th><th>잔량</th>
+        <th>ETD</th><th>운송</th><th>상태</th>
+      </tr></thead><tbody>`;
+    rows.forEach(r => {
+      const remain = (r.qty||0) - (r.shipped||0);
+      const modeBadge = r.mode==='AIR' ? `<span class="badge badge-air">AIR</span>` : `<span class="badge badge-vssl">VSSL</span>`;
+      const statusBadge = remain <= 0
+        ? `<span class="badge badge-ok">✓ 완료</span>`
+        : `<span class="badge" style="background:rgba(217,119,6,0.1);color:var(--warn);">대기 ${remain.toLocaleString()}</span>`;
+      html += `<tr>
+        <td>${r.date||'—'}</td><td>${r.pono||'—'}</td><td>${r.lgpn||'—'}</td>
+        <td>${r.mkpn||'—'}</td><td>${r.maker||'—'}</td>
+        <td style="text-align:right">${(r.qty||0).toLocaleString()}</td>
+        <td style="text-align:right">${(r.shipped||0).toLocaleString()}</td>
+        <td style="text-align:right;font-weight:700;color:${remain>0?'var(--warn)':'var(--success)'}">${remain.toLocaleString()}</td>
+        <td>${r.etd||'—'}</td><td>${modeBadge}</td><td>${statusBadge}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('listWrap').innerHTML = html;
+  }
+
+  // ── 표준 양식 다운로드 ──
+  function downloadTemplate() {
+    // 실제 파일 경로로 교체
+    const link = document.createElement('a');
+    link.href = 'SME_PO관리_업로드양식_v2.xlsx';
+    link.download = 'SME_PO관리_업로드양식_v2.xlsx';
+    link.click();
+  }
+
+  // 오늘 날짜 기본값
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('m-date').value = today;
+</script>
+</body>
+</html>
