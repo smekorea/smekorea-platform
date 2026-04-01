@@ -338,19 +338,17 @@
         <thead>
           <tr>
             <th class="row-num">#</th>
+            <th>구분 / Type</th>
             <th>법인 / Entity</th>
-            <th>주문일자 / Order Date</th>
+            <th>주문일자 / Date</th>
             <th>PO No.</th>
             <th>LG P/N</th>
             <th>Maker P/N</th>
-            <th>ERP코드</th>
-            <th>Description</th>
             <th>Maker</th>
             <th>수량 / Qty</th>
-            <th>ETD 요청일</th>
-            <th>ETA 희망일</th>
+            <th>ETD</th>
             <th>운송 / Mode</th>
-            <th>비고 / Remark</th>
+            <th>수정사유 / Reason</th>
             <th>상태</th>
           </tr>
         </thead>
@@ -451,16 +449,61 @@
 <!-- ══════════ 탭 3: PO 조회 ══════════ -->
 <div id="tab-list" class="card" style="display:none;">
 
-  <div class="search-bar">
-    <input type="text" id="s-pono" placeholder="PO No. 검색...">
-    <input type="text" id="s-mkpn" placeholder="Maker P/N 검색...">
-    <input type="month" id="s-month">
-    <select id="s-mode">
-      <option value="">전체 운송</option>
-      <option value="VSSL">VSSL</option>
-      <option value="AIR">AIR</option>
-    </select>
-    <button class="btn-search" onclick="searchPO()">🔍 조회</button>
+  <!-- 검색 조건 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+
+    <!-- 날짜 구간 -->
+    <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;white-space:nowrap;">조회기간</div>
+      <input type="month" id="s-from" style="flex:1;min-width:130px;"
+        placeholder="시작년월">
+      <span style="color:var(--muted);font-size:13px;">~</span>
+      <input type="month" id="s-to" style="flex:1;min-width:130px;"
+        placeholder="종료년월">
+      <button onclick="setQuick(3)" style="padding:7px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface);font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap;">최근3개월</button>
+      <button onclick="setQuick(6)" style="padding:7px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface);font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap;">최근6개월</button>
+      <button onclick="setQuick(12)" style="padding:7px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface);font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap;">최근12개월</button>
+    </div>
+
+    <!-- PO No. 드롭다운 -->
+    <div style="position:relative;">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:4px;">PO No.</div>
+      <input type="text" id="s-pono" placeholder="PO No. 검색 또는 선택..."
+        oninput="filterDropdown('pono')" onfocus="showDropdown('pono')"
+        style="width:100%;">
+      <div id="dd-pono" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;max-height:180px;overflow-y:auto;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.1);margin-top:2px;"></div>
+    </div>
+
+    <!-- Maker 드롭다운 -->
+    <div style="position:relative;">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:4px;">Maker</div>
+      <input type="text" id="s-maker" placeholder="Maker 검색 또는 선택..."
+        oninput="filterDropdown('maker')" onfocus="showDropdown('maker')"
+        style="width:100%;">
+      <div id="dd-maker" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;max-height:180px;overflow-y:auto;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.1);margin-top:2px;"></div>
+    </div>
+
+    <!-- 품번 검색 -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:4px;">Maker P/N / LG P/N</div>
+      <input type="text" id="s-mkpn" placeholder="품번 검색..." style="width:100%;">
+    </div>
+
+    <!-- ERP품번 검색 -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:4px;">ERP품번코드</div>
+      <input type="text" id="s-erp" placeholder="ERP 품번 검색..." style="width:100%;">
+    </div>
+
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+    <button class="btn-search" onclick="searchPO()">🔍 조회 / Search</button>
+    <button onclick="resetSearch()" style="padding:9px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">↺ 초기화</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+      <span id="listCount" style="font-size:12px;color:var(--muted);font-family:'Share Tech Mono',monospace;"></span>
+      <button id="excelBtn" onclick="exportListExcel()" style="display:none;padding:7px 14px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface);color:var(--success);font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">⬇ 엑셀 다운로드</button>
+    </div>
   </div>
 
   <div id="listWrap">
@@ -550,33 +593,40 @@
         const ws = wb.Sheets[sheetName];
         const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
 
-        // 헤더 행 찾기 (법인구분 or Entity 포함)
+        // 헤더 행 찾기 (구분 or Type 포함)
         let headerRow = -1;
         for (let i=0; i<Math.min(10, raw.length); i++) {
-          if (raw[i].some(c => String(c).includes('법인구분') || String(c).includes('Entity'))) {
+          if (raw[i].some(c => String(c).includes('구분') || String(c).includes('Type') || String(c).includes('법인구분'))) {
             headerRow = i; break;
           }
         }
         if (headerRow < 0) { showToast('⚠ 표준 양식이 아닙니다. 법인_PO입력 시트를 확인해주세요', 'error'); return; }
 
-        // 헤더 이후 데이터 파싱 (샘플행 제외)
+        // 파일명에서 법인코드 추출 (GSMEIN_PO_20260401.xlsx)
+        const fnMatch = currentFile.name.match(/^([A-Z]+)_PO_(\d{8})/);
+        const fnEntity = fnMatch ? fnMatch[1] : 'GSMEIN';
+        const fnDate   = fnMatch ? `${fnMatch[2].slice(0,4)}-${fnMatch[2].slice(4,6)}-${fnMatch[2].slice(6,8)}` : '';
+
+        // 헤더 이후 데이터 파싱 (설명행+샘플행 3개 제외)
         const dataRows = raw.slice(headerRow + 2).filter(r => r.some(c => c !== ''));
         currentData = dataRows.map((r, idx) => ({
           row:      idx + 1,
-          entity:   String(r[0] || '').trim() || 'GSMEIN',
-          date:     formatDate(r[1]),
-          pono:     String(r[2] || '').trim(),
-          lgpn:     String(r[3] || '').trim(),
-          mkpn:     String(r[4] || '').trim(),
-          erp:      String(r[5] || '').trim(),
-          desc:     String(r[6] || '').trim(),
-          spec:     String(r[7] || '').trim(),
-          maker:    String(r[8] || '').trim(),
-          qty:      Number(r[9]) || 0,
-          etd:      formatDate(r[10]),
-          eta:      formatDate(r[11]),
-          mode:     String(r[12] || '').trim().toUpperCase(),
-          remark:   String(r[13] || '').trim(),
+          type:     String(r[0] || '신규').trim(),   // 구분 (신규/수정/취소)
+          entity:   String(r[1] || '').trim() || fnEntity,
+          date:     formatDate(r[2]) || fnDate,
+          pono:     String(r[3] || '').trim(),
+          lgpn:     String(r[4] || '').trim(),
+          mkpn:     String(r[5] || '').trim(),
+          erp:      String(r[6] || '').trim(),
+          desc:     String(r[7] || '').trim(),
+          spec:     String(r[8] || '').trim(),
+          maker:    String(r[9] || '').trim(),
+          qty:      Number(r[10]) || 0,
+          etd:      formatDate(r[11]),
+          eta:      formatDate(r[12]),
+          mode:     String(r[13] || '').trim().toUpperCase(),
+          reason:   String(r[14] || '').trim(),  // 수정사유
+          remark:   String(r[15] || '').trim(),
         }));
 
         renderPreview();
@@ -604,9 +654,10 @@
     if (!r.pono)  errs.push('PO No.');
     if (!r.lgpn && !r.mkpn) errs.push('LG P/N 또는 Maker P/N');
     if (!r.maker) errs.push('Maker');
-    if (!r.qty || r.qty <= 0) errs.push('수량');
-    if (!r.etd)   errs.push('ETD');
-    if (!r.mode || !['VSSL','AIR'].includes(r.mode)) errs.push('운송구분(VSSL/AIR)');
+    if (r.type !== '취소' && (!r.qty || r.qty <= 0)) errs.push('수량');
+    if (r.type !== '취소' && !r.etd) errs.push('ETD');
+    if (r.type !== '취소' && (!r.mode || !['VSSL','AIR'].includes(r.mode))) errs.push('운송구분(VSSL/AIR)');
+    if ((r.type === '수정' || r.type === '취소') && !r.reason) errs.push('수정사유');
     return errs;
   }
 
@@ -623,11 +674,15 @@
       const tr = document.createElement('tr');
       if (isErr) tr.classList.add('row-error');
 
+      const typeBg = r.type==='수정' ? 'rgba(255,193,7,0.15)' : r.type==='취소' ? 'rgba(200,0,30,0.08)' : 'rgba(14,159,110,0.08)';
+      const typeColor = r.type==='수정' ? '#d97706' : r.type==='취소' ? '#c8001e' : '#0e9f6e';
+      const typeBadge = `<span class="badge" style="background:${typeBg};color:${typeColor};border:1px solid ${typeColor}40;">${r.type||'신규'}</span>`;
+
       const modeBadge = r.mode === 'VSSL'
         ? `<span class="badge badge-vssl">VSSL</span>`
         : r.mode === 'AIR'
         ? `<span class="badge badge-air">AIR</span>`
-        : `<span class="badge badge-err">${r.mode || '?'}</span>`;
+        : r.type === '취소' ? '—' : `<span class="badge badge-err">${r.mode || '?'}</span>`;
 
       const statusBadge = isErr
         ? `<span class="badge badge-err">⚠ ${errs.join(', ')}</span>`
@@ -635,19 +690,17 @@
 
       tr.innerHTML = `
         <td class="row-num">${r.row}</td>
+        <td>${typeBadge}</td>
         <td>${r.entity}</td>
         <td>${r.date}</td>
         <td class="${!r.pono?'err':''}">${r.pono || '—'}</td>
         <td>${r.lgpn || '—'}</td>
         <td class="${!r.mkpn?'err':''}">${r.mkpn || '—'}</td>
-        <td>${r.erp || '—'}</td>
-        <td>${r.desc}</td>
         <td class="${!r.maker?'err':''}">${r.maker || '—'}</td>
         <td style="text-align:right">${r.qty ? r.qty.toLocaleString() : '—'}</td>
-        <td class="${!r.etd?'err':''}">${r.etd || '—'}</td>
-        <td>${r.eta || '—'}</td>
+        <td class="${(!r.etd && r.type!=='취소')?'err':''}">${r.etd || '—'}</td>
         <td>${modeBadge}</td>
-        <td>${r.remark || '—'}</td>
+        <td class="${(r.type!=='신규' && !r.reason)?'err':''}">${r.reason || '—'}</td>
         <td>${statusBadge}</td>
       `;
       tbody.appendChild(tr);
@@ -718,54 +771,183 @@
   }
 
   // ── PO 조회 ──
+  let listData = [];
+  let ddData = { pono: [], maker: [] };
+
+  function setQuick(months) {
+    const now = new Date();
+    const to = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    now.setMonth(now.getMonth() - months + 1);
+    const from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    document.getElementById('s-from').value = from;
+    document.getElementById('s-to').value = to;
+  }
+
+  function resetSearch() {
+    ['s-from','s-to','s-pono','s-maker','s-mkpn','s-erp'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    ['dd-pono','dd-maker'].forEach(id => {
+      document.getElementById(id).style.display = 'none';
+    });
+  }
+
+  // 드롭다운 표시
+  function showDropdown(type) {
+    loadDropdownData(type);
+  }
+
+  function filterDropdown(type) {
+    const val = document.getElementById(`s-${type}`).value.toLowerCase();
+    const items = ddData[type].filter(v => v.toLowerCase().includes(val));
+    renderDropdown(type, items);
+  }
+
+  async function loadDropdownData(type) {
+    if (ddData[type].length > 0) {
+      renderDropdown(type, ddData[type]);
+      return;
+    }
+    try {
+      const params = new URLSearchParams({ action:'po_dropdown', entity:ENTITY, type });
+      const res = await fetch(`${SCRIPT_URL}?${params}`);
+      const data = await res.json();
+      ddData[type] = data || [];
+    } catch(e) {
+      // 샘플
+      ddData[type] = type === 'pono'
+        ? ['GSMEIN-260120-001','GSMEIN-260201-001','GSMEIN-260306-001']
+        : ['SMART','MURATA','JST','ROHM'];
+    }
+    renderDropdown(type, ddData[type]);
+  }
+
+  function renderDropdown(type, items) {
+    const dd = document.getElementById(`dd-${type}`);
+    if (!items.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = items.slice(0,50).map(v =>
+      `<div onclick="selectDD('${type}','${v}')"
+        style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f4f9;transition:background .1s;"
+        onmouseover="this.style.background='#f0f4f9'"
+        onmouseout="this.style.background=''">${v}</div>`
+    ).join('');
+    dd.style.display = 'block';
+  }
+
+  function selectDD(type, val) {
+    document.getElementById(`s-${type}`).value = val;
+    document.getElementById(`dd-${type}`).style.display = 'none';
+  }
+
+  // 드롭다운 외부 클릭 시 닫기
+  document.addEventListener('click', e => {
+    ['pono','maker'].forEach(type => {
+      const input = document.getElementById(`s-${type}`);
+      const dd = document.getElementById(`dd-${type}`);
+      if (input && dd && !input.contains(e.target) && !dd.contains(e.target)) {
+        dd.style.display = 'none';
+      }
+    });
+  });
+
   async function searchPO() {
-    const pono  = document.getElementById('s-pono').value.trim();
-    const mkpn  = document.getElementById('s-mkpn').value.trim();
-    const month = document.getElementById('s-month').value;
-    const mode  = document.getElementById('s-mode').value;
+    const from   = document.getElementById('s-from').value;
+    const to     = document.getElementById('s-to').value;
+    const pono   = document.getElementById('s-pono').value.trim();
+    const maker  = document.getElementById('s-maker').value.trim();
+    const mkpn   = document.getElementById('s-mkpn').value.trim();
+    const erp    = document.getElementById('s-erp').value.trim();
 
     document.getElementById('listWrap').innerHTML =
       '<div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중... / Loading...</p></div>';
+    document.getElementById('excelBtn').style.display = 'none';
+    document.getElementById('listCount').textContent = '';
 
     try {
-      const params = new URLSearchParams({ action:'po_list', entity:ENTITY, pono, mkpn, month, mode });
+      const params = new URLSearchParams({ action:'po_list', entity:ENTITY, from, to, pono, maker, mkpn, erp });
       const res = await fetch(`${SCRIPT_URL}?${params}`);
-      const data = await res.json();
-      renderList(data || []);
+      listData = await res.json() || [];
     } catch(e) {
-      renderList([]);
+      // 샘플 데이터
+      listData = [
+        {date:'2026-01-20',pono:'GSMEIN-260120-001',lgpn:'0RH1201L622',mkpn:'RC-98TRJ1K20',erp:'9001-001',maker:'SMART',qty:15000,shipped:10000,etd:'2026-06-30',mode:'VSSL',type:'신규'},
+        {date:'2026-02-08',pono:'GSMEIN-260208-001',lgpn:'EBC64595501',mkpn:'CSR02TRFR042',erp:'9001-023',maker:'SMART',qty:8000,shipped:0,etd:'2026-05-30',mode:'AIR',type:'신규'},
+        {date:'2026-03-06',pono:'GSMEIN-260306-001',lgpn:'0RH2001L422',mkpn:'RC-98TRF2K00',erp:'9001-005',maker:'SMART',qty:12000,shipped:12000,etd:'2026-07-15',mode:'VSSL',type:'수정'},
+      ];
     }
+    renderList(listData);
   }
 
   function renderList(rows) {
+    const wrap = document.getElementById('listWrap');
+    document.getElementById('listCount').textContent = `— ${rows.length.toLocaleString()}건`;
+
     if (!rows.length) {
-      document.getElementById('listWrap').innerHTML =
-        '<div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다 / No results found</p></div>';
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다 / No results found</p></div>';
+      document.getElementById('excelBtn').style.display = 'none';
       return;
     }
+
+    document.getElementById('excelBtn').style.display = 'flex';
+
     let html = `<div class="table-wrap"><table>
       <thead><tr>
-        <th>주문일자</th><th>PO No.</th><th>LG P/N</th><th>Maker P/N</th>
-        <th>Maker</th><th>주문수량</th><th>출하수량</th><th>잔량</th>
+        <th>구분</th><th>주문일자</th><th>PO No.</th>
+        <th>LG P/N</th><th>Maker P/N</th><th>ERP코드</th>
+        <th>Maker</th><th style="text-align:right">주문수량</th>
+        <th style="text-align:right">출하수량</th><th style="text-align:right">잔량</th>
         <th>ETD</th><th>운송</th><th>상태</th>
       </tr></thead><tbody>`;
+
     rows.forEach(r => {
       const remain = (r.qty||0) - (r.shipped||0);
-      const modeBadge = r.mode==='AIR' ? `<span class="badge badge-air">AIR</span>` : `<span class="badge badge-vssl">VSSL</span>`;
-      const statusBadge = remain <= 0
+      const typeBg = r.type==='수정'?'rgba(255,193,7,0.15)':r.type==='취소'?'rgba(200,0,30,0.08)':'rgba(14,159,110,0.08)';
+      const typeColor = r.type==='수정'?'#d97706':r.type==='취소'?'#c8001e':'#0e9f6e';
+      const typeBadge = `<span style="background:${typeBg};color:${typeColor};padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace;">${r.type||'신규'}</span>`;
+      const modeBadge = r.mode==='AIR'?`<span class="badge badge-air">✈AIR</span>`:`<span class="badge badge-vssl">🚢VSSL</span>`;
+      const statusBadge = remain<=0
         ? `<span class="badge badge-ok">✓ 완료</span>`
         : `<span class="badge" style="background:rgba(217,119,6,0.1);color:var(--warn);">대기 ${remain.toLocaleString()}</span>`;
       html += `<tr>
-        <td>${r.date||'—'}</td><td>${r.pono||'—'}</td><td>${r.lgpn||'—'}</td>
-        <td>${r.mkpn||'—'}</td><td>${r.maker||'—'}</td>
-        <td style="text-align:right">${(r.qty||0).toLocaleString()}</td>
-        <td style="text-align:right">${(r.shipped||0).toLocaleString()}</td>
-        <td style="text-align:right;font-weight:700;color:${remain>0?'var(--warn)':'var(--success)'}">${remain.toLocaleString()}</td>
-        <td>${r.etd||'—'}</td><td>${modeBadge}</td><td>${statusBadge}</td>
+        <td>${typeBadge}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.date||'—'}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.pono||'—'}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.lgpn||'—'}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn||'—'}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.erp||'—'}</td>
+        <td>${r.maker||'—'}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${(r.qty||0).toLocaleString()}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${(r.shipped||0).toLocaleString()}</td>
+        <td style="text-align:right;font-weight:700;color:${remain>0?'var(--warn)':'var(--success)'};">${remain.toLocaleString()}</td>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.etd||'—'}</td>
+        <td>${modeBadge}</td>
+        <td>${statusBadge}</td>
       </tr>`;
     });
+
     html += '</tbody></table></div>';
-    document.getElementById('listWrap').innerHTML = html;
+    wrap.innerHTML = html;
+  }
+
+  // ── 엑셀 다운로드 ──
+  function exportListExcel() {
+    if (!listData.length) { showToast('⚠ 조회 후 다운로드 가능합니다', 'warn'); return; }
+    const header = ['구분','주문일자','PO No.','LG P/N','Maker P/N','ERP품번코드',
+                    'Maker','주문수량','출하수량','잔량','ETD','운송','상태'];
+    const rows = listData.map(r => {
+      const remain = (r.qty||0)-(r.shipped||0);
+      return [r.type||'신규', r.date, r.pono, r.lgpn, r.mkpn, r.erp||'',
+              r.maker, r.qty, r.shipped||0, remain, r.etd, r.mode,
+              remain<=0?'완료':'잔량대기'];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws['!cols'] = [{wch:8},{wch:12},{wch:22},{wch:16},{wch:18},{wch:12},
+                   {wch:12},{wch:10},{wch:10},{wch:10},{wch:12},{wch:8},{wch:10}];
+    const wb2 = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb2, ws, 'PO조회');
+    const fname = `GSMEIN_PO조회_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb2, fname);
+    showToast('✓ 엑셀 다운로드 완료');
   }
 
   // ── 표준 양식 다운로드 ──

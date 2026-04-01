@@ -331,7 +331,92 @@
   </div>
 </div>
 
-<!-- 검색바 -->
+<!-- 탭 -->
+<div style="display:flex;gap:8px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--border);">
+  <button id="tab-query-btn" onclick="switchMasterTab('query')"
+    style="padding:8px 18px;border-radius:8px;border:none;background:var(--text);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+    🔍 PO 조회 · 출하입력
+  </button>
+  <button id="tab-upload-btn" onclick="switchMasterTab('upload')"
+    style="padding:8px 18px;border-radius:8px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+    📤 출하수량 업로드
+  </button>
+</div>
+
+<!-- 출하 업로드 탭 -->
+<div id="tab-upload" style="display:none;padding:24px 28px;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#f8fafc,var(--surface));">
+      <div style="font-size:14px;font-weight:700;">📤 본사 출하수량 업로드 / HQ Shipment Upload</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">표준양식 본사_출하입력 시트 기준 · 엑셀 업로드 후 미리보기 확인 후 등록</div>
+    </div>
+    <div style="padding:24px 20px;">
+
+      <!-- 업로드 존 -->
+      <div id="hqUploadZone"
+        style="border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;cursor:pointer;background:#f8fafc;transition:all .2s;position:relative;"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
+        ondragleave="this.style.borderColor='var(--border)'"
+        ondrop="onHQDrop(event)">
+        <input type="file" id="hqFileInput" accept=".xlsx,.xls"
+          onchange="onHQFileSelect(event)"
+          style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+        <div style="font-size:36px;margin-bottom:10px;">📂</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">본사 출하입력 엑셀 파일 업로드</div>
+        <div style="font-size:13px;color:var(--muted);">표준양식 <strong>본사_출하입력</strong> 시트 · .xlsx 지원<br>드래그&드롭 또는 클릭하여 선택</div>
+      </div>
+
+      <!-- 선택된 파일 -->
+      <div id="hqFileSelected" style="display:none;align-items:center;gap:12px;background:rgba(26,86,219,0.06);border:1.5px solid rgba(26,86,219,0.2);border-radius:10px;padding:12px 16px;margin-top:14px;">
+        <span style="font-size:22px;">📊</span>
+        <div>
+          <div id="hqFileName" style="font-size:14px;font-weight:700;color:var(--accent2);">—</div>
+          <div id="hqFileSize" style="font-size:11px;color:var(--muted);">—</div>
+        </div>
+        <button onclick="clearHQFile()" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">✕</button>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button onclick="parseHQFile()" id="hqParseBtn" style="display:none;padding:9px 18px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+          🔍 미리보기 / Preview
+        </button>
+      </div>
+
+      <!-- 미리보기 테이블 -->
+      <div id="hqPreviewWrap" style="display:none;margin-top:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:13px;font-weight:700;">미리보기 — <span id="hqRowCount" style="color:var(--accent2);">0</span>행 · <span id="hqErrCount">0</span>건 오류</div>
+          <div id="hqErrBadge" style="display:none;font-size:12px;padding:4px 10px;border-radius:6px;background:rgba(200,0,30,0.08);color:var(--accent);border:1px solid rgba(200,0,30,0.2);font-weight:600;"></div>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">
+            <thead>
+              <tr style="background:#f0f4f9;">
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">#</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">법인</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">인보이스 No.</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker P/N</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker</th>
+                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하수량</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하일</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">운송</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">본사발주일</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">메이커약속납기</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">상태</th>
+              </tr>
+            </thead>
+            <tbody id="hqPreviewBody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="clearHQFile()" style="padding:11px 18px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:14px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">↩ 다시 선택</button>
+          <button id="hqSubmitBtn" onclick="submitHQShipment()" style="padding:11px 24px;border-radius:8px;border:none;background:var(--accent2);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;box-shadow:0 3px 10px rgba(26,86,219,0.25);">✓ Google Sheets에 등록</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 <div class="search-section">
   <div class="search-row">
     <div class="s-group narrow">
@@ -858,6 +943,174 @@
     const filename = `SME_PO마스터_${new Date().toISOString().slice(0,10)}.xlsx`;
     XLSX.writeFile(wb, filename);
     showToast('✓ 엑셀 다운로드 완료');
+  }
+
+  // ── 탭 전환 ──
+  function switchMasterTab(tab) {
+    const isQuery = tab === 'query';
+    document.getElementById('tab-upload').style.display = isQuery ? 'none' : 'block';
+    document.querySelector('.search-section').style.display = isQuery ? 'block' : 'none';
+    document.querySelector('.table-section').style.display = isQuery ? 'block' : 'none';
+    document.getElementById('detailPanel').classList.remove('show');
+    document.getElementById('tab-query-btn').style.background = isQuery ? 'var(--text)' : 'none';
+    document.getElementById('tab-query-btn').style.color = isQuery ? '#fff' : 'var(--muted)';
+    document.getElementById('tab-upload-btn').style.background = !isQuery ? 'var(--accent2)' : 'none';
+    document.getElementById('tab-upload-btn').style.color = !isQuery ? '#fff' : 'var(--muted)';
+  }
+
+  // ── 출하 업로드 ──
+  let hqData = [], hqFile = null;
+
+  function onHQDrop(e) {
+    e.preventDefault();
+    document.getElementById('hqUploadZone').style.borderColor = 'var(--border)';
+    const file = e.dataTransfer.files[0];
+    if (file) processHQFile(file);
+  }
+  function onHQFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) processHQFile(file);
+  }
+  function processHQFile(file) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) { showToast('⚠ Excel 파일(.xlsx)만 지원됩니다', 'error'); return; }
+    hqFile = file;
+    document.getElementById('hqFileName').textContent = file.name;
+    document.getElementById('hqFileSize').textContent = (file.size/1024).toFixed(1) + ' KB';
+    document.getElementById('hqFileSelected').style.display = 'flex';
+    document.getElementById('hqParseBtn').style.display = 'flex';
+    document.getElementById('hqPreviewWrap').style.display = 'none';
+  }
+  function clearHQFile() {
+    hqFile = null; hqData = [];
+    document.getElementById('hqFileInput').value = '';
+    document.getElementById('hqFileSelected').style.display = 'none';
+    document.getElementById('hqParseBtn').style.display = 'none';
+    document.getElementById('hqPreviewWrap').style.display = 'none';
+  }
+  function parseHQFile() {
+    if (!hqFile) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.find(n => n.includes('출하') || n.includes('Shipment')) || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+        let headerRow = -1;
+        for (let i=0; i<Math.min(10, raw.length); i++) {
+          if (raw[i].some(c => String(c).includes('법인구분') || String(c).includes('인보이스'))) {
+            headerRow = i; break;
+          }
+        }
+        if (headerRow < 0) { showToast('⚠ 본사_출하입력 시트를 확인해주세요', 'error'); return; }
+
+        const dataRows = raw.slice(headerRow + 2).filter(r => r.some(c => c !== ''));
+        hqData = dataRows.map((r, idx) => ({
+          row:      idx + 1,
+          entity:   String(r[0]||'').trim(),
+          invoice:  String(r[1]||'').trim(),
+          maker:    String(r[2]||'').trim(),
+          mkpn:     String(r[3]||'').trim(),
+          erp:      String(r[4]||'').trim(),
+          shipdate: formatDate(r[5]),
+          shipqty:  Number(r[6])||0,
+          mode:     String(r[7]||'').trim().toUpperCase(),
+          hqdate:   formatDate(r[8]),
+          mkcommit: formatDate(r[9]),
+          mkactual: formatDate(r[10]),
+          ontyme:   String(r[11]||'').trim(),
+          remark:   String(r[12]||'').trim(),
+        }));
+
+        renderHQPreview();
+      } catch(err) {
+        showToast('⚠ 파일 읽기 실패: ' + err.message, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(hqFile);
+  }
+
+  function formatDate(val) {
+    if (!val) return '';
+    if (val instanceof Date) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth()+1).padStart(2,'0');
+      const d = String(val.getDate()).padStart(2,'0');
+      return `${y}-${m}-${d}`;
+    }
+    return String(val).trim();
+  }
+
+  function renderHQPreview() {
+    const tbody = document.getElementById('hqPreviewBody');
+    let errTotal = 0;
+    tbody.innerHTML = hqData.map(r => {
+      const errs = [];
+      if (!r.entity)  errs.push('법인');
+      if (!r.invoice) errs.push('인보이스No.');
+      if (!r.mkpn)    errs.push('MakerP/N');
+      if (!r.shipqty||r.shipqty<=0) errs.push('수량');
+      if (!r.shipdate) errs.push('출하일');
+      if (!['VSSL','AIR'].includes(r.mode)) errs.push('운송');
+      if (errs.length) errTotal++;
+
+      const isErr = errs.length > 0;
+      const modeBadge = r.mode==='AIR'
+        ? `<span style="background:rgba(200,0,30,0.1);color:#c8001e;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">✈AIR</span>`
+        : `<span style="background:rgba(26,86,219,0.1);color:#1a56db;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">🚢VSSL</span>`;
+      const statusBadge = isErr
+        ? `<span style="background:rgba(200,0,30,0.1);color:#c8001e;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;">⚠ ${errs.join(',')}</span>`
+        : `<span style="background:rgba(14,159,110,0.1);color:#0e9f6e;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;">✓ OK</span>`;
+
+      const bg = isErr ? 'rgba(200,0,30,0.03)' : (r.row%2===0?'#fff':'#f8fafc');
+      return `<tr style="background:${bg};border-bottom:1px solid #f0f4f9;">
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);">${r.row}</td>
+        <td style="padding:8px 12px;">${r.entity||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.invoice||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn||'—'}</td>
+        <td style="padding:8px 12px;">${r.maker||'—'}</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;">${r.shipqty?r.shipqty.toLocaleString():'—'}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.shipdate||'—'}</td>
+        <td style="padding:8px 12px;">${modeBadge}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.hqdate||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkcommit||'—'}</td>
+        <td style="padding:8px 12px;">${statusBadge}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('hqRowCount').textContent = hqData.length;
+    document.getElementById('hqErrCount').textContent = errTotal;
+    document.getElementById('hqPreviewWrap').style.display = 'block';
+    document.getElementById('hqSubmitBtn').disabled = errTotal > 0;
+
+    if (errTotal > 0) {
+      document.getElementById('hqErrBadge').style.display = 'block';
+      document.getElementById('hqErrBadge').textContent = `⚠ ${errTotal}건 오류 확인 필요`;
+      showToast(`⚠ ${errTotal}건 오류를 확인해주세요`, 'warn');
+    } else {
+      document.getElementById('hqErrBadge').style.display = 'none';
+      showToast(`✓ ${hqData.length}건 확인 완료. 등록 버튼을 눌러주세요`);
+    }
+  }
+
+  async function submitHQShipment() {
+    if (!hqData.length) return;
+    const btn = document.getElementById('hqSubmitBtn');
+    btn.disabled = true; btn.textContent = '등록 중...';
+    try {
+      await fetch(SCRIPT_URL, {
+        method:'POST', mode:'no-cors',
+        headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({action:'hq_shipment_upload', rows: hqData})
+      });
+      await new Promise(r => setTimeout(r, 1200));
+      showToast(`✓ ${hqData.length}건 출하 등록 완료`);
+      clearHQFile();
+    } catch(e) {
+      showToast('⚠ 등록 실패. 네트워크를 확인해주세요', 'error');
+    }
+    btn.disabled = false; btn.textContent = '✓ Google Sheets에 등록';
   }
 
   // 초기 로드
