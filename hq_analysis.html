@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HQ 거래현황분석 | SMEKOREA</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --red: #c8001e; --red-dark: #a8001a; --red-light: rgba(200,0,30,0.06);
+  --blue: #1a56db; --green: #1e7e4a; --amber: #b46400;
+  --text: #1a1a2e; --muted: #666; --border: #d8d8d8; --border-light: #ebebeb;
+  --bg: #f2f2f2; --surface: #ffffff; --header-bg: #f7f7f7; --row-hover: #fdf5f6; --row-lg: #fffafa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR','Malgun Gothic',sans-serif;font-size:12px;min-height:100vh;}
+
+.app-header{background:var(--red);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:44px;box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+.app-logo{display:flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;color:#fff;font-size:13px;font-weight:900;letter-spacing:1px;}
+.app-logo-box{width:28px;height:28px;background:rgba(255,255,255,0.2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;}
+.app-logo-div{width:1px;height:20px;background:rgba(255,255,255,0.3);}
+.app-title{font-size:13px;font-weight:700;color:#fff;letter-spacing:0.5px;}
+.app-badge{font-size:10px;background:rgba(255,255,255,0.15);color:#fff;padding:3px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+.app-home{font-size:11px;color:rgba(255,255,255,0.85);cursor:pointer;text-decoration:none;}
+.app-home:hover{color:#fff;}
+
+.tab-nav{background:var(--surface);border-bottom:2px solid var(--red);padding:0 20px;display:flex;align-items:flex-end;gap:2px;position:sticky;top:0;z-index:100;}
+.tab-item{display:flex;align-items:center;gap:7px;padding:9px 18px;font-size:12px;font-weight:700;color:#888;cursor:pointer;background:#ececec;border:1px solid #ccc;border-bottom:none;border-radius:4px 4px 0 0;margin-bottom:-2px;transition:all 0.15s;}
+.tab-item:hover{background:#e0e0e0;color:#555;}
+.tab-item.active{background:var(--red);color:#fff;border-color:var(--red);}
+.tab-close{font-size:10px;opacity:0.65;margin-left:2px;}
+.tab-home{padding:9px 12px;font-size:15px;color:#888;cursor:pointer;background:var(--surface);border:1px solid #ccc;border-bottom:none;border-radius:4px 4px 0 0;margin-bottom:-2px;}
+.tab-home:hover{color:var(--red);}
+
+.upload-bar{background:#fffaf0;border-bottom:1px solid #ffe082;padding:8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ul-label{font-size:11px;font-weight:700;color:var(--muted);}
+.p-select{border:1px solid var(--red);padding:4px 6px;font-size:11px;color:var(--text);background:var(--surface);height:26px;font-family:'Noto Sans KR',sans-serif;}
+.p-sep{font-size:11px;color:var(--muted);}
+.q-btn{border:1px solid var(--border);background:var(--surface);padding:4px 10px;font-size:11px;cursor:pointer;color:var(--muted);font-family:'Noto Sans KR',sans-serif;}
+.q-btn:hover{border-color:var(--red);color:var(--red);}
+.q-btn.active{background:var(--red);color:#fff;border-color:var(--red);font-weight:700;}
+.btn-apply{background:var(--red);color:#fff;border:none;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;height:26px;font-family:'Noto Sans KR',sans-serif;}
+.btn-apply:hover{background:var(--red-dark);}
+.ul-info{font-size:11px;color:var(--muted);margin-left:auto;}
+.ul-info.ok{color:var(--green);font-weight:700;}
+.btn-upload{background:var(--red);color:#fff;border:none;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+#fileInput{display:none;}
+
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* KPI */
+.kpi-bar{padding:14px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;background:var(--bg);border-bottom:1px solid var(--border);}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--border);padding:12px 14px;}
+.kpi-card.r{border-top-color:var(--red);}.kpi-card.b{border-top-color:var(--blue);}
+.kpi-card.g{border-top-color:var(--green);}.kpi-card.a{border-top-color:var(--amber);}
+.kpi-card.gr{border-top-color:#999;}
+.kpi-lbl{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;margin-bottom:6px;}
+.kpi-val{font-size:22px;font-weight:900;color:var(--text);line-height:1;}
+.kpi-val.r{color:var(--red);}.kpi-val.b{color:var(--blue);}.kpi-val.g{color:var(--green);}.kpi-val.a{color:var(--amber);}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:4px;}
+
+/* 대시 */
+.dash{padding:14px 20px;background:var(--bg);}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
+.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;}
+.bx{background:var(--surface);border:1px solid var(--border);}
+.bx-hdr{padding:8px 14px;border-bottom:1px solid var(--border-light);font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;justify-content:space-between;background:var(--header-bg);}
+.bx-sub{font-size:10px;color:var(--muted);font-weight:400;}
+.bx-body{padding:12px 14px;}
+
+.bar-area{height:130px;display:flex;align-items:flex-end;gap:8px;padding:8px 0 20px;position:relative;background:#fafafa;border:1px solid var(--border-light);}
+.bcol{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;}
+.bpair{width:100%;display:flex;gap:2px;align-items:flex-end;padding:0 4px;}
+.bi{flex:1;border-radius:1px 1px 0 0;}
+.blbl{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+.lgnd{position:absolute;top:6px;right:8px;display:flex;gap:10px;}
+.li{display:flex;align-items:center;gap:4px;font-size:9px;}
+.ld{width:8px;height:8px;border-radius:1px;}
+
+.donut-area{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 0;}
+.dll{display:flex;flex-direction:column;gap:6px;}
+.di{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);}
+.dd{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+.split-area{display:flex;flex-direction:column;gap:10px;}
+.split-lbl{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-bottom:4px;}
+.split-bar{display:flex;border-radius:2px;overflow:hidden;height:28px;}
+.split-seg{display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff;}
+.split-note{font-size:10px;color:var(--amber);background:#fff8e1;border:1px solid #ffe082;padding:6px 10px;margin-top:4px;}
+
+.mg-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;}
+.mg-col{text-align:center;}
+.mg-bw{height:50px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:3px;}
+.mg-b{width:26px;border-radius:1px 1px 0 0;}
+.mg-yr{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+.mg-val{font-size:10px;font-weight:700;margin-top:1px;}
+.mg-rate{font-size:9px;color:var(--muted);}
+
+.ri{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-light);}
+.ri:last-child{border-bottom:none;}
+.rn{font-size:11px;font-weight:700;color:var(--muted);font-family:'Share Tech Mono',monospace;min-width:16px;}
+.rn.top{color:var(--red);}
+.rnm{font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ram{font-size:11px;font-weight:700;}
+
+/* 필터 */
+.filter-sec{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;}
+.f-bread{font-size:11px;color:var(--muted);margin-bottom:10px;}
+.f-bread span{color:var(--red);font-weight:700;}
+.f-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 24px;}
+.f-row{display:flex;align-items:center;}
+.f-lbl{font-size:12px;color:var(--text);font-weight:700;min-width:72px;flex-shrink:0;padding-right:8px;}
+.f-sel{flex:1;border:1px solid var(--border);padding:4px 6px;font-size:12px;color:var(--text);background:var(--surface);height:30px;font-family:'Noto Sans KR',sans-serif;}
+.f-sel:focus{outline:none;border-color:var(--red);}
+.f-sel.hl{border:2px solid var(--red);}
+.f-inp{flex:1;border:1px solid var(--border);padding:5px 8px;font-size:12px;color:var(--text);background:var(--surface);height:30px;font-family:'Noto Sans KR',sans-serif;}
+.f-inp:focus{outline:none;border-color:var(--red);}
+.f-btns{grid-column:4;display:flex;justify-content:flex-end;align-items:flex-end;gap:6px;}
+.btn-search{background:var(--red);color:#fff;border:none;padding:6px 22px;font-size:12px;font-weight:700;cursor:pointer;height:30px;font-family:'Noto Sans KR',sans-serif;display:flex;align-items:center;gap:5px;}
+.btn-search:hover{background:var(--red-dark);}
+.btn-reset{background:#666;color:#fff;border:none;padding:6px 14px;font-size:12px;cursor:pointer;height:30px;font-family:'Noto Sans KR',sans-serif;}
+
+/* 결과 헤더 */
+.res-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 20px;display:flex;align-items:center;justify-content:space-between;}
+.res-total{font-size:13px;font-weight:700;}
+.res-total em{color:var(--red);font-style:normal;}
+.res-acts{display:flex;gap:6px;}
+.btn-act{border:1px solid var(--border);background:var(--surface);padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;font-family:'Noto Sans KR',sans-serif;}
+.btn-act:hover{background:var(--header-bg);}
+.btn-act.red{border-color:var(--red);color:var(--red);font-weight:700;}
+.btn-act.red:hover{background:var(--red-light);}
+
+/* 테이블 */
+.tbl-cont{background:var(--surface);overflow-x:auto;border-bottom:1px solid var(--border);}
+.dtbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+.dtbl thead th{background:var(--header-bg);padding:8px 10px;text-align:left;color:#444;font-weight:700;border-right:1px solid var(--border-light);border-bottom:2px solid var(--border);white-space:nowrap;}
+.dtbl thead th:last-child{border-right:none;}
+.dtbl tbody td{padding:7px 10px;border-bottom:1px solid var(--border-light);border-right:1px solid var(--border-light);white-space:nowrap;}
+.dtbl tbody td:last-child{border-right:none;}
+.dtbl tbody tr:hover td{background:var(--row-hover);}
+.dtbl tbody tr.lg-row{background:var(--row-lg);}
+.dtbl tbody tr.lg-row:hover td{background:#ffeaea;}
+.tc{text-align:center !important;}.tr{text-align:right !important;}
+.chk{width:36px;text-align:center !important;}
+.chk input[type=checkbox]{cursor:pointer;accent-color:var(--red);}
+.num-cell{text-align:center;color:var(--muted);font-size:11px;}
+
+.tag{font-size:10.5px;padding:2px 8px;border-radius:2px;font-weight:700;display:inline-block;}
+.tag-lg{background:rgba(200,0,30,0.08);color:var(--red);border:1px solid rgba(200,0,30,0.2);}
+.tag-dt{background:rgba(30,126,74,0.08);color:var(--green);border:1px solid rgba(30,126,74,0.2);}
+.s-ok{color:var(--green);font-weight:700;}.s-ov{color:var(--red);font-weight:700;}
+.s-sh{color:var(--blue);font-weight:700;}.s-st{color:var(--amber);font-weight:700;}
+
+/* 단가/마진 */
+.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:14px 20px;background:var(--bg);}
+.ph-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-light);}
+.ph-row:last-child{border-bottom:none;}
+.ph-yr{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;min-width:44px;}
+.ph-price{font-size:12px;font-weight:700;flex:1;}
+.ph-up{color:var(--red);font-size:10px;font-weight:700;}
+.ph-dn{color:var(--green);font-size:10px;font-weight:700;}
+.ct-row{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--header-bg);border:1px solid var(--border-light);margin-bottom:4px;}
+.ct-nm{font-size:11px;font-weight:700;flex:1;}
+.ct-buy{font-size:11px;color:var(--red);font-weight:700;min-width:52px;text-align:right;}
+.ct-sell{font-size:11px;color:var(--blue);font-weight:700;min-width:52px;text-align:right;}
+.ct-mg{font-size:11px;font-weight:700;min-width:40px;text-align:right;}
+.mb-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.mb-nm{font-size:11px;width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;}
+.mb-track{flex:1;background:var(--border-light);height:10px;border-radius:1px;}
+.mb-fill{height:100%;border-radius:1px;}
+.mb-val{font-size:11px;font-weight:700;width:38px;text-align:right;flex-shrink:0;}
+.trend-chart{height:110px;display:flex;align-items:flex-end;gap:10px;padding:8px 10px 20px;background:#fafafa;border:1px solid var(--border-light);position:relative;}
+
+.empty-wrap{text-align:center;padding:60px 20px;background:var(--surface);}
+.empty-icon{font-size:36px;margin-bottom:10px;}
+.empty-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;}
+.empty-desc{font-size:12px;color:var(--muted);line-height:1.7;}
+
+@media(max-width:1200px){
+  .kpi-bar{grid-template-columns:repeat(3,1fr);}
+  .row3{grid-template-columns:1fr 1fr;}
+  .row4{grid-template-columns:1fr 1fr;}
+  .f-grid{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="app-header">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="app-logo"><div class="app-logo-box">SME</div><div class="app-logo-div"></div><span>SMEKOREA</span></div>
+    <div class="app-logo-div"></div>
+    <div class="app-title">HQ 거래현황분석</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div class="app-badge">● 본사 전용 · HQ ONLY</div>
+    <a href="index.html" class="app-home">← 플랫폼 홈</a>
+  </div>
+</div>
+
+<!-- 탭 -->
+<div class="tab-nav">
+  <div class="tab-home" onclick="showTab('kpi',this)">🏠</div>
+  <div class="tab-item active" onclick="showTab('kpi',this)">📊 경영현황 <span class="tab-close">✕</span></div>
+  <div class="tab-item" onclick="showTab('trade',this)">🔍 거래분석 <span class="tab-close">✕</span></div>
+  <div class="tab-item" onclick="showTab('price',this)">💹 단가·마진 <span class="tab-close">✕</span></div>
+</div>
+
+<!-- 기간+업로드 바 -->
+<div class="upload-bar">
+  <span class="ul-label">기간</span>
+  <select class="p-select" id="fromYear"><option>2019</option><option>2020</option><option>2021</option><option>2022</option><option>2023</option><option>2024</option><option>2025</option><option selected>2026</option></select>
+  <select class="p-select" id="fromMonth"><option value="01" selected>01월</option><option value="02">02월</option><option value="03">03월</option><option value="04">04월</option><option value="05">05월</option><option value="06">06월</option><option value="07">07월</option><option value="08">08월</option><option value="09">09월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option></select>
+  <span class="p-sep">~</span>
+  <select class="p-select" id="toYear"><option>2025</option><option selected>2026</option></select>
+  <select class="p-select" id="toMonth"><option value="01">01월</option><option value="02">02월</option><option value="03">03월</option><option value="04" selected>04월</option><option value="05">05월</option><option value="06">06월</option><option value="07">07월</option><option value="08">08월</option><option value="09">09월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option></select>
+  <button class="q-btn" onclick="setQ('month',this)">당월</button>
+  <button class="q-btn" onclick="setQ('quarter',this)">당분기</button>
+  <button class="q-btn active" onclick="setQ('year',this)">올해</button>
+  <button class="q-btn" onclick="setQ('lastyear',this)">전년</button>
+  <button class="q-btn" onclick="setQ('all',this)">전체</button>
+  <button class="btn-apply" onclick="applyPeriod()">적용</button>
+  <div class="ul-info" id="uploadInfo">엑셀 파일을 업로드해 주세요 (구매현황DATA + 매출현황DATA 시트 포함)</div>
+  <button class="btn-upload" onclick="document.getElementById('fileInput').click()">파일 업로드</button>
+  <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+</div>
+
+<!-- ① 경영현황 -->
+<div class="tab-content active" id="tab-kpi">
+  <div class="kpi-bar">
+    <div class="kpi-card r"><div class="kpi-lbl">TOTAL SALES</div><div class="kpi-val r" id="kpi-s">-</div><div class="kpi-sub" id="kpi-ss">데이터 로드 후 표시</div></div>
+    <div class="kpi-card b"><div class="kpi-lbl">TOTAL PURCHASE</div><div class="kpi-val b" id="kpi-p">-</div><div class="kpi-sub" id="kpi-ps">데이터 로드 후 표시</div></div>
+    <div class="kpi-card g"><div class="kpi-lbl">MARGIN</div><div class="kpi-val g" id="kpi-m">-</div><div class="kpi-sub" id="kpi-ms">마진율 -</div></div>
+    <div class="kpi-card gr"><div class="kpi-lbl">TRANSACTIONS</div><div class="kpi-val" id="kpi-c">-</div><div class="kpi-sub" id="kpi-cs">매입 - · 매출 -</div></div>
+    <div class="kpi-card a"><div class="kpi-lbl">ALERT PATTERN</div><div class="kpi-val a" id="kpi-a">-</div><div class="kpi-sub" id="kpi-as">파일 로드 후 분석</div></div>
+  </div>
+  <div class="dash">
+    <div class="row3">
+      <div class="bx">
+        <div class="bx-hdr">월별 매출·매입 추이 <span class="bx-sub">단위: 억원</span></div>
+        <div class="bx-body" style="padding:10px 12px;">
+          <div class="bar-area" id="monthly-chart">
+            <div class="lgnd"><div class="li"><div class="ld" style="background:var(--red);opacity:0.75;"></div><span style="font-size:9px;color:var(--red);">매출</span></div><div class="li"><div class="ld" style="background:#999;"></div><span style="font-size:9px;color:var(--muted);">매입</span></div></div>
+            <div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
+          </div>
+        </div>
+      </div>
+      <div class="bx">
+        <div class="bx-hdr">법인별 매출 비중 <span class="bx-sub">기간 내</span></div>
+        <div class="bx-body"><div class="donut-area" id="donut-chart"><div style="color:var(--muted);font-size:11px;">데이터 로드 후 표시</div></div></div>
+      </div>
+      <div class="bx">
+        <div class="bx-hdr">사급 · 직거래 구분 <span class="bx-sub">매출기준</span></div>
+        <div class="bx-body">
+          <div class="split-area">
+            <div><div class="split-lbl">매출 비중 (LG사급 vs 직거래)</div><div class="split-bar"><div class="split-seg" id="split-lg" style="width:50%;background:var(--red);opacity:0.8;">LG사급 50%</div><div class="split-seg" id="split-dt" style="width:50%;background:var(--green);opacity:0.85;">직거래 50%</div></div></div>
+            <div><div class="split-lbl">업무 비중 (핸들링 기준)</div><div class="split-bar"><div class="split-seg" style="width:70%;background:#555;">자재구매팀 70%</div><div class="split-seg" style="width:30%;background:#999;">개발구매팀 30%</div></div></div>
+            <div class="split-note">⚠ LG사급 메이커 목록 미적용 · 확정 후 자동 분류 예정</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bx" style="margin-bottom:12px;">
+      <div class="bx-hdr">년도별 마진 현황 <span class="bx-sub">단위: 억원 / 마진율%</span></div>
+      <div class="bx-body">
+        <div class="mg-grid" id="mg-grid">
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:14px;background:#ccc;"></div></div><div class="mg-yr">19년</div><div class="mg-val" style="color:var(--muted);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:18px;background:#bbb;"></div></div><div class="mg-yr">20년</div><div class="mg-val" style="color:var(--muted);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:24px;background:#aaa;"></div></div><div class="mg-yr">21년</div><div class="mg-val" style="color:var(--muted);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:28px;background:#999;"></div></div><div class="mg-yr">22년</div><div class="mg-val" style="color:var(--muted);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:32px;background:#777;"></div></div><div class="mg-yr">23년</div><div class="mg-val" style="color:var(--muted);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:20px;background:var(--red);opacity:0.5;"></div></div><div class="mg-yr">24년</div><div class="mg-val" style="color:var(--red);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:48px;background:var(--green);"></div></div><div class="mg-yr">25년</div><div class="mg-val" style="color:var(--green);">-</div><div class="mg-rate">-%</div></div>
+          <div class="mg-col"><div class="mg-bw"><div class="mg-b" style="height:14px;background:var(--red);opacity:0.4;"></div></div><div class="mg-yr">26년↑</div><div class="mg-val" style="color:var(--red);">-</div><div class="mg-rate">-%</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="row4">
+      <div class="bx"><div class="bx-hdr">매출처 순위 TOP5</div><div class="bx-body" id="sales-rank"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
+      <div class="bx"><div class="bx-hdr">매입처 순위 TOP5</div><div class="bx-body" id="purchase-rank"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
+      <div class="bx"><div class="bx-hdr">매출 급등·급락 <span class="bx-sub">전월비</span></div><div class="bx-body" id="sales-surge"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
+      <div class="bx"><div class="bx-hdr">매입 급등·급락 <span class="bx-sub">전월비</span></div><div class="bx-body" id="purchase-surge"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ② 거래분석 -->
+<div class="tab-content" id="tab-trade">
+  <div class="filter-sec">
+    <div class="f-bread">조달 › 거래현황 › <span>거래분석</span></div>
+    <div class="f-grid">
+      <div class="f-row"><div class="f-lbl">구분</div><select class="f-sel hl" id="f-type"><option value="">전체</option><option value="LG사급">LG사급</option><option value="직거래">직거래</option></select></div>
+      <div class="f-row"><div class="f-lbl">브랜드</div><select class="f-sel" id="f-brand"><option value="">전체</option></select></div>
+      <div class="f-row"><div class="f-lbl">매입처</div><select class="f-sel" id="f-buyer"><option value="">전체</option></select></div>
+      <div class="f-row"><div class="f-lbl">매출처</div><select class="f-sel" id="f-seller"><option value="">전체</option></select></div>
+      <div class="f-row"><div class="f-lbl">품목코드</div><input class="f-inp" id="f-pcode" placeholder=""></div>
+      <div class="f-row"><div class="f-lbl">상태</div><select class="f-sel" id="f-status"><option value="">전체</option><option value="정상">정상</option><option value="재고누적">재고누적</option><option value="공급부족">공급부족</option><option value="매출중단">매출중단</option></select></div>
+      <div></div>
+      <div class="f-btns"><button class="btn-search" onclick="runTrade()">🔍 검색</button><button class="btn-reset" onclick="resetTrade()">초기화</button></div>
+    </div>
+  </div>
+  <div id="trade-result">
+    <div class="empty-wrap"><div class="empty-icon">📂</div><div class="empty-title">데이터를 불러와 주세요</div><div class="empty-desc">상단에서 엑셀 파일을 업로드하면<br>조건검색이 가능합니다</div></div>
+  </div>
+</div>
+
+<!-- ③ 단가·마진 -->
+<div class="tab-content" id="tab-price">
+  <div class="filter-sec">
+    <div class="f-bread">조달 › 거래현황 › <span>단가·마진분석</span></div>
+    <div class="f-grid">
+      <div class="f-row"><div class="f-lbl">구분</div><select class="f-sel" id="pf-type"><option value="">전체</option><option value="LG사급">LG사급</option><option value="직거래">직거래</option></select></div>
+      <div class="f-row"><div class="f-lbl">브랜드</div><select class="f-sel" id="pf-brand"><option value="">전체</option></select></div>
+      <div class="f-row"><div class="f-lbl">품목코드</div><input class="f-inp" id="pf-pcode" placeholder=""></div>
+      <div class="f-row"><div class="f-lbl">매입처</div><select class="f-sel" id="pf-buyer"><option value="">전체</option></select></div>
+      <div class="f-row"><div class="f-lbl">매출처</div><select class="f-sel" id="pf-seller"><option value="">전체</option></select></div>
+      <div></div><div></div>
+      <div class="f-btns"><button class="btn-search" onclick="runPrice()">🔍 검색</button><button class="btn-reset" onclick="resetPrice()">초기화</button></div>
+    </div>
+  </div>
+  <div id="price-result">
+    <div class="empty-wrap"><div class="empty-icon">💹</div><div class="empty-title">데이터를 불러와 주세요</div><div class="empty-desc">조건을 입력하고 검색하면<br>단가 및 마진 분석 결과가 표시됩니다</div></div>
+  </div>
+  <div style="padding:0 20px 20px;background:var(--bg);">
+    <div class="bx"><div class="bx-hdr">브랜드별 마진구조 <span class="bx-sub">기간 내 마진율 TOP10</span></div><div class="bx-body" id="brand-mg"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
+  </div>
+</div>
+
+<script>
+let rawP=[],rawS=[],loaded=false;
+const LG_M=['GRUNDFOS','MEC-CON','Techshine','Microchip','SKYWORTH','경전산업','CUMSUMI'];
+
+function showTab(id,el){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(el.classList.contains('tab-item'))el.classList.add('active');
+  else document.querySelectorAll('.tab-item')[0].classList.add('active');
+}
+
+function setQ(type,el){
+  document.querySelectorAll('.q-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');
+  const now=new Date(),y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0');
+  if(type==='month'){ss('fromYear',y);ss('fromMonth',m);ss('toYear',y);ss('toMonth',m);}
+  else if(type==='quarter'){const qs=String(Math.floor(now.getMonth()/3)*3+1).padStart(2,'0');ss('fromYear',y);ss('fromMonth',qs);ss('toYear',y);ss('toMonth',m);}
+  else if(type==='year'){ss('fromYear',y);ss('fromMonth','01');ss('toYear',y);ss('toMonth','12');}
+  else if(type==='lastyear'){ss('fromYear',y-1);ss('fromMonth','01');ss('toYear',y-1);ss('toMonth','12');}
+  else{ss('fromYear',2019);ss('fromMonth','01');ss('toYear',y);ss('toMonth','12');}
+}
+function ss(id,v){const s=document.getElementById(id);for(let o of s.options)if(o.value==v||o.textContent==v){o.selected=true;break;}}
+function getFT(){return{from:document.getElementById('fromYear').value+document.getElementById('fromMonth').value,to:document.getElementById('toYear').value+document.getElementById('toMonth').value};}
+function applyPeriod(){if(!loaded){alert('파일을 먼저 업로드해 주세요.');return;}updateAll();}
+
+function handleFile(e){
+  const file=e.target.files[0];if(!file)return;
+  document.getElementById('uploadInfo').textContent='로드 중...';
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array'});
+      rawP=[];rawS=[];
+      wb.SheetNames.forEach(n=>{const d=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});if(n.includes('구매'))rawP=d;if(n.includes('매출'))rawS=d;});
+      loaded=true;
+      const info=document.getElementById('uploadInfo');
+      info.textContent=file.name+' 로드완료 · 구매 '+rawP.length.toLocaleString()+'건 / 매출 '+rawS.length.toLocaleString()+'건';
+      info.classList.add('ok');
+      fillDrops();updateAll();
+    }catch(err){alert('파일 오류: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function inPer(r,from,to){const y=String(r['년']||'').replace('년','').trim(),m=String(r['월']||'').replace('월','').trim().padStart(2,'0');const ym=y+m;return ym>=from&&ym<=to;}
+function cls(r){const sel=String(r['판매처명']||''),br=String(r['브랜드명']||''),bu=String(r['구매처명']||'');if(sel.includes('LG전자')||LG_M.some(m=>br.includes(m)||bu.includes(m)))return 'LG사급';return '직거래';}
+function fmt(v){if(v>=100000000)return (v/100000000).toFixed(1)+'억';if(v>=10000)return Math.round(v/10000)+'만';return v.toLocaleString();}
+
+function fillDrops(){
+  const br=[...new Set([...rawP.map(r=>r['브랜드명']),...rawS.map(r=>r['브랜드명'])].filter(Boolean))].sort();
+  const bu=[...new Set(rawP.map(r=>r['구매처명']).filter(Boolean))].sort();
+  const se=[...new Set(rawS.map(r=>r['판매처명']).filter(Boolean))].sort();
+  ['f-brand','pf-brand'].forEach(id=>fillSel(id,br));
+  ['f-buyer','pf-buyer'].forEach(id=>fillSel(id,bu));
+  ['f-seller','pf-seller'].forEach(id=>fillSel(id,se));
+}
+function fillSel(id,items){const s=document.getElementById(id);s.innerHTML='<option value="">전체</option>';items.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;s.appendChild(o);});}
+
+function updateAll(){
+  const {from,to}=getFT();
+  const fS=rawS.filter(r=>inPer(r,from,to)),fP=rawP.filter(r=>inPer(r,from,to));
+  updKPI(fS,fP);updMonthly(fS,fP);updDonut(fS);updSplit(fS);updRanks(fS,fP);updBrandMg(fS,fP);
+}
+
+function updKPI(s,p){
+  const ts=s.reduce((a,r)=>a+(Number(r['공급가액'])||0),0),tp=p.reduce((a,r)=>a+(Number(r['공급가액'])||0),0),mg=ts-tp;
+  document.getElementById('kpi-s').textContent=fmt(ts);document.getElementById('kpi-ss').textContent=s.length.toLocaleString()+'건';
+  document.getElementById('kpi-p').textContent=fmt(tp);document.getElementById('kpi-ps').textContent=p.length.toLocaleString()+'건';
+  document.getElementById('kpi-m').textContent=fmt(mg);document.getElementById('kpi-ms').textContent='마진율 '+(ts>0?(mg/ts*100).toFixed(1):0)+'%';
+  document.getElementById('kpi-c').textContent=(s.length+p.length).toLocaleString();document.getElementById('kpi-cs').textContent='매입 '+p.length.toLocaleString()+' · 매출 '+s.length.toLocaleString();
+}
+
+function updMonthly(s,p){
+  const chart=document.getElementById('monthly-chart'),m={};
+  s.forEach(r=>{const k=String(r['년']||'').replace('년','').trim()+'-'+String(r['월']||'').replace('월','').trim().padStart(2,'0');if(!m[k])m[k]={s:0,p:0};m[k].s+=Number(r['공급가액'])||0;});
+  p.forEach(r=>{const k=String(r['년']||'').replace('년','').trim()+'-'+String(r['월']||'').replace('월','').trim().padStart(2,'0');if(!m[k])m[k]={s:0,p:0};m[k].p+=Number(r['공급가액'])||0;});
+  const keys=Object.keys(m).sort();if(!keys.length){chart.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--muted);font-size:11px;">데이터 없음</div>';return;}
+  const maxV=Math.max(...keys.map(k=>Math.max(m[k].s,m[k].p))),mH=100;
+  let html=`<div class="lgnd"><div class="li"><div class="ld" style="background:var(--red);opacity:0.75;"></div><span style="font-size:9px;color:var(--red);">매출</span></div><div class="li"><div class="ld" style="background:#999;"></div><span style="font-size:9px;color:var(--muted);">매입</span></div></div>`;
+  keys.forEach(k=>{const sh=maxV>0?Math.max(4,Math.round(m[k].s/maxV*mH)):4,ph=maxV>0?Math.max(4,Math.round(m[k].p/maxV*mH)):4;html+=`<div class="bcol"><div class="bpair"><div class="bi" style="height:${sh}px;background:var(--red);opacity:0.75;" title="${fmt(m[k].s)}"></div><div class="bi" style="height:${ph}px;background:#999;opacity:0.65;" title="${fmt(m[k].p)}"></div></div><div class="blbl">${k.slice(2,4)}/${k.slice(5)}</div></div>`;});
+  chart.innerHTML=html;
+}
+
+function updDonut(s){
+  const donut=document.getElementById('donut-chart'),c={};
+  s.forEach(r=>{const sel=String(r['판매처명']||'');let corp='국내';if(sel.includes('GSMEIN')||sel.includes('인도'))corp='GSMEIN';else if(sel.includes('SMEGLOBAL')||sel.includes('태국'))corp='SMEGLOBAL';else if(sel.includes('SMECN')||sel.includes('천진'))corp='SMECN';c[corp]=(c[corp]||0)+(Number(r['공급가액'])||0);});
+  const total=Object.values(c).reduce((a,b)=>a+b,0);if(!total){donut.innerHTML='<div style="color:var(--muted);font-size:11px;">데이터 없음</div>';return;}
+  const colors={GSMEIN:'var(--red)',SMECN:'#555',SMEGLOBAL:'var(--green)',국내:'var(--amber)'};
+  const items=Object.entries(c).sort((a,b)=>b[1]-a[1]);
+  const r=32,cx=45,cy=45,sw=14,circ=2*Math.PI*r;
+  let offset=0,circles='',leg='';
+  items.forEach(([nm,v])=>{const pct=v/total,dash=pct*circ,color=colors[nm]||'#999';circles+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})" opacity="0.85"/>`;offset+=dash;leg+=`<div class="di"><div class="dd" style="background:${color};opacity:0.85;"></div>${nm} ${Math.round(pct*100)}%</div>`;});
+  donut.innerHTML=`<svg width="88" height="88" viewBox="0 0 90 90"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#eee" stroke-width="${sw}"/>${circles}<text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text)">법인별</text></svg><div class="dll">${leg}</div>`;
+}
+
+function updSplit(s){
+  const total=s.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);let lgT=0;s.forEach(r=>{if(cls(r)==='LG사급')lgT+=Number(r['공급가액'])||0;});
+  const lgP=total>0?Math.round(lgT/total*100):50,dtP=100-lgP;
+  document.getElementById('split-lg').style.width=lgP+'%';document.getElementById('split-lg').textContent='LG사급 '+lgP+'%';
+  document.getElementById('split-dt').style.width=dtP+'%';document.getElementById('split-dt').textContent='직거래 '+dtP+'%';
+}
+
+function updRanks(s,p){
+  const sc={},pc={};
+  s.forEach(r=>{const k=String(r['판매처명']||'-');sc[k]=(sc[k]||0)+(Number(r['공급가액'])||0);});
+  p.forEach(r=>{const k=String(r['구매처명']||'-');pc[k]=(pc[k]||0)+(Number(r['공급가액'])||0);});
+  rndr('sales-rank',sc);rndr('purchase-rank',pc);
+  document.getElementById('sales-surge').innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0;">전월 데이터 필요</div>';
+  document.getElementById('purchase-surge').innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0;">전월 데이터 필요</div>';
+}
+function rndr(id,data){const sorted=Object.entries(data).sort((a,b)=>b[1]-a[1]).slice(0,5);let html='';sorted.forEach(([nm,v],i)=>{html+=`<div class="ri"><span class="rn ${i<3?'top':''}">${i+1}</span><span class="rnm">${nm}</span><span class="ram">${fmt(v)}</span></div>`;});document.getElementById(id).innerHTML=html||'<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0;">데이터 없음</div>';}
+
+function updBrandMg(s,p){
+  const bs={},bp={};s.forEach(r=>{const b=r['브랜드명']||'-';bs[b]=(bs[b]||0)+(Number(r['공급가액'])||0);});p.forEach(r=>{const b=r['브랜드명']||'-';bp[b]=(bp[b]||0)+(Number(r['공급가액'])||0);});
+  const brands=[...new Set([...Object.keys(bs),...Object.keys(bp)])];
+  const mg=brands.map(b=>{const sv=bs[b]||0,pv=bp[b]||0;return{brand:b,rate:sv>0?(sv-pv)/sv*100:0};}).sort((a,b)=>b.rate-a.rate);
+  const maxR=Math.max(...mg.map(m=>Math.abs(m.rate)),1);
+  let html='';mg.slice(0,10).forEach(m=>{const pct=Math.min(100,Math.abs(m.rate)/maxR*100);const color=m.rate>=5?'var(--green)':m.rate>=0?'#555':'var(--red)';html+=`<div class="mb-row"><span class="mb-nm">${m.brand}</span><div class="mb-track"><div class="mb-fill" style="width:${pct}%;background:${color};opacity:0.8;"></div></div><span class="mb-val" style="color:${color};">${m.rate.toFixed(1)}%</span></div>`;});
+  document.getElementById('brand-mg').innerHTML=html||'<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0;">데이터 없음</div>';
+}
+
+function getStatus(r){const s=r.sQ||0,p=r.pQ||0;if(s===0&&p===0)return '매출중단';if(p>s*2)return '재고누적';if(s>p*2)return '공급부족';return '정상';}
+
+function runTrade(){
+  if(!loaded){alert('파일을 먼저 업로드해 주세요.');return;}
+  const {from,to}=getFT();
+  const type=document.getElementById('f-type').value,brand=document.getElementById('f-brand').value;
+  const buyer=document.getElementById('f-buyer').value,seller=document.getElementById('f-seller').value;
+  const pcode=document.getElementById('f-pcode').value.trim();
+  const fS=rawS.filter(r=>inPer(r,from,to)&&(!type||cls(r)===type)&&(!brand||r['브랜드명']===brand)&&(!seller||r['판매처명']===seller)&&(!pcode||String(r['품목코드']||'').includes(pcode)));
+  const fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!buyer||r['구매처명']===buyer)&&(!pcode||String(r['품목코드']||'').includes(pcode)));
+  const byCode={};
+  fS.forEach(r=>{const k=String(r['품목코드']||'-')+'|'+String(r['브랜드명']||'');if(!byCode[k])byCode[k]={code:r['품목코드'],brand:r['브랜드명'],name:r['품명 및 규격'],seller:r['판매처명'],sQ:0,sA:0,type:cls(r)};byCode[k].sQ+=Number(r['수량'])||0;byCode[k].sA+=Number(r['공급가액'])||0;});
+  fP.forEach(r=>{const k=String(r['품목코드']||'-')+'|'+String(r['브랜드명']||'');if(!byCode[k])byCode[k]={code:r['품목코드'],brand:r['브랜드명'],name:r['품명 및 규격'],type:'직거래'};byCode[k].buyer=r['구매처명'];byCode[k].pQ=(byCode[k].pQ||0)+(Number(r['수량'])||0);byCode[k].pA=(byCode[k].pA||0)+(Number(r['공급가액'])||0);});
+  const rows=Object.values(byCode);
+  const el=document.getElementById('trade-result');
+  if(!rows.length){el.innerHTML='<div class="empty-wrap"><div class="empty-icon">🔍</div><div class="empty-title">조회 결과 없음</div><div class="empty-desc">조건을 변경해 주세요</div></div>';return;}
+  let html=`<div class="res-hdr"><div class="res-total">Total : <em>${rows.length.toLocaleString()}</em></div><div class="res-acts"><button class="btn-act red">📋 상세</button><button class="btn-act" onclick="alert('준비중')">📊 엑셀 다운로드</button></div></div>
+  <div class="tbl-cont"><table class="dtbl"><thead><tr>
+    <th class="chk"><input type="checkbox"></th>
+    <th class="tc" style="width:40px;">번호</th>
+    <th>구분</th><th>브랜드</th><th>품목코드</th><th>품명</th>
+    <th>매입처</th><th>매출처</th>
+    <th class="tr">매입수량</th><th class="tr">매출수량</th>
+    <th class="tr">매입금액</th><th class="tr">매출금액</th>
+    <th class="tr">마진율</th><th class="tc">상태</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r,i)=>{
+    const sA=r.sA||0,pA=r.pA||0,mgr=sA>0&&pA>0?((sA-pA)/sA*100).toFixed(1)+'%':'-';
+    const status=getStatus(r);
+    const isLg=r.type==='LG사급';
+    const typeTag=isLg?'<span class="tag tag-lg">LG사급</span>':'<span class="tag tag-dt">직거래</span>';
+    const sc={'정상':'s-ok','재고누적':'s-ov','공급부족':'s-sh','매출중단':'s-st'}[status]||'';
+    const mc=sA>pA?'var(--green)':sA<pA?'var(--red)':'#555';
+    html+=`<tr class="${isLg?'lg-row':''}">
+      <td class="chk"><input type="checkbox"></td><td class="num-cell">${i+1}</td>
+      <td>${typeTag}</td><td>${r.brand||'-'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:10.5px;">${r.code||'-'}</td>
+      <td>${r.name||'-'}</td><td>${r.buyer||'-'}</td><td>${r.seller||'-'}</td>
+      <td class="tr">${(r.pQ||0).toLocaleString()}</td><td class="tr">${(r.sQ||0).toLocaleString()}</td>
+      <td class="tr">${fmt(pA)}</td><td class="tr">${fmt(sA)}</td>
+      <td class="tr" style="color:${mc};font-weight:700;">${mgr}</td>
+      <td class="tc ${sc}">${status}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';el.innerHTML=html;
+}
+function resetTrade(){['f-type','f-brand','f-buyer','f-seller','f-status'].forEach(id=>document.getElementById(id).value='');document.getElementById('f-pcode').value='';}
+
+function runPrice(){
+  if(!loaded){alert('파일을 먼저 업로드해 주세요.');return;}
+  const {from,to}=getFT();
+  const brand=document.getElementById('pf-brand').value,pcode=document.getElementById('pf-pcode').value.trim();
+  const buyer=document.getElementById('pf-buyer').value,seller=document.getElementById('pf-seller').value;
+  const fS=rawS.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!seller||r['판매처명']===seller)&&(!pcode||String(r['품목코드']||'').includes(pcode)));
+  const fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!buyer||r['구매처명']===buyer)&&(!pcode||String(r['품목코드']||'').includes(pcode)));
+  const pByY={},sByY={},sBySel={};
+  fP.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(!pByY[y])pByY[y]={t:0,q:0};pByY[y].t+=(Number(r['단가'])||0)*(Number(r['수량'])||1);pByY[y].q+=Number(r['수량'])||1;});
+  fS.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(!sByY[y])sByY[y]={t:0,q:0};sByY[y].t+=(Number(r['단가'])||0)*(Number(r['수량'])||1);sByY[y].q+=Number(r['수량'])||1;const s=String(r['판매처명']||'-');if(!sBySel[s])sBySel[s]={t:0,q:0};sBySel[s].t+=(Number(r['단가'])||0)*(Number(r['수량'])||1);sBySel[s].q+=Number(r['수량'])||1;});
+  const avgP=fP.length>0?fP.reduce((a,r)=>a+(Number(r['단가'])||0),0)/fP.length:0;
+  const years=[...new Set([...Object.keys(pByY),...Object.keys(sByY)])].sort();
+  let html='<div class="price-grid">';
+  html+='<div class="bx"><div class="bx-hdr">매입단가 이력 <span class="bx-sub">년도별 평균</span></div><div class="bx-body">';
+  let prev=0;years.forEach(y=>{const avg=pByY[y]?pByY[y].t/pByY[y].q:0;const chg=prev>0?((avg-prev)/prev*100).toFixed(1):null;const ch=chg===null?'<span class="ph-dn">기준가</span>':Number(chg)>0?`<span class="ph-up">▲ +${chg}%</span>`:`<span class="ph-dn">▼ ${chg}%</span>`;html+=`<div class="ph-row"><span class="ph-yr">${y}년</span><span class="ph-price">₩ ${Math.round(avg).toLocaleString()}</span>${ch}</div>`;prev=avg;});
+  if(!years.length)html+='<div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 없음</div>';
+  html+='</div></div>';
+  html+='<div class="bx"><div class="bx-hdr">매출처별 단가 비교 <span class="bx-sub">동일 조건</span></div><div class="bx-body">';
+  html+='<div style="display:flex;gap:4px;font-size:10px;color:var(--muted);padding:0 4px;margin-bottom:4px;"><span style="flex:1;">매출처</span><span style="min-width:52px;text-align:right;">매입단가</span><span style="min-width:52px;text-align:right;">매출단가</span><span style="min-width:40px;text-align:right;">마진율</span></div>';
+  Object.entries(sBySel).sort((a,b)=>b[1].t-a[1].t).slice(0,8).forEach(([nm,d])=>{const aS=d.q>0?d.t/d.q:0;const rate=avgP>0&&aS>0?((aS-avgP)/aS*100).toFixed(1):'-';const rc=Number(rate)>=5?'var(--green)':Number(rate)>=0?'#555':'var(--red)';html+=`<div class="ct-row"><span class="ct-nm">${nm}</span><span class="ct-buy">₩${Math.round(avgP).toLocaleString()}</span><span class="ct-sell">₩${Math.round(aS).toLocaleString()}</span><span class="ct-mg" style="color:${rc};">${rate}%</span></div>`;});
+  html+='</div></div>';
+  html+='<div class="bx"><div class="bx-hdr">브랜드별 마진구조</div><div class="bx-body">';
+  const bs={},bp={};fS.forEach(r=>{const b=r['브랜드명']||'-';bs[b]=(bs[b]||0)+(Number(r['공급가액'])||0);});fP.forEach(r=>{const b=r['브랜드명']||'-';bp[b]=(bp[b]||0)+(Number(r['공급가액'])||0);});
+  const bL=[...new Set([...Object.keys(bs),...Object.keys(bp)])];
+  const bM=bL.map(b=>{const sv=bs[b]||0,pv=bp[b]||0;return{brand:b,rate:sv>0?(sv-pv)/sv*100:0};}).sort((a,b)=>b.rate-a.rate);
+  const mxR=Math.max(...bM.map(m=>Math.abs(m.rate)),1);
+  bM.slice(0,8).forEach(m=>{const pct=Math.min(100,Math.abs(m.rate)/mxR*100);const color=m.rate>=5?'var(--green)':m.rate>=0?'#555':'var(--red)';html+=`<div class="mb-row"><span class="mb-nm">${m.brand}</span><div class="mb-track"><div class="mb-fill" style="width:${pct}%;background:${color};opacity:0.8;"></div></div><span class="mb-val" style="color:${color};">${m.rate.toFixed(1)}%</span></div>`;});
+  html+='</div></div></div>';
+  const pA=years.map(y=>pByY[y]?pByY[y].t/pByY[y].q:0),sA=years.map(y=>sByY[y]?sByY[y].t/sByY[y].q:0);
+  const mxA=Math.max(...pA,...sA,1);
+  html+='<div style="padding:0 20px 20px;background:var(--bg);"><div class="bx"><div class="bx-hdr">매입·매출 단가 추이 <span class="bx-sub">년도별 평균단가</span></div><div class="bx-body"><div class="trend-chart">';
+  html+=`<div class="lgnd"><div class="li"><div class="ld" style="background:var(--red);opacity:0.75;"></div><span style="font-size:9px;color:var(--red);">매입단가</span></div><div class="li"><div class="ld" style="background:#555;"></div><span style="font-size:9px;color:var(--muted);">매출단가</span></div></div>`;
+  years.forEach((y,i)=>{const ph=mxA>0?Math.max(4,Math.round(pA[i]/mxA*90)):4;const sh=mxA>0?Math.max(4,Math.round(sA[i]/mxA*90)):4;html+=`<div class="bcol"><div class="bpair"><div class="bi" style="height:${ph}px;background:var(--red);opacity:0.7;"></div><div class="bi" style="height:${sh}px;background:#555;opacity:0.6;"></div></div><div class="blbl">${y}년</div></div>`;});
+  html+='</div></div></div></div>';
+  document.getElementById('price-result').innerHTML=html;
+  updBrandMg(fS,fP);
+}
+function resetPrice(){['pf-type','pf-brand','pf-buyer','pf-seller'].forEach(id=>document.getElementById(id).value='');document.getElementById('pf-pcode').value='';}
+
+window.onload=function(){if(!sessionStorage.getItem('hq_auth')){alert('접근 권한이 없습니다.');window.location.href='index.html';}};
+</script>
+</body>
+</html>
