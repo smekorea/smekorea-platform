@@ -67,6 +67,7 @@
   }
   .tag-input { background: rgba(200,0,30,0.08); color: var(--accent); border: 1px solid rgba(200,0,30,0.2); }
   .tag-display { background: rgba(26,86,219,0.08); color: var(--accent2); border: 1px solid rgba(26,86,219,0.2); }
+  .tag-hq { background: rgba(30,150,80,0.08); color: #1e9650; border: 1px solid rgba(30,150,80,0.2); }
   .menu-card-locked {
     background: var(--surface); border: 1.5px dashed var(--border);
     border-radius: 16px; padding: 32px 28px;
@@ -108,7 +109,7 @@
 
 <div class="menu-grid">
 
-  <!-- 출하 관리 -->
+  <!-- 1. 출하 관리 -->
   <div class="menu-card" onclick="openWithPW('ship')">
     <div class="card-title">출하 관리</div>
     <div class="card-desc">출하지시 입력 · 출하 현황판<br>구매팀 / 출하팀 공용</div>
@@ -118,7 +119,7 @@
     </div>
   </div>
 
-  <!-- 해외법인 PO관리 -->
+  <!-- 2. 해외법인 PO관리 -->
   <div class="menu-card" onclick="openWithPW('po')">
     <div class="card-title">해외법인 PO관리</div>
     <div style="display:inline-flex;align-items:center;margin-top:4px;">
@@ -130,15 +131,7 @@
     <div class="card-tag tag-display">● PO관리</div>
   </div>
 
-  <!-- 재고현황 준비중 -->
-  <div class="menu-card-locked">
-    <div class="lock-icon">🔒</div>
-    <div class="locked-title">재고 현황</div>
-    <div class="locked-desc">법인별 재고 · 적정재고 대비<br>브랜드별 현황</div>
-    <div class="locked-badge">준비중</div>
-  </div>
-
-  <!-- KPI 준비중 -->
+  <!-- 3. KPI 대시보드 준비중 -->
   <div class="menu-card-locked">
     <div class="lock-icon">🔒</div>
     <div class="locked-title">KPI 대시보드</div>
@@ -146,11 +139,18 @@
     <div class="locked-badge">준비중</div>
   </div>
 
+  <!-- 4. HQ 거래현황분석 -->
+  <div class="menu-card" onclick="openWithPW('hq')">
+    <div class="card-title">HQ 거래현황분석</div>
+    <div class="card-desc">매입·매출 데이터 · 브랜드별 분석<br>공급현황 · 마진 · 이상패턴 탐지</div>
+    <div class="card-tag tag-hq">● 본사 전용</div>
+  </div>
+
 </div>
 
-<div class="footer">© 2026 SMEKOREA · Platform v1.1 · All rights reserved</div>
+<div class="footer">© 2026 SMEKOREA · Platform v1.2 · All rights reserved</div>
 
-<!-- ── 비밀번호 팝업 ── -->
+<!-- ── 공통 비밀번호 팝업 ── -->
 <div id="pwOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,34,51,0.5);z-index:300;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:20px;padding:40px 36px;width:320px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.2);position:relative;">
     <div style="font-size:38px;margin-bottom:12px;">🔐</div>
@@ -211,8 +211,9 @@
 </div>
 
 <script>
-  // ── 비밀번호 설정 (변경 시 아래 값만 수정) ──
-  const PW = '1120';
+  // ── 비밀번호 설정 ──
+  const PW_COMMON = '1120';   // 출하관리, PO관리 공통
+  const PW_HQ     = '7523';   // HQ 거래현황분석 전용
   let pendingTarget = '';
 
   function openWithPW(target) {
@@ -226,7 +227,21 @@
   function checkPW() {
     const val = document.getElementById('pwInput').value;
     const input = document.getElementById('pwInput');
-    if (val === PW) {
+
+    // HQ 거래현황분석 전용 비번
+    if (pendingTarget === 'hq') {
+      if (val === PW_HQ) {
+        closePW();
+        sessionStorage.setItem('hq_auth', '1');
+        window.location.href = 'hq_analysis.html';
+      } else {
+        showPWError(input);
+      }
+      return;
+    }
+
+    // 공통 비번 (출하관리, PO관리)
+    if (val === PW_COMMON) {
       closePW();
       sessionStorage.setItem('po_auth', '1');
       if (pendingTarget === 'ship') {
@@ -235,11 +250,15 @@
         window.location.href = 'po_hub.html';
       }
     } else {
-      input.style.borderColor = 'var(--accent)';
-      document.getElementById('pwError').textContent = '⚠ 비밀번호가 올바르지 않습니다';
-      input.value = '';
-      setTimeout(() => { input.style.borderColor = '#d0daea'; }, 1000);
+      showPWError(input);
     }
+  }
+
+  function showPWError(input) {
+    input.style.borderColor = 'var(--accent)';
+    document.getElementById('pwError').textContent = '⚠ 비밀번호가 올바르지 않습니다';
+    input.value = '';
+    setTimeout(() => { input.style.borderColor = '#d0daea'; }, 1000);
   }
 
   function closePW() {
