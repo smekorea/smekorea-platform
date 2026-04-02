@@ -156,9 +156,16 @@
   .modal-btn-save{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(200,0,30,0.3);}
   .modal-btn-save:hover{background:#a80019;}
   .modal-btn-save:disabled{background:var(--border);border-color:var(--border);color:var(--muted);cursor:not-allowed;box-shadow:none;}
-  .orig-info{background:var(--surface2);border-radius:6px;padding:10px 12px;font-size:10px;color:var(--muted);margin-bottom:12px;}
+  .orig-info{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:10px;color:var(--muted);margin-bottom:12px;}
   .orig-row{display:flex;gap:8px;margin-bottom:3px;}
   .orig-label{font-weight:600;min-width:60px;}
+
+  /* 수정내용 영역 배경 */
+  .edit-zone{background:rgba(200,0,30,0.04);border:1px solid rgba(200,0,30,0.15);border-radius:8px;padding:14px;margin-bottom:16px;}
+  .edit-zone .modal-section-title{color:var(--accent);}
+
+  /* 수정이력 영역 배경 */
+  .history-zone{background:rgba(200,0,30,0.08);border:1px solid rgba(200,0,30,0.25);border-radius:8px;padding:14px;}
 
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
@@ -244,7 +251,7 @@
       </div>
 
       <!-- 수정 항목 -->
-      <div class="modal-section">
+      <div class="modal-section edit-zone">
         <div class="modal-section-title">수정 내용</div>
         <div class="form-row">
           <div class="form-group">
@@ -302,7 +309,7 @@
       </div>
 
       <!-- 수정 이력 -->
-      <div class="modal-section">
+      <div class="modal-section history-zone">
         <div class="modal-section-title">수정 이력 기록 <span style="color:var(--accent);font-size:9px;">(필수)</span></div>
         <div class="form-row">
           <div class="form-group">
@@ -370,6 +377,13 @@
     return s;
   }
 
+  function normalizeArrivalTime(val) {
+    if (!val) return '';
+    const s = String(val).trim();
+    if (!s || s === '-' || s.indexOf('1899') > -1 || s.indexOf('T') > -1) return '';
+    return s;
+  }
+
   function formatRegTime(val) {
     if (!val) return '-';
     const s = String(val).trim();
@@ -400,7 +414,7 @@
       <div class="orig-row"><span class="orig-label">출하일자</span><span>${shipDate||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">매출처명</span><span>${customer||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">담당자</span><span>${manager||'-'}</span></div>
-      <div class="orig-row"><span class="orig-label">도착시간</span><span>${arrivalTime||'-'}</span></div>
+      <div class="orig-row"><span class="orig-label">도착시간</span><span>${normalizeArrivalTime(arrivalTime)||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">포장완료</span><span>${packDone||'-'}</span></div>
       ${note ? `<div class="orig-row"><span class="orig-label">비고</span><span>${note}</span></div>` : ''}
       ${editTime ? `<div class="orig-row" style="color:var(--warn)"><span class="orig-label">최근수정</span><span>${formatRegTime(editTime)} / ${editBy||''} / ${editReason||''}</span></div>` : ''}
@@ -410,7 +424,7 @@
     document.getElementById('editShipDate').value = shipDate || '';
     document.getElementById('editCustomer').value = customer || '';
     document.getElementById('editManager').value = manager || '';
-    document.getElementById('editArrivalTime').value = (arrivalTime && arrivalTime !== '-') ? arrivalTime : '';
+    document.getElementById('editArrivalTime').value = normalizeArrivalTime(arrivalTime);
     document.getElementById('editInputBy').value = inputBy || '자재구매';
     document.getElementById('editPackDone').value = (packDone && packDone !== '-') ? packDone : '-';
     document.getElementById('editNote').value = (note && note !== '-') ? note : '';
@@ -493,7 +507,8 @@
     const isEdited = editTime && String(editTime).trim() !== '';
     const deptClass = inputBy === '자재구매' ? 'tag-m' : 'tag-d';
     const hasNote = note && note.trim() !== '' && note.trim() !== '-';
-    const timeLabel = arrivalTime && arrivalTime !== '-' ? `🕐 ${arrivalTime}` : '';
+    const cleanArrival = normalizeArrivalTime(arrivalTime);
+    const timeLabel = cleanArrival ? `🕐 ${cleanArrival}` : '';
     const packLabel = packDone && packDone !== '-' ? packDone : '';
     const regStr = formatRegTime(regTime);
     const idx = allData.indexOf(row);
