@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SME CALENDAR · 일정 등록</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&family=Barlow+Condensed:ital,wght@1,700;1,900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f4ef;
+    --surface: #ffffff;
+    --border: #e5ddd4;
+    --border-hover: #c8b8a8;
+    --accent: #c8001e;
+    --accent2: #1a56db;
+    --text: #1a1612;
+    --muted: #a8998a;
+    --locked: #c4b8aa;
+    --radius: 14px;
+    --shadow: 0 2px 12px rgba(80,60,40,0.08);
+    --shadow-hover: 0 8px 32px rgba(80,60,40,0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0;
+    background-image:
+      radial-gradient(ellipse 70% 50% at 5% 0%, rgba(200,0,30,0.05) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 40% at 95% 100%, rgba(26,86,219,0.04) 0%, transparent 55%);
+    pointer-events: none;
+  }
+
+  /* ── 상단바 ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(247,244,239,0.95);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+    padding: 0 32px;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .back-btn {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted);
+    text-decoration: none; font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px; transition: color 0.15s;
+  }
+  .back-btn:hover { color: var(--accent); }
+  .topbar-divider { width: 1px; height: 20px; background: var(--border); }
+  .topbar-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900; font-style: italic;
+    font-size: 22px; letter-spacing: -0.5px;
+  }
+  .topbar-title .red { color: var(--accent); }
+  .topbar-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--muted); letter-spacing: 2px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-clock {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 16px; font-weight: 700;
+    color: var(--accent); letter-spacing: 2px;
+  }
+
+  /* ── 메인 레이아웃 ── */
+  .page-wrap {
+    position: relative; z-index: 1;
+    max-width: 780px; margin: 0 auto;
+    padding: 36px 24px 60px;
+  }
+
+  /* ── 법인 탭 ── */
+  .entity-tabs {
+    display: flex; gap: 8px; margin-bottom: 28px;
+    animation: fadeDown 0.4s ease;
+  }
+  .entity-tab {
+    flex: 1; padding: 14px 8px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer; text-align: center;
+    transition: all 0.2s;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .entity-tab:hover { border-color: var(--border-hover); box-shadow: var(--shadow); }
+  .entity-tab.active { border-color: var(--accent); background: rgba(200,0,30,0.04); }
+  .entity-tab .flag { display: block; }
+  .entity-tab .ename {
+    font-size: 10px; font-weight: 700;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px; color: var(--muted);
+  }
+  .entity-tab.active .ename { color: var(--accent); }
+  .entity-tab .etime {
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+    color: var(--text); font-weight: 700; letter-spacing: 1px;
+  }
+
+  /* ── 입력 폼 카드 ── */
+  .form-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 32px 36px;
+    box-shadow: var(--shadow);
+    animation: fadeUp 0.4s ease 0.1s both;
+  }
+
+  .form-section-title {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--muted); font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 14px;
+  }
+
+  /* 구분 버튼 */
+  .type-btns { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
+  .type-btn {
+    flex: 1; min-width: 100px;
+    padding: 12px 8px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    cursor: pointer; text-align: center;
+    transition: all 0.18s; font-family: 'Noto Sans KR', sans-serif;
+  }
+  .type-btn .ticon { font-size: 18px; display: block; margin-bottom: 4px; }
+  .type-btn .tlabel { font-size: 12px; font-weight: 700; display: block; }
+  .type-btn:hover { border-color: var(--border-hover); background: var(--surface); }
+  .type-btn.sel-holiday { border-color: #ef4444; background: rgba(239,68,68,0.06); }
+  .type-btn.sel-holiday .tlabel { color: #dc2626; }
+  .type-btn.sel-duty    { border-color: #8b5cf6; background: rgba(139,92,246,0.06); }
+  .type-btn.sel-duty .tlabel { color: #7c3aed; }
+  .type-btn.sel-event   { border-color: #f59e0b; background: rgba(245,158,11,0.06); }
+  .type-btn.sel-event .tlabel { color: #d97706; }
+  .type-btn.sel-deadline{ border-color: #1a56db; background: rgba(26,86,219,0.06); }
+  .type-btn.sel-deadline .tlabel { color: #1a56db; }
+
+  /* 입력 필드 */
+  .form-row { margin-bottom: 18px; }
+  .form-label {
+    display: block; font-size: 12px; font-weight: 700;
+    color: var(--text); margin-bottom: 7px; letter-spacing: 0.3px;
+  }
+  .form-label span { color: var(--accent); margin-left: 2px; }
+  .form-input, .form-select {
+    width: 100%; padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px; font-family: 'Noto Sans KR', sans-serif;
+    color: var(--text); background: var(--bg);
+    outline: none; transition: border-color 0.18s, background 0.18s;
+    appearance: none;
+  }
+  .form-input:focus, .form-select:focus {
+    border-color: var(--accent2); background: var(--surface);
+  }
+  .form-input::placeholder { color: var(--locked); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+
+  /* 당직자 필드 (당직 선택 시만) */
+  .duty-field { display: none; }
+  .duty-field.visible { display: block; }
+
+  /* 등록 버튼 */
+  .submit-btn {
+    width: 100%; padding: 16px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 12px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; font-family: 'Noto Sans KR', sans-serif;
+    box-shadow: 0 4px 16px rgba(200,0,30,0.25);
+    transition: background 0.15s, transform 0.1s;
+    margin-top: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .submit-btn:hover { background: #a8001a; }
+  .submit-btn:active { transform: scale(0.99); }
+
+  /* 결과 토스트 */
+  .toast {
+    display: none; position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%);
+    background: #1a1612; color: #fff;
+    padding: 14px 28px; border-radius: 50px;
+    font-size: 14px; font-weight: 500;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    z-index: 999; white-space: nowrap;
+    animation: toastIn 0.3s ease;
+  }
+
+  /* ── 최근 등록 내역 ── */
+  .recent-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 24px 28px;
+    margin-top: 20px;
+    box-shadow: var(--shadow);
+    animation: fadeUp 0.4s ease 0.2s both;
+  }
+  .recent-title {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 3px; color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 16px;
+  }
+  .recent-list { display: flex; flex-direction: column; gap: 10px; }
+  .recent-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .recent-date {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; color: var(--muted); white-space: nowrap;
+  }
+  .recent-type-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 20px; white-space: nowrap;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .badge-holiday  { background: rgba(239,68,68,0.1);  color: #dc2626; }
+  .badge-duty     { background: rgba(139,92,246,0.1); color: #7c3aed; }
+  .badge-event    { background: rgba(245,158,11,0.1); color: #d97706; }
+  .badge-deadline { background: rgba(26,86,219,0.1);  color: #1a56db; }
+  .recent-entity { font-size: 14px; }
+  .recent-text { flex: 1; font-size: 13px; color: var(--text); font-weight: 500; }
+  .recent-person { font-size: 12px; color: var(--muted); }
+  .recent-empty { text-align: center; color: var(--locked); font-size: 13px; padding: 20px; }
+
+  /* 국기 SVG */
+  .flag-img { width: 28px; height: 19px; border-radius: 3px; border: 0.5px solid rgba(0,0,0,0.1); display: inline-block; vertical-align: middle; overflow: hidden; }
+
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(12px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes toastIn  { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+  @media (max-width: 560px) {
+    .page-wrap { padding: 20px 14px 40px; }
+    .form-card { padding: 20px 18px; }
+    .form-row-2 { grid-template-columns: 1fr; }
+    .topbar { padding: 0 16px; }
+    .entity-tabs { gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 상단바 -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="schedule.html" class="back-btn">← CALENDAR</a>
+    <div class="topbar-divider"></div>
+    <div>
+      <div class="topbar-title"><span class="red">SME</span> CALENDAR</div>
+      <div class="topbar-sub">일정 등록</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-clock" id="topClock">--:--:--</div>
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <!-- 법인 탭 -->
+  <div class="entity-tabs">
+    <div class="entity-tab active" data-entity="HQ" onclick="selectEntity(this)">
+      <span class="flag">🏢</span>
+      <span class="ename">HQ</span>
+      <span class="etime" id="time_HQ">--:--</span>
+    </div>
+    <div class="entity-tab" data-entity="GSMEIN" onclick="selectEntity(this)">
+      <span class="flag">
+        <svg class="flag-img" viewBox="0 0 900 600"><rect width="900" height="600" fill="#138808"/><rect width="900" height="400" fill="#fff"/><rect width="900" height="200" fill="#FF9933"/><circle cx="450" cy="300" r="90" fill="none" stroke="#000080" stroke-width="8"/><circle cx="450" cy="300" r="12" fill="#000080"/></svg>
+      </span>
+      <span class="ename">GSMEIN</span>
+      <span class="etime" id="time_GSMEIN">--:--</span>
+    </div>
+    <div class="entity-tab" data-entity="SMEGLOBAL" onclick="selectEntity(this)">
+      <span class="flag">
+        <svg class="flag-img" viewBox="0 0 900 600"><rect width="900" height="600" fill="#A51931"/><rect width="900" height="500" fill="#fff"/><rect width="900" height="400" fill="#2D2A4A"/><rect width="900" height="300" fill="#fff"/><rect width="900" height="200" fill="#A51931"/></svg>
+      </span>
+      <span class="ename">SMEGLOBAL</span>
+      <span class="etime" id="time_SMEGLOBAL">--:--</span>
+    </div>
+    <div class="entity-tab" data-entity="SMECN" onclick="selectEntity(this)">
+      <span class="flag">
+        <svg class="flag-img" viewBox="0 0 900 600"><rect width="900" height="600" fill="#DE2910"/><g fill="#FFDE00"><polygon points="150,75 163,116 205,116 171,141 184,182 150,157 116,182 129,141 95,116 137,116"/><polygon points="245,40 252,62 275,62 257,75 264,97 245,84 227,97 234,75 216,62 238,62"/><polygon points="290,90 297,112 320,112 302,125 309,147 290,134 272,147 279,125 261,112 283,112"/><polygon points="290,150 297,172 320,172 302,185 309,207 290,194 272,207 279,185 261,172 283,172"/><polygon points="245,200 252,222 275,222 257,235 264,257 245,244 227,257 234,235 216,222 238,222"/></g></svg>
+      </span>
+      <span class="ename">SMECN</span>
+      <span class="etime" id="time_SMECN">--:--</span>
+    </div>
+  </div>
+
+  <!-- 등록 폼 -->
+  <div class="form-card">
+    <div class="form-section-title">구분 선택</div>
+    <div class="type-btns">
+      <button class="type-btn" data-type="휴무" onclick="selectType(this)">
+        <span class="ticon">🔴</span>
+        <span class="tlabel">휴무</span>
+      </button>
+      <button class="type-btn" data-type="당직" onclick="selectType(this)">
+        <span class="ticon">🟣</span>
+        <span class="tlabel">당직</span>
+      </button>
+      <button class="type-btn" data-type="일정" onclick="selectType(this)">
+        <span class="ticon">🟡</span>
+        <span class="tlabel">일정</span>
+      </button>
+      <button class="type-btn" data-type="마감" onclick="selectType(this)">
+        <span class="ticon">🔵</span>
+        <span class="tlabel">마감</span>
+      </button>
+    </div>
+
+    <div class="form-row-2">
+      <div class="form-row" style="margin-bottom:0;">
+        <label class="form-label">날짜 <span>*</span></label>
+        <input class="form-input" type="date" id="fDate">
+      </div>
+      <div class="form-row duty-field" id="dutyField" style="margin-bottom:0;">
+        <label class="form-label">당직자 <span>*</span></label>
+        <input class="form-input" type="text" id="fDuty" placeholder="이름 입력">
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:18px;">
+      <label class="form-label">제목 <span>*</span></label>
+      <input class="form-input" type="text" id="fTitle" placeholder="예) 어린이날, 결제마감, 공장점검">
+    </div>
+
+    <div class="form-row-2">
+      <div class="form-row" style="margin-bottom:0;">
+        <label class="form-label">등록자 <span>*</span></label>
+        <input class="form-input" type="text" id="fWriter" placeholder="이름 입력">
+      </div>
+      <div class="form-row" style="margin-bottom:0;">
+        <label class="form-label">비고</label>
+        <input class="form-input" type="text" id="fNote" placeholder="선택입력">
+      </div>
+    </div>
+
+    <button class="submit-btn" onclick="submitSchedule()">
+      <span>📅</span> 등록하기
+    </button>
+  </div>
+
+  <!-- 최근 등록 내역 -->
+  <div class="recent-card">
+    <div class="recent-title">최근 등록 내역</div>
+    <div class="recent-list" id="recentList">
+      <div class="recent-empty">데이터를 불러오는 중...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const APPS_URL = 'YOUR_APPS_SCRIPT_URL';
+  const DAYS = ['일','월','화','수','목','금','토'];
+
+  let selectedEntity = 'HQ';
+  let selectedType = '';
+
+  /* 법인 탭 선택 */
+  function selectEntity(el) {
+    document.querySelectorAll('.entity-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    selectedEntity = el.dataset.entity;
+    loadRecent();
+  }
+
+  /* 구분 선택 */
+  function selectType(el) {
+    document.querySelectorAll('.type-btn').forEach(b => {
+      b.className = 'type-btn';
+    });
+    const t = el.dataset.type;
+    selectedType = t;
+    const cls = {휴무:'sel-holiday', 당직:'sel-duty', 일정:'sel-event', 마감:'sel-deadline'};
+    el.classList.add(cls[t]);
+    document.getElementById('dutyField').classList.toggle('visible', t === '당직');
+  }
+
+  /* 등록 */
+  async function submitSchedule() {
+    const date   = document.getElementById('fDate').value;
+    const title  = document.getElementById('fTitle').value.trim();
+    const writer = document.getElementById('fWriter').value.trim();
+    const duty   = document.getElementById('fDuty').value.trim();
+    const note   = document.getElementById('fNote').value.trim();
+
+    if (!selectedType) return showToast('⚠ 구분을 선택해주세요');
+    if (!date)         return showToast('⚠ 날짜를 선택해주세요');
+    if (!title)        return showToast('⚠ 제목을 입력해주세요');
+    if (!writer)       return showToast('⚠ 등록자를 입력해주세요');
+    if (selectedType === '당직' && !duty) return showToast('⚠ 당직자를 입력해주세요');
+
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+    const payload = [ts, date, selectedEntity, selectedType, title, duty, writer, note].join('||');
+
+    try {
+      await fetch(APPS_URL + '?action=schedule_add', {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: payload
+      });
+      showToast('✅ 등록되었습니다');
+      document.getElementById('fTitle').value = '';
+      document.getElementById('fDuty').value = '';
+      document.getElementById('fNote').value = '';
+      setTimeout(loadRecent, 1500);
+    } catch(e) {
+      showToast('⚠ 등록 중 오류가 발생했습니다');
+    }
+  }
+
+  /* 최근 내역 로드 */
+  async function loadRecent() {
+    const list = document.getElementById('recentList');
+    try {
+      const res = await fetch(`${APPS_URL}?action=schedule_list&entity=${selectedEntity}&limit=6`);
+      const data = await res.json();
+      if (!data.length) {
+        list.innerHTML = '<div class="recent-empty">등록된 일정이 없습니다</div>';
+        return;
+      }
+      const typeMap = {휴무:'holiday',당직:'duty',일정:'event',마감:'deadline'};
+      const iconMap = {휴무:'🔴',당직:'🟣',일정:'🟡',마감:'🔵'};
+      const entityFlag = {HQ:'🏢',GSMEIN:'🇮🇳',SMEGLOBAL:'🇹🇭',SMECN:'🇨🇳'};
+      list.innerHTML = data.map(r => `
+        <div class="recent-item">
+          <span class="recent-date">${r.date}</span>
+          <span class="recent-type-badge badge-${typeMap[r.type]||'event'}">${iconMap[r.type]||'●'} ${r.type}</span>
+          <span class="recent-entity">${entityFlag[r.entity]||''}</span>
+          <span class="recent-text">${r.title}</span>
+          ${r.duty ? `<span class="recent-person">${r.duty}</span>` : ''}
+        </div>
+      `).join('');
+    } catch(e) {
+      list.innerHTML = '<div class="recent-empty">데이터 연결 대기중</div>';
+    }
+  }
+
+  /* 토스트 */
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 2500);
+  }
+
+  /* 시계 */
+  function tzTime(offset) {
+    const now = new Date();
+    return new Date(now.getTime() + now.getTimezoneOffset()*60000 + offset*3600000);
+  }
+  function updateClocks() {
+    const kst = tzTime(9);
+    const h = String(kst.getHours()).padStart(2,'0');
+    const m = String(kst.getMinutes()).padStart(2,'0');
+    const s = String(kst.getSeconds()).padStart(2,'0');
+    document.getElementById('topClock').textContent = `${h}:${m}:${s}`;
+
+    const fmt = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('time_HQ').textContent       = fmt(tzTime(9));
+    document.getElementById('time_GSMEIN').textContent   = fmt(tzTime(5.5));
+    document.getElementById('time_SMEGLOBAL').textContent= fmt(tzTime(7));
+    document.getElementById('time_SMECN').textContent    = fmt(tzTime(8));
+  }
+  setInterval(updateClocks, 1000);
+  updateClocks();
+
+  /* 오늘 날짜 기본값 */
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  document.getElementById('fDate').value = `${yyyy}-${mm}-${dd}`;
+
+  loadRecent();
+</script>
+</body>
+</html>

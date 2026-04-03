@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SME CALENDAR</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&family=Barlow+Condensed:ital,wght@1,700;1,900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f7f4ef; --surface:#fff; --border:#e5ddd4; --border2:#c8b8a8;
+    --accent:#c8001e; --accent2:#1a56db; --text:#1a1612; --muted:#a8998a; --locked:#c4b8aa;
+    --c-hq:#c8001e; --c-india:#f97316; --c-thai:#3b82f6; --c-china:#22c55e;
+    --c-duty:#8b5cf6; --c-event:#f59e0b; --c-deadline:#1a56db;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+  body::before{content:'';position:fixed;inset:0;z-index:0;
+    background-image:radial-gradient(ellipse 70% 50% at 5% 0%,rgba(200,0,30,0.05) 0%,transparent 55%),
+    radial-gradient(ellipse 50% 40% at 95% 100%,rgba(26,86,219,0.04) 0%,transparent 55%);pointer-events:none;}
+
+  /* ── TOPBAR ── */
+  .topbar{position:sticky;top:0;z-index:100;background:rgba(247,244,239,0.96);
+    border-bottom:1px solid var(--border);backdrop-filter:blur(8px);
+    padding:0 28px;height:64px;display:flex;align-items:center;justify-content:space-between;}
+  .topbar-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-style:italic;font-size:26px;letter-spacing:-.5px;line-height:1;}
+  .topbar-logo .red{color:var(--accent);}
+  .topbar-logo .sub{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:4px;color:var(--muted);font-style:normal;font-weight:400;display:block;margin-top:2px;}
+  .tz-pills{display:flex;gap:8px;align-items:center;}
+  .tz-pill{display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--text);font-weight:700;letter-spacing:1px;}
+  .topbar-right{display:flex;align-items:center;gap:14px;}
+  .hq-clock{font-family:'Share Tech Mono',monospace;font-size:22px;font-weight:900;color:var(--accent);letter-spacing:2px;}
+  .hq-date{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;}
+  .add-btn{display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;text-decoration:none;transition:background .15s;white-space:nowrap;}
+  .add-btn:hover{background:#a8001a;}
+  .refresh-tag{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--locked);letter-spacing:1px;white-space:nowrap;}
+
+  /* ── BADGE BAR ── */
+  .badge-bar{position:relative;z-index:1;background:var(--surface);border-bottom:1px solid var(--border);
+    padding:10px 28px;display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;}
+  .badge-bar::-webkit-scrollbar{display:none;}
+  .badge-bar-label{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--locked);white-space:nowrap;flex-shrink:0;}
+  .ev-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;font-family:'Share Tech Mono',monospace;flex-shrink:0;}
+  .b-hq{background:rgba(200,0,30,0.08);color:#c8001e;border:1px solid rgba(200,0,30,0.2);}
+  .b-india{background:rgba(249,115,22,0.08);color:#ea6a0a;border:1px solid rgba(249,115,22,0.2);}
+  .b-thai{background:rgba(59,130,246,0.08);color:#2563eb;border:1px solid rgba(59,130,246,0.2);}
+  .b-china{background:rgba(34,197,94,0.08);color:#16a34a;border:1px solid rgba(34,197,94,0.2);}
+  .b-duty{background:rgba(139,92,246,0.1);color:#7c3aed;border:1px solid rgba(139,92,246,0.2);}
+  .b-event{background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.2);}
+  .b-deadline{background:rgba(26,86,219,0.08);color:#1a56db;border:1px solid rgba(26,86,219,0.2);}
+  .b-today{outline:2px solid var(--accent);}
+
+  /* ── MAIN LAYOUT ── */
+  .main-wrap{position:relative;z-index:1;display:grid;grid-template-columns:1fr 300px;gap:0;
+    max-width:1320px;margin:0 auto;padding:24px 28px 0;align-items:start;}
+
+  /* ── CALENDAR ── */
+  .calendar-wrap{padding-right:22px;}
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .cal-nav-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;color:var(--text);}
+  .cal-nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .cal-month{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-style:italic;font-size:30px;letter-spacing:-1px;color:var(--text);}
+  .cal-month span{color:var(--accent);}
+  .cal-filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .cal-filter{padding:4px 12px;border-radius:20px;border:1px solid var(--border);font-size:10px;font-weight:700;cursor:pointer;font-family:'Share Tech Mono',monospace;background:var(--surface);color:var(--muted);transition:all .15s;}
+  .cal-filter.on{background:var(--text);color:#fff;border-color:var(--text);}
+  .cal-head{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:5px;}
+  .cal-head-cell{text-align:center;font-size:10px;font-weight:700;color:var(--muted);padding:5px 0;font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+  .cal-head-cell:first-child{color:#dc2626;}
+  .cal-head-cell:last-child{color:#2563eb;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 6px 5px;min-height:86px;cursor:pointer;transition:all .15s;position:relative;display:flex;flex-direction:column;gap:2px;}
+  .cal-cell:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(80,60,40,0.12);z-index:2;}
+  .cal-cell.other-month{opacity:.3;cursor:default;}
+  .cal-cell.other-month:hover{border-color:var(--border);box-shadow:none;}
+  .cal-cell.today{border-color:var(--accent);border-width:2px;background:rgba(200,0,30,0.02);}
+  .cal-cell.selected{background:rgba(200,0,30,0.04);border-color:var(--accent);}
+  .cal-cell.sunday .cal-date{color:#dc2626;}
+  .cal-cell.saturday .cal-date{color:#2563eb;}
+  .cal-date{font-size:12px;font-weight:700;color:var(--text);font-family:'Share Tech Mono',monospace;line-height:1;}
+  .cal-cell.today .cal-date{background:var(--accent);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;}
+  .cell-events{display:flex;flex-direction:column;gap:2px;margin-top:2px;}
+  .cell-event{font-size:9px;font-weight:600;padding:1px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5;}
+  .ev-hq{background:rgba(200,0,30,0.1);color:#c8001e;}
+  .ev-india{background:rgba(249,115,22,0.1);color:#c2590a;}
+  .ev-thai{background:rgba(59,130,246,0.1);color:#1d4ed8;}
+  .ev-china{background:rgba(34,197,94,0.1);color:#15803d;}
+  .ev-duty{background:rgba(139,92,246,0.1);color:#6d28d9;}
+  .ev-event{background:rgba(245,158,11,0.1);color:#b45309;}
+  .ev-deadline{background:rgba(26,86,219,0.1);color:#1a56db;}
+  .cell-more{font-size:9px;color:var(--muted);padding-left:3px;}
+
+  /* ── RIGHT PANEL ── */
+  .list-wrap{position:sticky;top:88px;}
+  .list-card{background:var(--surface);border:1.5px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 2px 12px rgba(80,60,40,0.06);}
+
+  /* 주차 탭 */
+  .week-tabs{display:flex;border-bottom:1px solid var(--border);}
+  .week-tab{flex:1;padding:10px 4px;text-align:center;font-size:10px;font-weight:700;cursor:pointer;font-family:'Share Tech Mono',monospace;color:var(--muted);transition:all .15s;letter-spacing:.5px;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .week-tab:hover{color:var(--text);}
+  .week-tab.on{color:var(--accent);border-bottom-color:var(--accent);}
+
+  .list-header{padding:14px 18px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  .list-header-title{font-size:13px;font-weight:700;color:var(--text);}
+  .list-header-count{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;background:var(--bg);padding:2px 8px;border-radius:10px;}
+  .list-body{max-height:calc(100vh - 320px);overflow-y:auto;padding:8px 0;}
+  .list-body::-webkit-scrollbar{width:3px;}
+  .list-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  .list-item{display:flex;align-items:flex-start;gap:10px;padding:9px 18px;cursor:pointer;transition:background .12s;border-left:3px solid transparent;}
+  .list-item:hover{background:var(--bg);}
+  .list-item.is-active{background:rgba(200,0,30,0.04);border-left-color:var(--accent);}
+  .list-item.past{opacity:.45;}
+  .list-date-block{min-width:34px;text-align:center;flex-shrink:0;}
+  .list-date-d{font-size:17px;font-weight:900;color:var(--text);line-height:1;font-family:'Share Tech Mono',monospace;}
+  .list-date-m{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+  .list-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+  .list-info{flex:1;min-width:0;}
+  .list-meta{display:flex;align-items:center;gap:4px;margin-bottom:2px;}
+  .list-flag{font-size:11px;}
+  .list-ename{font-size:9px;font-weight:700;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+  .list-type{font-size:9px;color:var(--locked);font-family:'Share Tech Mono',monospace;margin-left:2px;}
+  .list-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .list-duty-tag{font-size:10px;color:#7c3aed;font-weight:600;}
+  .list-note{font-size:10px;color:var(--muted);}
+  .list-empty{text-align:center;padding:28px;color:var(--locked);font-size:12px;}
+
+  /* 범례 */
+  .legend{display:flex;flex-wrap:wrap;gap:6px;padding:12px 18px;border-top:1px solid var(--border);}
+  .legend-item{display:flex;align-items:center;gap:3px;font-size:9px;color:var(--muted);}
+  .legend-dot{width:7px;height:7px;border-radius:50%;}
+
+  /* ── ANNUAL TIMELINE ── */
+  .timeline-wrap{position:relative;z-index:1;max-width:1320px;margin:20px auto 0;padding:0 28px 48px;}
+  .timeline-card{background:var(--surface);border:1.5px solid var(--border);border-radius:18px;padding:20px 24px 18px;box-shadow:0 2px 12px rgba(80,60,40,0.06);}
+  .timeline-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .timeline-title{font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;letter-spacing:3px;color:var(--muted);text-transform:uppercase;}
+  .timeline-year{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-style:italic;font-size:20px;color:var(--text);}
+  .timeline-year span{color:var(--accent);}
+
+  .months-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;}
+  .month-col{cursor:pointer;border-radius:10px;padding:8px 6px;border:1px solid var(--border);background:var(--bg);transition:all .15s;position:relative;}
+  .month-col:hover{border-color:var(--border2);background:var(--surface);box-shadow:0 4px 12px rgba(80,60,40,0.1);}
+  .month-col.current-month{border-color:var(--accent);border-width:2px;background:rgba(200,0,30,0.03);}
+  .month-col.selected-month{background:rgba(200,0,30,0.05);border-color:var(--accent);}
+
+  .month-label{font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:var(--muted);text-align:center;margin-bottom:8px;letter-spacing:1px;}
+  .month-col.current-month .month-label{color:var(--accent);}
+
+  /* 법인별 스택 바 */
+  .month-bar-wrap{height:48px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;margin-bottom:6px;}
+  .month-bar-stack{display:flex;height:100%;flex-direction:column;justify-content:flex-end;gap:1px;}
+  .bar-seg{border-radius:2px;min-height:2px;transition:height .3s;}
+  .bar-hq{background:#c8001e;}
+  .bar-india{background:#f97316;}
+  .bar-thai{background:#3b82f6;}
+  .bar-china{background:#22c55e;}
+  .bar-duty{background:#8b5cf6;}
+  .bar-event{background:#f59e0b;}
+  .bar-deadline{background:#1a56db;}
+
+  .month-count{text-align:center;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:var(--text);}
+  .month-count.zero{color:var(--locked);}
+
+  /* 주차 표시 (월 컬럼 하단) */
+  .month-weeks{display:flex;gap:2px;margin-top:6px;justify-content:center;}
+  .week-dot{width:5px;height:5px;border-radius:50%;background:var(--border);}
+  .week-dot.has-ev{background:var(--accent2);}
+
+  /* 연간 법인 범례 */
+  .timeline-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
+  .tl-legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);}
+  .tl-dot{width:8px;height:8px;border-radius:2px;}
+
+
+  /* ── 법인별 가로 간트뷰 ── */
+  .gantt-wrap{position:relative;z-index:1;max-width:1320px;margin:16px auto 0;padding:0 28px 48px;}
+  .gantt-card{background:var(--surface);border:1.5px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 2px 12px rgba(80,60,40,0.06);}
+  .gantt-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px 14px;border-bottom:1px solid var(--border);}
+  .gantt-title{font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;letter-spacing:3px;color:var(--muted);text-transform:uppercase;}
+  .gantt-month-label{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-style:italic;font-size:20px;color:var(--text);}
+  .gantt-month-label span{color:var(--accent);}
+  .gantt-body{padding:0 24px 20px;overflow-x:auto;}
+  .gantt-body::-webkit-scrollbar{height:4px;}
+  .gantt-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+  .gantt-date-row{display:flex;margin-bottom:6px;padding-left:108px;}
+  .gantt-date-cell{flex-shrink:0;width:30px;text-align:center;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--locked);font-weight:700;padding:4px 0;}
+  .gantt-date-cell.is-today{color:var(--accent);font-weight:900;}
+  .gantt-date-cell.is-sun{color:#dc2626;}
+  .gantt-date-cell.is-sat{color:#2563eb;}
+  .gantt-date-cell.is-selected{background:rgba(200,0,30,0.08);border-radius:4px;color:var(--accent);}
+  .gantt-row{display:flex;align-items:center;padding:5px 0;}
+  .gantt-row:not(:last-child){border-bottom:1px solid var(--border);}
+  .gantt-row-label{width:108px;flex-shrink:0;display:flex;align-items:center;gap:7px;padding-right:8px;}
+  .gantt-entity-flag{font-size:18px;line-height:1;}
+  .gantt-entity-info{display:flex;flex-direction:column;gap:1px;}
+  .gantt-entity-name{font-family:'Share Tech Mono',monospace;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1px;}
+  .gantt-entity-count{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--locked);}
+  .gantt-cells{display:flex;gap:2px;}
+  .gantt-cell{flex-shrink:0;width:30px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;overflow:visible;}
+  .gantt-cell:hover{border-color:var(--border2);box-shadow:0 2px 8px rgba(80,60,40,0.15);z-index:10;}
+  .gantt-cell.is-today-col{border-color:rgba(200,0,30,0.4);background:rgba(200,0,30,0.04);}
+  .gantt-cell.is-selected-col{border-color:var(--accent);background:rgba(200,0,30,0.07);}
+  .gantt-cell.is-weekend{background:#f5f1eb;}
+  .gantt-cell.is-weekend.is-today-col{background:rgba(200,0,30,0.04);}
+  .gantt-ev-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .gantt-cell:hover .gantt-tooltip{display:block;}
+  .gantt-tooltip{display:none;position:absolute;bottom:calc(100%+8px);left:50%;transform:translateX(-50%);background:#1a1612;color:#fff;font-size:10px;font-family:'Noto Sans KR',sans-serif;padding:6px 10px;border-radius:8px;white-space:nowrap;z-index:999;pointer-events:none;line-height:1.6;min-width:80px;text-align:left;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
+  .gantt-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1612;}
+  .gantt-empty{font-size:10px;color:var(--locked);font-family:'Share Tech Mono',monospace;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+  @media(max-width:1000px){
+    .main-wrap{grid-template-columns:1fr;}
+    .calendar-wrap{padding-right:0;margin-bottom:20px;}
+    .list-wrap{position:static;}
+    .list-body{max-height:360px;}
+    .tz-pills{display:none;}
+    .months-grid{grid-template-columns:repeat(6,1fr);}
+  }
+  @media(max-width:560px){
+    .topbar{padding:0 14px;}
+    .main-wrap,.timeline-wrap{padding:14px 14px 0;}
+    .cal-cell{min-height:64px;}
+    .months-grid{grid-template-columns:repeat(4,1fr);}
+    .badge-bar{padding:8px 14px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <span class="red">SME</span> CALENDAR
+    <span class="sub">전법인 통합 일정표</span>
+  </div>
+  <div class="tz-pills" id="tzPills"></div>
+  <div class="topbar-right">
+    <div style="text-align:right;">
+      <div class="hq-clock" id="hqClock">--:--:--</div>
+      <div class="hq-date" id="hqDate"></div>
+    </div>
+    <a href="schedule_input.html" class="add-btn">＋ 일정 등록</a>
+    <div class="refresh-tag" id="refreshTag">갱신 --:--</div>
+  </div>
+</div>
+
+<!-- BADGE BAR -->
+<div class="badge-bar" id="badgeBar">
+  <span class="badge-bar-label">이달 주요일정</span>
+  <span style="font-size:11px;color:var(--locked);">로딩중...</span>
+</div>
+
+<!-- MAIN: 달력 + 우측 패널 -->
+<div class="main-wrap">
+
+  <!-- 달력 -->
+  <div class="calendar-wrap" style="animation:fadeUp .4s ease;">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+      <div class="cal-month" id="calMonth"></div>
+      <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="cal-filters" id="calFilters">
+      <span class="cal-filter on" data-f="ALL" onclick="toggleFilter(this)">전체</span>
+      <span class="cal-filter" data-f="HQ" onclick="toggleFilter(this)">🏢 HQ</span>
+      <span class="cal-filter" data-f="GSMEIN" onclick="toggleFilter(this)">🇮🇳 GSMEIN</span>
+      <span class="cal-filter" data-f="SMEGLOBAL" onclick="toggleFilter(this)">🇹🇭 SMEGLOBAL</span>
+      <span class="cal-filter" data-f="SMECN" onclick="toggleFilter(this)">🇨🇳 SMECN</span>
+    </div>
+    <div class="cal-head">
+      <div class="cal-head-cell">SUN</div><div class="cal-head-cell">MON</div>
+      <div class="cal-head-cell">TUE</div><div class="cal-head-cell">WED</div>
+      <div class="cal-head-cell">THU</div><div class="cal-head-cell">FRI</div>
+      <div class="cal-head-cell">SAT</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+  <!-- 우측 패널 -->
+  <div class="list-wrap" style="animation:fadeUp .4s ease .1s both;">
+    <div class="list-card">
+      <!-- 주차 탭 -->
+      <div class="week-tabs" id="weekTabs">
+        <div class="week-tab on" data-w="ALL" onclick="switchWeek(this)">전체</div>
+        <div class="week-tab" data-w="1" onclick="switchWeek(this)">1주</div>
+        <div class="week-tab" data-w="2" onclick="switchWeek(this)">2주</div>
+        <div class="week-tab" data-w="3" onclick="switchWeek(this)">3주</div>
+        <div class="week-tab" data-w="4" onclick="switchWeek(this)">4주</div>
+        <div class="week-tab" data-w="5" onclick="switchWeek(this)">5주</div>
+      </div>
+      <div class="list-header">
+        <div class="list-header-title" id="listTitle">이달 전체</div>
+        <div class="list-header-count" id="listCount">0건</div>
+      </div>
+      <div class="list-body" id="listBody">
+        <div class="list-empty">데이터 로딩중...</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#c8001e;"></div>HQ</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f97316;"></div>인도</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;"></div>태국</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#22c55e;"></div>중국</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6;"></div>당직</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div>일정</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1a56db;"></div>마감</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ANNUAL TIMELINE -->
+<div class="timeline-wrap" style="animation:fadeUp .4s ease .2s both;">
+  <div class="timeline-card">
+    <div class="timeline-header">
+      <div class="timeline-title">연간 일정 현황</div>
+      <div class="timeline-year" id="timelineYear"></div>
+    </div>
+    <div class="months-grid" id="monthsGrid"></div>
+    <div class="timeline-legend">
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#c8001e;"></div>HQ 휴무</div>
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#f97316;"></div>인도 휴무</div>
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#3b82f6;"></div>태국 휴무</div>
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#22c55e;"></div>중국 휴무</div>
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#8b5cf6;"></div>당직</div>
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#f59e0b;"></div>일정</div>
+      <div class="tl-legend-item"><div class="tl-dot" style="background:#1a56db;"></div>마감</div>
+    </div>
+  </div>
+</div>
+
+<!-- 법인별 가로 간트뷰 -->
+<div class="gantt-wrap" style="animation:fadeUp .4s ease .3s both;">
+  <div class="gantt-card">
+    <div class="gantt-header">
+      <div class="gantt-title">법인별 월간 일정 현황</div>
+      <div class="gantt-month-label" id="ganttMonthLabel"></div>
+    </div>
+    <div class="gantt-body">
+      <div class="gantt-date-row" id="ganttDateRow"></div>
+      <div id="ganttRows"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const APPS_URL = 'YOUR_APPS_SCRIPT_URL';
+const MONTHS_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const MONTHS_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+const DAYS_KO   = ['일','월','화','수','목','금','토'];
+
+let viewYear, viewMonth, allEvents=[], activeFilter='ALL', activeWeek='ALL', selectedDate=null, refreshTimer;
+
+const entityColor = {HQ:'hq',GSMEIN:'india',SMEGLOBAL:'thai',SMECN:'china'};
+const typeColorMap = e=>{
+  if(e.type==='당직') return 'duty';
+  if(e.type==='마감') return 'deadline';
+  if(e.type==='일정') return 'event';
+  return entityColor[e.entity]||'event';
+};
+const dotColors = {hq:'#c8001e',india:'#f97316',thai:'#3b82f6',china:'#22c55e',duty:'#8b5cf6',event:'#f59e0b',deadline:'#1a56db'};
+const entityFlag = {HQ:'🏢',GSMEIN:'🇮🇳',SMEGLOBAL:'🇹🇭',SMECN:'🇨🇳'};
+const barClass   = {hq:'bar-hq',india:'bar-india',thai:'bar-thai',china:'bar-china',duty:'bar-duty',event:'bar-event',deadline:'bar-deadline'};
+
+/* ── 시계 ── */
+function tzTime(off){const n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+off*3600000);}
+function pad(n){return String(n).padStart(2,'0');}
+function updateClocks(){
+  const k=tzTime(9);
+  document.getElementById('hqClock').textContent=`${pad(k.getHours())}:${pad(k.getMinutes())}:${pad(k.getSeconds())}`;
+  document.getElementById('hqDate').textContent=`${k.getFullYear()}.${pad(k.getMonth()+1)}.${pad(k.getDate())} (${DAYS_KO[k.getDay()]})`;
+  const fmt=d=>`${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  document.getElementById('tzPills').innerHTML=
+    `<div class="tz-pill">🏢 ${fmt(tzTime(9))} <span style="font-size:9px;color:var(--muted);">KST</span></div>
+     <div class="tz-pill">🇮🇳 ${fmt(tzTime(5.5))} <span style="font-size:9px;color:var(--muted);">IST</span></div>
+     <div class="tz-pill">🇹🇭 ${fmt(tzTime(7))} <span style="font-size:9px;color:var(--muted);">ICT</span></div>
+     <div class="tz-pill">🇨🇳 ${fmt(tzTime(8))} <span style="font-size:9px;color:var(--muted);">CST</span></div>`;
+}
+setInterval(updateClocks,1000); updateClocks();
+
+/* ── 필터 ── */
+function filtered(evs){return activeFilter==='ALL'?evs:evs.filter(e=>e.entity===activeFilter);}
+function toggleFilter(el){
+  document.querySelectorAll('.cal-filter').forEach(f=>f.classList.remove('on'));
+  el.classList.add('on'); activeFilter=el.dataset.f;
+  renderCalendar(); renderList();
+}
+
+/* ── 주차 탭 ── */
+function switchWeek(el){
+  document.querySelectorAll('.week-tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on'); activeWeek=el.dataset.w;
+  renderList();
+}
+
+/* 주차 계산: 해당 월의 몇번째 주 (1~5) */
+function getWeekOfMonth(dateStr){
+  const d=new Date(dateStr);
+  const first=new Date(d.getFullYear(),d.getMonth(),1);
+  return Math.ceil((d.getDate()+first.getDay())/7);
+}
+
+/* ── 날짜 클릭 ── */
+function selectDay(ds){
+  selectedDate=ds; activeWeek='ALL';
+  document.querySelectorAll('.week-tab').forEach(t=>t.classList.remove('on'));
+  document.querySelector('.week-tab[data-w="ALL"]').classList.add('on');
+  document.querySelectorAll('.cal-cell').forEach(c=>c.classList.toggle('selected',c.dataset.date===ds));
+  const evs=allEvents.filter(e=>e.date===ds);
+  const d=new Date(ds);
+  document.getElementById('listTitle').textContent=`${d.getMonth()+1}월 ${d.getDate()}일`;
+  document.getElementById('listCount').textContent=`${evs.length}건`;
+  renderListItems(evs); renderGantt();
+}
+
+/* ── 배지 바 ── */
+function renderBadgeBar(){
+  const kst=tzTime(9);
+  const todayStr=`${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
+  const upcoming=allEvents.filter(e=>e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,12);
+  const bar=document.getElementById('badgeBar');
+  if(!upcoming.length){bar.innerHTML='<span class="badge-bar-label">이달 주요일정</span><span style="font-size:11px;color:var(--locked);">등록된 일정 없음</span>';return;}
+  const bClass=e=>{const c=typeColorMap(e);return `ev-badge b-${c==='hq'?'hq':c==='india'?'india':c==='thai'?'thai':c==='china'?'china':c}`;};
+  const icon=e=>{if(e.type==='당직')return'🟣';if(e.type==='마감')return'🔵';if(e.type==='일정')return'🟡';return entityFlag[e.entity]||'📅';};
+  const fmtD=s=>{const p=s.split('-');return`${parseInt(p[1])}/${parseInt(p[2])}`};
+  bar.innerHTML='<span class="badge-bar-label">이달 주요일정</span>'+
+    upcoming.map(e=>`<span class="${bClass(e)}${e.date===todayStr?' b-today':''}">${icon(e)} ${fmtD(e.date)} ${e.title}${e.duty?' · '+e.duty:''}</span>`).join('');
+}
+
+/* ── 달력 ── */
+function changeMonth(d){
+  viewMonth+=d;
+  if(viewMonth>11){viewMonth=0;viewYear++;}
+  if(viewMonth<0){viewMonth=11;viewYear--;}
+  selectedDate=null; activeWeek='ALL';
+  document.querySelectorAll('.week-tab').forEach(t=>t.classList.remove('on'));
+  document.querySelector('.week-tab[data-w="ALL"]').classList.add('on');
+  renderCalendar(); renderList(); renderTimeline(); renderGantt();
+}
+
+function renderCalendar(){
+  const mo=pad(viewMonth+1);
+  document.getElementById('calMonth').innerHTML=`<span>${viewYear}</span>.${mo}`;
+  const first=new Date(viewYear,viewMonth,1);
+  const last=new Date(viewYear,viewMonth+1,0);
+  const startDay=first.getDay();
+  const kst=tzTime(9);
+  const todayStr=`${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
+  const evMap={};
+  filtered(allEvents).forEach(e=>{(evMap[e.date]=evMap[e.date]||[]).push(e);});
+  let html='';
+  for(let i=0;i<startDay;i++){
+    const d=new Date(viewYear,viewMonth,1-startDay+i);
+    html+=`<div class="cal-cell other-month"><span class="cal-date">${d.getDate()}</span></div>`;
+  }
+  for(let d=1;d<=last.getDate();d++){
+    const ds=`${viewYear}-${mo}-${pad(d)}`;
+    const dow=(startDay+d-1)%7;
+    let cls=`cal-cell${ds===todayStr?' today':''}${dow===0?' sunday':dow===6?' saturday':''}${selectedDate===ds?' selected':''}`;
+    const evs=evMap[ds]||[];
+    const show=evs.slice(0,3); const more=evs.length-3;
+    const evHtml=show.map(e=>{
+      const c=typeColorMap(e);
+      const lbl=e.type==='당직'?`🟣${e.duty||e.title}`:e.title;
+      return `<div class="cell-event ev-${c}">${lbl}</div>`;
+    }).join('');
+    html+=`<div class="${cls}" data-date="${ds}" onclick="selectDay('${ds}')">
+      <span class="cal-date">${d}</span>
+      <div class="cell-events">${evHtml}${more>0?`<div class="cell-more">+${more}</div>`:''}</div>
+    </div>`;
+  }
+  const rem=(7-((startDay+last.getDate())%7))%7;
+  for(let i=1;i<=rem;i++) html+=`<div class="cal-cell other-month"><span class="cal-date">${i}</span></div>`;
+  document.getElementById('calGrid').innerHTML=html;
+}
+
+/* ── 우측 리스트 ── */
+function renderList(){
+  const mo=pad(viewMonth+1);
+  const prefix=`${viewYear}-${mo}`;
+  const kst=tzTime(9);
+  const todayStr=`${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
+  let evs=filtered(allEvents).filter(e=>e.date.startsWith(prefix));
+  if(activeWeek!=='ALL') evs=evs.filter(e=>getWeekOfMonth(e.date)===parseInt(activeWeek));
+  evs.sort((a,b)=>a.date.localeCompare(b.date));
+  const wLabel=activeWeek==='ALL'?`${viewYear}년 ${viewMonth+1}월 전체`:`${viewYear}년 ${viewMonth+1}월 ${activeWeek}주차`;
+  document.getElementById('listTitle').textContent=wLabel;
+  document.getElementById('listCount').textContent=`${evs.length}건`;
+  renderListItems(evs,todayStr);
+}
+
+function renderListItems(evs,todayStr){
+  const body=document.getElementById('listBody');
+  if(!evs.length){body.innerHTML='<div class="list-empty">등록된 일정이 없습니다</div>';return;}
+  let html=''; let lastDate='';
+  evs.forEach(e=>{
+    const parts=e.date.split('-');
+    const dc=dotColors[typeColorMap(e)]||'#aaa';
+    const past=todayStr&&e.date<todayStr?' past':'';
+    const active=selectedDate===e.date?' is-active':'';
+    html+=`<div class="list-item${past}${active}" onclick="selectDay('${e.date}')">
+      <div class="list-date-block">
+        <div class="list-date-d">${parseInt(parts[2])}</div>
+        <div class="list-date-m">${MONTHS_EN[parseInt(parts[1])-1]}</div>
+      </div>
+      <div class="list-dot" style="background:${dc};"></div>
+      <div class="list-info">
+        <div class="list-meta">
+          <span class="list-flag">${entityFlag[e.entity]||''}</span>
+          <span class="list-ename">${e.entity}</span>
+          <span class="list-type">${e.type}</span>
+        </div>
+        <div class="list-title">${e.title}</div>
+        ${e.duty?`<div class="list-duty-tag">당직 · ${e.duty}</div>`:''}
+        ${e.note?`<div class="list-note">${e.note}</div>`:''}
+      </div>
+    </div>`;
+  });
+  body.innerHTML=html;
+}
+
+/* ── 연간 타임라인 ── */
+function renderTimeline(){
+  document.getElementById('timelineYear').innerHTML=`<span>${viewYear}</span>년`;
+  const kst=tzTime(9);
+  const todayStr=`${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
+  const currentMo=kst.getMonth();
+
+  let html='';
+  for(let m=0;m<12;m++){
+    const mo=pad(m+1);
+    const prefix=`${viewYear}-${mo}`;
+    const evs=allEvents.filter(e=>e.date.startsWith(prefix));
+    const total=evs.length;
+    const isCurrent=(viewYear===kst.getFullYear()&&m===currentMo);
+    const isSelected=(m===viewMonth);
+
+    // 법인별/타입별 카운트
+    const counts={hq:0,india:0,thai:0,china:0,duty:0,event:0,deadline:0};
+    evs.forEach(e=>{ const c=typeColorMap(e); if(counts[c]!==undefined) counts[c]++; });
+    const maxH=40;
+    const maxCount=Math.max(...Object.values(counts),1);
+
+    // 스택바
+    const segs=Object.entries(counts).filter(([,v])=>v>0).map(([k,v])=>{
+      const h=Math.max(2,Math.round((v/maxCount)*maxH*0.7));
+      return `<div class="bar-seg ${barClass[k]}" style="height:${h}px;"></div>`;
+    }).join('');
+
+    // 주차별 점 (해당 월의 주차에 일정 있으면 파란 점)
+    const weekHas={1:false,2:false,3:false,4:false,5:false};
+    evs.forEach(e=>{ const w=getWeekOfMonth(e.date); if(weekHas[w]!==undefined) weekHas[w]=true; });
+    const weekDots=[1,2,3,4,5].map(w=>`<div class="week-dot${weekHas[w]?' has-ev':''}"></div>`).join('');
+
+    html+=`<div class="month-col${isCurrent?' current-month':''}${isSelected?' selected-month':''}" onclick="goToMonth(${m})">
+      <div class="month-label">${MONTHS_EN[m]}</div>
+      <div class="month-bar-wrap">
+        <div class="month-bar-stack">${segs||'<div style="height:2px;background:var(--border);border-radius:2px;"></div>'}</div>
+      </div>
+      <div class="month-count${total===0?' zero':''}">${total>0?total:'-'}</div>
+      <div class="month-weeks">${weekDots}</div>
+    </div>`;
+  }
+  document.getElementById('monthsGrid').innerHTML=html;
+}
+
+
+/* ── 간트뷰 ── */
+function renderGantt(){
+  const mo = pad(viewMonth+1);
+  const lastDay = new Date(viewYear, viewMonth+1, 0).getDate();
+  const kst = tzTime(9);
+  const todayStr = `${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
+
+  document.getElementById('ganttMonthLabel').innerHTML =
+    `<span>${viewYear}</span>년 ${viewMonth+1}월`;
+
+  const MONTHS_KO2 = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  // 날짜 헤더
+  let dateRowHtml = '';
+  for(let d=1; d<=lastDay; d++){
+    const ds = `${viewYear}-${mo}-${pad(d)}`;
+    const dow = new Date(ds).getDay();
+    let cls = 'gantt-date-cell';
+    if(ds === todayStr)       cls += ' is-today';
+    else if(dow === 0)        cls += ' is-sun';
+    else if(dow === 6)        cls += ' is-sat';
+    if(ds === selectedDate)   cls += ' is-selected';
+    dateRowHtml += `<div class="${cls}">${d}</div>`;
+  }
+  document.getElementById('ganttDateRow').innerHTML = dateRowHtml;
+
+  // 법인별 행
+  const entities = [
+    {code:'HQ',      flag:'🏢', name:'HQ'},
+    {code:'GSMEIN',  flag:'🇮🇳', name:'GSMEIN'},
+    {code:'SMEGLOBAL',flag:'🇹🇭',name:'SMEGLOBAL'},
+    {code:'SMECN',   flag:'🇨🇳', name:'SMECN'},
+  ];
+
+  let rowsHtml = '';
+  entities.forEach(ent => {
+    const rowEvs = allEvents.filter(e =>
+      e.entity === ent.code &&
+      e.date.startsWith(`${viewYear}-${mo}`)
+    );
+    const evByDate = {};
+    rowEvs.forEach(e => { (evByDate[e.date] = evByDate[e.date]||[]).push(e); });
+
+    let cellsHtml = '';
+    for(let d=1; d<=lastDay; d++){
+      const ds = `${viewYear}-${mo}-${pad(d)}`;
+      const dow = new Date(ds).getDay();
+      const evs = evByDate[ds]||[];
+      let cls = 'gantt-cell';
+      if(ds === todayStr)     cls += ' is-today-col';
+      if(ds === selectedDate) cls += ' is-selected-col';
+      if(dow===0||dow===6)    cls += ' is-weekend';
+
+      let inner = '';
+      if(evs.length > 0){
+        // 최대 3개 점 표시
+        const show = evs.slice(0,3);
+        inner = show.map(e => {
+          const c = typeColorMap(e);
+          return `<div class="gantt-ev-dot" style="background:${dotColors[c]||'#aaa'};"></div>`;
+        }).join('');
+
+        // 툴팁
+        const tipLines = evs.map(e =>
+          `${e.type==='당직'?'🟣':e.type==='마감'?'🔵':e.type==='일정'?'🟡':'🔴'} ${e.title}${e.duty?' · '+e.duty:''}`
+        ).join('<br>');
+        inner += `<div class="gantt-tooltip">${tipLines}</div>`;
+      } else {
+        inner = `<div class="gantt-empty">·</div>`;
+      }
+
+      cellsHtml += `<div class="${cls}" onclick="selectDay('${ds}')">${inner}</div>`;
+    }
+
+    const cnt = rowEvs.length;
+    rowsHtml += `<div class="gantt-row">
+      <div class="gantt-row-label">
+        <span class="gantt-entity-flag">${ent.flag}</span>
+        <div class="gantt-entity-info">
+          <span class="gantt-entity-name">${ent.name}</span>
+          <span class="gantt-entity-count">${cnt}건</span>
+        </div>
+      </div>
+      <div class="gantt-cells">${cellsHtml}</div>
+    </div>`;
+  });
+
+  document.getElementById('ganttRows').innerHTML = rowsHtml;
+}
+function goToMonth(m){
+  viewMonth=m;
+  selectedDate=null; activeWeek='ALL';
+  document.querySelectorAll('.week-tab').forEach(t=>t.classList.remove('on'));
+  document.querySelector('.week-tab[data-w="ALL"]').classList.add('on');
+  renderCalendar(); renderList(); renderTimeline(); renderGantt();
+}
+
+/* ── 데이터 로드 ── */
+async function loadEvents(){
+  try{
+    const res=await fetch(`${APPS_URL}?action=schedule_list&all=1`);
+    allEvents=await res.json();
+  }catch(e){ allEvents=[]; }
+  renderBadgeBar(); renderCalendar(); renderList(); renderTimeline(); renderGantt();
+  const kst=tzTime(9);
+  document.getElementById('refreshTag').textContent=`갱신 ${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
+}
+
+/* ── 초기화 ── */
+const initKST=tzTime(9);
+viewYear=initKST.getFullYear(); viewMonth=initKST.getMonth();
+loadEvents();
+clearInterval(refreshTimer);
+refreshTimer=setInterval(loadEvents,30000);
+</script>
+</body>
+</html>
