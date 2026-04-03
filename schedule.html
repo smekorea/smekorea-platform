@@ -244,6 +244,38 @@
   .gantt-tooltip::after{content:'';position:absolute;top:100%;left:50%;
     transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1612;}
 
+
+  /* ── 수정 팝업 ── */
+  .edit-overlay{display:none;position:fixed;inset:0;background:rgba(26,22,18,0.55);
+    z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
+  .edit-overlay.open{display:flex;}
+  .edit-popup{background:#fff;border-radius:20px;width:420px;max-width:92vw;
+    box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden;animation:popIn .22s ease;}
+  .edit-popup-header{background:#1a1612;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;}
+  .edit-popup-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-style:italic;
+    font-size:20px;color:#fff;letter-spacing:-.3px;}
+  .edit-popup-title span{color:var(--accent);}
+  .edit-close-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.5);
+    font-size:18px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+    border-radius:50%;transition:background .15s;}
+  .edit-close-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}
+  .edit-popup-body{padding:20px 22px;}
+  .edit-ev-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;}
+  .edit-ev-item{display:flex;align-items:center;gap:10px;padding:11px 14px;
+    background:#f8f5f1;border:1.5px solid #e5ddd4;border-radius:10px;cursor:pointer;
+    transition:all .15s;}
+  .edit-ev-item:hover{border-color:var(--accent);background:rgba(200,0,30,0.04);}
+  .edit-ev-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .edit-ev-info{flex:1;}
+  .edit-ev-type{font-size:10px;font-weight:700;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+  .edit-ev-title{font-size:13px;font-weight:700;color:#1a1612;}
+  .edit-ev-duty{font-size:11px;color:#5219a8;font-weight:600;}
+  .edit-ev-arrow{font-size:14px;color:#c4b8aa;}
+  .edit-popup-sub{font-size:11px;color:var(--muted);text-align:center;padding-top:4px;}
+  .edit-date-label{font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;
+    color:var(--muted);letter-spacing:2px;margin-bottom:12px;display:block;}
+  .edit-empty{text-align:center;padding:20px;color:var(--locked);font-size:12px;}
+  @keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
   @media(max-width:1100px){
@@ -348,6 +380,20 @@
   </div>
 </div>
 
+<!-- 간트뷰 -->
+<div class="gantt-wrap" style="animation:fadeUp .4s ease .3s both;">
+  <div class="gantt-card">
+    <div class="gantt-header">
+      <div class="section-title">법인별 월간 일정 현황</div>
+      <div class="section-year" id="ganttMonthLabel"></div>
+    </div>
+    <div class="gantt-body">
+      <div class="gantt-date-row" id="ganttDateRow"></div>
+      <div id="ganttRows"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 연간 타임라인 -->
 <div class="timeline-wrap" style="animation:fadeUp .4s ease .2s both;">
   <div class="timeline-card">
@@ -364,20 +410,6 @@
       <div class="tl-legend-item"><div class="tl-dot" style="background:#6d28d9;"></div>당직</div>
       <div class="tl-legend-item"><div class="tl-dot" style="background:#b45309;"></div>일정</div>
       <div class="tl-legend-item"><div class="tl-dot" style="background:#1a56db;"></div>마감</div>
-    </div>
-  </div>
-</div>
-
-<!-- 간트뷰 -->
-<div class="gantt-wrap" style="animation:fadeUp .4s ease .3s both;">
-  <div class="gantt-card">
-    <div class="gantt-header">
-      <div class="section-title">법인별 월간 일정 현황</div>
-      <div class="section-year" id="ganttMonthLabel"></div>
-    </div>
-    <div class="gantt-body">
-      <div class="gantt-date-row" id="ganttDateRow"></div>
-      <div id="ganttRows"></div>
     </div>
   </div>
 </div>
@@ -438,6 +470,8 @@ function selectDay(ds){
   document.getElementById('listTitle').textContent=`${d.getMonth()+1}월 ${d.getDate()}일`;
   document.getElementById('listCount').textContent=`${evs.length}건`;
   renderListItems(evs); renderGantt();
+  // 일정 있으면 수정 팝업
+  if(evs.length>0) openEditPopup(ds,evs);
 }
 
 function renderBadgeBar(){
@@ -637,6 +671,49 @@ function goToMonth(m){
   renderCalendar(); renderList(); renderTimeline(); renderGantt();
 }
 
+
+/* ── 수정 팝업 ── */
+function openEditPopup(ds,evs){
+  const d=new Date(ds);
+  const DAYS_KO2=['일','월','화','수','목','금','토'];
+  document.getElementById('editDateLabel').textContent=
+    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DAYS_KO2[d.getDay()]})`;
+
+  const dc={hq:'#c8001e',india:'#ea6a0a',thai:'#1d4ed8',china:'#15803d',
+    duty:'#6d28d9',event:'#b45309',deadline:'#1a56db'};
+
+  document.getElementById('editEvList').innerHTML = evs.map((e,i)=>{
+    const c=typeColorMap(e);
+    const icon=e.type==='당직'?'🟣':e.type==='마감'?'🔵':e.type==='일정'?'🟡':e.type==='기타'?'🔘':'🔴';
+    return `<div class="edit-ev-item" onclick="goToEdit(${JSON.stringify(JSON.stringify(e)).slice(1,-1)})">
+      <div class="edit-ev-dot" style="background:${dc[c]||'#aaa'};"></div>
+      <div class="edit-ev-info">
+        <div class="edit-ev-type">${entityFlag[e.entity]||''} ${e.entity} · ${e.type}</div>
+        <div class="edit-ev-title">${icon} ${e.title}</div>
+        ${e.duty?`<div class="edit-ev-duty">당직 · ${e.duty}</div>`:''}
+      </div>
+      <div class="edit-ev-arrow">→</div>
+    </div>`;
+  }).join('') || '<div class="edit-empty">일정이 없습니다</div>';
+
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function closeEditPopup(e){
+  if(e.target===document.getElementById('editOverlay')) closeEditPopupDirect();
+}
+function closeEditPopupDirect(){
+  document.getElementById('editOverlay').classList.remove('open');
+}
+
+function goToEdit(jsonStr){
+  try{
+    const d=JSON.parse(jsonStr);
+    const encoded=encodeURIComponent(JSON.stringify(d));
+    window.location.href=`schedule_input.html?mode=edit&data=${encoded}`;
+  }catch(e){}
+}
+
 async function loadEvents(){
   try{
     const res=await fetch(`${APPS_URL}?action=schedule_list&all=1`);
@@ -653,5 +730,20 @@ loadEvents();
 clearInterval(refreshTimer);
 refreshTimer=setInterval(loadEvents,30000);
 </script>
+
+<!-- 수정 팝업 -->
+<div class="edit-overlay" id="editOverlay" onclick="closeEditPopup(event)">
+  <div class="edit-popup">
+    <div class="edit-popup-header">
+      <div class="edit-popup-title"><span>SME</span> CALENDAR</div>
+      <button class="edit-close-btn" onclick="closeEditPopupDirect()">✕</button>
+    </div>
+    <div class="edit-popup-body">
+      <span class="edit-date-label" id="editDateLabel"></span>
+      <div class="edit-ev-list" id="editEvList"></div>
+      <div class="edit-popup-sub">수정할 일정을 선택하세요</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
