@@ -673,19 +673,22 @@ function goToMonth(m){
 
 
 /* ── 수정 팝업 ── */
-function openEditPopup(ds,evs){
-  const d=new Date(ds);
-  const DAYS_KO2=['일','월','화','수','목','금','토'];
-  document.getElementById('editDateLabel').textContent=
-    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DAYS_KO2[d.getDay()]})`;
+let _editEvCache = []; // 전역 캐시 — JSON 직렬화 우회
 
-  const dc={hq:'#c8001e',india:'#ea6a0a',thai:'#1d4ed8',china:'#15803d',
+function openEditPopup(ds, evs){
+  _editEvCache = evs; // 전역에 저장
+  const d = new Date(ds);
+  const DK = ['일','월','화','수','목','금','토'];
+  document.getElementById('editDateLabel').textContent =
+    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DK[d.getDay()]})`;
+
+  const dc = {hq:'#c8001e',india:'#ea6a0a',thai:'#1d4ed8',china:'#15803d',
     duty:'#6d28d9',event:'#b45309',deadline:'#1a56db'};
 
-  document.getElementById('editEvList').innerHTML = evs.map((e,i)=>{
-    const c=typeColorMap(e);
-    const icon=e.type==='당직'?'🟣':e.type==='마감'?'🔵':e.type==='일정'?'🟡':e.type==='기타'?'🔘':'🔴';
-    return `<div class="edit-ev-item" onclick="goToEdit(${JSON.stringify(JSON.stringify(e)).slice(1,-1)})">
+  document.getElementById('editEvList').innerHTML = evs.map((e,i) => {
+    const c = typeColorMap(e);
+    const icon = e.type==='당직'?'🟣':e.type==='마감'?'🔵':e.type==='일정'?'🟡':e.type==='기타'?'🔘':'🔴';
+    return `<div class="edit-ev-item" onclick="goToEdit(${i})">
       <div class="edit-ev-dot" style="background:${dc[c]||'#aaa'};"></div>
       <div class="edit-ev-info">
         <div class="edit-ev-type">${entityFlag[e.entity]||''} ${e.entity} · ${e.type}</div>
@@ -706,12 +709,13 @@ function closeEditPopupDirect(){
   document.getElementById('editOverlay').classList.remove('open');
 }
 
-function goToEdit(jsonStr){
+function goToEdit(idx){
   try{
-    const d=JSON.parse(jsonStr);
-    const encoded=encodeURIComponent(JSON.stringify(d));
-    window.location.href=`schedule_input.html?mode=edit&data=${encoded}`;
-  }catch(e){}
+    const d = _editEvCache[idx];
+    if(!d) return;
+    const encoded = encodeURIComponent(JSON.stringify(d));
+    window.location.href = `schedule_input.html?mode=edit&data=${encoded}`;
+  }catch(e){ console.error('goToEdit error:', e); }
 }
 
 async function loadEvents(){
