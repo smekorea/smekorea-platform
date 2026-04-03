@@ -416,15 +416,14 @@ async function submitSchedule(){
   const now=new Date();
   const ts=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
-  // 수정 모드: 기존 행 삭제 후 새로 추가 (rowIndex 기반)
-  const action = isEditMode && editRowData?.rowIndex
-    ? `schedule_update&rowIndex=${editRowData.rowIndex}`
-    : 'schedule_add';
+  // action과 rowIndex를 payload에 포함
+  const action = isEditMode && editRowData?.rowIndex ? 'update' : 'add';
+  const rowIndex = isEditMode && editRowData?.rowIndex ? editRowData.rowIndex : '';
 
-  const payload=[ts,date,selectedEntity,selectedType,title,duty,writer,note].join('||');
+  const payload=[action,rowIndex,ts,date,selectedEntity,selectedType,title,duty,writer,note].join('||');
 
   try{
-    await fetch(`${APPS_URL}?action=${action}`,{
+    await fetch(`${APPS_URL}?action=schedule_post`,{
       method:'POST',mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
       body:payload
@@ -443,14 +442,17 @@ async function submitSchedule(){
 }
 
 /* 최근 내역 로드 */
+let _recentCache = []; // 전역 캐시
+
 async function loadRecent(){
   const list=document.getElementById('recentList');
   try{
     const res=await fetch(`${APPS_URL}?action=schedule_list&entity=${selectedEntity}&limit=8`);
     const data=await res.json();
     if(!data.length){list.innerHTML='<div class="recent-empty">등록된 일정이 없습니다</div>';return;}
+    _recentCache = data; // 전역 저장
     list.innerHTML=data.map((r,i)=>`
-      <div class="recent-item" onclick="loadEditData(${JSON.stringify(JSON.stringify(r)).slice(1,-1)},${i})">
+      <div class="recent-item" onclick="loadEditData(${i})">
         <span class="recent-date">${r.date}</span>
         <span class="recent-type-badge ${typeBadgeMap[r.type]||'badge-etc'}">${typeIconMap[r.type]||'🔘'} ${r.type}</span>
         <span class="recent-entity">${entityFlag[r.entity]||''}</span>
@@ -464,14 +466,15 @@ async function loadRecent(){
 }
 
 /* 최근내역 클릭 → 수정 모드 */
-function loadEditData(jsonStr,idx){
+function loadEditData(idx){
   try{
-    const d=JSON.parse(jsonStr);
-    editRowData=d;
+    const d = _recentCache[idx];
+    if(!d) return;
+    editRowData = d;
     fillEditForm(d);
     window.scrollTo({top:0,behavior:'smooth'});
     showToast('✏️ 수정 모드로 전환되었습니다');
-  }catch(e){}
+  }catch(e){ console.error('loadEditData error:', e); }
 }
 
 function showToast(msg){
