@@ -124,9 +124,21 @@
     flex-shrink: 0;
     display: block;
   }
+  .tz-card.korea  { border-top: 2px solid #c8001e; }
   .tz-card.india  { border-top: 2px solid #f97316; }
   .tz-card.thai   { border-top: 2px solid #3b82f6; }
   .tz-card.china  { border-top: 2px solid #ef4444; }
+  .tz-fx {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--text);
+    text-align: right; width: 100%;
+    line-height: 1.6; margin-top: 2px;
+    border-top: 1px solid var(--border);
+    padding-top: 4px;
+  }
+  .tz-fx .fx-live { color: var(--accent); font-weight: 700; }
+  .tz-fx .fx-prev { color: var(--muted); }
+  .tz-fx .fx-label { font-size: 8px; letter-spacing: 0.5px; color: var(--locked); }
 
   .dot-live {
     width: 6px; height: 6px; border-radius: 50%;
@@ -303,6 +315,23 @@
       </div>
       <!-- 해외법인 시계 바 -->
       <div class="tz-bar">
+        <div class="tz-card korea">
+          <div class="tz-header">
+            <svg class="flag-svg" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+              <rect width="900" height="600" fill="#fff"/>
+              <circle cx="450" cy="300" r="150" fill="#CD2E3A"/>
+              <path d="M450,150 A150,150 0 0,1 450,450 Z" fill="#003478"/>
+            </svg>
+            <span class="tz-name">HQ · KST</span>
+          </div>
+          <div class="tz-time" id="tzKorea">--<em>:</em>--</div>
+          <div class="tz-sub">UTC +9:00</div>
+          <div class="tz-fx">
+            <div class="fx-label">USD/KRW</div>
+            <div class="fx-live" id="fxKoreaLive">—</div>
+            <div class="fx-prev" id="fxKoreaPrev">전월 —</div>
+          </div>
+        </div>
         <div class="tz-card india">
           <div class="tz-header">
             <svg class="flag-svg" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
@@ -316,6 +345,11 @@
           </div>
           <div class="tz-time" id="tzIndia">--<em>:</em>--</div>
           <div class="tz-sub">UTC +5:30</div>
+          <div class="tz-fx">
+            <div class="fx-label">USD/INR</div>
+            <div class="fx-live" id="fxIndiaLive">—</div>
+            <div class="fx-prev" id="fxIndiaPrev">전월 —</div>
+          </div>
         </div>
         <div class="tz-card thai">
           <div class="tz-header">
@@ -330,6 +364,11 @@
           </div>
           <div class="tz-time" id="tzThai">--<em>:</em>--</div>
           <div class="tz-sub">UTC +7:00</div>
+          <div class="tz-fx">
+            <div class="fx-label">USD/THB</div>
+            <div class="fx-live" id="fxThaiLive">—</div>
+            <div class="fx-prev" id="fxThaiPrev">전월 —</div>
+          </div>
         </div>
         <div class="tz-card china">
           <div class="tz-header">
@@ -347,6 +386,11 @@
           </div>
           <div class="tz-time" id="tzChina">--<em>:</em>--</div>
           <div class="tz-sub">UTC +8:00</div>
+          <div class="tz-fx">
+            <div class="fx-label">USD/CNY</div>
+            <div class="fx-live" id="fxChinaLive">—</div>
+            <div class="fx-prev" id="fxChinaPrev">전월 —</div>
+          </div>
         </div>
       </div>
     </div>
@@ -561,35 +605,57 @@
   }
 
   function updateClocks() {
-    // 본사 KST (UTC+9)
     const kst = tzTime(9);
     const k = fmt(kst);
-    document.getElementById('hqClock').innerHTML =
-      `${k.h}<em>:</em>${k.m}<em>:</em>${k.s}`;
+    document.getElementById('hqClock').innerHTML = `${k.h}<em>:</em>${k.m}<em>:</em>${k.s}`;
+    document.getElementById('tzKorea').innerHTML = `${k.h}<em>:</em>${k.m}`;
     const day = DAYS[kst.getDay()];
     const mo = String(kst.getMonth()+1).padStart(2,'0');
     const dt = String(kst.getDate()).padStart(2,'0');
-    document.getElementById('hqDate').textContent =
-      `${kst.getFullYear()}.${mo}.${dt} (${day})`;
-
-    // 인도 IST (UTC+5:30)
-    const ist = tzTime(5.5);
-    const i = fmt(ist);
+    document.getElementById('hqDate').textContent = `${kst.getFullYear()}.${mo}.${dt} (${day})`;
+    const ist = tzTime(5.5); const i = fmt(ist);
     document.getElementById('tzIndia').innerHTML = `${i.h}<em>:</em>${i.m}`;
-
-    // 태국 ICT (UTC+7)
-    const ict = tzTime(7);
-    const t = fmt(ict);
+    const ict = tzTime(7); const t = fmt(ict);
     document.getElementById('tzThai').innerHTML = `${t.h}<em>:</em>${t.m}`;
-
-    // 중국 CST (UTC+8)
-    const cst = tzTime(8);
-    const c = fmt(cst);
+    const cst = tzTime(8); const c = fmt(cst);
     document.getElementById('tzChina').innerHTML = `${c.h}<em>:</em>${c.m}`;
   }
-
   setInterval(updateClocks, 1000);
   updateClocks();
+
+  // ── 환율 ──
+  async function loadFX() {
+    try {
+      // 실시간
+      const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=KRW,INR,THB,CNY');
+      const d = await r.json();
+      const fx = d.rates;
+      document.getElementById('fxKoreaLive').textContent = `${fx.KRW.toFixed(0)} ₩`;
+      document.getElementById('fxIndiaLive').textContent = `${fx.INR.toFixed(2)} ₹`;
+      document.getElementById('fxThaiLive').textContent  = `${fx.THB.toFixed(2)} ฿`;
+      document.getElementById('fxChinaLive').textContent = `${fx.CNY.toFixed(4)} ¥`;
+
+      // 전월 말일 계산
+      const now = new Date();
+      const prevLast = new Date(now.getFullYear(), now.getMonth(), 0);
+      const py = prevLast.getFullYear();
+      const pm = String(prevLast.getMonth()+1).padStart(2,'0');
+      const pd = String(prevLast.getDate()).padStart(2,'0');
+      const r2 = await fetch(`https://api.frankfurter.app/${py}-${pm}-${pd}?from=USD&to=KRW,INR,THB,CNY`);
+      const d2 = await r2.json();
+      const fx2 = d2.rates;
+      document.getElementById('fxKoreaPrev').textContent = `전월 ${fx2.KRW.toFixed(0)} ₩`;
+      document.getElementById('fxIndiaPrev').textContent = `전월 ${fx2.INR.toFixed(2)} ₹`;
+      document.getElementById('fxThaiPrev').textContent  = `전월 ${fx2.THB.toFixed(2)} ฿`;
+      document.getElementById('fxChinaPrev').textContent = `전월 ${fx2.CNY.toFixed(4)} ¥`;
+    } catch(e) {
+      ['Korea','India','Thai','China'].forEach(n => {
+        document.getElementById('fx'+n+'Live').textContent = '조회실패';
+      });
+    }
+  }
+  loadFX();
+  setInterval(loadFX, 2 * 60 * 60 * 1000); // 2시간마다
 </script>
 </body>
 </html>
