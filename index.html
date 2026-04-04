@@ -39,7 +39,7 @@
 
   /* ── 헤더 ── */
   .header {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: flex-start; justify-content: space-between;
     margin-bottom: 48px; animation: fadeDown 0.5s ease; gap: 24px;
   }
   .logo-area { display: flex; align-items: flex-start; flex-shrink: 0; }
@@ -47,7 +47,7 @@
   .logo-sme {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 900; font-style: italic;
-    font-size: 72px; letter-spacing: -2px;
+    font-size: 80px; letter-spacing: -2px;
     color: var(--text); line-height: 0.92;
   }
   .logo-sme .red { color: var(--accent); }
@@ -86,15 +86,15 @@
 
   /* 해외법인 시계 바 */
   .tz-bar {
-    display: flex; gap: 8px; align-items: stretch;
+    display: flex; gap: 8px; align-items: flex-start;
   }
   .tz-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 10px 14px;
+    padding: 10px 12px;
     display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
-    min-width: 110px;
+    width: 130px; min-width: 130px; flex-shrink: 0;
   }
   .tz-header {
     display: flex; align-items: center; gap: 6px; width: 100%; justify-content: space-between;
@@ -284,7 +284,7 @@
   }
   @media (max-width: 560px) {
     .page-wrap { padding: 24px 16px 40px; }
-    .logo-sme { font-size: 34px; }
+    .logo-sme { font-size: 38px; }
     .card-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
     .hq-clock { font-size: 32px; }
     .tz-card { min-width: 90px; }
@@ -320,7 +320,10 @@
             <svg class="flag-svg" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
               <rect width="900" height="600" fill="#fff"/>
               <circle cx="450" cy="300" r="150" fill="#CD2E3A"/>
-              <path d="M450,150 A150,150 0 0,1 450,450 Z" fill="#003478"/>
+              <path d="M450,150 A150,150 0 0,0 450,450" fill="#003478"/>
+              <path d="M450,150 A150,150 0 0,1 450,450" fill="#CD2E3A"/>
+              <circle cx="375" cy="225" r="50" fill="#003478"/>
+              <circle cx="525" cy="375" r="50" fill="#CD2E3A"/>
             </svg>
             <span class="tz-name">HQ · KST</span>
           </div>
@@ -625,33 +628,43 @@
 
   // ── 환율 ──
   async function loadFX() {
+    const apis = [
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',
+      'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
+    ];
+    let fx = null;
+    for(const url of apis) {
+      try {
+        const r = await fetch(url);
+        const d = await r.json();
+        fx = d.usd;
+        if(fx) break;
+      } catch(e) {}
+    }
+    if(!fx) {
+      ['Korea','India','Thai','China'].forEach(n =>
+        document.getElementById('fx'+n+'Live').textContent = '조회실패');
+      return;
+    }
+    document.getElementById('fxKoreaLive').textContent = `${Math.round(fx.krw).toLocaleString()} ₩`;
+    document.getElementById('fxIndiaLive').textContent = `${fx.inr.toFixed(2)} ₹`;
+    document.getElementById('fxThaiLive').textContent  = `${fx.thb.toFixed(2)} ฿`;
+    document.getElementById('fxChinaLive').textContent = `${fx.cny.toFixed(4)} ¥`;
+    // 전월평균 — 전월 말일 기준
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth(), 0);
+    const ds = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-${String(prev.getDate()).padStart(2,'0')}`;
     try {
-      // 실시간
-      const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=KRW,INR,THB,CNY');
-      const d = await r.json();
-      const fx = d.rates;
-      document.getElementById('fxKoreaLive').textContent = `${fx.KRW.toFixed(0)} ₩`;
-      document.getElementById('fxIndiaLive').textContent = `${fx.INR.toFixed(2)} ₹`;
-      document.getElementById('fxThaiLive').textContent  = `${fx.THB.toFixed(2)} ฿`;
-      document.getElementById('fxChinaLive').textContent = `${fx.CNY.toFixed(4)} ¥`;
-
-      // 전월 말일 계산
-      const now = new Date();
-      const prevLast = new Date(now.getFullYear(), now.getMonth(), 0);
-      const py = prevLast.getFullYear();
-      const pm = String(prevLast.getMonth()+1).padStart(2,'0');
-      const pd = String(prevLast.getDate()).padStart(2,'0');
-      const r2 = await fetch(`https://api.frankfurter.app/${py}-${pm}-${pd}?from=USD&to=KRW,INR,THB,CNY`);
+      const r2 = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${ds}/v1/currencies/usd.json`);
       const d2 = await r2.json();
-      const fx2 = d2.rates;
-      document.getElementById('fxKoreaPrev').textContent = `전월 ${fx2.KRW.toFixed(0)} ₩`;
-      document.getElementById('fxIndiaPrev').textContent = `전월 ${fx2.INR.toFixed(2)} ₹`;
-      document.getElementById('fxThaiPrev').textContent  = `전월 ${fx2.THB.toFixed(2)} ฿`;
-      document.getElementById('fxChinaPrev').textContent = `전월 ${fx2.CNY.toFixed(4)} ¥`;
+      const fx2 = d2.usd;
+      document.getElementById('fxKoreaPrev').textContent = `전월 ${Math.round(fx2.krw).toLocaleString()} ₩`;
+      document.getElementById('fxIndiaPrev').textContent = `전월 ${fx2.inr.toFixed(2)} ₹`;
+      document.getElementById('fxThaiPrev').textContent  = `전월 ${fx2.thb.toFixed(2)} ฿`;
+      document.getElementById('fxChinaPrev').textContent = `전월 ${fx2.cny.toFixed(4)} ¥`;
     } catch(e) {
-      ['Korea','India','Thai','China'].forEach(n => {
-        document.getElementById('fx'+n+'Live').textContent = '조회실패';
-      });
+      ['Korea','India','Thai','China'].forEach(n =>
+        document.getElementById('fx'+n+'Prev').textContent = '전월 조회실패');
     }
   }
   loadFX();
