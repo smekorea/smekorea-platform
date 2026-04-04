@@ -494,7 +494,7 @@
         </tr>
       </thead>
       <tbody id="poTableBody">
-        <tr><td colspan="14" class="loading">조회 버튼을 눌러 PO 목록을 불러오세요</td></tr>
+        <tr><td colspan="15" class="loading">조회 버튼을 눌러 PO 목록을 불러오세요</td></tr>
       </tbody>
     </table>
   </div>
@@ -666,7 +666,7 @@
   // ── PO 조회 ──
   async function loadPO() {
     const body = document.getElementById('poTableBody');
-    body.innerHTML = '<tr><td colspan="14" class="loading">⏳ 조회 중...</td></tr>';
+    body.innerHTML = '<tr><td colspan="15" class="loading">⏳ 조회 중...</td></tr>';
     closePanel();
 
     const entity  = document.getElementById('s-entity').value;
@@ -704,6 +704,7 @@
         const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
         return {
           id: r.id, entity: r.entity, date: r.order_date,
+          action_type: r.action_type,
           pono: r.po_no, lgpn: r.lg_pn, mkpn: r.maker_pn,
           erp: r.item_code, maker: r.maker, qty: r.qty,
           shipped, etd: r.etd_request, eta: r.eta_hope,
@@ -722,7 +723,7 @@
       updateKPI(allData);
     } catch(e) {
       showToast('⚠ 조회 실패: ' + e.message, 'error');
-      body.innerHTML = '<tr><td colspan="14" class="loading">조회 실패</td></tr>';
+      body.innerHTML = '<tr><td colspan="15" class="loading">조회 실패</td></tr>';
     }
   }
 
@@ -742,7 +743,7 @@
     document.getElementById('tableCount').textContent = `— ${data.length.toLocaleString()}건`;
 
     if (!data.length) {
-      body.innerHTML = '<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
+      body.innerHTML = '<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
       return;
     }
 
@@ -750,6 +751,11 @@
       const remain = (r.qty||0) - (r.shipped||0);
       const remainCls = remain <= 0 ? 'remain-zero' : 'remain-pos';
       const entityBadge = `<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
+      const typeBadge = r.action_type==='수정'
+        ? `<span class="badge b-mod">수정</span>`
+        : r.action_type==='취소'
+        ? `<span class="badge b-can">취소</span>`
+        : `<span class="badge b-new">신규</span>`;
       const modeBadge = r.mode === 'AIR'
         ? `<span class="badge b-air">✈ AIR</span>`
         : `<span class="badge b-vssl">🚢 VSSL</span>`;
@@ -757,6 +763,7 @@
       const isLast = i === data.length - 1 ? ' last' : '';
 
       return `<tr class="${isLast}" onclick="selectRow(${i})" id="row-${i}">
+        <td>${typeBadge}</td>
         <td>${entityBadge}</td>
         <td class="td-mono">${r.date||'—'}</td>
         <td class="td-mono">${r.pono||'—'}</td>
@@ -966,11 +973,11 @@
   function exportExcel() {
     if (!allData.length) { showToast('⚠ 먼저 조회해주세요', 'warn'); return; }
 
-    const header = ['법인','주문일자','PO No.','LG P/N','Maker P/N','ERP품번','Maker',
+    const header = ['구분','법인','주문일자','PO No.','LG P/N','Maker P/N','ERP품번','Maker',
                     '주문수량','출하수량','잔량','ETD요청일','운송','상태',
                     '출하수량(입력)','운송구분(입력)','인보이스No.(입력)','출하일(입력)','비고'];
     const rows = allData.map(r => [
-      r.entity, r.date, r.pono, r.lgpn, r.mkpn, r.erp||'', r.maker,
+      r.action_type||'신규', r.entity, r.date, r.pono, r.lgpn, r.mkpn, r.erp||'', r.maker,
       r.qty, r.shipped, (r.qty||0)-(r.shipped||0),
       r.etd, r.mode, r.resp==='complete'?'완료':r.resp==='pending'?'잔량대기':'미발주',
       '','','','',''
@@ -979,7 +986,7 @@
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     // 컬럼 너비 설정
     ws['!cols'] = [
-      {wch:12},{wch:12},{wch:24},{wch:16},{wch:18},{wch:12},{wch:12},
+      {wch:8},{wch:12},{wch:12},{wch:24},{wch:16},{wch:18},{wch:12},{wch:12},
       {wch:10},{wch:10},{wch:10},{wch:12},{wch:8},{wch:10},
       {wch:12},{wch:10},{wch:16},{wch:12},{wch:14}
     ];
