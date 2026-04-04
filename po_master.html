@@ -640,9 +640,11 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL';
-  // 인증 확인 — po_hub.html에서 비밀번호 인증 필요
+  const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   if (sessionStorage.getItem('po_auth') !== '1') { window.location.href = 'po_hub.html'; }
   let allData = [];
   let selectedRow = null;
@@ -667,27 +669,60 @@
     body.innerHTML = '<tr><td colspan="14" class="loading">⏳ 조회 중...</td></tr>';
     closePanel();
 
-    const params = new URLSearchParams({
-      action: 'po_master',
-      entity:   document.getElementById('s-entity').value,
-      status:   document.getElementById('s-status').value,
-      mode:     document.getElementById('s-mode').value,
-      keyword:  document.getElementById('s-keyword').value,
-      maker:    document.getElementById('s-maker').value,
-      month:    document.getElementById('s-month').value,
-    });
+    const entity  = document.getElementById('s-entity').value;
+    const status  = document.getElementById('s-status').value;
+    const mode    = document.getElementById('s-mode').value;
+    const keyword = document.getElementById('s-keyword').value.trim();
+    const maker   = document.getElementById('s-maker').value.trim();
+    const month   = document.getElementById('s-month').value;
 
     try {
-      const res = await fetch(`${SCRIPT_URL}?${params}`);
-      const data = await res.json();
-      allData = data || [];
-      renderTable(allData);
+      // po_data 조회
+      let q = sb.from('po_data').select('*').order('order_date', {ascending:false});
+      if (entity)  q = q.eq('entity', entity);
+      if (mode && mode !== '전체') q = q.eq('transport', mode);
+      if (maker)   q = q.ilike('maker', '%'+maker+'%');
+      if (keyword) q = q.or(`po_no.ilike.%${keyword}%,maker_pn.ilike.%${keyword}%,lg_pn.ilike.%${keyword}%`);
+      if (month)   q = q.gte('order_date', month+'-01').lte('order_date', month+'-31');
+
+      const {data: poRows, error} = await q;
+      if (error) throw error;
+
+      // shipment_po 조회 (출하수량 합산)
+      const poIds = (poRows||[]).map(r => r.id);
+      let shipMap = {};
+      if (poIds.length > 0) {
+        const {data: ships} = await sb.from('shipment_po').select('po_id, ship_qty');
+        (ships||[]).forEach(s => {
+          shipMap[s.po_id] = (shipMap[s.po_id]||0) + (s.ship_qty||0);
+        });
+      }
+
+      allData = (poRows||[]).map(r => {
+        const shipped = shipMap[r.id] || 0;
+        const remain  = (r.qty||0) - shipped;
+        const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
+        return {
+          id: r.id, entity: r.entity, date: r.order_date,
+          pono: r.po_no, lgpn: r.lg_pn, mkpn: r.maker_pn,
+          erp: r.item_code, maker: r.maker, qty: r.qty,
+          shipped, etd: r.etd_request, eta: r.eta_hope,
+          mode: r.transport, resp,
+          item_status: r.item_status,
+          hqdate:'', mkcommit:'', mkactual:'', history:[]
+        };
+      });
+
+      // status 필터 (완료 제외 기본)
+      let filtered = allData;
+      if (status === 'pending') filtered = allData.filter(r => r.resp !== 'complete');
+      else if (status === 'complete') filtered = allData.filter(r => r.resp === 'complete');
+
+      renderTable(filtered);
       updateKPI(allData);
     } catch(e) {
-      // 연동 전 샘플 데이터
-      allData = getSampleData();
-      renderTable(allData);
-      updateKPI(allData);
+      showToast('⚠ 조회 실패: ' + e.message, 'error');
+      body.innerHTML = '<tr><td colspan="14" class="loading">조회 실패</td></tr>';
     }
   }
 
@@ -902,17 +937,26 @@
     };
 
     try {
-      await fetch(SCRIPT_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify(payload)
-      });
-      await new Promise(r => setTimeout(r, 1000));
+      const {error} = await sb.from('shipment_po').insert([{
+        po_id:      selectedRow.id,
+        po_no:      selectedRow.pono,
+        entity:     selectedRow.entity,
+        item_code:  selectedRow.erp || null,
+        ship_date:  shipdate,
+        ship_qty:   shipqty,
+        transport:  shipmode,
+        invoice_no: invoice,
+        etd:        mkcommit || null,
+        eta:        mkactual || null,
+        status:     '출하완료',
+        created_by: 'HQ'
+      }]);
+      if (error) throw error;
       showToast('✓ 출하 등록 완료');
       closePanel();
-      await loadPO(); // 목록 갱신
+      await loadPO();
     } catch(e) {
-      showToast('⚠ 등록 실패. 네트워크를 확인해주세요', 'error');
+      showToast('⚠ 등록 실패: ' + e.message, 'error');
     }
 
     btn.disabled = false; btn.textContent = '✓ 출하 등록 / Register Shipment';
@@ -922,21 +966,22 @@
   function exportExcel() {
     if (!allData.length) { showToast('⚠ 먼저 조회해주세요', 'warn'); return; }
 
-    const header = ['법인','주문일자','PO No.','LG P/N','Maker P/N','Maker',
-                    '주문수량','출하수량','잔량','ETD요청일','운송','책임구분',
-                    '본사발주일','메이커약속납기'];
+    const header = ['법인','주문일자','PO No.','LG P/N','Maker P/N','ERP품번','Maker',
+                    '주문수량','출하수량','잔량','ETD요청일','운송','상태',
+                    '출하수량(입력)','운송구분(입력)','인보이스No.(입력)','출하일(입력)','비고'];
     const rows = allData.map(r => [
-      r.entity, r.date, r.pono, r.lgpn, r.mkpn, r.maker,
+      r.entity, r.date, r.pono, r.lgpn, r.mkpn, r.erp||'', r.maker,
       r.qty, r.shipped, (r.qty||0)-(r.shipped||0),
-      r.etd, r.mode, r.resp, r.hqdate, r.mkcommit
+      r.etd, r.mode, r.resp==='complete'?'완료':r.resp==='pending'?'잔량대기':'미발주',
+      '','','','',''
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     // 컬럼 너비 설정
     ws['!cols'] = [
-      {wch:12},{wch:12},{wch:22},{wch:16},{wch:18},{wch:12},
-      {wch:10},{wch:10},{wch:10},{wch:12},{wch:8},{wch:14},
-      {wch:12},{wch:14}
+      {wch:12},{wch:12},{wch:24},{wch:16},{wch:18},{wch:12},{wch:12},
+      {wch:10},{wch:10},{wch:10},{wch:12},{wch:8},{wch:10},
+      {wch:12},{wch:10},{wch:16},{wch:12},{wch:14}
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'PO마스터');
@@ -1052,7 +1097,7 @@
       if (!r.mkpn)    errs.push('MakerP/N');
       if (!r.shipqty||r.shipqty<=0) errs.push('수량');
       if (!r.shipdate) errs.push('출하일');
-      if (!['VSSL','AIR'].includes(r.mode)) errs.push('운송');
+      if (!['VSL','AIR'].includes(r.mode)) errs.push('운송');
       if (errs.length) errTotal++;
 
       const isErr = errs.length > 0;
@@ -1099,18 +1144,38 @@
     const btn = document.getElementById('hqSubmitBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
     try {
-      await fetch(SCRIPT_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify({action:'hq_shipment_upload', rows: hqData})
-      });
-      await new Promise(r => setTimeout(r, 1200));
+      // po_no + mkpn 기준으로 po_data id 조회
+      const rows = await Promise.all(hqData.map(async r => {
+        const {data} = await sb.from('po_data')
+          .select('id,entity')
+          .eq('po_no', r.pono||'')
+          .eq('maker_pn', r.mkpn||'')
+          .limit(1);
+        const po = data?.[0];
+        return {
+          po_id:      po?.id || null,
+          po_no:      r.pono || '',
+          entity:     r.entity,
+          item_code:  r.erp || null,
+          ship_date:  r.shipdate,
+          ship_qty:   r.shipqty,
+          transport:  r.mode,
+          invoice_no: r.invoice,
+          etd:        r.hqdate || null,
+          eta:        r.mkcommit || null,
+          status:     '출하완료',
+          remark:     r.remark || null,
+          created_by: 'HQ'
+        };
+      }));
+      const {error} = await sb.from('shipment_po').insert(rows);
+      if (error) throw error;
       showToast(`✓ ${hqData.length}건 출하 등록 완료`);
       clearHQFile();
     } catch(e) {
-      showToast('⚠ 등록 실패. 네트워크를 확인해주세요', 'error');
+      showToast('⚠ 등록 실패: ' + e.message, 'error');
     }
-    btn.disabled = false; btn.textContent = '✓ Google Sheets에 등록';
+    btn.disabled = false; btn.textContent = '✓ 등록';
   }
 
   // 초기 로드
