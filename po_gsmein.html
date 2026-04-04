@@ -292,7 +292,7 @@ function parseFile(){
       if(hdr<0){showToast('⚠ 표준양식이 아닙니다','error');return;}
       const m=curFile.name.match(/^([A-Z]+)_PO_(\d{8})/);
       const fnDate=m?`${m[2].slice(0,4)}-${m[2].slice(4,6)}-${m[2].slice(6,8)}`:'';
-      curData=raw.slice(hdr+2).filter(r=>r.some(c=>c!=='')).map((r,i)=>({
+      curData=raw.slice(hdr+3).filter(r=>r.some(c=>c!=='')).map((r,i)=>({
         row:i+1,type:String(r[0]||'신규').trim(),entity:String(r[1]||'').trim()||ENTITY,
         date:fmtD(r[2])||fnDate,pono:String(r[3]||'').trim(),lgpn:String(r[4]||'').trim(),
         mkpn:String(r[5]||'').trim(),erp:String(r[6]||'').trim(),desc:String(r[7]||'').trim(),
@@ -317,7 +317,7 @@ function validate(r){
   if(!r.maker)e.push('Maker');
   if(r.type!=='취소'&&!r.qty)e.push('수량');
   if(r.type!=='취소'&&!r.etd)e.push('ETD');
-  if(r.type!=='취소'&&!['VSSL','AIR'].includes(r.mode))e.push('운송');
+  if(r.type!=='취소'&&!['VSL','AIR'].includes(r.mode))e.push('운송');
   if(r.type!=='신규'&&!r.reason)e.push('수정사유');
   return e;
 }
@@ -366,18 +366,70 @@ async function submitPO(){
   btn.disabled=false;btn.textContent='✓ 등록';
 }
 function downloadTemplate(){
-  const h=[['구분 *','법인구분 *','주문일자 *','PO No. *','LG P/N *','Maker P/N *','ERP품번','Description *','Specification','Maker *','주문수량 *','ETD요청일 *','ETA희망일','운송구분 *','수정사유','비고']];
-  const g=[['신규/수정/취소','GSMEIN','YYYY-MM-DD','예)GSMEIN-260401-001','LG품번','메이커품번','선택','부품군','사양(선택)','제조사','숫자','YYYY-MM-DD','YYYY-MM-DD','VSSL/AIR','수정·취소시필수','선택']];
-  const s=[
-    ['신규','GSMEIN','2026-04-01','GSMEIN-260401-001','0RH1201L622','RC-98TRJ1K20','9001-001','RESISTOR CHIP','1.2KOHM 5%','SMART',15000,'2026-06-30','2026-08-19','VSSL','',''],
-    ['수정','GSMEIN','2026-04-03','GSMEIN-260401-001','0RH1201L622','RC-98TRJ1K20','9001-001','RESISTOR CHIP','1.2KOHM 5%','SMART',10000,'2026-06-30','2026-08-19','VSSL','수량변경(15000→10000)',''],
-    ['취소','GSMEIN','2026-04-05','GSMEIN-260401-002','0RH3300L622','RC-98TRJ330R','','RESISTOR CHIP','','SMART',0,'','','','PO취소','모델단종'],
-  ];
-  const ws=XLSX.utils.aoa_to_sheet([...h,...g,...s]);
-  ws['!cols']=[{wch:8},{wch:10},{wch:12},{wch:22},{wch:16},{wch:18},{wch:10},{wch:16},{wch:20},{wch:10},{wch:10},{wch:12},{wch:12},{wch:8},{wch:20},{wch:14}];
-  const wb2=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb2,ws,'법인_PO입력');
-  XLSX.writeFile(wb2,`GSMEIN_PO_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+  const cols = 16;
+  // 1행: 한글 컬럼명
+  const row1 = ['구분 *','법인구분 *','주문일자 *','PO No. *','LG P/N *','Maker P/N *','ERP품번','Description *','Specification','Maker *','주문수량 *','ETD요청일 *','ETA희망일','운송구분 *','수정사유','비고'];
+  // 2행: 영문 컬럼명
+  const row2 = ['Type *','Entity *','Order Date *','PO No. *','LG P/N *','Maker P/N *','ERP Code','Description *','Specification','Maker *','Qty *','ETD Request *','ETA Hope','Transport *','Modify Reason','Remark'];
+  // 3행: 입력 가이드
+  const row3 = ['신규/수정/취소','GSMEIN','YYYY-MM-DD','GSMEIN-YYMMDD-001','LG품번입력','메이커품번입력','ERP품번(선택)','부품명','사양(선택)','제조사명','숫자만','YYYY-MM-DD','YYYY-MM-DD','VSL 또는 AIR','수정·취소시 필수','선택입력'];
+  // 4~5행: 샘플
+  const row4 = ['신규','GSMEIN','2026-04-01','GSMEIN-260401-001','0RH1201L622','RC-98TRJ1K20','9001-001','RESISTOR CHIP','1.2KOHM 5%','SMART',15000,'2026-06-30','2026-08-19','VSL','',''];
+  const row5 = ['수정','GSMEIN','2026-04-03','GSMEIN-260401-001','0RH1201L622','RC-98TRJ1K20','9001-001','RESISTOR CHIP','1.2KOHM 5%','SMART',10000,'2026-06-30','2026-08-19','VSL','수량변경(15000→10000)',''];
+
+  const ws = XLSX.utils.aoa_to_sheet([row1, row2, row3, row4, row5]);
+
+  // 열 너비
+  ws['!cols'] = [{wch:10},{wch:10},{wch:13},{wch:22},{wch:16},{wch:18},{wch:10},{wch:18},{wch:18},{wch:12},{wch:10},{wch:13},{wch:13},{wch:10},{wch:22},{wch:14}];
+
+  // 셀 스타일 적용
+  const cellRef = (r, c) => XLSX.utils.encode_cell({r, c});
+
+  // 색상 정의
+  const style1 = { // 1행: 진한 남색
+    font: {bold:true, color:{rgb:'FFFFFF'}, sz:11},
+    fill: {fgColor:{rgb:'1E3A5F'}},
+    alignment: {horizontal:'center', vertical:'center', wrapText:true},
+    border: {top:{style:'thin',color:{rgb:'FFFFFF'}}, bottom:{style:'thin',color:{rgb:'FFFFFF'}}, left:{style:'thin',color:{rgb:'FFFFFF'}}, right:{style:'thin',color:{rgb:'FFFFFF'}}}
+  };
+  const style2 = { // 2행: 파란색
+    font: {bold:true, color:{rgb:'FFFFFF'}, sz:10},
+    fill: {fgColor:{rgb:'2563EB'}},
+    alignment: {horizontal:'center', vertical:'center', wrapText:true},
+    border: {top:{style:'thin',color:{rgb:'FFFFFF'}}, bottom:{style:'thin',color:{rgb:'FFFFFF'}}, left:{style:'thin',color:{rgb:'FFFFFF'}}, right:{style:'thin',color:{rgb:'FFFFFF'}}}
+  };
+  const style3 = { // 3행: 연한 노란색 가이드
+    font: {italic:true, color:{rgb:'7C6B2E'}, sz:10},
+    fill: {fgColor:{rgb:'FFF9C4'}},
+    alignment: {horizontal:'center', vertical:'center', wrapText:true},
+    border: {top:{style:'thin',color:{rgb:'E5D57A'}}, bottom:{style:'thin',color:{rgb:'E5D57A'}}, left:{style:'thin',color:{rgb:'E5D57A'}}, right:{style:'thin',color:{rgb:'E5D57A'}}}
+  };
+  const style4 = { // 4~5행: 흰배경 샘플
+    font: {color:{rgb:'555555'}, sz:10},
+    fill: {fgColor:{rgb:'F8FAFC'}},
+    alignment: {horizontal:'center', vertical:'center'},
+    border: {top:{style:'thin',color:{rgb:'D1D5DB'}}, bottom:{style:'thin',color:{rgb:'D1D5DB'}}, left:{style:'thin',color:{rgb:'D1D5DB'}}, right:{style:'thin',color:{rgb:'D1D5DB'}}}
+  };
+
+  for(let col=0; col<cols; col++){
+    const c1 = cellRef(0, col);
+    const c2 = cellRef(1, col);
+    const c3 = cellRef(2, col);
+    const c4 = cellRef(3, col);
+    const c5 = cellRef(4, col);
+    if(ws[c1]) ws[c1].s = style1;
+    if(ws[c2]) ws[c2].s = style2;
+    if(ws[c3]) ws[c3].s = style3;
+    if(ws[c4]) ws[c4].s = style4;
+    if(ws[c5]) ws[c5].s = style4;
+  }
+
+  // 행 높이
+  ws['!rows'] = [{hpt:22},{hpt:20},{hpt:20},{hpt:18},{hpt:18}];
+
+  const wb2 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2, ws, 'GSMEIN_PO입력양식');
+  XLSX.writeFile(wb2, `GSMEIN_PO_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`, {cellStyles:true});
   showToast('✓ 표준양식 다운로드 완료');
 }
 
