@@ -236,8 +236,11 @@
 
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SCRIPT_URL='YOUR_APPS_SCRIPT_URL';
+const SUPABASE_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SUPABASE_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const ENTITY='GSMEIN';
 if(sessionStorage.getItem('po_auth')!=='1')window.location.href='po_hub.html';
 
@@ -346,12 +349,21 @@ async function submitPO(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;btn.textContent='등록 중...';
   try{
-    await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'po_upload',entity:ENTITY,rows:curData})});
-    await new Promise(r=>setTimeout(r,1000));
+    const rows=curData.map(r=>({
+      entity:ENTITY, action_type:r.type||'신규', po_no:r.pono,
+      order_date:r.date, maker_pn:r.mkpn, lg_pn:r.lgpn,
+      item_code:r.erp||null, description:r.desc, specification:r.spec||null,
+      maker:r.maker, qty:Number(r.qty), etd_request:r.etd,
+      eta_hope:r.eta||null, transport:r.mode==='AIR'?'AIR':'VSL',
+      item_status:r.erp?'confirmed':'unverified',
+      modify_reason:r.reason||null, remark:r.remark||null, created_by:'GSMEIN'
+    }));
+    const {error}=await sb.from('po_data').insert(rows);
+    if(error)throw error;
     showToast(`✓ ${curData.length}건 등록 완료`);
     setTimeout(()=>clearFile(),1500);
-  }catch{showToast('⚠ 등록 실패','error');}
-  btn.disabled=false;btn.textContent='✓ Google Sheets 등록';
+  }catch(e){showToast('⚠ 등록 실패: '+e.message,'error');}
+  btn.disabled=false;btn.textContent='✓ 등록';
 }
 function downloadTemplate(){
   const h=[['구분 *','법인구분 *','주문일자 *','PO No. *','LG P/N *','Maker P/N *','ERP품번','Description *','Specification','Maker *','주문수량 *','ETD요청일 *','ETA희망일','운송구분 *','수정사유','비고']];
@@ -383,10 +395,18 @@ async function submitManual(){
   const errs=validate(row);
   if(errs.length){showToast('⚠ 필수항목: '+errs.join(', '),'error');return;}
   try{
-    await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'po_upload',entity:ENTITY,rows:[row]})});
-    await new Promise(r=>setTimeout(r,800));
+    const {error}=await sb.from('po_data').insert([{
+      entity:ENTITY, action_type:row.type, po_no:row.pono,
+      order_date:row.date, maker_pn:row.mkpn, lg_pn:row.lgpn,
+      item_code:row.erp||null, description:row.desc, specification:row.spec||null,
+      maker:row.maker, qty:row.qty, etd_request:row.etd,
+      eta_hope:row.eta||null, transport:row.mode==='AIR'?'AIR':'VSL',
+      item_status:row.erp?'confirmed':'unverified',
+      modify_reason:row.reason||null, remark:row.remark||null, created_by:'GSMEIN'
+    }]);
+    if(error)throw error;
     showToast('✓ 등록 완료');clearManual();
-  }catch{showToast('⚠ 등록 실패','error');}
+  }catch(e){showToast('⚠ 등록 실패: '+e.message,'error');}
 }
 
 // ── 조회 ──
@@ -402,8 +422,11 @@ function filterDD(t){
 }
 async function loadDD(t){
   if(ddData[t].length){renderDD(t,ddData[t]);return;}
-  try{ddData[t]=await(await fetch(`${SCRIPT_URL}?action=po_dropdown&entity=${ENTITY}&type=${t}`)).json()||[];}
-  catch{ddData[t]={pono:['GSMEIN-260120-001','GSMEIN-260201-001','GSMEIN-260306-001'],maker:['SMART','MURATA','JST','ROHM'],mkpn:['RC-98TRJ1K20','CSR02TRFR042','RC-98TRF2K00'],lgpn:['0RH1201L622','EBC64595501','0RH2001L422'],erp:['9001-001','9001-023','9001-005']}[t]||[];}
+  const colMap={pono:'po_no',maker:'maker',mkpn:'maker_pn',lgpn:'lg_pn',erp:'item_code'};
+  try{
+    const {data}=await sb.from('po_data').select(colMap[t]).eq('entity',ENTITY).not(colMap[t],'is',null);
+    ddData[t]=[...new Set(data.map(r=>r[colMap[t]]).filter(Boolean))].sort();
+  }catch{ddData[t]=[];}
   renderDD(t,ddData[t]);
 }
 function renderDD(t,items){
@@ -427,15 +450,23 @@ async function searchPO(){
   document.getElementById('listBody').innerHTML='<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중...</p></div></td></tr>';
   document.getElementById('excelBtn').style.display='none';
   try{
-    const p=new URLSearchParams({action:'po_list',entity:ENTITY,from,to,pono,maker,mkpn,lgpn,erp});
-    listData=await(await fetch(`${SCRIPT_URL}?${p}`)).json()||[];
-  }catch{
-    listData=[
-      {type:'신규',date:'2026-01-20',pono:'GSMEIN-260120-001',lgpn:'0RH1201L622',mkpn:'RC-98TRJ1K20',erp:'9001-001',maker:'SMART',qty:15000,shipped:10000,etd:'2026-06-30',mode:'VSSL'},
-      {type:'수정',date:'2026-02-08',pono:'GSMEIN-260208-001',lgpn:'EBC64595501',mkpn:'CSR02TRFR042',erp:'9001-023',maker:'SMART',qty:8000,shipped:8000,etd:'2026-05-30',mode:'AIR'},
-      {type:'신규',date:'2026-03-06',pono:'GSMEIN-260306-001',lgpn:'0RH2001L422',mkpn:'RC-98TRF2K00',erp:'9001-005',maker:'SMART',qty:12000,shipped:0,etd:'2026-07-15',mode:'VSSL'},
-    ];
-  }
+    let q=sb.from('po_data').select('*').eq('entity',ENTITY).order('order_date',{ascending:false});
+    if(from)q=q.gte('order_date',from);
+    if(to)q=q.lte('order_date',to);
+    if(pono)q=q.ilike('po_no','%'+pono+'%');
+    if(maker)q=q.ilike('maker','%'+maker+'%');
+    if(mkpn)q=q.ilike('maker_pn','%'+mkpn+'%');
+    if(lgpn)q=q.ilike('lg_pn','%'+lgpn+'%');
+    if(erp)q=q.ilike('item_code','%'+erp+'%');
+    const {data,error}=await q;
+    if(error)throw error;
+    listData=(data||[]).map(r=>({
+      type:r.action_type, date:r.order_date, pono:r.po_no,
+      lgpn:r.lg_pn, mkpn:r.maker_pn, erp:r.item_code,
+      maker:r.maker, qty:r.qty, shipped:0,
+      etd:r.etd_request, mode:r.transport
+    }));
+  }catch(e){showToast('⚠ 조회 실패: '+e.message,'error');listData=[];}
   renderList();
 }
 function renderList(){
