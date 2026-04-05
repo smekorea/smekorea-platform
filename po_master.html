@@ -1085,34 +1085,40 @@
     reader.onload = e => {
       try {
         const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
-        const sheetName = wb.SheetNames.find(n => n.includes('출하') || n.includes('Shipment')) || wb.SheetNames[0];
+        const sheetName = wb.SheetNames.find(n => n.includes('PO마스터') || n.includes('출하') || n.includes('Shipment')) || wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
         const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
 
+        // SME_PO마스터 파일 기준
+        // 0:구분 1:법인 2:주문일자 3:PO No. 4:LG P/N 5:Maker P/N 6:ERP품번 7:Maker
+        // 8:주문수량 9:출하수량 10:잔량 11:ETD요청일 12:운송 13:상태
+        // 14:출하수량(입력) 15:운송구분(입력) 16:인보이스No.(입력) 17:출하일(입력) 18:비고
         let headerRow = -1;
         for (let i=0; i<Math.min(10, raw.length); i++) {
-          if (raw[i].some(c => String(c).includes('법인구분') || String(c).includes('인보이스'))) {
+          if (raw[i].some(c => String(c).includes('구분')) && raw[i].some(c => String(c).includes('PO No.'))) {
             headerRow = i; break;
           }
         }
-        if (headerRow < 0) { showToast('⚠ 본사_출하입력 시트를 확인해주세요', 'error'); return; }
+        if (headerRow < 0) { showToast('⚠ SME_PO마스터 파일을 확인해주세요', 'error'); return; }
 
-        const dataRows = raw.slice(headerRow + 2).filter(r => r.some(c => c !== ''));
+        // 출하수량(입력) 컬럼에 값이 있는 행만 파싱
+        const dataRows = raw.slice(headerRow + 1).filter(r => r.some(c => c !== '') && Number(r[14]) > 0);
+        if (!dataRows.length) { showToast('⚠ 출하수량(입력) 컬럼에 값을 입력해주세요', 'warn'); return; }
+
         hqData = dataRows.map((r, idx) => ({
           row:      idx + 1,
-          entity:   String(r[0]||'').trim(),
-          invoice:  String(r[1]||'').trim(),
-          maker:    String(r[2]||'').trim(),
-          mkpn:     String(r[3]||'').trim(),
-          erp:      String(r[4]||'').trim(),
-          shipdate: formatDate(r[5]),
-          shipqty:  Number(r[6])||0,
-          mode:     String(r[7]||'').trim().toUpperCase(),
-          hqdate:   formatDate(r[8]),
-          mkcommit: formatDate(r[9]),
-          mkactual: formatDate(r[10]),
-          ontyme:   String(r[11]||'').trim(),
-          remark:   String(r[12]||'').trim(),
+          entity:   String(r[1]||'').trim(),
+          pono:     String(r[3]||'').trim(),
+          lgpn:     String(r[4]||'').trim(),
+          mkpn:     String(r[5]||'').trim(),
+          erp:      String(r[6]||'').trim(),
+          maker:    String(r[7]||'').trim(),
+          etd:      formatDate(r[11]),
+          shipqty:  Number(r[14])||0,
+          mode:     String(r[15]||'').trim().toUpperCase(),
+          invoice:  String(r[16]||'').trim(),
+          shipdate: formatDate(r[17]),
+          remark:   String(r[18]||'').trim(),
         }));
 
         renderHQPreview();
@@ -1139,12 +1145,13 @@
     let errTotal = 0;
     tbody.innerHTML = hqData.map(r => {
       const errs = [];
-      if (!r.entity)  errs.push('법인');
-      if (!r.invoice) errs.push('인보이스No.');
-      if (!r.mkpn)    errs.push('MakerP/N');
+      if (!r.entity)   errs.push('법인');
+      if (!r.pono)     errs.push('PO No.');
+      if (!r.mkpn)     errs.push('MakerP/N');
+      if (!r.invoice)  errs.push('인보이스No.');
       if (!r.shipqty||r.shipqty<=0) errs.push('수량');
       if (!r.shipdate) errs.push('출하일');
-      if (!['VSL','AIR'].includes(r.mode)) errs.push('운송');
+      if (!r.mode||!['VSL','AIR'].includes(r.mode)) errs.push('운송(VSL/AIR)');
       if (errs.length) errTotal++;
 
       const isErr = errs.length > 0;
@@ -1197,6 +1204,8 @@
           .select('id,entity')
           .eq('po_no', r.pono||'')
           .eq('maker_pn', r.mkpn||'')
+          .eq('etd_request', r.etd||'')
+          .eq('etd_request', r.etd||'')
           .limit(1);
         const po = data?.[0];
         return {
