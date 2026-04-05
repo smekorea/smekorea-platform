@@ -678,7 +678,7 @@
 
     try {
       // po_data 조회
-      let q = sb.from('po_data').select('*').order('order_date', {ascending:false});
+      let q = sb.from('po_data').select('*').order('created_at', {ascending:true});
       if (entity)  q = q.eq('entity', entity);
       if (mode && mode !== '전체') q = q.eq('transport', mode);
       if (maker)   q = q.ilike('maker', '%'+maker+'%');
@@ -712,6 +712,7 @@
           mode: r.transport, resp,
           item_status: r.item_status,
           modify_reason: r.modify_reason || '',
+          created_at: r.created_at || '',
           hqdate:'', mkcommit:'', mkactual:'', history:[]
         };
       });
@@ -726,7 +727,9 @@
 
       allData = Object.values(groupMap).map(group => {
         // 가장 최근 등록된 건을 대표로
-        group.sort((a,b) => new Date(b.date) - new Date(a.date) || b.id.localeCompare(a.id));
+        group.sort((a,b) => new Date(a.created_at||a.date) - new Date(b.created_at||b.date));
+        // 마지막이 최신건
+        group.reverse();
         const latest = group[0];
         const orig = group.find(r => r.action_type === '신규') || group[group.length-1];
 
