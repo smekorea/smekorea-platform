@@ -717,25 +717,23 @@
         };
       });
 
-      // PO No. + Maker P/N 기준으로 신규/수정/취소 그룹핑
+      // PO No. + Maker P/N + ETD 3개 조합으로 그룹핑
       const groupMap = {};
       allRows.forEach(r => {
-        const key = `${r.pono}||${r.mkpn}`;
+        const key = `${r.pono}||${r.mkpn}||${r.etd}`;
         if (!groupMap[key]) groupMap[key] = [];
         groupMap[key].push(r);
       });
 
       allData = Object.values(groupMap).map(group => {
-        // 가장 최근 등록된 건을 대표로
+        // created_at 기준 오름차순 정렬 → 마지막이 최신건
         group.sort((a,b) => new Date(a.created_at||a.date) - new Date(b.created_at||b.date));
-        // 마지막이 최신건
-        group.reverse();
-        const latest = group[0];
-        const orig = group.find(r => r.action_type === '신규') || group[group.length-1];
+        const latest = group[group.length-1];
+        const orig = group.find(r => r.action_type === '신규') || group[0];
 
         // 변경내용 감지 (수정/취소 시 신규와 비교)
         let changes = [];
-        if (latest.action_type !== '신규' && orig) {
+        if (latest.action_type !== '신규' && orig && orig !== latest) {
           if (orig.qty !== latest.qty)
             changes.push(`수량 ${orig.qty.toLocaleString()}→${latest.qty.toLocaleString()}`);
           if (orig.etd !== latest.etd)
