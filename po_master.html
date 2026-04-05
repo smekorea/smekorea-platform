@@ -698,7 +698,8 @@
         });
       }
 
-      allData = (poRows||[]).map(r => {
+      // 전체 이력 매핑
+      const allRows = (poRows||[]).map(r => {
         const shipped = shipMap[r.id] || 0;
         const remain  = (r.qty||0) - shipped;
         const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
@@ -710,8 +711,36 @@
           shipped, etd: r.etd_request, eta: r.eta_hope,
           mode: r.transport, resp,
           item_status: r.item_status,
+          modify_reason: r.modify_reason || '',
           hqdate:'', mkcommit:'', mkactual:'', history:[]
         };
+      });
+
+      // PO No. + Maker P/N 기준 최신건만 추출 (이력 중 가장 최근 등록일 기준)
+      const latestMap = {};
+      allRows.forEach(r => {
+        const key = `${r.pono}||${r.mkpn}`;
+        if (!latestMap[key] || r.date > latestMap[key].date) {
+          latestMap[key] = r;
+        }
+      });
+
+      // 신규 기준 수량 조회 (수정 시 변경내용 표시용)
+      const origMap = {};
+      allRows.forEach(r => {
+        const key = `${r.pono}||${r.mkpn}`;
+        if (r.action_type === '신규') origMap[key] = r.qty;
+      });
+
+      allData = Object.values(latestMap).map(r => {
+        const key = `${r.pono}||${r.mkpn}`;
+        const origQty = origMap[key];
+        let changeNote = '';
+        if (r.action_type === '수정' && origQty !== undefined && origQty !== r.qty) {
+          changeNote = `수량변경 ${origQty.toLocaleString()}→${r.qty.toLocaleString()}`;
+        }
+        if (r.modify_reason) changeNote = changeNote ? changeNote + ' / ' + r.modify_reason : r.modify_reason;
+        return {...r, changeNote};
       });
 
       // status 필터 (완료 제외 기본)
@@ -762,12 +791,17 @@
       const respBadge = getResponsibilityBadge(r.resp);
       const isLast = i === data.length - 1 ? ' last' : '';
 
-      return `<tr class="${isLast}" onclick="selectRow(${i})" id="row-${i}">
+      const rowBg = r.action_type==='수정' ? 'style="background:#FFFDE7;"'
+        : r.action_type==='취소' ? 'style="background:#FFF0F0;"' : '';
+      const changeCell = r.changeNote
+        ? `<span style="font-size:10px;color:#b45309;margin-left:4px;">(${r.changeNote})</span>` : '';
+
+      return `<tr ${rowBg} class="${isLast}" onclick="selectRow(${i})" id="row-${i}">
         <td>${typeBadge}</td>
         <td>${entityBadge}</td>
         <td class="td-mono">${r.date||'—'}</td>
         <td class="td-mono">${r.pono||'—'}</td>
-        <td class="td-mono">${r.mkpn||'—'}</td>
+        <td class="td-mono">${r.mkpn||'—'}${changeCell}</td>
         <td>${r.maker||'—'}</td>
         <td class="td-mono">${r.lgpn||'—'}</td>
         <td class="td-right td-mono">${(r.qty||0).toLocaleString()}</td>
