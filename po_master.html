@@ -716,31 +716,36 @@
         };
       });
 
-      // PO No. + Maker P/N 기준 최신건만 추출 (이력 중 가장 최근 등록일 기준)
-      const latestMap = {};
+      // PO No. + Maker P/N 기준으로 신규/수정/취소 그룹핑
+      const groupMap = {};
       allRows.forEach(r => {
         const key = `${r.pono}||${r.mkpn}`;
-        if (!latestMap[key] || r.date > latestMap[key].date) {
-          latestMap[key] = r;
-        }
+        if (!groupMap[key]) groupMap[key] = [];
+        groupMap[key].push(r);
       });
 
-      // 신규 기준 수량 조회 (수정 시 변경내용 표시용)
-      const origMap = {};
-      allRows.forEach(r => {
-        const key = `${r.pono}||${r.mkpn}`;
-        if (r.action_type === '신규') origMap[key] = r.qty;
-      });
+      allData = Object.values(groupMap).map(group => {
+        // 가장 최근 등록된 건을 대표로
+        group.sort((a,b) => new Date(b.date) - new Date(a.date) || b.id.localeCompare(a.id));
+        const latest = group[0];
+        const orig = group.find(r => r.action_type === '신규') || group[group.length-1];
 
-      allData = Object.values(latestMap).map(r => {
-        const key = `${r.pono}||${r.mkpn}`;
-        const origQty = origMap[key];
-        let changeNote = '';
-        if (r.action_type === '수정' && origQty !== undefined && origQty !== r.qty) {
-          changeNote = `수량변경 ${origQty.toLocaleString()}→${r.qty.toLocaleString()}`;
+        // 변경내용 감지 (수정/취소 시 신규와 비교)
+        let changes = [];
+        if (latest.action_type !== '신규' && orig) {
+          if (orig.qty !== latest.qty)
+            changes.push(`수량 ${orig.qty.toLocaleString()}→${latest.qty.toLocaleString()}`);
+          if (orig.etd !== latest.etd)
+            changes.push(`ETD ${orig.etd||''}→${latest.etd||''}`);
+          if ((orig.mode||'').toUpperCase() !== (latest.mode||'').toUpperCase())
+            changes.push(`운송 ${orig.mode||''}→${latest.mode||''}`);
+          if (orig.eta !== latest.eta && (orig.eta||latest.eta))
+            changes.push(`ETA ${orig.eta||''}→${latest.eta||''}`);
         }
-        if (r.modify_reason) changeNote = changeNote ? changeNote + ' / ' + r.modify_reason : r.modify_reason;
-        return {...r, changeNote};
+        if (latest.modify_reason) changes.push(latest.modify_reason);
+        const changeNote = changes.join(' / ');
+
+        return {...latest, changeNote};
       });
 
       // status 필터 (완료 제외 기본)
