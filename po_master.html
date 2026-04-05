@@ -477,6 +477,7 @@
     <table>
       <thead>
         <tr>
+          <th>구분</th>
           <th>법인</th>
           <th class="sortable">주문일자 ↕</th>
           <th>PO No.</th>
@@ -688,21 +689,18 @@
       const {data: poRows, error} = await q;
       if (error) throw error;
 
-      // shipment_po 조회 (po_no + po_id 기준 합산)
-      let shipMap = {}; // key: po_id
-      let shipMapByNo = {}; // key: po_no (fallback)
+      // shipment_po 조회 (po_id 기준 합산)
+      let shipMap = {}; // key: po_id → 출하수량
       {
-        const {data: ships} = await sb.from('shipment_po').select('po_id, po_no, ship_qty');
+        const {data: ships} = await sb.from('shipment_po').select('po_id, ship_qty');
         (ships||[]).forEach(s => {
           if (s.po_id) shipMap[s.po_id] = (shipMap[s.po_id]||0) + (s.ship_qty||0);
-          if (s.po_no) shipMapByNo[s.po_no] = (shipMapByNo[s.po_no]||0) + (s.ship_qty||0);
         });
       }
 
       // 전체 이력 매핑
       const allRows = (poRows||[]).map(r => {
-        // po_id 기준 우선, 없으면 po_no 기준으로 합산
-        const shipped = (shipMap[r.id] || 0);
+        const shipped = shipMap[r.id] || 0;
         const remain  = (r.qty||0) - shipped;
         const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
         return {
@@ -733,9 +731,11 @@
         const latest = group[group.length-1];
         const orig = group.find(r => r.action_type === '신규') || group[0];
         // 그룹 내 모든 id의 출하수량 합산 (신규/수정 모든 건 포함)
-        const totalShipped = group.reduce((sum, r) => sum + (shipMap[r.id]||0), 0)
-          || (shipMapByNo[latest.pono]||0);
+        const totalShipped = group.reduce((sum, r) => sum + (shipMap[r.id]||0), 0);
         latest.shipped = totalShipped;
+        // resp 재계산 (totalShipped 기준)
+        const remain2 = (latest.qty||0) - totalShipped;
+        latest.resp = totalShipped === 0 ? 'unordered' : remain2 <= 0 ? 'complete' : 'pending';
 
         // 변경내용 감지 (수정/취소 시 신규와 비교)
         let changes = [];
@@ -1025,7 +1025,7 @@
     const rows = allData.map(r => [
       r.action_type||'신규', r.entity, r.date, r.pono, r.lgpn, r.mkpn, r.erp||'', r.maker,
       r.qty, r.shipped, (r.qty||0)-(r.shipped||0),
-      r.etd, r.mode, r.resp==='complete'?'완료':r.resp==='pending'?'잔량대기':'미발주',
+      r.etd, r.mode, r.resp==='complete'?'출하완료':r.resp==='pending'?'잔량대기':'본사미발주',
       '','','','',''
     ]);
 
