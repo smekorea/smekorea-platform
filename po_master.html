@@ -692,9 +692,11 @@
       // shipment_po 조회 (po_id 기준 합산)
       let shipMap = {}; // key: po_id → 출하수량
       {
-        const {data: ships} = await sb.from('shipment_po').select('po_id, ship_qty');
+        const {data: ships} = await sb.from('shipment_po').select('po_id, ship_qty, ship_date');
+        const shipDateMap = {}; // key: po_id → 출하일
         (ships||[]).forEach(s => {
           if (s.po_id) shipMap[s.po_id] = (shipMap[s.po_id]||0) + (s.ship_qty||0);
+          if (s.po_id && s.ship_date) shipDateMap[s.po_id] = s.ship_date;
         });
       }
 
@@ -733,6 +735,12 @@
         // 그룹 내 모든 id의 출하수량 합산 (신규/수정 모든 건 포함)
         const totalShipped = group.reduce((sum, r) => sum + (shipMap[r.id]||0), 0);
         latest.shipped = totalShipped;
+        // 출하일 반영 (그룹 내 가장 최근 출하일)
+        const latestShipDate = group.reduce((date, r) => {
+          const d = shipDateMap[r.id];
+          return d && (!date || d > date) ? d : date;
+        }, '');
+        latest.hqdate = latestShipDate;
         // resp 재계산 (totalShipped 기준)
         const remain2 = (latest.qty||0) - totalShipped;
         latest.resp = totalShipped === 0 ? 'unordered' : remain2 <= 0 ? 'complete' : 'pending';
