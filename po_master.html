@@ -688,19 +688,21 @@
       const {data: poRows, error} = await q;
       if (error) throw error;
 
-      // shipment_po 조회 (출하수량 합산)
-      const poIds = (poRows||[]).map(r => r.id);
-      let shipMap = {};
-      if (poIds.length > 0) {
-        const {data: ships} = await sb.from('shipment_po').select('po_id, ship_qty');
+      // shipment_po 조회 (po_no + po_id 기준 합산)
+      let shipMap = {}; // key: po_id
+      let shipMapByNo = {}; // key: po_no (fallback)
+      {
+        const {data: ships} = await sb.from('shipment_po').select('po_id, po_no, ship_qty');
         (ships||[]).forEach(s => {
-          shipMap[s.po_id] = (shipMap[s.po_id]||0) + (s.ship_qty||0);
+          if (s.po_id) shipMap[s.po_id] = (shipMap[s.po_id]||0) + (s.ship_qty||0);
+          if (s.po_no) shipMapByNo[s.po_no] = (shipMapByNo[s.po_no]||0) + (s.ship_qty||0);
         });
       }
 
       // 전체 이력 매핑
       const allRows = (poRows||[]).map(r => {
-        const shipped = shipMap[r.id] || 0;
+        // po_id 기준 우선, 없으면 po_no 기준으로 합산
+        const shipped = (shipMap[r.id] || 0);
         const remain  = (r.qty||0) - shipped;
         const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
         return {
@@ -730,6 +732,10 @@
         group.sort((a,b) => new Date(a.created_at||a.date) - new Date(b.created_at||b.date));
         const latest = group[group.length-1];
         const orig = group.find(r => r.action_type === '신규') || group[0];
+        // 그룹 내 모든 id의 출하수량 합산 (신규/수정 모든 건 포함)
+        const totalShipped = group.reduce((sum, r) => sum + (shipMap[r.id]||0), 0)
+          || (shipMapByNo[latest.pono]||0);
+        latest.shipped = totalShipped;
 
         // 변경내용 감지 (수정/취소 시 신규와 비교)
         let changes = [];
@@ -1205,7 +1211,7 @@
           .eq('po_no', r.pono||'')
           .eq('maker_pn', r.mkpn||'')
           .eq('etd_request', r.etd||'')
-          .eq('etd_request', r.etd||'')
+          .order('created_at', {ascending:false})
           .limit(1);
         const po = data?.[0];
         return {
