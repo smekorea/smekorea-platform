@@ -376,10 +376,21 @@ tbody td{padding:10px 13px;color:#1a2233;font-size:13px;}
     </div>
     <button class="btn-search" onclick="loadPSI()">🔍 조회</button>
     <button class="btn-reset" onclick="resetFilter('psi')">↺ 초기화</button>
+    <!-- 월별/주차별 토글 -->
+    <div style="display:flex;gap:4px;margin-left:12px;align-items:flex-end;">
+      <button id="psi-toggle-month" onclick="setPSIMode('month')"
+        style="height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--accent2);background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+        월별
+      </button>
+      <button id="psi-toggle-week" onclick="setPSIMode('week')"
+        style="height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+        주차별
+      </button>
+    </div>
     <div class="legend" style="margin-left:auto;">
       <span><span style="color:var(--accent2);font-weight:700;">P</span>=법인PO요청</span>
       <span><span style="color:var(--accent3);font-weight:700;">S</span>=본사출하</span>
-      <span><span style="color:var(--amber);font-weight:700;">I</span>=누적잔량(P-S)</span>
+      <span><span style="color:var(--amber);font-weight:700;">I</span>=누적잔량(P-S이월)</span>
     </div>
   </div>
   <div class="content">
@@ -815,108 +826,166 @@ function loadAir(){
 // ─────────────────────────────────────────
 // ⑤ PSI분석
 // ─────────────────────────────────────────
-let psiData=[];
+let psiData=[], psiPeriods=[], psiMode='month', psiEntity='';
+
+function setPSIMode(mode){
+  psiMode=mode;
+  // 버튼 스타일 토글
+  const on='height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--accent2);background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'Noto Sans KR\',sans-serif;';
+  const off='height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:\'Noto Sans KR\',sans-serif;';
+  document.getElementById('psi-toggle-month').style.cssText=mode==='month'?on:off;
+  document.getElementById('psi-toggle-week').style.cssText=mode==='week'?on:off;
+  if(psiData.length) renderPSI();
+}
+
+// 날짜 → 주차 키 (YYYY-WW)
+function getWeekKey(dateStr){
+  if(!dateStr) return '';
+  const d=new Date(dateStr);
+  const startOfYear=new Date(d.getFullYear(),0,1);
+  const weekNo=Math.ceil(((d-startOfYear)/86400000+startOfYear.getDay()+1)/7);
+  return `${d.getFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+
+// 날짜 → 기간 키 (월별 or 주차별)
+function getPeriodKey(dateStr){
+  if(!dateStr) return '';
+  return psiMode==='week' ? getWeekKey(dateStr) : ym(dateStr);
+}
+
+// 기간 범위 생성
+function buildPeriods(from, to, allDates){
+  if(psiMode==='month'){
+    if(from&&to){
+      const periods=[];
+      let cur=new Date(from+'-01');
+      const end=new Date(to+'-01');
+      while(cur<=end){
+        periods.push(cur.toISOString().slice(0,7));
+        cur.setMonth(cur.getMonth()+1);
+      }
+      return periods;
+    }
+    return [...new Set(allDates.map(d=>ym(d)).filter(Boolean))].sort();
+  } else {
+    // 주차별
+    if(from&&to){
+      const periods=[];
+      let cur=new Date(from+'-01');
+      const end=new Date(to+'-28');
+      while(cur<=end){
+        periods.push(getWeekKey(cur.toISOString().slice(0,10)));
+        cur.setDate(cur.getDate()+7);
+      }
+      return [...new Set(periods)].sort();
+    }
+    return [...new Set(allDates.map(d=>getWeekKey(d)).filter(Boolean))].sort();
+  }
+}
+
 function loadPSI(){
   const entity=document.getElementById('p-entity').value;
   const from=document.getElementById('p-from').value;
   const to=document.getElementById('p-to').value;
   const makerF=document.getElementById('p-maker').value.trim().toLowerCase();
   const modeF=document.getElementById('p-mode').value;
-
   if(!entity){showToast('⚠ 법인을 선택해주세요','warn');return;}
+  psiEntity=entity;
 
-  // 기간 내 모든 월 생성
-  let months=[];
-  if(from&&to){
-    let cur=new Date(from+'-01');
-    const end=new Date(to+'-01');
-    while(cur<=end){
-      months.push(cur.toISOString().slice(0,7));
-      cur.setMonth(cur.getMonth()+1);
-    }
-  }
-
-  // P: po_data ETD 기준 월별 집계 (법인 PO)
+  // P: po_data ETD 기준
   let poFiltered=allPO.filter(r=>r.entity===entity);
   if(makerF) poFiltered=poFiltered.filter(r=>(r.maker||'').toLowerCase().includes(makerF));
   if(modeF) poFiltered=poFiltered.filter(r=>(r.mode||'').toUpperCase()===modeF);
   if(from) poFiltered=poFiltered.filter(r=>ym(r.etd)>=from);
   if(to) poFiltered=poFiltered.filter(r=>ym(r.etd)<=to);
 
-  // 자동 월 범위 계산
-  if(!months.length){
-    const allMonths=[...new Set([
-      ...poFiltered.map(r=>ym(r.etd)),
-      ...allShip.filter(s=>s.entity===entity).map(s=>ym(s.ship_date))
-    ])].filter(Boolean).sort();
-    months=allMonths;
-  }
-
-  // Maker P/N + Maker + mode 기준 행
-  const rowKeys={};
-  poFiltered.forEach(r=>{
-    const k=`${r.maker_pn}||${r.maker}||${r.mode}`;
-    if(!rowKeys[k]) rowKeys[k]={mkpn:r.maker_pn,maker:r.maker,mode:r.mode,p:{},s:{},i:{}};
-    const m=ym(r.etd);
-    if(m) rowKeys[k].p[m]=(rowKeys[k].p[m]||0)+(r.qty||0);
-  });
-
-  // S: shipment_po ship_date 기준
+  // S: shipment_po
   const poIdMap={};
   allPO.filter(r=>r.entity===entity).forEach(r=>{
     r.shipRows.forEach(s=>{poIdMap[s.id]={mkpn:r.maker_pn,maker:r.maker,mode:r.mode};});
   });
+  let shipFiltered=allShip.filter(s=>s.entity===entity);
+  if(makerF) shipFiltered=shipFiltered.filter(s=>(poIdMap[s.id]?.maker||'').toLowerCase().includes(makerF));
+  if(modeF) shipFiltered=shipFiltered.filter(s=>(poIdMap[s.id]?.mode||'').toUpperCase()===modeF);
 
-  allShip.filter(s=>s.entity===entity).forEach(s=>{
+  // 전체 날짜 수집 → 기간 범위 결정
+  const allDates=[...poFiltered.map(r=>r.etd),...shipFiltered.map(s=>s.ship_date)].filter(Boolean);
+  psiPeriods=buildPeriods(from,to,allDates);
+
+  // 품목별 P/S 집계
+  const rowKeys={};
+  poFiltered.forEach(r=>{
+    const k=`${r.maker_pn}||${r.maker}||${r.mode}`;
+    if(!rowKeys[k]) rowKeys[k]={mkpn:r.maker_pn,maker:r.maker,mode:r.mode,p:{},s:{},i:{}};
+    const pk=getPeriodKey(r.etd);
+    if(pk) rowKeys[k].p[pk]=(rowKeys[k].p[pk]||0)+(r.qty||0);
+  });
+  shipFiltered.forEach(s=>{
     const po=poIdMap[s.id];
     if(!po) return;
-    if(makerF&&!(po.maker||'').toLowerCase().includes(makerF)) return;
-    if(modeF&&(po.mode||'').toUpperCase()!==modeF) return;
     const k=`${po.mkpn}||${po.maker}||${po.mode}`;
     if(!rowKeys[k]) rowKeys[k]={mkpn:po.mkpn,maker:po.maker,mode:po.mode,p:{},s:{},i:{}};
-    const m=ym(s.ship_date);
-    if(m) rowKeys[k].s[m]=(rowKeys[k].s[m]||0)+(s.ship_qty||0);
+    const pk=getPeriodKey(s.ship_date);
+    if(pk) rowKeys[k].s[pk]=(rowKeys[k].s[pk]||0)+(s.ship_qty||0);
   });
 
-  // I: 누적 계산 (전월이월)
+  // I: 누적 계산
   Object.values(rowKeys).forEach(row=>{
     let cumI=0;
-    months.forEach(m=>{
-      const p=row.p[m]||0;
-      const s=row.s[m]||0;
-      cumI=cumI+p-s;
-      row.i[m]=cumI;
+    psiPeriods.forEach(pk=>{
+      cumI=cumI+(row.p[pk]||0)-(row.s[pk]||0);
+      row.i[pk]=cumI;
     });
   });
 
   psiData=Object.values(rowKeys);
-  document.getElementById('psi-count').textContent=`— ${entity} / ${psiData.length.toLocaleString()}개 품목`;
+  renderPSI();
+}
 
-  if(!months.length||!psiData.length){
+function renderPSI(){
+  const entity=psiEntity||document.getElementById('p-entity').value;
+  document.getElementById('psi-count').textContent=
+    `— ${entity} / ${psiData.length.toLocaleString()}개 품목 / ${psiMode==='week'?'주차별':'월별'}`;
+
+  if(!psiPeriods.length||!psiData.length){
     document.getElementById('psiTableWrap').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><p>데이터 없음</p></div>';
     return;
   }
 
-  // 동적 테이블 생성
-  const thMonths=months.map(m=>`<th class="p-col center" colspan="3">${m}</th>`).join('');
-  const thPSI=months.map(()=>'<th class="p-col right">P</th><th class="s-col right">S</th><th class="i-col right">I</th>').join('');
+  // ── 세로방향 테이블: 행=기간, 열=품목별P/S/I ──
+  // 헤더: 기간 | 품목1-P | 품목1-S | 품목1-I | 품목2-P | ...
+  const thItems=psiData.map(row=>{
+    const mb=(row.mode||'').toUpperCase()==='AIR'
+      ?'<span class="badge b-air" style="font-size:9px;">AIR</span>'
+      :'<span class="badge b-vsl" style="font-size:9px;">VSL</span>';
+    return`<th class="p-col center" colspan="3" style="min-width:160px;">
+      <div style="font-size:11px;">${row.mkpn||'—'}</div>
+      <div style="font-size:10px;font-weight:400;color:var(--muted);">${row.maker||''} ${mb}</div>
+    </th>`;
+  }).join('');
 
-  const rows=psiData.map(row=>{
-    const mb=(row.mode||'').toUpperCase()==='AIR'?'<span class="badge b-air" style="font-size:10px;">✈AIR</span>':'<span class="badge b-vsl" style="font-size:10px;">🚢VSL</span>';
-    const cells=months.map(m=>{
-      const p=row.p[m]||0;
-      const s=row.s[m]||0;
-      const i=row.i[m]||0;
+  const thPSI=psiData.map(()=>
+    '<th class="p-col right" style="font-size:11px;">P</th><th class="s-col right" style="font-size:11px;">S</th><th class="i-col right" style="font-size:11px;">I</th>'
+  ).join('');
+
+  // 행: 기간별
+  const rows=psiPeriods.map(pk=>{
+    const cells=psiData.map(row=>{
+      const p=row.p[pk]||0;
+      const s=row.s[pk]||0;
+      const i=row.i[pk]||0;
       const iCls=i>0?'psi-plus':i<0?'psi-minus':'psi-zero';
       const iSign=i>0?'+':'';
       return`<td class="td-right td-mono" style="font-size:12px;">${p?p.toLocaleString():'—'}</td>
              <td class="td-right td-mono" style="font-size:12px;color:var(--accent3);">${s?s.toLocaleString():'—'}</td>
-             <td class="td-right td-mono ${iCls}" style="font-size:12px;">${iSign}${i.toLocaleString()}</td>`;
+             <td class="td-right td-mono ${iCls}" style="font-size:12px;font-weight:700;">${p||s?iSign+i.toLocaleString():'—'}</td>`;
     }).join('');
-    return`<tr>
-      <td class="td-mono">${row.mkpn||'—'}</td>
-      <td style="font-weight:600;">${row.maker||'—'}</td>
-      <td>${mb}</td>
+
+    // 기간 행 배경 (주차별은 격주 구분)
+    const isOdd=psiPeriods.indexOf(pk)%2===0;
+    const rowBg=isOdd?'':'background:#f8fafc;';
+    return`<tr style="${rowBg}">
+      <td class="td-mono" style="font-weight:700;min-width:90px;background:#f0f4f9;border-right:2px solid #c0cce0;">${pk}</td>
       ${cells}
     </tr>`;
   }).join('');
@@ -924,7 +993,10 @@ function loadPSI(){
   document.getElementById('psiTableWrap').innerHTML=`
     <table class="psi-table">
       <thead>
-        <tr><th rowspan="2">Maker P/N</th><th rowspan="2">Maker</th><th rowspan="2">운송</th>${thMonths}</tr>
+        <tr>
+          <th rowspan="2" style="background:#e8edf5;min-width:90px;">${psiMode==='week'?'주차':'월'}</th>
+          ${thItems}
+        </tr>
         <tr>${thPSI}</tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -932,8 +1004,19 @@ function loadPSI(){
 }
 
 function exportPSI(){
-  if(!psiData.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
-  showToast('엑셀 내보내기는 준비중입니다','warn');
+  if(!psiData.length||!psiPeriods.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
+  const h=['기간',...psiData.flatMap(r=>[`${r.mkpn}(P)`,`${r.mkpn}(S)`,`${r.mkpn}(I)`])];
+  const rows=psiPeriods.map(pk=>{
+    return[pk,...psiData.flatMap(row=>{
+      const p=row.p[pk]||0, s=row.s[pk]||0, i=row.i[pk]||0;
+      return[p,s,i];
+    })];
+  });
+  const ws=XLSX.utils.aoa_to_sheet([h,...rows]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'PSI분석');
+  XLSX.writeFile(wb,`PSI분석_${psiEntity}_${today()}.xlsx`);
+  showToast('✓ PSI 엑셀 다운로드 완료');
 }
 
 // ─────────────────────────────────────────
