@@ -589,12 +589,12 @@ async function loadFromSupabase(){
 async function fetchAll(table,from,to){
   const PAGE=1000;
   let all=[], page=0;
-  // from/to 예: '2001' = 20년01월
-  const fromDate=`20${from.slice(0,2)}-${from.slice(2,4)}-01`;
-  const toYr=parseInt('20'+to.slice(0,2));
-  const toMo=parseInt(to.slice(2,4));
-  const lastDay=new Date(toYr,toMo,0).getDate();
-  const toDate=`20${to.slice(0,2)}-${to.slice(2,4)}-${String(lastDay).padStart(2,'0')}`;
+  // from/to 형식: '202601' (년4자리+월2자리)
+  const fromY=from.slice(0,4), fromM=from.slice(4,6);
+  const toY=to.slice(0,4), toM=to.slice(4,6);
+  const fromDate=`${fromY}-${fromM}-01`;
+  const lastDay=new Date(parseInt(toY),parseInt(toM),0).getDate();
+  const toDate=`${toY}-${toM}-${String(lastDay).padStart(2,'0')}`;
   while(true){
     let q=sb.from(table).select('year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand'
       +(table==='purchase_data'?',supplier':',customer'))
@@ -651,7 +651,7 @@ function applyPeriod(){loadFromSupabase();}
 
 // handleFile 제거 - Supabase 연동으로 대체
 
-function inPer(r,from,to){const y=String(r['년']||'').replace('년','').trim(),m=String(r['월']||'').replace('월','').trim().padStart(2,'0');const ym=y+m;return ym>=from&&ym<=to;}
+function inPer(r,from,to){const yr=String(r['년']||'').replace('년','').trim();const y=yr.length===2?'20'+yr:yr;const m=String(r['월']||'').replace('월','').trim().padStart(2,'0');const ym=y+m;return ym>=from&&ym<=to;}
 function cls(r){const sel=String(r['판매처명']||''),br=String(r['브랜드명']||''),bu=String(r['구매처명']||'');if(sel.includes('LG전자')||LG_M.some(m=>br.includes(m)||bu.includes(m)))return 'LG사급';return '직거래';}
 function fmt(v){if(v>=100000000)return (v/100000000).toFixed(1)+'억';if(v>=10000)return Math.round(v/10000)+'만';return v.toLocaleString();}
 
