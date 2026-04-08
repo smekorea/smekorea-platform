@@ -125,11 +125,11 @@
     border:1px solid var(--border);border-radius:12px;
     overflow:hidden;overflow-x:auto;
   }
-  table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
+  table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap;}
   thead th{
-    background:#f0f4f9;padding:10px 12px;text-align:left;
-    font-weight:700;color:var(--muted);
-    font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.5px;
+    background:#e8edf5;padding:11px 13px;text-align:left;
+    font-weight:800;color:#3a4a6a;
+    font-family:'Noto Sans KR',sans-serif;font-size:12px;letter-spacing:0;border-bottom:2px solid #c0cce0;
     border-bottom:1px solid var(--border);position:sticky;top:0;
   }
   thead th.sortable{cursor:pointer;user-select:none;}
@@ -138,18 +138,18 @@
     border-bottom:1px solid #f0f4f9;cursor:pointer;
     transition:background 0.1s;
   }
-  tbody tr:hover{background:#f8fafc;}
+  tbody tr:hover{filter:brightness(0.97);}
   tbody tr.selected{background:rgba(26,86,219,0.05)!important;border-left:3px solid var(--accent2);}
   tbody tr.last{border-bottom:none;}
-  tbody td{padding:10px 12px;color:var(--text);}
-  .td-mono{font-family:'Share Tech Mono',monospace;font-size:11px;}
+  tbody td{padding:10px 13px;color:#1a2233;font-size:13px;}
+  .td-mono{font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;color:#2a3a5a;}
   .td-right{text-align:right;}
   .td-center{text-align:center;}
 
   /* 배지 */
   .badge{
-    display:inline-flex;padding:2px 8px;border-radius:4px;
-    font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace;
+    display:inline-flex;padding:3px 10px;border-radius:5px;
+    font-size:12px;font-weight:700;font-family:'Share Tech Mono',monospace;
     white-space:nowrap;
   }
   .b-gsmein {background:rgba(200,0,30,0.09);color:var(--accent);}
@@ -227,7 +227,7 @@
     border:1.5px solid var(--border);
   }
 
-  /* 책임구분 표시 */
+  /* 출하현황 표시 */
   .resp-display{
     display:flex;align-items:center;gap:8px;
     padding:10px 14px;border-radius:8px;border:1.5px solid var(--border);
@@ -323,7 +323,7 @@
   </div>
   <div class="kpi-chip red">
     <div class="kpi-val" id="kpi-unordered">—</div>
-    <div class="kpi-lbl">본사미발주</div>
+    <div class="kpi-lbl">미출하</div>
   </div>
   <div class="kpi-chip" style="--c:var(--purple)">
     <div class="kpi-val" id="kpi-maker-delay" style="color:var(--purple)">—</div>
@@ -429,14 +429,13 @@
       </select>
     </div>
     <div class="s-group narrow">
-      <div class="s-label">상태 / STATUS</div>
+      <div class="s-label">출하현황 / STATUS</div>
       <select id="s-status">
+        <option value="incomplete" selected>미완료만</option>
         <option value="">전체</option>
         <option value="pending">잔량대기</option>
         <option value="complete">출하완료</option>
-        <option value="air">AIR 발송</option>
-        <option value="unordered">본사미발주</option>
-        <option value="maker">메이커귀책</option>
+        <option value="unordered">미출하</option>
       </select>
     </div>
     <div class="s-group narrow">
@@ -487,15 +486,16 @@
           <th class="td-right">주문수량</th>
           <th class="td-right">출하수량</th>
           <th class="td-right">잔량</th>
-          <th>ETD 요청</th>
+          <th>ETD요청</th>
+          <th>ETA(자동)</th>
           <th>운송</th>
-          <th>책임구분</th>
+          <th>출하현황</th>
           <th>출하일</th>
           <th>메이커납기</th>
         </tr>
       </thead>
       <tbody id="poTableBody">
-        <tr><td colspan="15" class="loading">조회 버튼을 눌러 PO 목록을 불러오세요</td></tr>
+        <tr><td colspan="16" class="loading">조회 버튼을 눌러 PO 목록을 불러오세요</td></tr>
       </tbody>
     </table>
   </div>
@@ -602,9 +602,9 @@
       </div>
     </div>
 
-    <!-- 책임구분 -->
+    <!-- 출하현황 -->
     <div class="panel-sec">
-      <div class="panel-sec-title">책임구분 / Responsibility</div>
+      <div class="panel-sec-title">출하현황 / Ship Status</div>
       <div class="resp-display" id="respDisplay">
         <span id="respIcon">—</span>
         <span id="respText" style="font-size:14px;">조회 후 자동 판단됩니다</span>
@@ -647,6 +647,24 @@
   const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   if (sessionStorage.getItem('po_auth') !== '1') { window.location.href = 'po_hub.html'; }
+
+  // 법인별 운송기간 맵 (entities 테이블)
+  let entityTransitMap = {};
+  async function loadEntityTransit(){
+    if(Object.keys(entityTransitMap).length) return;
+    try{
+      const {data} = await sb.from('entities').select('entity_code,vsl_days,air_days');
+      (data||[]).forEach(r=>{ entityTransitMap[r.entity_code]={vsl:r.vsl_days||50,air:r.air_days||3}; });
+    }catch(e){ console.warn('entities 로드 실패',e); }
+  }
+  function calcETA(etd, entity, mode){
+    if(!etd||!entity) return '—';
+    const transit = entityTransitMap[entity];
+    if(!transit) return '—';
+    const days = (mode||'').toUpperCase()==='AIR' ? transit.air : transit.vsl;
+    const d = new Date(etd); d.setDate(d.getDate()+days);
+    return d.toISOString().slice(0,10);
+  }
   let allData = [];
   let selectedRow = null;
 
@@ -660,14 +678,16 @@
 
   // ── 초기화 ──
   function resetSearch() {
-    ['s-entity','s-status','s-mode'].forEach(id => document.getElementById(id).value = '');
+    ['s-entity','s-mode'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('s-status').value = 'incomplete';
     ['s-keyword','s-maker','s-month'].forEach(id => document.getElementById(id).value = '');
   }
 
   // ── PO 조회 ──
   async function loadPO() {
+    await loadEntityTransit();
     const body = document.getElementById('poTableBody');
-    body.innerHTML = '<tr><td colspan="15" class="loading">⏳ 조회 중...</td></tr>';
+    body.innerHTML = '<tr><td colspan="16" class="loading">⏳ 조회 중...</td></tr>';
     closePanel();
 
     const entity  = document.getElementById('s-entity').value;
@@ -763,16 +783,18 @@
         return {...latest, changeNote};
       });
 
-      // status 필터 (완료 제외 기본)
+      // status 필터
       let filtered = allData;
-      if (status === 'pending') filtered = allData.filter(r => r.resp !== 'complete');
-      else if (status === 'complete') filtered = allData.filter(r => r.resp === 'complete');
+      if (status === 'incomplete' || status === '') filtered = allData.filter(r => r.resp !== 'complete');
+      if (status === 'pending')   filtered = allData.filter(r => r.resp === 'pending');
+      else if (status === 'complete')  filtered = allData.filter(r => r.resp === 'complete');
+      else if (status === 'unordered') filtered = allData.filter(r => r.resp === 'unordered');
 
       renderTable(filtered);
       updateKPI(allData);
     } catch(e) {
       showToast('⚠ 조회 실패: ' + e.message, 'error');
-      body.innerHTML = '<tr><td colspan="15" class="loading">조회 실패</td></tr>';
+      body.innerHTML = '<tr><td colspan="16" class="loading">조회 실패</td></tr>';
     }
   }
 
@@ -792,7 +814,7 @@
     document.getElementById('tableCount').textContent = `— ${data.length.toLocaleString()}건`;
 
     if (!data.length) {
-      body.innerHTML = '<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
+      body.innerHTML = '<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
       return;
     }
 
@@ -806,48 +828,57 @@
         ? `<span class="badge b-can">취소</span>`
         : `<span class="badge b-new">신규</span>`;
       const modeBadge = r.mode === 'AIR'
-        ? `<span class="badge b-air">✈ AIR</span>`
-        : `<span class="badge b-vssl">🚢 VSSL</span>`;
+        ? `<span class="badge b-air" style="font-size:12px;">✈ AIR</span>`
+        : `<span class="badge b-vssl" style="font-size:12px;">🚢 VSL</span>`;
       const respBadge = getResponsibilityBadge(r.resp);
       const isLast = i === data.length - 1 ? ' last' : '';
 
-      const rowBg = r.action_type==='수정' ? 'style="background:#FFFDE7;"'
-        : r.action_type==='취소' ? 'style="background:#FFF0F0;"' : '';
+      const rowBg = ''; // 출하현황 기준 행색상으로 대체
       const changeCell = r.changeNote
         ? `<span style="font-size:10px;color:#b45309;margin-left:4px;">(${r.changeNote})</span>` : '';
 
-      return `<tr ${rowBg} class="${isLast}" onclick="selectRow(${i})" id="row-${i}">
+      // 행 배경색 - 출하현황 기준
+      let trBg='';
+      if(r.resp==='complete') trBg='background:#fff;';
+      else if(r.resp==='pending') trBg='background:#FFFDE7;';
+      else trBg='background:#FFF0F0;';
+      // action_type 수정/취소이면 우선
+      if(r.action_type==='수정') trBg='background:#FFFDE7;';
+      if(r.action_type==='취소') trBg='background:#FFF0F0;';
+
+      // ETA 자동계산
+      const etaAuto = calcETA(r.etd, r.entity, r.mode);
+
+      return `<tr style="${trBg}" class="${isLast}" onclick="selectRow(${i})" id="row-${i}">
         <td>${typeBadge}</td>
         <td>${entityBadge}</td>
         <td class="td-mono">${r.date||'—'}</td>
-        <td class="td-mono">${r.pono||'—'}</td>
+        <td class="td-mono" style="font-weight:700;">${r.pono||'—'}</td>
         <td class="td-mono">${r.mkpn||'—'}${changeCell}</td>
-        <td>${r.maker||'—'}</td>
+        <td style="font-size:13px;font-weight:600;">${r.maker||'—'}</td>
         <td class="td-mono">${r.lgpn||'—'}</td>
-        <td class="td-right td-mono">${(r.qty||0).toLocaleString()}</td>
-        <td class="td-right td-mono">${(r.shipped||0).toLocaleString()}</td>
-        <td class="td-right td-mono ${remainCls}">${remain.toLocaleString()}</td>
+        <td class="td-right td-mono" style="font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+        <td class="td-right td-mono" style="font-weight:700;color:var(--accent3);">${r.shipped>0?(r.shipped||0).toLocaleString():'—'}</td>
+        <td class="td-right td-mono ${remainCls}" style="font-weight:700;">${remain.toLocaleString()}</td>
         <td class="td-mono">${r.etd||'—'}</td>
+        <td class="td-mono" style="color:var(--muted);">${etaAuto}</td>
         <td>${modeBadge}</td>
         <td>${respBadge}</td>
-        <td class="td-mono">${r.hqdate||'—'}</td>
+        <td class="td-mono" style="color:var(--accent3);font-weight:700;">${r.hqdate||'—'}</td>
         <td class="td-mono">${r.mkcommit||'—'}</td>
       </tr>`;
     }).join('');
   }
 
-  // ── 책임구분 배지 ──
+  // ── 출하현황 배지 ──
   function getResponsibilityBadge(resp) {
     const map = {
-      complete:  ['b-ok',     '✅ 완료'],
-      pending:   ['b-pending','⏳ 잔량대기'],
-      unordered: ['b-hq',    '🔴 본사미발주'],
-      maker:     ['b-maker', '🟣 메이커귀책'],
-      corp:      ['b-corp',  '⚠ 법인긴급'],
-      air:       ['b-airship','✈ 긴급AIR'],
+      complete:  ['b-ok',     '✓ 완료'],
+      pending:   ['b-pending','잔량대기'],
+      unordered: ['b-hq',    '미출하'],
     };
     const [cls, label] = map[resp] || ['b-pending','—'];
-    return `<span class="badge ${cls}">${label}</span>`;
+    return `<span class="badge ${cls}" style="font-size:12px;">${label}</span>`;
   }
 
   // ── KPI 업데이트 ──
@@ -892,7 +923,7 @@
     document.getElementById('p-shipmode').value       = '';
     document.getElementById('p-afterremain').textContent = '—';
 
-    // 책임구분
+    // 출하현황
     updateRespDisplay(r.resp);
 
     // 출하이력
@@ -908,7 +939,7 @@
     selectedRow = null;
   }
 
-  // ── 책임구분 표시 ──
+  // ── 출하현황 표시 ──
   function updateRespDisplay(resp) {
     const map = {
       complete:  ['✅', '정상 완료', 'var(--accent3)'],
