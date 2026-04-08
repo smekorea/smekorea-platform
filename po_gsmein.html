@@ -36,10 +36,10 @@
   .table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
   .table-wrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;}
   table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
-  thead th{background:#f0f4f9;padding:10px 12px;text-align:left;font-weight:700;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.5px;border-bottom:1px solid var(--border);}
-  tbody tr{border-bottom:1px solid #f0f4f9;transition:background .1s;}
-  tbody tr:hover{background:#f8fafc;}
-  tbody td{padding:9px 12px;}
+  thead th{background:#e8edf5;padding:11px 13px;text-align:left;font-weight:800;color:#3a4a6a;font-family:'Noto Sans KR',sans-serif;font-size:12px;letter-spacing:0;border-bottom:2px solid #c0cce0;}
+  tbody tr{border-bottom:1px solid #e8edf5;transition:background .1s;}
+  tbody tr:hover{filter:brightness(0.97);}
+  tbody td{padding:10px 13px;font-size:13px;color:#1a2233;}
   .form-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:860px;}
   .field{margin-bottom:14px;}
   label{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:5px;}
@@ -50,7 +50,7 @@
   .form-card input:focus,.form-card select:focus{border-color:var(--accent2);background:#fff;}
   .btn-primary{padding:11px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
   .btn-sec{padding:11px 16px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:14px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
-  .badge{display:inline-flex;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+  .badge{display:inline-flex;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;}
   .b-new{background:rgba(14,159,110,0.1);color:var(--accent3);}
   .b-mod{background:rgba(217,119,6,0.1);color:var(--amber);}
   .b-can{background:rgba(200,0,30,0.08);color:var(--accent);}
@@ -239,10 +239,10 @@
           <th>구분</th><th>주문일자</th><th>PO No.</th><th>LG P/N</th><th>Maker P/N</th>
           <th>ERP</th><th>Maker</th><th style="text-align:right">주문수량</th>
           <th style="text-align:right">출하수량</th><th style="text-align:right">잔량</th>
-          <th>ETD요청</th><th>본사출하일</th><th>운송</th><th>출하현황</th>
+          <th>ETD요청</th><th style="text-align:center">Maker L/T</th><th style="text-align:center">납기조건</th><th>본사출하일</th><th>운송</th><th>출하현황</th>
         </tr></thead>
         <tbody id="listBody">
-          <tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📋</div><p>조회 버튼을 눌러 PO 목록을 불러오세요</p></div></td></tr>
+          <tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📋</div><p>조회 버튼을 눌러 PO 목록을 불러오세요</p></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -559,7 +559,7 @@ async function searchPO(){
   const mkpn=document.getElementById('s-mkpn').value.trim(),lgpn=document.getElementById('s-lgpn').value.trim();
   const erp=document.getElementById('s-erp').value.trim();
   const viewMode=document.getElementById('s-view').value;
-  document.getElementById('listBody').innerHTML='<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중...</p></div></td></tr>';
+  document.getElementById('listBody').innerHTML='<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중...</p></div></td></tr>';
   document.getElementById('excelBtn').style.display='none';
   try{
     let q=sb.from('po_data').select('*').eq('entity',ENTITY).order('created_at',{ascending:true});
@@ -640,7 +640,7 @@ async function searchPO(){
 function renderList(){
   document.getElementById('listCount').textContent=`— ${listData.length.toLocaleString()}건`;
   if(!listData.length){
-    document.getElementById('listBody').innerHTML='<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
+    document.getElementById('listBody').innerHTML='<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
     return;
   }
   document.getElementById('excelBtn').style.display='flex';
@@ -651,26 +651,39 @@ function renderList(){
     else rowBg='background:#FFF0F0;';
     const subStyle=r._sub?'opacity:0.6;':'';
     const tc=r.type==='수정'?'b-mod':r.type==='취소'?'b-can':'b-new';
-    const mb=r.mode==='AIR'?`<span class="badge b-air">✈AIR</span>`:`<span class="badge b-vssl">🚢VSL</span>`;
+    const mb=r.mode==='AIR'?`<span class="badge b-air" style="font-size:12px;">✈AIR</span>`:`<span class="badge b-vssl" style="font-size:12px;">🚢VSL</span>`;
     let statusBadge='';
-    if(r.shipped>0&&r.remain<=0)statusBadge=`<span class="badge b-ok">✓완료</span>`;
-    else if(r.shipped>0&&r.remain>0)statusBadge=`<span class="badge b-wait">잔량 ${r.remain.toLocaleString()}</span>`;
-    else statusBadge=`<span class="badge" style="background:rgba(200,0,30,0.08);color:var(--accent);">미출하</span>`;
-    const ltBadge=r.ltLabel&&r.ltLabel!=='—'?`<span class="badge ${r.ltCls}" style="font-size:9px;margin-right:3px;">${r.ltLabel}</span>`:'';
-    const expTxt=r.expETD?`<span style="font-size:10px;color:var(--muted);display:block;">(예상:${r.expETD})</span>`:'';
+    if(r.shipped>0&&r.remain<=0)statusBadge=`<span class="badge b-ok" style="font-size:12px;">✓완료</span>`;
+    else if(r.shipped>0&&r.remain>0)statusBadge=`<span class="badge b-wait" style="font-size:12px;">잔량 ${r.remain.toLocaleString()}</span>`;
+    else statusBadge=`<span class="badge" style="background:rgba(200,0,30,0.08);color:var(--accent);font-size:12px;">미출하</span>`;
+    // Maker L/T
+    const makerKey=(r.maker||'').toUpperCase();
+    let makerLT=null;
+    for(const [k,v] of Object.entries(makerLeadMap)){
+      if(makerKey.includes(k)||k.includes(makerKey)){makerLT=v;break;}
+    }
+    const ltDaysBadge=makerLT?`<span style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;color:#3a4a6a;">${makerLT}일</span>`:`<span style="color:var(--muted);font-size:12px;">—</span>`;
+    // 납기조건 뱃지
+    let ltCondBadge='<span style="color:var(--muted);font-size:12px;">—</span>';
+    if(r.ltLabel&&r.ltLabel!=='—'){
+      const isShort=r.ltLabel==='단납기';
+      ltCondBadge=`<span class="badge ${r.ltCls}" style="font-size:11px;padding:3px 9px;">${r.ltLabel}</span>`;
+    }
     return`<tr style="${rowBg}${subStyle}">
-      <td><span class="badge ${tc}">${r.type||'신규'}</span></td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.date||'—'}</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.pono||'—'}</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.lgpn||'—'}</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn||'—'}</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.erp||'—'}</td>
-      <td>${r.maker||'—'}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${(r.qty||0).toLocaleString()}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:var(--accent3);">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
-      <td style="text-align:right;font-weight:700;color:${r.remain>0?'var(--amber)':'var(--accent3)'};">${r.remain>0?r.remain.toLocaleString():'0'}</td>
-      <td style="font-size:11px;">${ltBadge}${r.etd||'—'}${expTxt}</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent3);">${r.shipDate||'—'}</td>
+      <td><span class="badge ${tc}" style="font-size:11px;padding:3px 9px;">${r.type||'신규'}</span></td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;color:#2a3a5a;">${r.date||'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;color:#2a3a5a;">${r.pono||'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;">${r.lgpn||'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;">${r.mkpn||'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;">${r.erp||'—'}</td>
+      <td style="font-size:13px;font-weight:600;">${r.maker||'—'}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:700;color:var(--accent3);">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:700;color:${r.remain>0?'var(--amber)':'var(--accent3)'};">${r.remain>0?r.remain.toLocaleString():'0'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;">${r.etd||'—'}</td>
+      <td style="text-align:center;">${ltDaysBadge}</td>
+      <td style="text-align:center;">${ltCondBadge}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;color:var(--accent3);">${r.shipDate||'—'}</td>
       <td>${mb}</td>
       <td>${statusBadge}</td>
     </tr>`;
@@ -678,10 +691,15 @@ function renderList(){
 }
 function exportExcel(){
   if(!listData.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
-  const h=['구분','주문일자','PO No.','LG P/N','Maker P/N','ERP','Maker','주문수량','출하수량','잔량','ETD요청','본사출하일','운송','출하현황','납기구분'];
+  const h=['구분','주문일자','PO No.','LG P/N','Maker P/N','ERP','Maker','주문수량','출하수량','잔량','ETD요청','Maker L/T(일)','납기조건','본사출하일','운송','출하현황'];
   const rows=listData.map(r=>{
+    const makerKey=(r.maker||'').toUpperCase();
+    let makerLT='—';
+    for(const [k,v] of Object.entries(makerLeadMap)){
+      if(makerKey.includes(k)||k.includes(makerKey)){makerLT=v;break;}
+    }
     const status=r.shipped>0&&r.remain<=0?'완료':r.shipped>0?'잔량대기':'미출하';
-    return[r.type||'신규',r.date,r.pono,r.lgpn,r.mkpn,r.erp||'',r.maker,r.qty,r.shipped||0,r.remain,r.etd,r.shipDate||'',r.mode,status,r.ltLabel||'—'];
+    return[r.type||'신규',r.date,r.pono,r.lgpn,r.mkpn,r.erp||'',r.maker,r.qty,r.shipped||0,r.remain,r.etd,makerLT,r.ltLabel||'—',r.shipDate||'',r.mode,status];
   });
   const ws=XLSX.utils.aoa_to_sheet([h,...rows]);
   const wb2=XLSX.utils.book_new();
