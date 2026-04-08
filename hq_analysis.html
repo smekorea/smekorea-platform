@@ -427,7 +427,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
   <div class="dash-section">
     <div class="row3">
       <div class="bx">
-        <div class="bx-header"><span class="bx-title">월별 매출 · 매입 추이</span><span class="bx-sub">단위: 억원</span></div>
+        <div class="bx-header"><span class="bx-title">매출 · 매입 추이</span><span class="bx-sub">단위: 억원</span></div>
         <div class="bx-body" style="padding:10px 12px;">
           <div class="bar-chart" id="monthly-chart">
             <div class="chart-legend">
@@ -484,6 +484,17 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
       <div class="bx"><div class="bx-header"><span class="bx-title">매입처 순위 TOP5</span></div><div class="bx-body" id="purchase-rank"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
       <div class="bx"><div class="bx-header"><span class="bx-title">마진율 순위 TOP5</span><span class="bx-sub">브랜드별</span></div><div class="bx-body" id="margin-rank"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
       <div class="bx"><div class="bx-header"><span class="bx-title">마진 하위 TOP5</span><span class="bx-sub">브랜드별</span></div><div class="bx-body" id="margin-rank-low"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
+    </div>
+
+    <!-- 매출처 집중도 리스크 -->
+    <div class="bx" style="margin-top:12px;">
+      <div class="bx-header">
+        <span class="bx-title">매출처 집중도 리스크</span>
+        <span class="bx-sub">상위 5개사 매출 비중 · 집중도 경고</span>
+      </div>
+      <div class="bx-body" id="concentration-risk">
+        <div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div>
+      </div>
     </div>
   </div>
 </div>
@@ -664,7 +675,7 @@ function fillSel(id,items){const s=document.getElementById(id);s.innerHTML='<opt
 function updateAll(){
   const {from,to}=getFT();
   const fS=rawS.filter(r=>inPer(r,from,to)),fP=rawP.filter(r=>inPer(r,from,to));
-  updKPI(fS,fP);updMonthly(fS,fP);updDonut(fS);updSplit(fS);updRanks(fS,fP);updBrandMg(fS,fP);updYearlyMargin();
+  updKPI(fS,fP);updMonthly(fS,fP);updDonut(fS);updSplit(fS);updRanks(fS,fP);updBrandMg(fS,fP);updYearlyMargin();updConcentration(fS);
 }
 
 function updKPI(s,p){
@@ -683,7 +694,21 @@ function updMonthly(s,p){
   if(!keys.length){chart.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--muted);font-size:11px;">데이터 없음</div>';return;}
   const maxV=Math.max(...keys.map(k=>Math.max(m[k].s,m[k].p))),mH=105;
   let html=`<div class="chart-legend"><div class="cl-item"><div class="cl-dot" style="background:var(--accent);opacity:0.8;"></div><span style="color:var(--accent);font-size:9px;">매출</span></div><div class="cl-item"><div class="cl-dot" style="background:var(--muted);opacity:0.6;"></div><span style="color:var(--muted);font-size:9px;">매입</span></div></div>`;
-  keys.forEach(k=>{const sh=maxV>0?Math.max(4,Math.round(m[k].s/maxV*mH)):4,ph=maxV>0?Math.max(4,Math.round(m[k].p/maxV*mH)):4;html+=`<div class="bar-col"><div class="bar-pair"><div class="bar-item" style="height:${sh}px;background:var(--accent);opacity:0.8;" title="${fmt(m[k].s)}"></div><div class="bar-item" style="height:${ph}px;background:var(--muted);opacity:0.55;" title="${fmt(m[k].p)}"></div></div><div class="bar-lbl">${k.slice(2,4)}/${k.slice(5)}</div></div>`;});
+  keys.forEach(k=>{
+    const sh=maxV>0?Math.max(4,Math.round(m[k].s/maxV*mH)):4;
+    const ph=maxV>0?Math.max(4,Math.round(m[k].p/maxV*mH)):4;
+    // 라벨: '2024-01' → '24.01'
+    const yr=k.slice(0,4).slice(2); // '24'
+    const mo=k.slice(5,7);          // '01'
+    const lbl=`${yr}.${mo}`;
+    html+=`<div class="bar-col">
+      <div class="bar-pair">
+        <div class="bar-item" style="height:${sh}px;background:var(--accent);opacity:0.8;" title="${fmt(m[k].s)}"></div>
+        <div class="bar-item" style="height:${ph}px;background:var(--muted);opacity:0.55;" title="${fmt(m[k].p)}"></div>
+      </div>
+      <div class="bar-lbl" style="font-size:8px;white-space:nowrap;">${lbl}</div>
+    </div>`;
+  });
   chart.innerHTML=html;
 }
 
@@ -692,9 +717,9 @@ function updDonut(s){
   s.forEach(r=>{
     const sel=String(r['판매처명']||'');
     let corp='국내';
-    if(sel==='GSMEIN ELECTRONICS PRIVATE LIMITED') corp='GSMEIN';
-    else if(sel==='SME GLOBAL CO.,LTD.') corp='SMEGLOBAL';
-    else if(sel==='SME(TIANJIN) ELECTRONICS CO.,LTD.') corp='SMECN';
+    if(sel.includes('GSMEIN')) corp='GSMEIN';
+    else if(sel.includes('SME GLOBAL')||sel.includes('SMEGLOBAL')) corp='SMEGLOBAL';
+    else if(sel.includes('TIANJIN')||sel.includes('SMECN')) corp='SMECN';
     c[corp]=(c[corp]||0)+(Number(r['공급가액'])||0);
   });
   const total=Object.values(c).reduce((a,b)=>a+b,0);
@@ -728,7 +753,7 @@ function updRanks(s,p){
   const mg=brands.map(b=>{
     const sv=bs[b]||0,pv=bp[b]||0;
     return{brand:b,sales:sv,purchase:pv,margin:sv-pv,rate:sv>0?(sv-pv)/sv*100:0};
-  }).filter(m=>m.sales>0);
+  }).filter(m=>m.sales>0&&m.purchase>0); // 매출+매입 모두 있는 브랜드만
 
   // TOP5 (마진율 높은 순)
   const top5=mg.sort((a,b)=>b.rate-a.rate).slice(0,5);
@@ -762,18 +787,56 @@ function rndr(id,data){
   document.getElementById(id).innerHTML=html||'<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0;">데이터 없음</div>';
 }
 
+function updConcentration(s){
+  const sc={};
+  const total=s.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
+  s.forEach(r=>{const k=String(r['판매처명']||'-');sc[k]=(sc[k]||0)+(Number(r['공급가액'])||0);});
+  const sorted=Object.entries(sc).sort((a,b)=>b[1]-a[1]);
+  const top5=sorted.slice(0,5);
+  const top5Total=top5.reduce((a,b)=>a+b[1],0);
+  const top5Pct=total>0?Math.round(top5Total/total*100):0;
+  const top1Pct=total>0?Math.round((top5[0]?.[1]||0)/total*100):0;
+
+  // 집중도 경고 레벨
+  let riskLevel='',riskColor='',riskMsg='';
+  if(top1Pct>=30){riskLevel='⚠ 고위험';riskColor='var(--accent)';riskMsg='1개사 의존도 30% 초과 — 거래처 다변화 필요';}
+  else if(top5Pct>=70){riskLevel='⚡ 주의';riskColor='var(--amber)';riskMsg='상위 5개사 집중도 70% 초과 — 분산 검토 필요';}
+  else{riskLevel='✓ 양호';riskColor='var(--accent3)';riskMsg='매출처 분산도 양호';}
+
+  let html=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;border-radius:8px;background:${top1Pct>=30?'rgba(200,0,30,0.05)':top5Pct>=70?'rgba(217,119,6,0.05)':'rgba(14,159,110,0.05)'};">
+      <span style="font-size:13px;font-weight:700;color:${riskColor};">${riskLevel}</span>
+      <span style="font-size:12px;color:var(--muted);">${riskMsg}</span>
+      <span style="margin-left:auto;font-size:12px;font-weight:700;">상위5사 합계: <span style="color:${riskColor};">${top5Pct}%</span></span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">`;
+
+  top5.forEach(([nm,v],i)=>{
+    const pct=total>0?v/total*100:0;
+    const barColor=i===0&&pct>=30?'var(--accent)':pct>=20?'var(--amber)':'var(--accent2)';
+    html+=`<div style="display:flex;align-items:center;gap:8px;">
+      <span style="width:18px;height:18px;border-radius:50%;background:${barColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</span>
+      <span style="font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;" title="${nm}">${nm}</span>
+      <div style="flex:2;background:#f0f4f9;border-radius:4px;height:14px;overflow:hidden;">
+        <div style="height:14px;width:${Math.min(100,pct)}%;background:${barColor};opacity:0.75;border-radius:4px;transition:width .3s;"></div>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:${barColor};min-width:40px;text-align:right;">${pct.toFixed(1)}%</span>
+      <span style="font-size:11px;color:var(--muted);min-width:50px;text-align:right;">${fmt(v)}</span>
+    </div>`;
+  });
+  html+='</div>';
+  document.getElementById('concentration-risk').innerHTML=html;
+}
+
 function updYearlyMargin(){
-  // 전체 데이터에서 연도별 집계 (기간 필터 무관)
   const years=['20년','21년','22년','23년','24년','25년','26년'];
-  const yLabels=['20년','21년','22년','23년','24년','25년','26년'];
   const ySales={},yPurch={};
   rawS.forEach(r=>{const y=String(r['년']||'');if(years.includes(y)){ySales[y]=(ySales[y]||0)+(Number(r['공급가액'])||0);}});
   rawP.forEach(r=>{const y=String(r['년']||'');if(years.includes(y)){yPurch[y]=(yPurch[y]||0)+(Number(r['공급가액'])||0);}});
 
   const data=years.map(y=>({
-    y,label:y,
-    sales:ySales[y]||0,
-    purch:yPurch[y]||0,
+    label:y.replace('년','년'),
+    sales:ySales[y]||0, purch:yPurch[y]||0,
     margin:(ySales[y]||0)-(yPurch[y]||0),
     rate:(ySales[y]||0)>0?((ySales[y]||0)-(yPurch[y]||0))/(ySales[y]||0)*100:0
   })).filter(d=>d.sales>0||d.purch>0);
@@ -783,45 +846,60 @@ function updYearlyMargin(){
     return;
   }
 
-  const maxSales=Math.max(...data.map(d=>d.sales),1);
-  const maxPurch=Math.max(...data.map(d=>d.purch),1);
-  const maxVal=Math.max(maxSales,maxPurch);
-  const maxH=120; // 막대 최대 높이(px)
+  const maxVal=Math.max(...data.map(d=>Math.max(d.sales,d.purch)),1);
+  const maxRate=Math.max(...data.map(d=>Math.abs(d.rate)),1);
+  const W=100/data.length; // 각 컬럼 width%
+  const BAR_H=120, CHART_W=data.length*70;
 
-  let html=`<div style="display:flex;align-items:flex-end;gap:8px;padding:10px 8px 0;height:${maxH+80}px;overflow-x:auto;">`;
-  data.forEach(d=>{
-    const sH=Math.max(4,Math.round(d.sales/maxVal*maxH));
-    const pH=Math.max(4,Math.round(d.purch/maxVal*maxH));
-    const rateColor=d.rate>=10?'var(--accent3)':d.rate>=5?'var(--accent2)':d.rate>=0?'var(--amber)':'var(--accent)';
-    html+=`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:52px;">
-      <!-- 마진율 -->
-      <div style="font-size:10px;font-weight:700;color:${rateColor};">${d.rate.toFixed(1)}%</div>
-      <!-- 막대 영역 -->
-      <div style="display:flex;align-items:flex-end;gap:2px;height:${maxH}px;">
-        <!-- 매출 막대 -->
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:${maxH}px;">
-          <div style="font-size:9px;color:var(--accent);margin-bottom:2px;">${fmt(d.sales)}</div>
-          <div style="width:18px;height:${sH}px;background:var(--accent);opacity:0.75;border-radius:3px 3px 0 0;"></div>
-        </div>
-        <!-- 매입 막대 -->
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:${maxH}px;">
-          <div style="font-size:9px;color:var(--muted);margin-bottom:2px;">${fmt(d.purch)}</div>
-          <div style="width:18px;height:${pH}px;background:var(--muted);opacity:0.5;border-radius:3px 3px 0 0;"></div>
-        </div>
-      </div>
-      <!-- 연도 -->
-      <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px;">${d.label}</div>
-      <!-- 마진금액 -->
-      <div style="font-size:10px;color:${rateColor};">${fmt(d.margin)}</div>
-    </div>`;
+  // SVG 복합차트 (막대 + 꺾은선)
+  const svgW=CHART_W, svgH=BAR_H+60;
+  const padL=10, padR=10, padT=30, padB=30;
+  const chartW=svgW-padL-padR, chartH=BAR_H;
+  const colW=chartW/data.length;
+  const barW=colW*0.35;
+
+  let saleBars='', purchBars='', linePoints='', lineStr='', dots='', labels='', values='', rateLabels='';
+
+  data.forEach((d,i)=>{
+    const cx=padL+colW*i+colW/2;
+    const sH=Math.max(3,d.sales/maxVal*chartH);
+    const pH=Math.max(3,d.purch/maxVal*chartH);
+    const sY=padT+chartH-sH, pY=padT+chartH-pH;
+    const rateY=padT+(1-d.rate/maxRate)*chartH*0.8+chartH*0.1;
+
+    // 매출 막대
+    saleBars+=`<rect x="${cx-barW-1}" y="${sY}" width="${barW}" height="${sH}" fill="#c8001e" opacity="0.75" rx="2"/>`;
+    // 매입 막대
+    purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barW}" height="${pH}" fill="#7a8baa" opacity="0.5" rx="2"/>`;
+    // 막대 위 수치
+    values+=`<text x="${cx-barW/2-1}" y="${sY-3}" text-anchor="middle" font-size="8" fill="#c8001e">${fmt(d.sales)}</text>`;
+    values+=`<text x="${cx+barW/2+1}" y="${pY-3}" text-anchor="middle" font-size="8" fill="#7a8baa">${fmt(d.purch)}</text>`;
+    // 꺾은선 포인트
+    if(i===0) lineStr=`M${cx},${rateY}`;
+    else lineStr+=` L${cx},${rateY}`;
+    dots+=`<circle cx="${cx}" cy="${rateY}" r="4" fill="#1e7e4a" opacity="0.9"/>`;
+    // 마진율 수치
+    const rateColor=d.rate>=10?'#1e7e4a':d.rate>=5?'#1a56db':d.rate>=0?'#b46400':'#c8001e';
+    rateLabels+=`<text x="${cx}" y="${rateY-7}" text-anchor="middle" font-size="9" font-weight="700" fill="${rateColor}">${d.rate.toFixed(1)}%</text>`;
+    // 연도 라벨
+    labels+=`<text x="${cx}" y="${padT+chartH+16}" text-anchor="middle" font-size="10" font-weight="700" fill="#1a2233">${d.label}</text>`;
+    // 마진금액
+    labels+=`<text x="${cx}" y="${padT+chartH+28}" text-anchor="middle" font-size="9" fill="${rateColor}">${fmt(d.margin)}</text>`;
   });
-  html+=`</div>
-  <div style="display:flex;gap:12px;padding:6px 8px;font-size:10px;color:var(--muted);">
-    <span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);opacity:0.75;border-radius:2px;margin-right:3px;"></span>매출</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:var(--muted);opacity:0.5;border-radius:2px;margin-right:3px;"></span>매입</span>
-    <span style="color:var(--accent3);">% = 마진율</span>
+
+  const svg=`<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="overflow:visible;">
+    ${saleBars}${purchBars}
+    <path d="${lineStr}" fill="none" stroke="#1e7e4a" stroke-width="2" opacity="0.9"/>
+    ${dots}${rateLabels}${values}${labels}
+  </svg>`;
+
+  const legend=`<div style="display:flex;gap:14px;padding:4px 10px;font-size:10px;color:var(--muted);">
+    <span><span style="display:inline-block;width:10px;height:10px;background:#c8001e;opacity:0.75;border-radius:2px;margin-right:3px;"></span>매출</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#7a8baa;opacity:0.5;border-radius:2px;margin-right:3px;"></span>매입</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#1e7e4a;border-radius:50%;margin-right:3px;"></span>마진율(%)</span>
   </div>`;
-  document.getElementById('mg-grid').innerHTML=html;
+
+  document.getElementById('mg-grid').innerHTML=`<div style="overflow-x:auto;padding:8px 8px 0;">${svg}</div>${legend}`;
 }
 
 function updBrandMg(s,p){
