@@ -120,7 +120,7 @@
         <table><thead><tr>
           <th>#</th><th>구분</th><th>법인</th><th>주문일자</th><th>PO No.</th>
           <th>LG P/N</th><th>Maker P/N</th><th>Maker</th>
-          <th style="text-align:right">수량</th><th>ETD</th><th>운송</th><th>수정사유</th><th>상태</th>
+          <th style="text-align:right">수량</th><th>ETD요청</th><th>납기판별</th><th>예상ETD</th><th>운송</th><th>수정사유</th><th>상태</th>
         </tr></thead>
         <tbody id="previewBody"></tbody></table>
       </div>
@@ -209,6 +209,14 @@
         <input type="text" id="s-erp" placeholder="검색 또는 선택..." style="width:110px;" oninput="filterDD('erp')" onfocus="showDD('erp')">
         <div class="dd-list" id="dd-erp"></div>
       </div>
+      <div class="s-group">
+        <div class="s-label">조회구분 / VIEW</div>
+        <select id="s-view" style="width:110px;height:36px;background:#f8fafc;border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:0 10px;outline:none;">
+          <option value="latest">최신본만</option>
+          <option value="all">전체이력</option>
+          <option value="complete">완료포함</option>
+        </select>
+      </div>
       <button class="btn-search" onclick="searchPO()">🔍 조회</button>
       <button class="btn-reset" onclick="resetSearch()">↺ 초기화</button>
     </div>
@@ -216,7 +224,14 @@
   <div class="content">
     <div class="table-header">
       <div style="font-size:13px;font-weight:700;">PO 목록 <span id="listCount" style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;"></span></div>
-      <button class="btn-excel" id="excelBtn" onclick="exportExcel()" style="display:none;">⬇ 엑셀 다운로드</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fff;border:1px solid #d0daea;border-radius:2px;margin-right:3px;"></span>출하완료</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#FFFDE7;border:1px solid #d0daea;border-radius:2px;margin-right:3px;"></span>잔량대기</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#FFF0F0;border:1px solid #d0daea;border-radius:2px;margin-right:3px;"></span>미출하</span>
+        </div>
+        <button class="btn-excel" id="excelBtn" onclick="exportExcel()" style="display:none;">⬇ 엑셀 다운로드</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -224,10 +239,10 @@
           <th>구분</th><th>주문일자</th><th>PO No.</th><th>LG P/N</th><th>Maker P/N</th>
           <th>ERP</th><th>Maker</th><th style="text-align:right">주문수량</th>
           <th style="text-align:right">출하수량</th><th style="text-align:right">잔량</th>
-          <th>ETD</th><th>운송</th><th>상태</th>
+          <th>ETD요청</th><th>본사출하일</th><th>운송</th><th>출하현황</th>
         </tr></thead>
         <tbody id="listBody">
-          <tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📋</div><p>조회 버튼을 눌러 PO 목록을 불러오세요</p></div></td></tr>
+          <tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📋</div><p>조회 버튼을 눌러 PO 목록을 불러오세요</p></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -280,7 +295,7 @@ function clearFile(){
   document.getElementById('parseBtn').style.display='none';
   document.getElementById('previewWrap').style.display='none';
 }
-function parseFile(){
+async function parseFile(){
   if(!curFile)return;
   const reader=new FileReader();
   reader.onload=e=>{
@@ -301,6 +316,7 @@ function parseFile(){
         etd:fmtD(r[11]),eta:fmtD(r[12]),mode:String(r[13]||'').trim().toUpperCase(),
         reason:String(r[14]||'').trim(),remark:String(r[15]||'').trim(),
       }));
+      await loadMakerLeadTimes();
       renderPreview();
     }catch(err){showToast('⚠ 파일 읽기 실패: '+err.message,'error');}
   };
@@ -324,17 +340,22 @@ function validate(r){
 }
 function renderPreview(){
   let errTotal=0;
+  const today=new Date().toISOString().slice(0,10);
   document.getElementById('previewBody').innerHTML=curData.map(r=>{
     const errs=validate(r);if(errs.length)errTotal++;
     const tc=r.type==='수정'?'b-mod':r.type==='취소'?'b-can':'b-new';
     const mb=r.type==='취소'?'—':r.mode==='AIR'?`<span class="badge b-air">AIR</span>`:`<span class="badge b-vssl">VSSL</span>`;
     const sb=errs.length?`<span class="badge b-err">⚠${errs.join(',')}</span>`:`<span class="badge b-ok">✓OK</span>`;
+    const ltInfo=classifyLeadTime(r.maker,r.etd,today);
+    const ltBadge=ltInfo.label!=='—'?`<span class="badge ${ltInfo.cls}" style="font-size:9px;">${ltInfo.label}</span>`:'—';
+    const expETD=calcExpectedETD(r.maker,today)||'—';
     return`<tr style="${errs.length?'background:rgba(200,0,30,0.03)':''}">
       <td>${r.row}</td><td><span class="badge ${tc}">${r.type}</span></td>
       <td>${r.entity}</td><td>${r.date}</td><td style="${!r.pono?'color:var(--accent)':''}">${r.pono||'—'}</td>
       <td>${r.lgpn||'—'}</td><td>${r.mkpn||'—'}</td><td>${r.maker||'—'}</td>
       <td style="text-align:right">${r.qty?r.qty.toLocaleString():'—'}</td>
-      <td>${r.etd||'—'}</td><td>${mb}</td><td>${r.reason||'—'}</td><td>${sb}</td>
+      <td>${r.etd||'—'}</td><td>${ltBadge}</td><td style="font-size:11px;color:var(--muted);">${expETD}</td>
+      <td>${mb}</td><td>${r.reason||'—'}</td><td>${sb}</td>
     </tr>`;
   }).join('');
   document.getElementById('rowCount').textContent=curData.length;
@@ -347,6 +368,7 @@ function renderPreview(){
   else showToast(`✓ ${curData.length}건 확인완료. 등록 버튼을 눌러주세요`);
 }
 async function submitPO(){
+  await loadMakerLeadTimes();
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;btn.textContent='등록 중...';
   try{
@@ -465,8 +487,42 @@ async function submitManual(){
 
 // ── 조회 ──
 let listData=[],ddData={pono:[],maker:[],mkpn:[],lgpn:[],erp:[]};
+let makerLeadMap={};
+
+async function loadMakerLeadTimes(){
+  if(Object.keys(makerLeadMap).length) return;
+  try{
+    const {data}=await sb.from('makers').select('maker_name,lead_time_days');
+    (data||[]).forEach(r=>{ makerLeadMap[r.maker_name.toUpperCase()]=r.lead_time_days; });
+  }catch(e){ console.warn('makers 로드 실패',e); }
+}
+
+function calcExpectedETD(makerName,today){
+  const key=(makerName||'').toUpperCase();
+  let days=null;
+  for(const [k,v] of Object.entries(makerLeadMap)){
+    if(key.includes(k)||k.includes(key)){days=v;break;}
+  }
+  if(!days)return null;
+  const d=new Date(today);d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+
+function classifyLeadTime(makerName,etdRequest,today){
+  const key=(makerName||'').toUpperCase();
+  let leadDays=null;
+  for(const [k,v] of Object.entries(makerLeadMap)){
+    if(key.includes(k)||k.includes(key)){leadDays=v;break;}
+  }
+  if(!leadDays||!etdRequest)return{label:'—',cls:''};
+  const availDays=Math.floor((new Date(etdRequest)-new Date(today))/(1000*60*60*24));
+  if(availDays>=leadDays)return{label:'정상납기',cls:'b-ok'};
+  return{label:'단납기',cls:'b-air'};
+}
+
 function resetSearch(){
   ['s-from','s-to','s-pono','s-maker','s-mkpn','s-lgpn','s-erp'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('s-view').value='latest';
   Object.keys(ddData).forEach(k=>document.getElementById('dd-'+k).style.display='none');
 }
 function showDD(t){loadDD(t);}
@@ -497,17 +553,18 @@ document.addEventListener('click',e=>{
   });
 });
 async function searchPO(){
+  await loadMakerLeadTimes();
   const from=document.getElementById('s-from').value,to=document.getElementById('s-to').value;
   const pono=document.getElementById('s-pono').value.trim(),maker=document.getElementById('s-maker').value.trim();
   const mkpn=document.getElementById('s-mkpn').value.trim(),lgpn=document.getElementById('s-lgpn').value.trim();
   const erp=document.getElementById('s-erp').value.trim();
-  document.getElementById('listBody').innerHTML='<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중...</p></div></td></tr>';
+  const viewMode=document.getElementById('s-view').value;
+  document.getElementById('listBody').innerHTML='<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">⏳</div><p>조회 중...</p></div></td></tr>';
   document.getElementById('excelBtn').style.display='none';
   try{
-    let q=sb.from('po_data').select('*').eq('entity',ENTITY).order('order_date',{ascending:false});
+    let q=sb.from('po_data').select('*').eq('entity',ENTITY).order('created_at',{ascending:true});
     if(from)q=q.gte('order_date',from+'-01');
     if(to){
-      // 해당 월 말일 계산
       const [ty,tm]=to.split('-').map(Number);
       const lastDay=new Date(ty,tm,0).getDate();
       q=q.lte('order_date',`${to}-${String(lastDay).padStart(2,'0')}`);
@@ -517,30 +574,91 @@ async function searchPO(){
     if(mkpn)q=q.ilike('maker_pn','%'+mkpn+'%');
     if(lgpn)q=q.ilike('lg_pn','%'+lgpn+'%');
     if(erp)q=q.ilike('item_code','%'+erp+'%');
-    const {data,error}=await q;
-    if(error)throw error;
-    listData=(data||[]).map(r=>({
-      type:r.action_type, date:r.order_date, pono:r.po_no,
-      lgpn:r.lg_pn, mkpn:r.maker_pn, erp:r.item_code,
-      maker:r.maker, qty:r.qty, shipped:0,
-      etd:r.etd_request, mode:r.transport
-    }));
+    const {data:poRows,error:poErr}=await q;
+    if(poErr)throw poErr;
+
+    const {data:shipRows}=await sb.from('shipment_po').select('po_id,ship_qty,ship_date').eq('entity',ENTITY);
+    const shipMap={};
+    (shipRows||[]).forEach(s=>{
+      if(!shipMap[s.po_id])shipMap[s.po_id]={qty:0,date:''};
+      shipMap[s.po_id].qty+=(s.ship_qty||0);
+      if(s.ship_date&&s.ship_date>shipMap[s.po_id].date)shipMap[s.po_id].date=s.ship_date;
+    });
+
+    const today=new Date().toISOString().slice(0,10);
+    const groups={};
+    (poRows||[]).forEach(r=>{
+      const key=`${r.po_no}||${r.maker_pn}||${r.etd_request}`;
+      if(!groups[key])groups[key]=[];
+      groups[key].push(r);
+    });
+
+    let processed=[];
+    for(const [,grp] of Object.entries(groups)){
+      const latest=grp[grp.length-1];
+      const totalShipped=grp.reduce((s,r)=>s+(shipMap[r.id]?.qty||0),0);
+      const latestShipDate=grp.reduce((d,r)=>{const sd=shipMap[r.id]?.date||'';return sd>d?sd:d;},'');
+      const rem=(latest.qty||0)-totalShipped;
+      const expETD=calcExpectedETD(latest.maker,today);
+      const ltInfo=classifyLeadTime(latest.maker,latest.etd_request,today);
+      processed.push({
+        id:latest.id,type:latest.action_type,date:latest.order_date,
+        pono:latest.po_no,lgpn:latest.lg_pn,mkpn:latest.maker_pn,
+        erp:latest.item_code,maker:latest.maker,qty:latest.qty||0,
+        shipped:totalShipped,remain:rem,shipDate:latestShipDate,
+        etd:latest.etd_request,mode:latest.transport,
+        expETD,ltLabel:ltInfo.label,ltCls:ltInfo.cls,
+        allRows:viewMode==='all'?grp:null
+      });
+    }
+
+    if(viewMode==='latest'||viewMode==='all'){
+      processed=processed.filter(r=>r.remain>0||r.shipped===0);
+    }
+
+    listData=[];
+    if(viewMode==='all'){
+      for(const r of processed){
+        if(r.allRows&&r.allRows.length>1){
+          r.allRows.forEach((sub,idx)=>{
+            const isLast=idx===r.allRows.length-1;
+            const subShipped=shipMap[sub.id]?.qty||0;
+            const subDate=shipMap[sub.id]?.date||'';
+            listData.push({...r,id:sub.id,type:sub.action_type,qty:sub.qty,
+              shipped:isLast?r.shipped:subShipped,
+              remain:isLast?r.remain:(sub.qty-subShipped),
+              shipDate:isLast?r.shipDate:subDate,_sub:!isLast});
+          });
+        }else{listData.push(r);}
+      }
+    }else{listData=processed;}
+
+    listData.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   }catch(e){showToast('⚠ 조회 실패: '+e.message,'error');listData=[];}
   renderList();
 }
 function renderList(){
   document.getElementById('listCount').textContent=`— ${listData.length.toLocaleString()}건`;
   if(!listData.length){
-    document.getElementById('listBody').innerHTML='<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
+    document.getElementById('listBody').innerHTML='<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
     return;
   }
   document.getElementById('excelBtn').style.display='flex';
   document.getElementById('listBody').innerHTML=listData.map(r=>{
-    const rem=(r.qty||0)-(r.shipped||0);
+    let rowBg='';
+    if(r.shipped>0&&r.remain<=0)rowBg='background:#fff;';
+    else if(r.shipped>0&&r.remain>0)rowBg='background:#FFFDE7;';
+    else rowBg='background:#FFF0F0;';
+    const subStyle=r._sub?'opacity:0.6;':'';
     const tc=r.type==='수정'?'b-mod':r.type==='취소'?'b-can':'b-new';
-    const mb=r.mode==='AIR'?`<span class="badge b-air">✈AIR</span>`:`<span class="badge b-vssl">🚢VSSL</span>`;
-    const sb=rem<=0?`<span class="badge b-ok">✓완료</span>`:`<span class="badge b-wait">대기 ${rem.toLocaleString()}</span>`;
-    return`<tr>
+    const mb=r.mode==='AIR'?`<span class="badge b-air">✈AIR</span>`:`<span class="badge b-vssl">🚢VSL</span>`;
+    let statusBadge='';
+    if(r.shipped>0&&r.remain<=0)statusBadge=`<span class="badge b-ok">✓완료</span>`;
+    else if(r.shipped>0&&r.remain>0)statusBadge=`<span class="badge b-wait">잔량 ${r.remain.toLocaleString()}</span>`;
+    else statusBadge=`<span class="badge" style="background:rgba(200,0,30,0.08);color:var(--accent);">미출하</span>`;
+    const ltBadge=r.ltLabel&&r.ltLabel!=='—'?`<span class="badge ${r.ltCls}" style="font-size:9px;margin-right:3px;">${r.ltLabel}</span>`:'';
+    const expTxt=r.expETD?`<span style="font-size:10px;color:var(--muted);display:block;">(예상:${r.expETD})</span>`:'';
+    return`<tr style="${rowBg}${subStyle}">
       <td><span class="badge ${tc}">${r.type||'신규'}</span></td>
       <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.date||'—'}</td>
       <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.pono||'—'}</td>
@@ -549,17 +667,22 @@ function renderList(){
       <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.erp||'—'}</td>
       <td>${r.maker||'—'}</td>
       <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${(r.qty||0).toLocaleString()}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${(r.shipped||0).toLocaleString()}</td>
-      <td style="text-align:right;font-weight:700;color:${rem>0?'var(--amber)':'var(--accent3)'};">${rem.toLocaleString()}</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.etd||'—'}</td>
-      <td>${mb}</td><td>${sb}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:var(--accent3);">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${r.remain>0?'var(--amber)':'var(--accent3)'};">${r.remain>0?r.remain.toLocaleString():'0'}</td>
+      <td style="font-size:11px;">${ltBadge}${r.etd||'—'}${expTxt}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent3);">${r.shipDate||'—'}</td>
+      <td>${mb}</td>
+      <td>${statusBadge}</td>
     </tr>`;
   }).join('');
 }
 function exportExcel(){
   if(!listData.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
-  const h=['구분','주문일자','PO No.','LG P/N','Maker P/N','ERP','Maker','주문수량','출하수량','잔량','ETD','운송','상태'];
-  const rows=listData.map(r=>{const rem=(r.qty||0)-(r.shipped||0);return[r.type||'신규',r.date,r.pono,r.lgpn,r.mkpn,r.erp||'',r.maker,r.qty,r.shipped||0,rem,r.etd,r.mode,rem<=0?'완료':'잔량대기'];});
+  const h=['구분','주문일자','PO No.','LG P/N','Maker P/N','ERP','Maker','주문수량','출하수량','잔량','ETD요청','본사출하일','운송','출하현황','납기구분'];
+  const rows=listData.map(r=>{
+    const status=r.shipped>0&&r.remain<=0?'완료':r.shipped>0?'잔량대기':'미출하';
+    return[r.type||'신규',r.date,r.pono,r.lgpn,r.mkpn,r.erp||'',r.maker,r.qty,r.shipped||0,r.remain,r.etd,r.shipDate||'',r.mode,status,r.ltLabel||'—'];
+  });
   const ws=XLSX.utils.aoa_to_sheet([h,...rows]);
   const wb2=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb2,ws,'PO조회');
