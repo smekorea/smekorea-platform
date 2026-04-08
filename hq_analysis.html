@@ -6,6 +6,7 @@
 <title>HQ 거래현황분석 | SMEKOREA</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #f0f4f9;
@@ -402,9 +403,8 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
   <button class="p-apply" onclick="applyPeriod()">적용</button>
   <div class="upload-area">
     <div class="pdiv"></div>
-    <div class="upload-info" id="uploadInfo">엑셀 파일을 업로드해 주세요</div>
-    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">파일 업로드</button>
-    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+    <div class="upload-info" id="uploadInfo">데이터 로드 대기중</div>
+    <button class="upload-btn" id="loadBtn" onclick="loadFromSupabase()">🔄 데이터 로드</button>
   </div>
 </div>
 
@@ -534,8 +534,100 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
 </div>
 
 <script>
+// ── 경영 비밀번호 확인 ──
+(function(){
+  const auth=sessionStorage.getItem('hq_auth');
+  if(auth!=='1'){
+    const pw=prompt('경영 전용 비밀번호를 입력하세요');
+    if(pw==='1121'){sessionStorage.setItem('hq_auth','1');}
+    else{alert('비밀번호가 틀렸습니다.');window.location.href='index.html';return;}
+  }
+})();
+
+// ── Supabase 연결 ──
+const SUPABASE_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SUPABASE_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
 let rawP=[],rawS=[],loaded=false;
 const LG_M=['GRUNDFOS','MEC-CON','Techshine','Microchip','SKYWORTH','경전산업','CUMSUMI'];
+
+// ── Supabase에서 데이터 로드 ──
+async function loadFromSupabase(){
+  const btn=document.getElementById('loadBtn');
+  const info=document.getElementById('uploadInfo');
+  btn.disabled=true;
+  btn.textContent='로드 중...';
+  info.textContent='데이터 조회 중...';
+  info.classList.remove('ok');
+
+  try{
+    // 기간 필터 적용
+    const {from,to}=getFT();
+    const fromYear=(from.slice(0,2)||'20')+'년';
+    const toYear=(to.slice(0,2)||'26')+'년';
+
+    // 구매 데이터 조회 (페이지네이션)
+    rawP=await fetchAll('purchase_data',from,to);
+    // 매출 데이터 조회
+    rawS=await fetchAll('sales_data',from,to);
+
+    loaded=true;
+    info.textContent=`로드완료 · 구매 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+    info.classList.add('ok');
+    fillDrops();
+    updateAll();
+  }catch(e){
+    info.textContent='로드 실패: '+e.message;
+    console.error(e);
+  }
+  btn.disabled=false;
+  btn.textContent='🔄 데이터 로드';
+}
+
+// 페이지네이션으로 전체 데이터 조회
+async function fetchAll(table,from,to){
+  const PAGE=1000;
+  let all=[], page=0;
+  // from/to 예: '2001' = 20년01월
+  const fromDate=`20${from.slice(0,2)}-${from.slice(2,4)}-01`;
+  const toYr=parseInt('20'+to.slice(0,2));
+  const toMo=parseInt(to.slice(2,4));
+  const lastDay=new Date(toYr,toMo,0).getDate();
+  const toDate=`20${to.slice(0,2)}-${to.slice(2,4)}-${String(lastDay).padStart(2,'0')}`;
+  while(true){
+    let q=sb.from(table).select('year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand'
+      +(table==='purchase_data'?',supplier':',customer'))
+      .gte('trade_date',fromDate)
+      .lte('trade_date',toDate)
+      .range(page*PAGE,(page+1)*PAGE-1)
+      .order('trade_date',{ascending:true});
+    const {data,error}=await q;
+    if(error) throw error;
+    if(!data||!data.length) break;
+    // Supabase 컬럼 → 기존 rawP/rawS 컬럼명으로 변환
+    const mapped=data.map(r=>({
+      '년': r.year,
+      '월': r.month,
+      '구분': r.trade_date,
+      '일자': r.slip_no||'',
+      '품목코드': r.item_code,
+      '품명 및 규격': r.description,
+      '수량': r.qty,
+      '단가': r.unit_price,
+      '공급가액': r.supply_amt,
+      '부가세': r.vat,
+      '합 계': r.total_amt,
+      '브랜드명': r.brand,
+      '구매처명': table==='purchase_data'?r.supplier:'',
+      '판매처명': table==='sales_data'?r.customer:'',
+    }));
+    all=[...all,...mapped];
+    if(data.length<PAGE) break;
+    page++;
+  }
+  return all;
+}
 
 function showTab(id,el){
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -555,26 +647,9 @@ function setQ(type,el){
 }
 function ss(id,v){const s=document.getElementById(id);for(let o of s.options)if(o.value==v||o.textContent==v){o.selected=true;break;}}
 function getFT(){return{from:document.getElementById('fromYear').value+document.getElementById('fromMonth').value,to:document.getElementById('toYear').value+document.getElementById('toMonth').value};}
-function applyPeriod(){if(!loaded){alert('파일을 먼저 업로드해 주세요.');return;}updateAll();}
+function applyPeriod(){loadFromSupabase();}
 
-function handleFile(e){
-  const file=e.target.files[0];if(!file)return;
-  document.getElementById('uploadInfo').textContent='로드 중...';
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    try{
-      const wb=XLSX.read(ev.target.result,{type:'array'});
-      rawP=[];rawS=[];
-      wb.SheetNames.forEach(n=>{const d=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});if(n.includes('구매'))rawP=d;if(n.includes('매출'))rawS=d;});
-      loaded=true;
-      const info=document.getElementById('uploadInfo');
-      info.textContent=file.name+' 로드완료 · 구매 '+rawP.length.toLocaleString()+'건 / 매출 '+rawS.length.toLocaleString()+'건';
-      info.classList.add('ok');
-      fillDrops();updateAll();
-    }catch(err){alert('파일 오류: '+err.message);}
-  };
-  reader.readAsArrayBuffer(file);
-}
+// handleFile 제거 - Supabase 연동으로 대체
 
 function inPer(r,from,to){const y=String(r['년']||'').replace('년','').trim(),m=String(r['월']||'').replace('월','').trim().padStart(2,'0');const ym=y+m;return ym>=from&&ym<=to;}
 function cls(r){const sel=String(r['판매처명']||''),br=String(r['브랜드명']||''),bu=String(r['구매처명']||'');if(sel.includes('LG전자')||LG_M.some(m=>br.includes(m)||bu.includes(m)))return 'LG사급';return '직거래';}
@@ -662,7 +737,7 @@ function updBrandMg(s,p){
 function getStatus(r){const s=r.sQ||0,p=r.pQ||0;if(s===0&&p===0)return '매출중단';if(p>s*2)return '재고누적';if(s>p*2)return '공급부족';return '정상';}
 
 function runTrade(){
-  if(!loaded){alert('파일을 먼저 업로드해 주세요.');return;}
+  if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
   const {from,to}=getFT();
   const type=document.getElementById('f-type').value,brand=document.getElementById('f-brand').value;
   const buyer=document.getElementById('f-buyer').value,seller=document.getElementById('f-seller').value;
@@ -708,7 +783,7 @@ function runTrade(){
 function resetTrade(){['f-type','f-brand','f-buyer','f-seller','f-status'].forEach(id=>document.getElementById(id).value='');document.getElementById('f-pcode').value='';}
 
 function runPrice(){
-  if(!loaded){alert('파일을 먼저 업로드해 주세요.');return;}
+  if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
   const {from,to}=getFT();
   const brand=document.getElementById('pf-brand').value,pcode=document.getElementById('pf-pcode').value.trim();
   const buyer=document.getElementById('pf-buyer').value,seller=document.getElementById('pf-seller').value;
