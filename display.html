@@ -96,9 +96,12 @@
   .summary-title{font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
   .summary-title span{font-size:9px;color:var(--muted);font-weight:400;font-family:'Share Tech Mono',monospace;}
   .day-summary-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;}
-  .day-sum-card{border:1px solid var(--border);border-radius:5px;padding:5px 4px;text-align:center;background:var(--surface2);}
+  .day-sum-card{border:1px solid var(--border);border-radius:5px;padding:5px 4px;text-align:center;background:var(--surface2);cursor:pointer;transition:all 0.15s;}
+  .day-sum-card:hover{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(26,86,219,0.15);}
   .day-sum-card.has-data{border-color:var(--accent2);background:rgba(26,86,219,0.06);}
   .day-sum-card.is-today{border-color:var(--accent);background:var(--today-bg);}
+  .day-sum-card.active{box-shadow:0 0 0 2px rgba(26,86,219,0.35);}
+  .day-sum-card.is-today.active{box-shadow:0 0 0 2px rgba(200,0,30,0.35);}
   .day-sum-date{font-size:8px;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-bottom:2px;}
   .day-sum-date.today-date{color:var(--accent);font-weight:700;}
   .day-sum-count{font-size:13px;font-weight:700;color:var(--text);line-height:1;}
@@ -542,10 +545,36 @@
     return `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">${msg}</div></div>`;
   }
 
+  function selectDayFromSummary(dateStr, label) {
+    // 30일 카드 active 표시
+    document.querySelectorAll('.day-sum-card').forEach(el => el.classList.remove('active'));
+    const target = document.querySelector(`.day-sum-card[data-date="${dateStr}"]`);
+    if(target) target.classList.add('active');
+
+    // 이번주 그리드 active 해제 (30일에서 선택)
+    document.querySelectorAll('.week-day').forEach(el => el.classList.remove('active'));
+
+    // 우측 패널 업데이트
+    const rows = allData.filter(r => r[1] === dateStr);
+    const todayStr = getLocalDate(0).str;
+    const type = dateStr === todayStr ? 'today' : 'week';
+    selectedDate = dateStr;
+
+    document.getElementById('selectedDateLabel').textContent = label;
+    document.getElementById('weekCount').textContent = rows.length + '건';
+    document.getElementById('weekList').innerHTML = rows.length > 0
+      ? rows.map(r => renderCard(r, type)).join('') : renderEmpty('출하 일정 없음');
+
+    // 화면 상단으로 스크롤
+    document.querySelector('.main-grid').scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
   function selectWeekDate(dateStr, label) {
     selectedDate = dateStr;
     document.querySelectorAll('.week-day').forEach(el => el.classList.remove('active'));
     document.querySelectorAll(`.week-day[data-date="${dateStr}"]`).forEach(el => el.classList.add('active'));
+    // 30일 카드 active 해제
+    document.querySelectorAll('.day-sum-card').forEach(el => el.classList.remove('active'));
 
     const rows = allData.filter(r => r[1] === dateStr);
     const todayStr = getLocalDate(0).str;
@@ -606,9 +635,14 @@
       const rows = allData.filter(r => r[1] === day.str);
       const done = rows.filter(r => r[8] === '완료').length;
       const hasData = rows.length > 0;
-      const cls = day.isToday ? 'day-sum-card is-today' : hasData ? 'day-sum-card has-data' : 'day-sum-card';
+      const isActive = day.str === selectedDate;
+      const cls = [
+        'day-sum-card',
+        day.isToday ? 'is-today' : (hasData ? 'has-data' : ''),
+        isActive ? 'active' : ''
+      ].filter(Boolean).join(' ');
       const dateCls = day.isToday ? 'day-sum-date today-date' : 'day-sum-date';
-      return `<div class="${cls}">
+      return `<div class="${cls}" data-date="${day.str}" data-label="${day.label}" onclick="selectDayFromSummary('${day.str}','${day.label}')">
         <div class="${dateCls}">${day.label}</div>
         <div class="day-sum-count">${rows.length > 0 ? rows.length : '-'}</div>
         ${done > 0 ? `<div class="day-sum-done">✓${done}</div>` : ''}
