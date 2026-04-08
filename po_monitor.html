@@ -3,682 +3,1031 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SMEKOREA — PO Monitor</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<title>PO 모니터링 — SMEKOREA</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg:#f0f4f9; --surface:#fff; --border:#d0daea;
-    --accent:#c8001e; --accent2:#1a56db; --accent3:#0e9f6e;
-    --amber:#d97706; --purple:#7c3aed;
-    --text:#1a2233; --muted:#7a8baa;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{
-    background:var(--bg);color:var(--text);
-    font-family:'Noto Sans KR',sans-serif;min-height:100vh;
-    background-image:
-      radial-gradient(ellipse at 0% 0%,rgba(200,0,30,0.05) 0%,transparent 50%),
-      radial-gradient(ellipse at 100% 100%,rgba(26,86,219,0.04) 0%,transparent 50%);
-  }
+:root{
+  --bg:#f0f4f9;--surface:#fff;--border:#d0daea;
+  --accent:#c8001e;--accent2:#1a56db;--accent3:#0e9f6e;--amber:#d97706;--purple:#7c3aed;
+  --text:#1a2233;--muted:#7a8baa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
 
-  /* ── 탑바 ── */
-  .topbar{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:11px 28px;background:var(--surface);
-    border-bottom:2px solid var(--border);
-    box-shadow:0 2px 8px rgba(0,0,0,0.06);
-    position:sticky;top:0;z-index:50;
-  }
-  .logo-wrap{display:flex;align-items:center;gap:10px;}
-  .logo-box{
-    width:38px;height:38px;background:var(--accent);border-radius:8px;
-    display:flex;align-items:center;justify-content:center;
-    font-family:'Share Tech Mono',monospace;font-size:13px;
-    font-weight:900;color:#fff;letter-spacing:-1px;
-    box-shadow:0 3px 10px rgba(200,0,30,0.3);
-  }
-  .co-name{font-size:14px;font-weight:700;}
-  .co-sub{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;}
-  .topbar-right{display:flex;align-items:center;gap:10px;}
-  .live-badge{
-    display:flex;align-items:center;gap:6px;
-    background:rgba(14,159,110,0.08);border:1px solid rgba(14,159,110,0.25);
-    border-radius:20px;padding:5px 12px;
-    font-size:10px;font-family:'Share Tech Mono',monospace;
-    color:var(--accent3);font-weight:700;letter-spacing:1px;
-  }
-  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--accent3);animation:pulse 1.5s infinite;}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
-  .back-btn{
-    display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;
-    background:var(--surface);border:1px solid var(--border);
-    text-decoration:none;color:var(--muted);
-    font-size:11px;font-family:'Share Tech Mono',monospace;transition:all .18s;
-  }
-  .back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
-  .refresh-btn{
-    display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;
-    background:var(--surface);border:1px solid var(--border);
-    color:var(--muted);font-size:11px;font-family:'Share Tech Mono',monospace;
-    cursor:pointer;transition:all .18s;
-  }
-  .refresh-btn:hover{border-color:var(--accent3);color:var(--accent3);}
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:11px 28px;background:var(--surface);border-bottom:2px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,0.06);position:sticky;top:0;z-index:50;}
+.logo-box{width:38px;height:38px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:900;color:#fff;}
+.co-name{font-size:14px;font-weight:700;}.co-sub{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;}
+.back-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;background:var(--surface);border:1px solid var(--border);text-decoration:none;color:var(--muted);font-size:11px;font-family:'Share Tech Mono',monospace;transition:all .18s;}
+.back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
 
-  /* ── 법인 탭 ── */
-  .tab-bar{
-    display:flex;gap:0;padding:12px 28px;
-    background:var(--surface);border-bottom:1px solid var(--border);
-  }
-  .tab-btn{
-    padding:8px 20px;border:none;border-radius:8px;
-    background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;
-    font-size:13px;font-weight:500;color:var(--muted);transition:all .18s;
-  }
-  .tab-btn.active{background:var(--text);color:#fff;font-weight:700;}
-  .tab-btn.gsmein.active{background:var(--accent);}
-  .tab-btn.smeglobal.active{background:var(--accent2);}
-  .tab-btn.smecn.active{background:var(--accent3);}
+/* KPI */
+.kpi-bar{display:flex;gap:10px;padding:14px 28px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
+.kpi-card{min-width:120px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;flex-shrink:0;}
+.kpi-val{font-size:22px;font-weight:900;line-height:1;color:var(--text);}
+.kpi-lbl{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;margin-top:4px;}
+.kpi-card.red .kpi-val{color:var(--accent);}
+.kpi-card.blue .kpi-val{color:var(--accent2);}
+.kpi-card.green .kpi-val{color:var(--accent3);}
+.kpi-card.amber .kpi-val{color:var(--amber);}
+.kpi-card.purple .kpi-val{color:var(--purple);}
 
-  /* ── 컨텐츠 ── */
-  .content{padding:20px 28px;display:flex;flex-direction:column;gap:20px;}
+/* TAB */
+.tab-bar{display:flex;gap:4px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
+.tab-btn{padding:8px 18px;border:none;border-radius:8px;background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--muted);transition:all .18s;white-space:nowrap;}
+.tab-btn.active{background:var(--accent2);color:#fff;font-weight:700;}
+.tab-btn:hover:not(.active){background:#f0f4f9;}
 
-  /* ── 섹션 공통 ── */
-  .sec{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
-  .sec-head{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:14px 20px;border-bottom:1px solid var(--border);
-    background:linear-gradient(90deg,#f8fafc,var(--surface));
-  }
-  .sec-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
-  .sec-title .icon{font-size:16px;}
-  .sec-sub{font-size:11px;color:var(--muted);margin-top:2px;}
-  .sec-body{padding:16px 20px;}
+/* FILTER */
+.filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:14px 28px;background:var(--surface);border-bottom:1px solid var(--border);}
+.f-group{display:flex;flex-direction:column;gap:4px;}
+.f-label{font-size:9px;font-family:'Share Tech Mono',monospace;color:var(--muted);letter-spacing:1px;}
+.f-group select,.f-group input{height:36px;background:#f8fafc;border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:0 10px;outline:none;transition:border-color .18s;}
+.f-group select:focus,.f-group input:focus{border-color:var(--accent2);}
+.btn-search{height:36px;padding:0 18px;border-radius:8px;border:none;background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.btn-reset{height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 
-  /* ── 책임구분 KPI ── */
-  .resp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
-  .resp-card{
-    border-radius:12px;padding:16px;text-align:center;
-    border:1.5px solid;cursor:pointer;transition:transform .15s,box-shadow .15s;
-  }
-  .resp-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.1);}
-  .resp-card .r-icon{font-size:24px;margin-bottom:6px;}
-  .resp-card .r-count{font-size:28px;font-weight:900;font-family:'Share Tech Mono',monospace;line-height:1;}
-  .resp-card .r-label{font-size:10px;font-weight:700;letter-spacing:0.5px;margin-top:4px;}
-  .resp-card .r-sub{font-size:9px;margin-top:2px;opacity:0.7;}
-  .r-normal  {background:rgba(14,159,110,0.07);border-color:rgba(14,159,110,0.25);color:var(--accent3);}
-  .r-corp    {background:rgba(217,119,6,0.07);border-color:rgba(217,119,6,0.25);color:var(--amber);}
-  .r-hq      {background:rgba(200,0,30,0.07);border-color:rgba(200,0,30,0.25);color:var(--accent);}
-  .r-maker   {background:rgba(124,58,237,0.07);border-color:rgba(124,58,237,0.25);color:var(--purple);}
-  .r-air     {background:rgba(26,86,219,0.07);border-color:rgba(26,86,219,0.25);color:var(--accent2);}
+/* TABLE */
+.content{padding:20px 28px;}
+.table-wrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;}
+.table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.table-title{font-size:13px;font-weight:700;}
+.table-count{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+table{width:100%;border-collapse:collapse;white-space:nowrap;}
+thead th{background:#e8edf5;padding:11px 13px;text-align:left;font-weight:800;color:#3a4a6a;font-family:'Noto Sans KR',sans-serif;font-size:12px;border-bottom:2px solid #c0cce0;}
+thead th.right{text-align:right;}
+thead th.center{text-align:center;}
+tbody tr{border-bottom:1px solid #e8edf5;cursor:pointer;transition:filter .1s;}
+tbody tr:hover{filter:brightness(0.97);}
+tbody td{padding:10px 13px;color:#1a2233;font-size:13px;}
+.td-mono{font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:600;color:#2a3a5a;}
+.td-right{text-align:right;}
+.td-center{text-align:center;}
 
-  /* ── D-Day 납기 현황 ── */
-  .dday-list{display:flex;flex-direction:column;gap:8px;}
-  .dday-item{
-    display:flex;align-items:center;gap:12px;
-    padding:12px 14px;border-radius:10px;border:1px solid var(--border);
-    transition:background .15s;cursor:pointer;
-  }
-  .dday-item:hover{background:#f8fafc;}
-  .dday-item.urgent{border-color:rgba(200,0,30,0.3);background:rgba(200,0,30,0.03);}
-  .dday-item.warn  {border-color:rgba(217,119,6,0.3);background:rgba(217,119,6,0.03);}
-  .dday-item.safe  {border-color:rgba(14,159,110,0.2);background:rgba(14,159,110,0.02);}
+/* BADGE */
+.badge{display:inline-flex;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+.b-gsmein{background:rgba(200,0,30,0.09);color:var(--accent);}
+.b-smeglobal{background:rgba(26,86,219,0.09);color:var(--accent2);}
+.b-smecn{background:rgba(14,159,110,0.09);color:var(--accent3);}
+.b-vsl{background:rgba(26,86,219,0.08);color:var(--accent2);}
+.b-air{background:rgba(200,0,30,0.08);color:var(--accent);}
+.b-ok{background:rgba(14,159,110,0.1);color:var(--accent3);}
+.b-warn{background:rgba(217,119,6,0.1);color:var(--amber);}
+.b-danger{background:rgba(200,0,30,0.1);color:var(--accent);}
+.b-transit{background:rgba(124,58,237,0.1);color:var(--purple);}
 
-  .dday-badge{
-    min-width:56px;text-align:center;padding:6px 8px;border-radius:8px;
-    font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:900;
-    flex-shrink:0;
-  }
-  .dday-badge.urgent{background:rgba(200,0,30,0.1);color:var(--accent);}
-  .dday-badge.warn  {background:rgba(217,119,6,0.1);color:var(--amber);}
-  .dday-badge.safe  {background:rgba(14,159,110,0.1);color:var(--accent3);}
+/* D-DAY */
+.dday-red{color:var(--accent);font-weight:800;}
+.dday-amber{color:var(--amber);font-weight:700;}
+.dday-green{color:var(--accent3);font-weight:600;}
 
-  .dday-info{flex:1;min-width:0;}
-  .dday-pono{font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--muted);}
-  .dday-mkpn{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .dday-meta{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;}
-  .dday-tag{
-    font-size:10px;padding:2px 7px;border-radius:4px;
-    font-family:'Share Tech Mono',monospace;font-weight:600;border:1px solid;
-  }
+/* PSI 테이블 */
+.psi-table thead th.p-col{background:#e8f0fe;color:#1a56db;}
+.psi-table thead th.s-col{background:#e6f4ea;color:#0e9f6e;}
+.psi-table thead th.i-col{background:#fef3c7;color:#d97706;}
+.psi-plus{color:var(--accent3);font-weight:700;}
+.psi-zero{color:var(--muted);}
+.psi-minus{color:var(--accent);font-weight:700;}
 
-  .dday-right{text-align:right;flex-shrink:0;}
-  .dday-remain{font-size:13px;font-weight:700;font-family:'Share Tech Mono',monospace;}
-  .dday-etd{font-size:10px;color:var(--muted);margin-top:2px;font-family:'Share Tech Mono',monospace;}
+/* EMPTY */
+.empty-state{text-align:center;padding:48px;color:var(--muted);}
+.empty-icon{font-size:36px;margin-bottom:10px;}
 
-  /* ── AIR 현황 ── */
-  .air-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-  .air-entity{border-radius:10px;border:1px solid var(--border);padding:14px;}
-  .air-entity-name{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
-  .air-bar-wrap{margin-bottom:8px;}
-  .air-bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;}
-  .air-bar-track{height:8px;background:#f0f4f9;border-radius:4px;overflow:hidden;}
-  .air-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
-  .air-cause-list{display:flex;flex-direction:column;gap:4px;margin-top:10px;}
-  .air-cause{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:6px 10px;border-radius:6px;font-size:11px;
-  }
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--accent3);color:#fff;font-weight:700;font-size:13px;padding:12px 26px;border-radius:50px;transition:transform .4s cubic-bezier(.34,1.56,.64,1);z-index:200;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.error{background:var(--accent);}
+.toast.warn{background:var(--amber);}
 
-  /* ── PSI 테이블 ── */
-  .psi-filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-  .psi-filter select, .psi-filter input{
-    height:32px;padding:0 10px;border:1.5px solid var(--border);
-    border-radius:7px;font-family:'Noto Sans KR',sans-serif;
-    font-size:12px;outline:none;background:var(--surface);
-    transition:border-color .18s;
-  }
-  .psi-filter select:focus, .psi-filter input:focus{border-color:var(--accent2);}
-  .psi-wrap{overflow-x:auto;}
-  .psi-table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
-  .psi-table th{
-    padding:8px 12px;background:#f0f4f9;
-    font-family:'Share Tech Mono',monospace;font-size:10px;
-    color:var(--muted);letter-spacing:0.5px;
-    border-bottom:1px solid var(--border);text-align:center;
-  }
-  .psi-table th.left{text-align:left;}
-  .psi-table td{padding:9px 12px;border-bottom:1px solid #f5f7fa;text-align:center;}
-  .psi-table td.left{text-align:left;font-weight:600;}
-  .psi-table tr:hover td{background:#f8fafc;}
-  .psi-p{color:var(--accent2);font-weight:700;}
-  .psi-s{color:var(--amber);font-weight:700;}
-  .psi-i{color:var(--accent3);font-weight:700;}
-  .psi-legend{display:flex;gap:16px;margin-bottom:10px;}
-  .psi-leg{display:flex;align-items:center;gap:5px;font-size:11px;}
-  .psi-dot{width:8px;height:8px;border-radius:50%;}
-
-  /* 배지 */
-  .badge{display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace;}
-  .b-gsmein  {background:rgba(200,0,30,0.09);color:var(--accent);}
-  .b-smeglobal{background:rgba(26,86,219,0.09);color:var(--accent2);}
-  .b-smecn   {background:rgba(14,159,110,0.09);color:var(--accent3);}
-  .b-vssl    {background:rgba(26,86,219,0.08);color:var(--accent2);}
-  .b-air     {background:rgba(200,0,30,0.08);color:var(--accent);}
-
-  /* 빈상태 */
-  .empty{text-align:center;padding:32px;color:var(--muted);font-size:13px;}
-
-  /* 2단 레이아웃 */
-  .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-
-  @media(max-width:900px){
-    .resp-grid{grid-template-columns:repeat(3,1fr);}
-    .air-grid{grid-template-columns:1fr;}
-    .row2{grid-template-columns:1fr;}
-  }
+/* 범례 */
+.legend{display:flex;gap:10px;align-items:center;font-size:11px;color:var(--muted);}
+.legend span{display:inline-flex;align-items:center;gap:4px;}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block;}
 </style>
 </head>
 <body>
 
-<!-- 탑바 -->
+<!-- TOPBAR -->
 <div class="topbar">
-  <div class="logo-wrap">
+  <div style="display:flex;align-items:center;gap:10px;">
     <div class="logo-box">SME</div>
-    <div>
-      <div class="co-name">SMEKOREA</div>
-      <div class="co-sub">PO MONITOR</div>
-    </div>
+    <div><div class="co-name">SMEKOREA</div><div class="co-sub">PO MONITOR</div></div>
   </div>
-  <div class="topbar-right">
-    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-    <button class="refresh-btn" onclick="loadAll()">↺ 새로고침</button>
-    <a class="back-btn" href="po_hub.html">← PO 허브</a>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;" id="lastUpdated"></span>
+    <a class="back-btn" href="index.html">← 메인</a>
   </div>
 </div>
 
-<!-- 법인 탭 -->
+<!-- KPI -->
+<div class="kpi-bar">
+  <div class="kpi-card"><div class="kpi-val" id="kpi-total">—</div><div class="kpi-lbl">전체 PO</div></div>
+  <div class="kpi-card green"><div class="kpi-val" id="kpi-complete">—</div><div class="kpi-lbl">출하완료</div></div>
+  <div class="kpi-card amber"><div class="kpi-val" id="kpi-pending">—</div><div class="kpi-lbl">잔량대기</div></div>
+  <div class="kpi-card red"><div class="kpi-val" id="kpi-unordered">—</div><div class="kpi-lbl">미출하</div></div>
+  <div class="kpi-card red"><div class="kpi-val" id="kpi-danger">—</div><div class="kpi-lbl">납기위험</div></div>
+  <div class="kpi-card blue"><div class="kpi-val" id="kpi-air">—</div><div class="kpi-lbl">AIR 발송</div></div>
+  <div class="kpi-card purple"><div class="kpi-val" id="kpi-transit">—</div><div class="kpi-lbl">운송중</div></div>
+</div>
+
+<!-- TAB -->
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchEntity('ALL',this)">전체</button>
-  <button class="tab-btn gsmein" onclick="switchEntity('GSMEIN',this)">🇮🇳 GSMEIN</button>
-  <button class="tab-btn smeglobal" onclick="switchEntity('SMEGLOBAL',this)">🇹🇭 SMEGLOBAL</button>
-  <button class="tab-btn smecn" onclick="switchEntity('SMECN',this)">🇨🇳 SME Tianjin</button>
+  <button class="tab-btn active" id="tab-deadline-btn" onclick="switchTab('deadline')">📅 납기현황</button>
+  <button class="tab-btn" id="tab-history-btn" onclick="switchTab('history')">📦 출하이력</button>
+  <button class="tab-btn" id="tab-transit-btn" onclick="switchTab('transit')">🚢 운송중재고</button>
+  <button class="tab-btn" id="tab-air-btn" onclick="switchTab('air')">✈ AIR분석</button>
+  <button class="tab-btn" id="tab-psi-btn" onclick="switchTab('psi')">📊 PSI분석</button>
+  <button class="tab-btn" id="tab-resp-btn" onclick="switchTab('resp')">⚖ 책임귀책</button>
 </div>
 
-<div class="content">
-
-  <!-- ① 책임구분 KPI -->
-  <div class="sec">
-    <div class="sec-head">
-      <div>
-        <div class="sec-title"><span class="icon">📊</span> 책임구분 현황 / Responsibility Summary</div>
-        <div class="sec-sub">클릭 시 해당 항목만 필터링됩니다</div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;" id="lastUpdate">—</div>
+<!-- ① 납기현황 -->
+<div id="tab-deadline">
+  <div class="filter-bar">
+    <div class="f-group"><div class="f-label">법인 / ENTITY</div>
+      <select id="d-entity" style="width:140px;">
+        <option value="">전체</option>
+        <option value="GSMEIN">GSMEIN (인도)</option>
+        <option value="SMEGLOBAL">SMEGLOBAL (태국)</option>
+        <option value="SMECN">SME Tianjin (중국)</option>
+      </select>
     </div>
-    <div class="sec-body">
-      <div class="resp-grid">
-        <div class="resp-card r-normal" onclick="filterByResp('normal')">
-          <div class="r-icon">✅</div>
-          <div class="r-count" id="cnt-normal">—</div>
-          <div class="r-label">정상</div>
-          <div class="r-sub">Normal</div>
-        </div>
-        <div class="resp-card r-corp" onclick="filterByResp('corp')">
-          <div class="r-icon">⚠</div>
-          <div class="r-count" id="cnt-corp">—</div>
-          <div class="r-label">법인 긴급요청</div>
-          <div class="r-sub">Corp Urgent</div>
-        </div>
-        <div class="resp-card r-hq" onclick="filterByResp('unordered')">
-          <div class="r-icon">🔴</div>
-          <div class="r-count" id="cnt-hq">—</div>
-          <div class="r-label">본사 미발주</div>
-          <div class="r-sub">HQ Not Ordered</div>
-        </div>
-        <div class="resp-card r-maker" onclick="filterByResp('maker')">
-          <div class="r-icon">🟣</div>
-          <div class="r-count" id="cnt-maker">—</div>
-          <div class="r-label">메이커 귀책</div>
-          <div class="r-sub">Maker Delay</div>
-        </div>
-        <div class="resp-card r-air" onclick="filterByResp('air')">
-          <div class="r-icon">✈</div>
-          <div class="r-count" id="cnt-air">—</div>
-          <div class="r-label">긴급 AIR</div>
-          <div class="r-sub">Emergency AIR</div>
-        </div>
-      </div>
+    <div class="f-group"><div class="f-label">운송 / MODE</div>
+      <select id="d-mode" style="width:100px;">
+        <option value="">전체</option>
+        <option value="VSL">VSL</option>
+        <option value="AIR">AIR</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">출하현황</div>
+      <select id="d-status" style="width:120px;">
+        <option value="incomplete">미완료만</option>
+        <option value="">전체</option>
+        <option value="unordered">미출하</option>
+        <option value="pending">잔량대기</option>
+        <option value="complete">완료</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">Maker P/N</div>
+      <input type="text" id="d-mkpn" placeholder="품번 검색..." style="width:150px;">
+    </div>
+    <div class="f-group"><div class="f-label">Maker</div>
+      <input type="text" id="d-maker" placeholder="메이커 검색..." style="width:120px;">
+    </div>
+    <button class="btn-search" onclick="loadDeadline()">🔍 조회</button>
+    <button class="btn-reset" onclick="resetFilter('deadline')">↺ 초기화</button>
+    <div class="legend" style="margin-left:auto;">
+      <span><span class="dot" style="background:#fee2e2;border:1px solid #fca5a5;"></span>납기위험(D-50/3일↓)</span>
+      <span><span class="dot" style="background:#fef9c3;border:1px solid #fde047;"></span>주의(D-60일↓)</span>
+      <span><span class="dot" style="background:#f0fdf4;border:1px solid #86efac;"></span>여유</span>
     </div>
   </div>
-
-  <!-- ② 납기 D-Day + AIR 현황 -->
-  <div class="row2">
-
-    <!-- 납기 D-Day -->
-    <div class="sec">
-      <div class="sec-head">
-        <div>
-          <div class="sec-title"><span class="icon">⏰</span> 납기 임박 / ETD Alert</div>
-          <div class="sec-sub">ETD 요청일 기준 D-Day 순 정렬</div>
-        </div>
-        <select id="dday-filter" onchange="renderDDay()" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);">
-          <option value="30">D-30 이내</option>
-          <option value="60">D-60 이내</option>
-          <option value="90">D-90 이내</option>
-          <option value="999">전체</option>
-        </select>
-      </div>
-      <div class="sec-body">
-        <div class="dday-list" id="ddayList">
-          <div class="empty">데이터 로딩 중...</div>
-        </div>
-      </div>
+  <div class="content">
+    <div class="table-header">
+      <div><span class="table-title">납기현황</span> <span class="table-count" id="deadline-count"></span></div>
+      <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportTable('deadlineBody','납기현황')">⬇ 엑셀</button>
     </div>
-
-    <!-- AIR 발송 현황 -->
-    <div class="sec">
-      <div class="sec-head">
-        <div>
-          <div class="sec-title"><span class="icon">✈</span> AIR 발송 현황 / AIR Shipment</div>
-          <div class="sec-sub">법인별 AIR 비율 및 원인 분류</div>
-        </div>
-      </div>
-      <div class="sec-body">
-        <div class="air-grid" id="airGrid">
-          <div class="empty">데이터 로딩 중...</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- ③ 메이커별 PSI -->
-  <div class="sec">
-    <div class="sec-head">
-      <div>
-        <div class="sec-title"><span class="icon">📈</span> 메이커별 월별 PSI</div>
-        <div class="sec-sub">Purchase(발주) · Stock(잔량) · Invoice(출하) 월별 현황</div>
-      </div>
-    </div>
-    <div class="sec-body">
-      <div class="psi-filter">
-        <select id="psi-maker" onchange="renderPSI()">
-          <option value="">전체 메이커</option>
-          <option value="SMART">SMART</option>
-          <option value="MURATA">MURATA</option>
-          <option value="JST">JST</option>
-          <option value="ROHM">ROHM</option>
-          <option value="DIODES">DIODES</option>
-        </select>
-        <select id="psi-year" onchange="renderPSI()">
-          <option value="2026">2026년</option>
-          <option value="2025">2025년</option>
-        </select>
-        <select id="psi-entity-psi" onchange="renderPSI()">
-          <option value="">전체 법인</option>
-          <option value="GSMEIN">GSMEIN</option>
-          <option value="SMEGLOBAL">SMEGLOBAL</option>
-          <option value="SMECN">SME Tianjin</option>
-        </select>
-      </div>
-      <div class="psi-legend">
-        <div class="psi-leg"><div class="psi-dot" style="background:var(--accent2)"></div><span style="font-size:11px;">P · 발주수량</span></div>
-        <div class="psi-leg"><div class="psi-dot" style="background:var(--amber)"></div><span style="font-size:11px;">S · 잔량(주문-출하)</span></div>
-        <div class="psi-leg"><div class="psi-dot" style="background:var(--accent3)"></div><span style="font-size:11px;">I · 출하수량</span></div>
-      </div>
-      <div class="psi-wrap">
-        <table class="psi-table" id="psiTable">
-          <thead>
-            <tr>
-              <th class="left">Maker / 품번</th>
-              <th>1월</th><th>2월</th><th>3월</th><th>4월</th>
-              <th>5월</th><th>6월</th><th>7월</th><th>8월</th>
-              <th>9월</th><th>10월</th><th>11월</th><th>12월</th>
-              <th>합계</th>
-            </tr>
-          </thead>
-          <tbody id="psiBody">
-            <tr><td colspan="14" class="empty">조건을 선택하면 PSI 데이터가 표시됩니다</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>구분</th><th>법인</th><th>주문일자</th><th>PO No.</th>
+          <th>Maker P/N</th><th>Maker</th>
+          <th class="right">주문수량</th><th class="right">출하수량</th><th class="right">잔량</th>
+          <th>ETD요청</th><th class="center">D-day</th><th>운송</th><th>출하현황</th>
+        </tr></thead>
+        <tbody id="deadlineBody">
+          <tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📅</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
-
-  <!-- ④ 미발주 경보 -->
-  <div class="sec">
-    <div class="sec-head">
-      <div>
-        <div class="sec-title"><span class="icon">🚨</span> 본사 미발주 경보 / HQ Order Alert</div>
-        <div class="sec-sub">PO 접수 후 본사 발주 미완료 건 — 즉시 조치 필요</div>
-      </div>
-      <span id="alertCount" style="font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--accent);font-weight:700;"></span>
-    </div>
-    <div class="sec-body">
-      <div class="psi-wrap">
-        <table class="psi-table" id="alertTable">
-          <thead>
-            <tr>
-              <th class="left">법인</th>
-              <th class="left">PO No.</th>
-              <th class="left">Maker P/N</th>
-              <th class="left">Maker</th>
-              <th>주문수량</th>
-              <th>ETD 요청일</th>
-              <th>D-Day</th>
-              <th>운송</th>
-              <th>경과일</th>
-            </tr>
-          </thead>
-          <tbody id="alertBody">
-            <tr><td colspan="9" class="empty">데이터 로딩 중...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
 </div>
 
+<!-- ② 출하이력 -->
+<div id="tab-history" style="display:none;">
+  <div class="filter-bar">
+    <div class="f-group"><div class="f-label">법인 / ENTITY</div>
+      <select id="h-entity" style="width:140px;">
+        <option value="">전체</option>
+        <option value="GSMEIN">GSMEIN</option>
+        <option value="SMEGLOBAL">SMEGLOBAL</option>
+        <option value="SMECN">SME Tianjin</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">출하월</div>
+      <input type="month" id="h-from" style="width:130px;">
+    </div>
+    <div class="f-group"><div class="f-label">~</div>
+      <input type="month" id="h-to" style="width:130px;">
+    </div>
+    <div class="f-group"><div class="f-label">운송</div>
+      <select id="h-mode" style="width:100px;">
+        <option value="">전체</option>
+        <option value="VSL">VSL</option>
+        <option value="AIR">AIR</option>
+      </select>
+    </div>
+    <button class="btn-search" onclick="loadHistory()">🔍 조회</button>
+    <button class="btn-reset" onclick="resetFilter('history')">↺ 초기화</button>
+  </div>
+  <div class="content">
+    <div class="table-header">
+      <div><span class="table-title">출하이력</span> <span class="table-count" id="history-count"></span></div>
+      <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportTable('historyBody','출하이력')">⬇ 엑셀</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>법인</th><th>인보이스No.</th><th>PO No.</th>
+          <th>Maker P/N</th><th>Maker</th>
+          <th class="right">출하수량</th>
+          <th>출하일</th><th>ETD요청</th><th>예상ETA</th><th>운송</th>
+        </tr></thead>
+        <tbody id="historyBody">
+          <tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📦</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 운송중재고 -->
+<div id="tab-transit" style="display:none;">
+  <div class="filter-bar">
+    <div class="f-group"><div class="f-label">법인 / ENTITY</div>
+      <select id="t-entity" style="width:140px;">
+        <option value="">전체</option>
+        <option value="GSMEIN">GSMEIN</option>
+        <option value="SMEGLOBAL">SMEGLOBAL</option>
+        <option value="SMECN">SME Tianjin</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">운송</div>
+      <select id="t-mode" style="width:100px;">
+        <option value="">전체</option>
+        <option value="VSL">VSL</option>
+        <option value="AIR">AIR</option>
+      </select>
+    </div>
+    <button class="btn-search" onclick="loadTransit()">🔍 조회</button>
+    <button class="btn-reset" onclick="resetFilter('transit')">↺ 초기화</button>
+    <div style="margin-left:auto;font-size:12px;color:var(--muted);">
+      ※ 출하일 등록 후 예상ETA 미도래 품목 (FOB 기준 법인재고)
+    </div>
+  </div>
+  <div class="content">
+    <div class="table-header">
+      <div><span class="table-title">운송중재고</span> <span class="table-count" id="transit-count"></span></div>
+      <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportTable('transitBody','운송중재고')">⬇ 엑셀</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>법인</th><th>PO No.</th><th>Maker P/N</th><th>Maker</th>
+          <th class="right">출하수량</th>
+          <th>출하일</th><th>예상ETA</th><th class="center">잔여일</th><th>운송</th>
+        </tr></thead>
+        <tbody id="transitBody">
+          <tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🚢</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ④ AIR분석 -->
+<div id="tab-air" style="display:none;">
+  <div class="filter-bar">
+    <div class="f-group"><div class="f-label">법인 / ENTITY</div>
+      <select id="a-entity" style="width:140px;">
+        <option value="">전체</option>
+        <option value="GSMEIN">GSMEIN</option>
+        <option value="SMEGLOBAL">SMEGLOBAL</option>
+        <option value="SMECN">SME Tianjin</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">기간(출하월)</div>
+      <input type="month" id="a-from" style="width:130px;">
+    </div>
+    <div class="f-group"><div class="f-label">~</div>
+      <input type="month" id="a-to" style="width:130px;">
+    </div>
+    <button class="btn-search" onclick="loadAir()">🔍 조회</button>
+    <button class="btn-reset" onclick="resetFilter('air')">↺ 초기화</button>
+  </div>
+  <div class="content">
+    <div class="table-header">
+      <div><span class="table-title">AIR 출하 분석</span> <span class="table-count" id="air-count"></span></div>
+    </div>
+    <!-- 월별 요약 -->
+    <div class="table-wrap" style="margin-bottom:20px;">
+      <table>
+        <thead><tr>
+          <th>월</th><th>법인</th>
+          <th class="right">VSL 건수</th><th class="right">AIR 건수</th>
+          <th class="right">VSL 수량</th><th class="right">AIR 수량</th>
+          <th class="center">AIR 비율</th>
+        </tr></thead>
+        <tbody id="airSummaryBody">
+          <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">✈</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- 건별 상세 -->
+    <div class="table-header"><div><span class="table-title">AIR 건별 상세</span></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>법인</th><th>PO No.</th><th>Maker P/N</th><th>Maker</th>
+          <th class="right">출하수량</th><th>출하일</th><th>ETD요청</th>
+        </tr></thead>
+        <tbody id="airDetailBody">
+          <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">✈</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ⑤ PSI분석 -->
+<div id="tab-psi" style="display:none;">
+  <div class="filter-bar">
+    <div class="f-group"><div class="f-label">법인 / ENTITY <span style="color:var(--accent);">*</span></div>
+      <select id="p-entity" style="width:150px;">
+        <option value="GSMEIN">GSMEIN (인도)</option>
+        <option value="SMEGLOBAL">SMEGLOBAL (태국)</option>
+        <option value="SMECN">SME Tianjin (중국)</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">시작월</div>
+      <input type="month" id="p-from" style="width:130px;">
+    </div>
+    <div class="f-group"><div class="f-label">종료월</div>
+      <input type="month" id="p-to" style="width:130px;">
+    </div>
+    <div class="f-group"><div class="f-label">Maker</div>
+      <input type="text" id="p-maker" placeholder="메이커 검색..." style="width:120px;">
+    </div>
+    <div class="f-group"><div class="f-label">운송</div>
+      <select id="p-mode" style="width:100px;">
+        <option value="">전체</option>
+        <option value="VSL">VSL</option>
+        <option value="AIR">AIR</option>
+      </select>
+    </div>
+    <button class="btn-search" onclick="loadPSI()">🔍 조회</button>
+    <button class="btn-reset" onclick="resetFilter('psi')">↺ 초기화</button>
+    <div class="legend" style="margin-left:auto;">
+      <span><span style="color:var(--accent2);font-weight:700;">P</span>=법인PO요청</span>
+      <span><span style="color:var(--accent3);font-weight:700;">S</span>=본사출하</span>
+      <span><span style="color:var(--amber);font-weight:700;">I</span>=누적잔량(P-S)</span>
+    </div>
+  </div>
+  <div class="content">
+    <div class="table-header">
+      <div><span class="table-title">PSI 분석</span> <span class="table-count" id="psi-count"></span></div>
+      <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportPSI()">⬇ 엑셀</button>
+    </div>
+    <div class="table-wrap" id="psiTableWrap">
+      <div class="empty-state"><div class="empty-icon">📊</div><p>법인 선택 후 조회해주세요</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑥ 책임귀책 -->
+<div id="tab-resp" style="display:none;">
+  <div class="filter-bar">
+    <div class="f-group"><div class="f-label">법인 / ENTITY</div>
+      <select id="r-entity" style="width:140px;">
+        <option value="">전체</option>
+        <option value="GSMEIN">GSMEIN</option>
+        <option value="SMEGLOBAL">SMEGLOBAL</option>
+        <option value="SMECN">SME Tianjin</option>
+      </select>
+    </div>
+    <div class="f-group"><div class="f-label">기간(ETD기준)</div>
+      <input type="month" id="r-from" style="width:130px;">
+    </div>
+    <div class="f-group"><div class="f-label">~</div>
+      <input type="month" id="r-to" style="width:130px;">
+    </div>
+    <button class="btn-search" onclick="loadResp()">🔍 조회</button>
+    <button class="btn-reset" onclick="resetFilter('resp')">↺ 초기화</button>
+  </div>
+  <div class="content">
+    <div class="table-header"><div><span class="table-title">귀책 현황</span> <span class="table-count" id="resp-count"></span></div></div>
+    <!-- 요약 카드 -->
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;" id="respSummary"></div>
+    <!-- 상세 -->
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>귀책구분</th><th>법인</th><th>PO No.</th>
+          <th>Maker P/N</th><th>Maker</th>
+          <th class="right">주문수량</th><th class="right">출하수량</th><th class="right">잔량</th>
+          <th>ETD요청</th><th>운송</th>
+        </tr></thead>
+        <tbody id="respBody">
+          <tr><td colspan="10"><div class="empty-state"><div class="empty-icon">⚖</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-  const SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL';
-  if (sessionStorage.getItem('po_auth') !== '1') { window.location.href = 'po_hub.html'; }
+const SUPABASE_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SUPABASE_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+if(sessionStorage.getItem('po_auth')!=='1') window.location.href='po_hub.html';
 
-  let currentEntity = 'ALL';
-  let allPOData = [];
+// 법인별 운송기간
+let entityTransitMap={};
+async function loadEntityTransit(){
+  if(Object.keys(entityTransitMap).length) return;
+  try{
+    const {data}=await sb.from('entities').select('entity_code,vsl_days,air_days');
+    (data||[]).forEach(r=>{entityTransitMap[r.entity_code]={vsl:r.vsl_days||50,air:r.air_days||3};});
+  }catch(e){console.warn('entities 로드 실패',e);}
+}
+function getTransitDays(entity,mode){
+  const t=entityTransitMap[entity];
+  if(!t) return mode==='AIR'?3:50;
+  return mode==='AIR'?t.air:t.vsl;
+}
+function calcETA(shipDate,entity,mode){
+  if(!shipDate) return null;
+  const days=getTransitDays(entity,mode);
+  const d=new Date(shipDate); d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
 
-  // ── 탭 전환 ──
-  function switchEntity(entity, btn) {
-    currentEntity = entity;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    renderAll();
-  }
+// 탭 전환
+function switchTab(t){
+  ['deadline','history','transit','air','psi','resp'].forEach(x=>{
+    document.getElementById('tab-'+x).style.display=x===t?'block':'none';
+    document.getElementById('tab-'+x+'-btn').classList.toggle('active',x===t);
+  });
+}
 
-  // ── 전체 로드 ──
-  async function loadAll() {
-    try {
-      const res = await fetch(`${SCRIPT_URL}?action=po_monitor`);
-      allPOData = await res.json() || [];
-    } catch(e) {
-      allPOData = getSampleData();
-    }
-    renderAll();
-    document.getElementById('lastUpdate').textContent =
-      'Updated: ' + new Date().toLocaleTimeString('ko-KR');
-  }
+// 토스트
+function showToast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';
+  setTimeout(()=>el.className='toast',3500);
+}
 
-  function renderAll() {
-    const data = currentEntity === 'ALL'
-      ? allPOData
-      : allPOData.filter(r => r.entity === currentEntity);
-    renderKPI(data);
-    renderDDay(data);
-    renderAIR(data);
-    renderAlerts(data);
-    renderPSI();
-  }
+// 날짜 헬퍼
+function today(){ return new Date().toISOString().slice(0,10); }
+function diffDays(a,b){ return Math.ceil((new Date(a)-new Date(b))/(1000*60*60*24)); }
+function ym(dateStr){ return dateStr?dateStr.slice(0,7):''; }
 
-  // ── KPI ──
-  function renderKPI(data) {
-    const cnt = (resp) => data.filter(r => r.resp === resp).length;
-    document.getElementById('cnt-normal').textContent    = cnt('complete');
-    document.getElementById('cnt-corp').textContent      = cnt('corp');
-    document.getElementById('cnt-hq').textContent        = cnt('unordered');
-    document.getElementById('cnt-maker').textContent     = cnt('maker');
-    document.getElementById('cnt-air').textContent       = data.filter(r=>r.mode==='AIR').length;
-  }
+// 필터 초기화
+function resetFilter(tab){
+  const pfx={deadline:'d',history:'h',transit:'t',air:'a',psi:'p',resp:'r'}[tab];
+  document.querySelectorAll(`[id^="${pfx}-"]`).forEach(el=>{
+    if(el.tagName==='SELECT') el.value=el.id===`${pfx}-status`?'incomplete':'';
+    else el.value='';
+  });
+}
 
-  // ── D-Day 납기 임박 ──
-  function renderDDay(data) {
-    if (!data) data = currentEntity==='ALL' ? allPOData : allPOData.filter(r=>r.entity===currentEntity);
-    const days = Number(document.getElementById('dday-filter').value);
-    const today = new Date(); today.setHours(0,0,0,0);
-    const list = document.getElementById('ddayList');
+// ─────────────────────────────────────────
+// 공통 데이터 로드 (allData, shipData)
+// ─────────────────────────────────────────
+let allPO=[], allShip=[];
 
-    const filtered = data
-      .filter(r => r.etd && r.resp !== 'complete')
-      .map(r => {
-        const etd = new Date(r.etd); etd.setHours(0,0,0,0);
-        const diff = Math.round((etd - today) / 86400000);
-        return {...r, diff};
-      })
-      .filter(r => r.diff <= days)
-      .sort((a,b) => a.diff - b.diff)
-      .slice(0, 15);
+async function loadBaseData(){
+  await loadEntityTransit();
+  const [{data:poRows},{data:shipRows}]=await Promise.all([
+    sb.from('po_data').select('*').order('created_at',{ascending:true}),
+    sb.from('shipment_po').select('*')
+  ]);
 
-    if (!filtered.length) {
-      list.innerHTML = `<div class="empty">납기 임박 항목이 없습니다 (D-${days} 이내)</div>`;
-      return;
-    }
+  // shipment_po → po_id별 합산
+  const shipMap={}, shipDateMap={}, shipTransMap={}, shipInvMap={}, shipAllMap={};
+  (shipRows||[]).forEach(s=>{
+    if(!shipMap[s.po_id]) shipMap[s.po_id]=0;
+    shipMap[s.po_id]+=(s.ship_qty||0);
+    if(s.ship_date&&(!shipDateMap[s.po_id]||s.ship_date>shipDateMap[s.po_id])) shipDateMap[s.po_id]=s.ship_date;
+    shipTransMap[s.po_id]=s.transport||'';
+    shipInvMap[s.po_id]=s.invoice_no||'';
+    if(!shipAllMap[s.po_id]) shipAllMap[s.po_id]=[];
+    shipAllMap[s.po_id].push(s);
+  });
 
-    list.innerHTML = filtered.map(r => {
-      const cls = r.diff <= 7 ? 'urgent' : r.diff <= 20 ? 'warn' : 'safe';
-      const dday = r.diff < 0 ? `D+${Math.abs(r.diff)}` : r.diff === 0 ? 'D-DAY' : `D-${r.diff}`;
-      const entityBadge = `<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
-      const modeBadge = r.mode==='AIR'
-        ? `<span class="badge b-air">✈AIR</span>`
-        : `<span class="badge b-vssl">🚢VSSL</span>`;
-      const remain = (r.qty||0) - (r.shipped||0);
-      return `<div class="dday-item ${cls}">
-        <div class="dday-badge ${cls}">${dday}</div>
-        <div class="dday-info">
-          <div class="dday-pono">${r.pono}</div>
-          <div class="dday-mkpn">${r.mkpn} · ${r.maker}</div>
-          <div class="dday-meta">${entityBadge}${modeBadge}</div>
-        </div>
-        <div class="dday-right">
-          <div class="dday-remain" style="color:${remain>0?'var(--amber)':'var(--accent3)'}">
-            잔량 ${remain.toLocaleString()}
-          </div>
-          <div class="dday-etd">ETD ${r.etd}</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
+  // PO 그룹핑
+  const groups={};
+  (poRows||[]).forEach(r=>{
+    const key=`${r.po_no}||${r.maker_pn}||${r.etd_request}`;
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(r);
+  });
 
-  // ── AIR 현황 ──
-  function renderAIR(data) {
-    const grid = document.getElementById('airGrid');
-    const entities = currentEntity === 'ALL'
-      ? ['GSMEIN','SMEGLOBAL','SMECN']
-      : [currentEntity];
-
-    const colors = {GSMEIN:'var(--accent)',SMEGLOBAL:'var(--accent2)',SMECN:'var(--accent3)'};
-    const flags  = {GSMEIN:'🇮🇳',SMEGLOBAL:'🇹🇭',SMECN:'🇨🇳'};
-
-    grid.innerHTML = entities.map(ent => {
-      const entData = data.filter(r => r.entity === ent);
-      const total = entData.length;
-      const airData = entData.filter(r => r.mode === 'AIR');
-      const airPct = total ? Math.round(airData.length/total*100) : 0;
-
-      // 원인 분류
-      const causes = [
-        {label:'법인 긴급요청', cnt: airData.filter(r=>r.resp==='corp').length,     color:'var(--amber)'},
-        {label:'본사 미발주',   cnt: airData.filter(r=>r.resp==='unordered').length, color:'var(--accent)'},
-        {label:'메이커 귀책',   cnt: airData.filter(r=>r.resp==='maker').length,     color:'var(--purple)'},
-        {label:'기타',          cnt: airData.filter(r=>!['corp','unordered','maker'].includes(r.resp)).length, color:'var(--muted)'},
-      ].filter(c => c.cnt > 0);
-
-      const barColor = airPct >= 30 ? 'var(--accent)' : airPct >= 15 ? 'var(--amber)' : 'var(--accent3)';
-
-      return `<div class="air-entity">
-        <div class="air-entity-name">
-          ${flags[ent]} <span style="color:${colors[ent]};font-weight:900;">${ent}</span>
-        </div>
-        <div class="air-bar-wrap">
-          <div class="air-bar-label">
-            <span>AIR 비율</span>
-            <span style="font-weight:700;color:${barColor}">${airPct}% (${airData.length}/${total}건)</span>
-          </div>
-          <div class="air-bar-track">
-            <div class="air-bar-fill" style="width:${airPct}%;background:${barColor};"></div>
-          </div>
-        </div>
-        <div class="air-cause-list">
-          ${causes.map(c => `
-            <div class="air-cause" style="background:rgba(0,0,0,0.03);">
-              <span style="color:${c.color};font-weight:600;">${c.label}</span>
-              <span style="font-family:'Share Tech Mono',monospace;font-weight:700;">${c.cnt}건</span>
-            </div>`).join('')}
-          ${!causes.length ? '<div style="text-align:center;color:var(--muted);font-size:12px;">AIR 발송 없음</div>' : ''}
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── PSI 테이블 ──
-  function renderPSI() {
-    const maker  = document.getElementById('psi-maker').value;
-    const year   = document.getElementById('psi-year').value;
-    const entity = document.getElementById('psi-entity-psi').value;
-    const tbody  = document.getElementById('psiBody');
-
-    const data = allPOData.filter(r =>
-      (!entity || r.entity === entity) &&
-      (!maker  || r.maker === maker)
-    );
-
-    if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="14" class="empty">해당 조건의 데이터가 없습니다</td></tr>';
-      return;
-    }
-
-    // 메이커별 집계
-    const makers = [...new Set(data.map(r => r.maker))].slice(0, 10);
-    const months = [1,2,3,4,5,6,7,8,9,10,11,12];
-
-    tbody.innerHTML = makers.map(mk => {
-      const mkData = data.filter(r => r.maker === mk);
-      const P = months.map(m => mkData.filter(r => r.date?.startsWith(`${year}-${String(m).padStart(2,'0')}`)).reduce((s,r)=>s+(r.qty||0),0));
-      const I = months.map(m => mkData.filter(r => r.shipdate?.startsWith(`${year}-${String(m).padStart(2,'0')}`)).reduce((s,r)=>s+(r.shipped||0),0));
-      const S = months.map((m,i) => P[i] - I[i]);
-      const totalP = P.reduce((a,b)=>a+b,0);
-      const totalI = I.reduce((a,b)=>a+b,0);
-      const totalS = totalP - totalI;
-
-      const fmt = n => n ? n.toLocaleString() : '—';
-      const cell = (val, cls) => `<td class="${cls}">${fmt(val)}</td>`;
-
-      return `
-        <tr style="border-top:2px solid var(--border);">
-          <td class="left" rowspan="3" style="font-weight:700;">${mk}</td>
-          <td class="left" style="font-size:10px;color:var(--accent2);font-weight:700;">P</td>
-          ${P.map(v=>cell(v,'psi-p')).join('')}
-          ${cell(totalP,'psi-p')}
-        </tr>
-        <tr>
-          <td class="left" style="font-size:10px;color:var(--amber);font-weight:700;">S</td>
-          ${S.map(v=>cell(v,'psi-s')).join('')}
-          ${cell(totalS,'psi-s')}
-        </tr>
-        <tr>
-          <td class="left" style="font-size:10px;color:var(--accent3);font-weight:700;">I</td>
-          ${I.map(v=>cell(v,'psi-i')).join('')}
-          ${cell(totalI,'psi-i')}
-        </tr>`;
-    }).join('');
-  }
-
-  // ── 미발주 경보 ──
-  function renderAlerts(data) {
-    const alerts = data.filter(r => r.resp === 'unordered');
-    document.getElementById('alertCount').textContent =
-      alerts.length ? `⚠ ${alerts.length}건 즉시 조치 필요` : '이상 없음';
-
-    const tbody = document.getElementById('alertBody');
-    if (!alerts.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty">✅ 미발주 경보 없음</td></tr>';
-      return;
-    }
-
-    const today = new Date(); today.setHours(0,0,0,0);
-    tbody.innerHTML = alerts.map(r => {
-      const etd = new Date(r.etd); etd.setHours(0,0,0,0);
-      const dday = Math.round((etd - today) / 86400000);
-      const order = new Date(r.date); order.setHours(0,0,0,0);
-      const elapsed = Math.round((today - order) / 86400000);
-      const ddayStr = dday < 0 ? `<span style="color:var(--accent);font-weight:700;">D+${Math.abs(dday)}</span>` :
-                      dday === 0 ? `<span style="color:var(--accent);font-weight:700;">D-DAY</span>` :
-                      `<span style="color:${dday<=14?'var(--accent)':'var(--amber)'}">D-${dday}</span>`;
-      const entityBadge = `<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
-      const modeBadge = r.mode==='AIR'?`<span class="badge b-air">✈AIR</span>`:`<span class="badge b-vssl">🚢VSSL</span>`;
-      return `<tr>
-        <td>${entityBadge}</td>
-        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.pono}</td>
-        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn}</td>
-        <td class="left">${r.maker}</td>
-        <td>${(r.qty||0).toLocaleString()}</td>
-        <td style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.etd}</td>
-        <td>${ddayStr}</td>
-        <td>${modeBadge}</td>
-        <td style="font-weight:700;color:${elapsed>7?'var(--accent)':'var(--amber)'};">${elapsed}일 경과</td>
-      </tr>`;
-    }).join('');
-  }
-
-  // ── 책임구분 필터 ──
-  function filterByResp(resp) {
-    const data = currentEntity==='ALL' ? allPOData : allPOData.filter(r=>r.entity===currentEntity);
-    const filtered = data.filter(r => r.resp === resp || (resp==='air' && r.mode==='AIR'));
-    renderDDay(filtered);
-    renderAlerts(filtered);
-  }
-
-  // ── 샘플 데이터 ──
-  function getSampleData() {
-    const today = new Date();
-    const addDays = (d, n) => {
-      const r = new Date(d); r.setDate(r.getDate()+n);
-      return r.toISOString().slice(0,10);
+  allPO=Object.values(groups).map(grp=>{
+    grp.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const latest=grp[grp.length-1];
+    const totalShipped=grp.reduce((s,r)=>s+(shipMap[r.id]||0),0);
+    const latestShipDate=grp.reduce((d,r)=>{const sd=shipDateMap[r.id];return sd&&sd>d?sd:d;},'');
+    const latestTransport=grp.reduce((t,r)=>shipTransMap[r.id]||t,'');
+    const latestInvoice=grp.reduce((t,r)=>shipInvMap[r.id]||t,'');
+    const remain=(latest.qty||0)-totalShipped;
+    const resp=totalShipped===0?'unordered':remain<=0?'complete':'pending';
+    return{
+      ...latest, shipped:totalShipped, remain, resp,
+      hqdate:latestShipDate, shipTransport:latestTransport||latest.transport,
+      invoice:latestInvoice,
+      etd:latest.etd_request, mode:latest.transport,
+      shipRows: grp.flatMap(r=>shipAllMap[r.id]||[])
     };
-    return [
-      {entity:'GSMEIN',   date:'2026-01-20', pono:'GSMEIN-260120-001',   lgpn:'0RH1201L622', mkpn:'RC-98TRJ1K20',  maker:'SMART', qty:15000, shipped:10000, etd:addDays(today,5),  mode:'VSSL', resp:'corp',      shipdate:''},
-      {entity:'GSMEIN',   date:'2026-01-20', pono:'GSMEIN-260120-001',   lgpn:'0RH3300L622', mkpn:'RC-98TRJ330R',  maker:'SMART', qty:15000, shipped:15000, etd:addDays(today,30), mode:'VSSL', resp:'complete',   shipdate:'2026-04-10'},
-      {entity:'GSMEIN',   date:'2026-02-08', pono:'GSMEIN-260208-001',   lgpn:'EBC64595501', mkpn:'CSR02TRFR042',  maker:'SMART', qty:8000,  shipped:0,     etd:addDays(today,12), mode:'AIR',  resp:'unordered',  shipdate:''},
-      {entity:'SMEGLOBAL',date:'2026-02-01', pono:'SMEGLOBAL-260201-001',lgpn:'0RD1002G609', mkpn:'RD-94T1J10K0',  maker:'SMART', qty:20000, shipped:5000,  etd:addDays(today,20), mode:'VSSL', resp:'maker',      shipdate:''},
-      {entity:'SMEGLOBAL',date:'2026-03-06', pono:'SMEGLOBAL-260306-001',lgpn:'0RH2001L422', mkpn:'RC-98TRF2K00',  maker:'SMART', qty:12000, shipped:12000, etd:addDays(today,45), mode:'VSSL', resp:'complete',   shipdate:'2026-05-01'},
-      {entity:'SMECN',    date:'2026-02-10', pono:'SMECN-260210-001',    lgpn:'0RH1502L422', mkpn:'RC-98TRF15K0',  maker:'SMART', qty:30000, shipped:10000, etd:addDays(today,3),  mode:'AIR',  resp:'corp',      shipdate:''},
-      {entity:'SMECN',    date:'2026-03-20', pono:'SMECN-260320-001',    lgpn:'0RJ5100E672', mkpn:'RC-98TRJ510R',  maker:'SMART', qty:9000,  shipped:0,     etd:addDays(today,25), mode:'VSSL', resp:'unordered',  shipdate:''},
-      {entity:'GSMEIN',   date:'2026-03-21', pono:'GSMEIN-260321-001',   lgpn:'0RD1001F609', mkpn:'RD-96T1J1K00',  maker:'SMART', qty:50000, shipped:30000, etd:addDays(today,8),  mode:'AIR',  resp:'maker',     shipdate:'2026-04-05'},
-    ];
+  });
+
+  allShip=shipRows||[];
+
+  // KPI 업데이트
+  updateKPI();
+  document.getElementById('lastUpdated').textContent='업데이트: '+new Date().toLocaleTimeString('ko-KR');
+}
+
+function updateKPI(){
+  const tod=today();
+  document.getElementById('kpi-total').textContent=allPO.length.toLocaleString();
+  document.getElementById('kpi-complete').textContent=allPO.filter(r=>r.resp==='complete').length;
+  document.getElementById('kpi-pending').textContent=allPO.filter(r=>r.resp==='pending').length;
+  document.getElementById('kpi-unordered').textContent=allPO.filter(r=>r.resp==='unordered').length;
+  document.getElementById('kpi-air').textContent=allShip.filter(r=>r.transport==='AIR').length;
+
+  // 납기위험: VSL 50일·AIR 3일 이내 미출하
+  const danger=allPO.filter(r=>{
+    if(r.resp==='complete') return false;
+    if(!r.etd) return false;
+    const days=diffDays(r.etd,tod);
+    const limit=r.mode==='AIR'?3:50;
+    return days<=limit;
+  });
+  document.getElementById('kpi-danger').textContent=danger.length;
+
+  // 운송중: 출하일 있고 예상ETA 미도래
+  const transit=allPO.filter(r=>{
+    if(!r.hqdate) return false;
+    const eta=calcETA(r.hqdate,r.entity,r.shipTransport||r.mode);
+    return eta&&eta>tod;
+  });
+  document.getElementById('kpi-transit').textContent=transit.length;
+}
+
+// ─────────────────────────────────────────
+// ① 납기현황
+// ─────────────────────────────────────────
+function loadDeadline(){
+  const entity=document.getElementById('d-entity').value;
+  const mode=document.getElementById('d-mode').value;
+  const status=document.getElementById('d-status').value;
+  const mkpn=document.getElementById('d-mkpn').value.trim().toLowerCase();
+  const maker=document.getElementById('d-maker').value.trim().toLowerCase();
+  const tod=today();
+
+  let data=[...allPO];
+  if(entity) data=data.filter(r=>r.entity===entity);
+  if(mode) data=data.filter(r=>(r.mode||'').toUpperCase()===mode);
+  if(status==='incomplete') data=data.filter(r=>r.resp!=='complete');
+  else if(status==='unordered') data=data.filter(r=>r.resp==='unordered');
+  else if(status==='pending') data=data.filter(r=>r.resp==='pending');
+  else if(status==='complete') data=data.filter(r=>r.resp==='complete');
+  if(mkpn) data=data.filter(r=>(r.maker_pn||'').toLowerCase().includes(mkpn));
+  if(maker) data=data.filter(r=>(r.maker||'').toLowerCase().includes(maker));
+
+  // ETD 기준 정렬
+  data.sort((a,b)=>(a.etd||'').localeCompare(b.etd||''));
+  document.getElementById('deadline-count').textContent=`— ${data.length.toLocaleString()}건`;
+
+  if(!data.length){
+    document.getElementById('deadlineBody').innerHTML='<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과 없음</p></div></td></tr>';
+    return;
   }
 
-  // 초기 로드 + 30초 자동 새로고침
-  loadAll();
-  setInterval(loadAll, 30000);
+  document.getElementById('deadlineBody').innerHTML=data.map(r=>{
+    const dday=r.etd?diffDays(r.etd,tod):null;
+    const limit=r.mode==='AIR'?3:50;
+    let rowBg='', ddayHtml='—', ddayCls='';
+    if(dday!==null){
+      if(dday<=limit){rowBg='background:#fee2e2;';ddayCls='dday-red';}
+      else if(dday<=60){rowBg='background:#fef9c3;';ddayCls='dday-amber';}
+      else{rowBg='background:#f0fdf4;';ddayCls='dday-green';}
+      ddayHtml=`<span class="${ddayCls}">D-${dday}</span>`;
+    }
+    if(r.resp==='complete') rowBg='background:#fff;';
+
+    const eb=`<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
+    const tb=r.action_type==='수정'?'<span class="badge" style="background:#FFFDE7;color:#b45309;">수정</span>':
+             r.action_type==='취소'?'<span class="badge" style="background:#FFF0F0;color:var(--accent);">취소</span>':
+             '<span class="badge b-ok">신규</span>';
+    const mb=r.mode==='AIR'?'<span class="badge b-air">✈AIR</span>':'<span class="badge b-vsl">🚢VSL</span>';
+    const sb2=r.resp==='complete'?'<span class="badge b-ok">✓완료</span>':
+              r.resp==='pending'?`<span class="badge b-warn">잔량 ${r.remain.toLocaleString()}</span>`:
+              '<span class="badge b-danger">미출하</span>';
+    return`<tr style="${rowBg}">
+      <td>${tb}</td><td>${eb}</td>
+      <td class="td-mono">${r.order_date||'—'}</td>
+      <td class="td-mono" style="font-weight:700;">${r.pono||'—'}</td>
+      <td class="td-mono">${r.maker_pn||'—'}</td>
+      <td style="font-weight:600;">${r.maker||'—'}</td>
+      <td class="td-right td-mono" style="font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+      <td class="td-right td-mono" style="color:var(--accent3);font-weight:700;">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
+      <td class="td-right td-mono" style="font-weight:700;color:${r.remain>0?'var(--amber)':'var(--accent3)'};">${r.remain.toLocaleString()}</td>
+      <td class="td-mono">${r.etd||'—'}</td>
+      <td class="td-center">${ddayHtml}</td>
+      <td>${mb}</td><td>${sb2}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────
+// ② 출하이력
+// ─────────────────────────────────────────
+function loadHistory(){
+  const entity=document.getElementById('h-entity').value;
+  const from=document.getElementById('h-from').value;
+  const to=document.getElementById('h-to').value;
+  const mode=document.getElementById('h-mode').value;
+
+  // shipment_po 기준으로 PO 정보 JOIN
+  const poMap={};
+  allPO.forEach(r=>{
+    r.shipRows.forEach(s=>{poMap[s.id]={entity:r.entity,pono:r.pono,mkpn:r.maker_pn,maker:r.maker,etd:r.etd,mode:r.mode};});
+  });
+
+  let data=allShip.filter(s=>{
+    if(entity&&s.entity!==entity) return false;
+    if(mode&&(s.transport||'').toUpperCase()!==mode) return false;
+    if(from&&s.ship_date&&ym(s.ship_date)<from) return false;
+    if(to&&s.ship_date&&ym(s.ship_date)>to) return false;
+    return true;
+  });
+
+  data.sort((a,b)=>(b.ship_date||'').localeCompare(a.ship_date||''));
+  document.getElementById('history-count').textContent=`— ${data.length.toLocaleString()}건`;
+
+  if(!data.length){
+    document.getElementById('historyBody').innerHTML='<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과 없음</p></div></td></tr>';
+    return;
+  }
+
+  document.getElementById('historyBody').innerHTML=data.map(s=>{
+    const po=poMap[s.id]||{};
+    const eta=calcETA(s.ship_date,s.entity,s.transport);
+    const eb=`<span class="badge b-${(s.entity||'').toLowerCase()}">${s.entity||'—'}</span>`;
+    const mb=(s.transport||'').toUpperCase()==='AIR'?'<span class="badge b-air">✈AIR</span>':'<span class="badge b-vsl">🚢VSL</span>';
+    return`<tr>
+      <td>${eb}</td>
+      <td class="td-mono">${s.invoice_no||'—'}</td>
+      <td class="td-mono" style="font-weight:700;">${s.po_no||po.pono||'—'}</td>
+      <td class="td-mono">${po.mkpn||'—'}</td>
+      <td style="font-weight:600;">${po.maker||'—'}</td>
+      <td class="td-right td-mono" style="font-weight:700;color:var(--accent3);">${(s.ship_qty||0).toLocaleString()}</td>
+      <td class="td-mono" style="font-weight:700;">${s.ship_date||'—'}</td>
+      <td class="td-mono">${po.etd||s.etd||'—'}</td>
+      <td class="td-mono" style="color:var(--purple);">${eta||'—'}</td>
+      <td>${mb}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────
+// ③ 운송중재고
+// ─────────────────────────────────────────
+function loadTransit(){
+  const entity=document.getElementById('t-entity').value;
+  const mode=document.getElementById('t-mode').value;
+  const tod=today();
+
+  // shipment_po 기준: 출하일 있고 예상ETA > 오늘
+  const poMap={};
+  allPO.forEach(r=>{
+    r.shipRows.forEach(s=>{poMap[s.id]={entity:r.entity,pono:r.pono,mkpn:r.maker_pn,maker:r.maker};});
+  });
+
+  let data=allShip.filter(s=>{
+    if(!s.ship_date) return false;
+    const eta=calcETA(s.ship_date,s.entity,s.transport);
+    if(!eta||eta<=tod) return false;
+    if(entity&&s.entity!==entity) return false;
+    if(mode&&(s.transport||'').toUpperCase()!==mode) return false;
+    return true;
+  });
+
+  data.sort((a,b)=>{
+    const etaA=calcETA(a.ship_date,a.entity,a.transport)||'';
+    const etaB=calcETA(b.ship_date,b.entity,b.transport)||'';
+    return etaA.localeCompare(etaB);
+  });
+
+  document.getElementById('transit-count').textContent=`— ${data.length.toLocaleString()}건 / 총 ${data.reduce((s,r)=>s+(r.ship_qty||0),0).toLocaleString()}개`;
+
+  if(!data.length){
+    document.getElementById('transitBody').innerHTML='<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📭</div><p>운송중 재고 없음</p></div></td></tr>';
+    return;
+  }
+
+  document.getElementById('transitBody').innerHTML=data.map(s=>{
+    const po=poMap[s.id]||{};
+    const eta=calcETA(s.ship_date,s.entity,s.transport);
+    const remain=eta?diffDays(eta,tod):null;
+    const eb=`<span class="badge b-${(s.entity||'').toLowerCase()}">${s.entity||'—'}</span>`;
+    const mb=(s.transport||'').toUpperCase()==='AIR'?'<span class="badge b-air">✈AIR</span>':'<span class="badge b-vsl">🚢VSL</span>';
+    const remainCls=remain!==null?(remain<=5?'dday-red':remain<=15?'dday-amber':'dday-green'):'';
+    return`<tr style="background:#f5f0ff;">
+      <td>${eb}</td>
+      <td class="td-mono" style="font-weight:700;">${s.po_no||po.pono||'—'}</td>
+      <td class="td-mono">${po.mkpn||'—'}</td>
+      <td style="font-weight:600;">${po.maker||'—'}</td>
+      <td class="td-right td-mono" style="font-weight:700;color:var(--purple);">${(s.ship_qty||0).toLocaleString()}</td>
+      <td class="td-mono">${s.ship_date||'—'}</td>
+      <td class="td-mono" style="color:var(--purple);font-weight:700;">${eta||'—'}</td>
+      <td class="td-center"><span class="${remainCls}">${remain!==null?`D-${remain}`:'—'}</span></td>
+      <td>${mb}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────
+// ④ AIR분석
+// ─────────────────────────────────────────
+function loadAir(){
+  const entity=document.getElementById('a-entity').value;
+  const from=document.getElementById('a-from').value;
+  const to=document.getElementById('a-to').value;
+
+  const poMap={};
+  allPO.forEach(r=>{r.shipRows.forEach(s=>{poMap[s.id]={entity:r.entity,pono:r.pono,mkpn:r.maker_pn,maker:r.maker,etd:r.etd};});});
+
+  let data=allShip.filter(s=>{
+    if(entity&&s.entity!==entity) return false;
+    if(from&&s.ship_date&&ym(s.ship_date)<from) return false;
+    if(to&&s.ship_date&&ym(s.ship_date)>to) return false;
+    return true;
+  });
+
+  const airData=data.filter(s=>(s.transport||'').toUpperCase()==='AIR');
+  document.getElementById('air-count').textContent=`— 전체 ${data.length}건 중 AIR ${airData.length}건`;
+
+  // 월별 요약
+  const monthMap={};
+  data.forEach(s=>{
+    const key=`${ym(s.ship_date)}||${s.entity||'전체'}`;
+    if(!monthMap[key]) monthMap[key]={month:ym(s.ship_date),entity:s.entity||'전체',vslCnt:0,airCnt:0,vslQty:0,airQty:0};
+    if((s.transport||'').toUpperCase()==='AIR'){monthMap[key].airCnt++;monthMap[key].airQty+=(s.ship_qty||0);}
+    else{monthMap[key].vslCnt++;monthMap[key].vslQty+=(s.ship_qty||0);}
+  });
+
+  const summaryRows=Object.values(monthMap).sort((a,b)=>a.month.localeCompare(b.month)||a.entity.localeCompare(b.entity));
+  document.getElementById('airSummaryBody').innerHTML=summaryRows.length?summaryRows.map(r=>{
+    const total=r.vslCnt+r.airCnt;
+    const ratio=total?Math.round(r.airCnt/total*100):0;
+    const eb=r.entity!=='전체'?`<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`:r.entity;
+    return`<tr>
+      <td class="td-mono">${r.month}</td><td>${eb}</td>
+      <td class="td-right td-mono">${r.vslCnt}</td>
+      <td class="td-right td-mono" style="color:var(--accent);font-weight:700;">${r.airCnt}</td>
+      <td class="td-right td-mono">${r.vslQty.toLocaleString()}</td>
+      <td class="td-right td-mono" style="color:var(--accent);font-weight:700;">${r.airQty.toLocaleString()}</td>
+      <td class="td-center"><span class="badge ${ratio>30?'b-danger':'b-warn'}">${ratio}%</span></td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📭</div><p>데이터 없음</p></div></td></tr>';
+
+  document.getElementById('airDetailBody').innerHTML=airData.length?airData.map(s=>{
+    const po=poMap[s.id]||{};
+    const eb=`<span class="badge b-${(s.entity||'').toLowerCase()}">${s.entity||'—'}</span>`;
+    return`<tr>
+      <td>${eb}</td>
+      <td class="td-mono">${s.po_no||po.pono||'—'}</td>
+      <td class="td-mono">${po.mkpn||'—'}</td>
+      <td style="font-weight:600;">${po.maker||'—'}</td>
+      <td class="td-right td-mono" style="color:var(--accent);font-weight:700;">${(s.ship_qty||0).toLocaleString()}</td>
+      <td class="td-mono">${s.ship_date||'—'}</td>
+      <td class="td-mono">${po.etd||'—'}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">✈</div><p>AIR 출하 없음</p></div></td></tr>';
+}
+
+// ─────────────────────────────────────────
+// ⑤ PSI분석
+// ─────────────────────────────────────────
+let psiData=[];
+function loadPSI(){
+  const entity=document.getElementById('p-entity').value;
+  const from=document.getElementById('p-from').value;
+  const to=document.getElementById('p-to').value;
+  const makerF=document.getElementById('p-maker').value.trim().toLowerCase();
+  const modeF=document.getElementById('p-mode').value;
+
+  if(!entity){showToast('⚠ 법인을 선택해주세요','warn');return;}
+
+  // 기간 내 모든 월 생성
+  let months=[];
+  if(from&&to){
+    let cur=new Date(from+'-01');
+    const end=new Date(to+'-01');
+    while(cur<=end){
+      months.push(cur.toISOString().slice(0,7));
+      cur.setMonth(cur.getMonth()+1);
+    }
+  }
+
+  // P: po_data ETD 기준 월별 집계 (법인 PO)
+  let poFiltered=allPO.filter(r=>r.entity===entity);
+  if(makerF) poFiltered=poFiltered.filter(r=>(r.maker||'').toLowerCase().includes(makerF));
+  if(modeF) poFiltered=poFiltered.filter(r=>(r.mode||'').toUpperCase()===modeF);
+  if(from) poFiltered=poFiltered.filter(r=>ym(r.etd)>=from);
+  if(to) poFiltered=poFiltered.filter(r=>ym(r.etd)<=to);
+
+  // 자동 월 범위 계산
+  if(!months.length){
+    const allMonths=[...new Set([
+      ...poFiltered.map(r=>ym(r.etd)),
+      ...allShip.filter(s=>s.entity===entity).map(s=>ym(s.ship_date))
+    ])].filter(Boolean).sort();
+    months=allMonths;
+  }
+
+  // Maker P/N + Maker + mode 기준 행
+  const rowKeys={};
+  poFiltered.forEach(r=>{
+    const k=`${r.maker_pn}||${r.maker}||${r.mode}`;
+    if(!rowKeys[k]) rowKeys[k]={mkpn:r.maker_pn,maker:r.maker,mode:r.mode,p:{},s:{},i:{}};
+    const m=ym(r.etd);
+    if(m) rowKeys[k].p[m]=(rowKeys[k].p[m]||0)+(r.qty||0);
+  });
+
+  // S: shipment_po ship_date 기준
+  const poIdMap={};
+  allPO.filter(r=>r.entity===entity).forEach(r=>{
+    r.shipRows.forEach(s=>{poIdMap[s.id]={mkpn:r.maker_pn,maker:r.maker,mode:r.mode};});
+  });
+
+  allShip.filter(s=>s.entity===entity).forEach(s=>{
+    const po=poIdMap[s.id];
+    if(!po) return;
+    if(makerF&&!(po.maker||'').toLowerCase().includes(makerF)) return;
+    if(modeF&&(po.mode||'').toUpperCase()!==modeF) return;
+    const k=`${po.mkpn}||${po.maker}||${po.mode}`;
+    if(!rowKeys[k]) rowKeys[k]={mkpn:po.mkpn,maker:po.maker,mode:po.mode,p:{},s:{},i:{}};
+    const m=ym(s.ship_date);
+    if(m) rowKeys[k].s[m]=(rowKeys[k].s[m]||0)+(s.ship_qty||0);
+  });
+
+  // I: 누적 계산 (전월이월)
+  Object.values(rowKeys).forEach(row=>{
+    let cumI=0;
+    months.forEach(m=>{
+      const p=row.p[m]||0;
+      const s=row.s[m]||0;
+      cumI=cumI+p-s;
+      row.i[m]=cumI;
+    });
+  });
+
+  psiData=Object.values(rowKeys);
+  document.getElementById('psi-count').textContent=`— ${entity} / ${psiData.length.toLocaleString()}개 품목`;
+
+  if(!months.length||!psiData.length){
+    document.getElementById('psiTableWrap').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><p>데이터 없음</p></div>';
+    return;
+  }
+
+  // 동적 테이블 생성
+  const thMonths=months.map(m=>`<th class="p-col center" colspan="3">${m}</th>`).join('');
+  const thPSI=months.map(()=>'<th class="p-col right">P</th><th class="s-col right">S</th><th class="i-col right">I</th>').join('');
+
+  const rows=psiData.map(row=>{
+    const mb=(row.mode||'').toUpperCase()==='AIR'?'<span class="badge b-air" style="font-size:10px;">✈AIR</span>':'<span class="badge b-vsl" style="font-size:10px;">🚢VSL</span>';
+    const cells=months.map(m=>{
+      const p=row.p[m]||0;
+      const s=row.s[m]||0;
+      const i=row.i[m]||0;
+      const iCls=i>0?'psi-plus':i<0?'psi-minus':'psi-zero';
+      const iSign=i>0?'+':'';
+      return`<td class="td-right td-mono" style="font-size:12px;">${p?p.toLocaleString():'—'}</td>
+             <td class="td-right td-mono" style="font-size:12px;color:var(--accent3);">${s?s.toLocaleString():'—'}</td>
+             <td class="td-right td-mono ${iCls}" style="font-size:12px;">${iSign}${i.toLocaleString()}</td>`;
+    }).join('');
+    return`<tr>
+      <td class="td-mono">${row.mkpn||'—'}</td>
+      <td style="font-weight:600;">${row.maker||'—'}</td>
+      <td>${mb}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('psiTableWrap').innerHTML=`
+    <table class="psi-table">
+      <thead>
+        <tr><th rowspan="2">Maker P/N</th><th rowspan="2">Maker</th><th rowspan="2">운송</th>${thMonths}</tr>
+        <tr>${thPSI}</tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function exportPSI(){
+  if(!psiData.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
+  showToast('엑셀 내보내기는 준비중입니다','warn');
+}
+
+// ─────────────────────────────────────────
+// ⑥ 책임귀책
+// ─────────────────────────────────────────
+function loadResp(){
+  const entity=document.getElementById('r-entity').value;
+  const from=document.getElementById('r-from').value;
+  const to=document.getElementById('r-to').value;
+  const tod=today();
+
+  let data=[...allPO];
+  if(entity) data=data.filter(r=>r.entity===entity);
+  if(from) data=data.filter(r=>ym(r.etd)>=from);
+  if(to) data=data.filter(r=>ym(r.etd)<=to);
+
+  // 귀책 분류
+  data=data.map(r=>{
+    let resp2='';
+    if(r.resp==='complete') resp2='완료';
+    else if(r.resp==='unordered') resp2='본사미발주';
+    else if(r.resp==='pending'){
+      const dday=r.etd?diffDays(r.etd,tod):null;
+      const limit=r.mode==='AIR'?3:50;
+      if(dday!==null&&dday<=limit) resp2='납기위험';
+      else resp2='잔량대기';
+    }
+    return{...r,resp2};
+  });
+
+  document.getElementById('resp-count').textContent=`— ${data.length.toLocaleString()}건`;
+
+  // 요약 카드
+  const cats=['완료','잔량대기','납기위험','본사미발주'];
+  const catColors={'완료':'b-ok','잔량대기':'b-warn','납기위험':'b-danger','본사미발주':'b-danger'};
+  document.getElementById('respSummary').innerHTML=cats.map(c=>{
+    const cnt=data.filter(r=>r.resp2===c).length;
+    return`<div class="kpi-card" style="min-width:110px;">
+      <div class="kpi-val" style="font-size:20px;">${cnt}</div>
+      <div class="kpi-lbl">${c}</div>
+    </div>`;
+  }).join('');
+
+  data.sort((a,b)=>(a.etd||'').localeCompare(b.etd||''));
+
+  document.getElementById('respBody').innerHTML=data.length?data.map(r=>{
+    const eb=`<span class="badge b-${r.entity.toLowerCase()}">${r.entity}</span>`;
+    const mb=r.mode==='AIR'?'<span class="badge b-air">✈AIR</span>':'<span class="badge b-vsl">🚢VSL</span>';
+    const cats2={'완료':'b-ok','잔량대기':'b-warn','납기위험':'b-danger','본사미발주':'b-danger'};
+    const rb=`<span class="badge ${cats2[r.resp2]||'b-warn'}">${r.resp2}</span>`;
+    return`<tr>
+      <td>${rb}</td><td>${eb}</td>
+      <td class="td-mono" style="font-weight:700;">${r.pono||'—'}</td>
+      <td class="td-mono">${r.maker_pn||'—'}</td>
+      <td style="font-weight:600;">${r.maker||'—'}</td>
+      <td class="td-right td-mono" style="font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+      <td class="td-right td-mono" style="color:var(--accent3);font-weight:700;">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
+      <td class="td-right td-mono" style="color:var(--amber);font-weight:700;">${r.remain>0?r.remain.toLocaleString():'0'}</td>
+      <td class="td-mono">${r.etd||'—'}</td>
+      <td>${mb}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📭</div><p>데이터 없음</p></div></td></tr>';
+}
+
+// ─────────────────────────────────────────
+// 엑셀 내보내기 (공통)
+// ─────────────────────────────────────────
+function exportTable(tbodyId, title){
+  const tbody=document.getElementById(tbodyId);
+  if(!tbody){showToast('⚠ 데이터 없음','warn');return;}
+  const ws=XLSX.utils.table_to_sheet(tbody.closest('table'));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,title);
+  XLSX.writeFile(wb,`${title}_${today()}.xlsx`);
+  showToast(`✓ ${title} 엑셀 다운로드 완료`);
+}
+
+// ─────────────────────────────────────────
+// 초기 로드
+// ─────────────────────────────────────────
+(async()=>{
+  try{
+    await loadBaseData();
+    // 기본 기간 설정
+    const now=new Date();
+    const nowYM=now.toISOString().slice(0,7);
+    const prev=new Date(now.getFullYear(),now.getMonth()-2,1).toISOString().slice(0,7);
+    const next=new Date(now.getFullYear(),now.getMonth()+3,1).toISOString().slice(0,7);
+    ['h-from','a-from','r-from'].forEach(id=>document.getElementById(id).value=prev);
+    ['h-to','a-to','r-to'].forEach(id=>document.getElementById(id).value=next);
+    ['p-from'].forEach(id=>document.getElementById(id).value=prev);
+    ['p-to'].forEach(id=>document.getElementById(id).value=next);
+  }catch(e){showToast('⚠ 데이터 로드 실패: '+e.message,'error');}
+})();
 </script>
 </body>
 </html>
