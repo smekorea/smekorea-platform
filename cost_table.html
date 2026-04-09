@@ -354,10 +354,10 @@ async function searchCost() {
 }
 
 function calcMargin(r) {
-  if(!r.buy_price || !r.sell_price) return null;
-  const buy  = r.buy_currency === 'USD' ? r.buy_price * (r.exchange_rate||1) : r.buy_price;
-  const sell = r.sell_currency === 'USD' ? r.sell_price * (r.exchange_rate||1) : r.sell_price;
-  if(!buy) return null;
+  if(!r.buy_price) return null;
+  const buy  = r.buy_currency === 'USD' ? null : r.buy_price; // USD매입은 KRW환산 불가
+  const sell = r.sell_currency === 'USD' ? (r.sell_price_krw || null) : r.sell_price;
+  if(!buy || !sell) return null;
   return Math.round(((sell - buy) / sell) * 1000) / 10;
 }
 
@@ -396,7 +396,7 @@ function renderPivotTable(data) {
   }
 
   document.getElementById('listBody').innerHTML = rows.map(r => {
-    const buyKRW = r.buy_currency==='USD' ? (r.buy_price*(r.exchange_rate||1)) : r.buy_price;
+    const buyKRW = r.buy_currency==='USD' ? null : r.buy_price;
     const buyDisp = r.buy_currency==='USD'
       ? `$${r.buy_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:4})}`
       : (r.buy_price?.toLocaleString()+'원');
@@ -407,7 +407,7 @@ function renderPivotTable(data) {
       const sellDisp = cr.sell_currency==='USD'
         ? `$${cr.sell_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:4})}`
         : (cr.sell_price?.toLocaleString()+'원');
-      const mp = calcMarginFromValues(buyKRW, cr.sell_price, cr.sell_currency, cr.exchange_rate);
+      const mp = calcMarginFromValues(buyKRW, cr.sell_price, cr.sell_currency, cr.sell_price_krw);
       const mpColor = mp===null?'var(--muted)':mp<5?'var(--accent)':mp<10?'var(--amber)':'var(--accent3)';
       const mpBadge = mp===null?'—':`<span style="color:${mpColor};font-weight:700;">${mp}%</span>${mp<5?' ⚠':''}`;
       return `<td class="num">${sellDisp}</td><td class="center">${mpBadge}</td>`;
@@ -432,9 +432,9 @@ function renderPivotTable(data) {
   }).join('');
 }
 
-function calcMarginFromValues(buyKRW, sellPrice, sellCurrency, exRate) {
+function calcMarginFromValues(buyKRW, sellPrice, sellCurrency, sellPriceKrw) {
   if(!buyKRW || !sellPrice) return null;
-  const sellKRW = sellCurrency==='USD' ? sellPrice*(exRate||1) : sellPrice;
+  const sellKRW = sellCurrency==='USD' ? (sellPriceKrw || null) : sellPrice;
   if(!sellKRW) return null;
   return Math.round(((sellKRW - buyKRW) / sellKRW) * 1000) / 10;
 }
@@ -478,11 +478,12 @@ async function openDetail(erpCode, supplier) {
             <th>적용일자</th><th>변동구분</th><th>구매처</th><th>매입통화</th>
             <th style="text-align:right">매입단가</th><th style="text-align:right">LG인증가</th>
             <th>판매처</th><th>판매통화</th><th style="text-align:right">판매단가</th>
-            <th style="text-align:right">마진율</th><th>변동사유</th><th>등록자</th>
+            <th style="text-align:right">원화환산가</th><th style="text-align:right">마진율</th>
+            <th>변동사유</th><th>등록자</th><th>비고</th>
           </tr></thead>
           <tbody>${data.map(r => {
-            const buyKRW = r.buy_currency==='USD'?(r.buy_price*(r.exchange_rate||1)):r.buy_price;
-            const mp = calcMarginFromValues(buyKRW, r.sell_price, r.sell_currency, r.exchange_rate);
+            const buyKRW = r.buy_currency==='USD' ? null : r.buy_price;
+            const mp = calcMarginFromValues(buyKRW, r.sell_price, r.sell_currency, r.sell_price_krw);
             const mpColor = mp===null?'var(--muted)':mp<5?'var(--accent)':mp<10?'var(--amber)':'var(--accent3)';
             const buyDisp = r.buy_currency==='USD'?`$${r.buy_price?.toFixed(4)}`:(r.buy_price?.toLocaleString()+'원');
             const sellDisp = r.sell_currency==='USD'?`$${r.sell_price?.toFixed(4)}`:(r.sell_price?.toLocaleString()+'원');
@@ -497,9 +498,11 @@ async function openDetail(erpCode, supplier) {
               <td style="font-size:11px;">${r.customer||'—'}</td>
               <td class="center"><span class="badge b-direct">${r.sell_currency||'KRW'}</span></td>
               <td class="num">${sellDisp}</td>
+              <td class="num" style="color:var(--muted);">${r.sell_price_krw?r.sell_price_krw.toLocaleString()+'원':'—'}</td>
               <td class="num" style="color:${mpColor};font-weight:700;">${mp!==null?mp+'%':'—'}</td>
               <td style="font-size:11px;color:var(--muted);max-width:180px;white-space:normal;">${r.change_reason||'—'}</td>
               <td style="font-size:11px;">${r.registered_by||'—'}</td>
+              <td style="font-size:11px;color:var(--muted);max-width:160px;white-space:normal;">${r.remarks||'—'}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -625,15 +628,16 @@ function parseFile(){
         supplier:     String(r[ci('구매처명')]||'').trim(),
         buy_currency: String(r[ci('매입통화')]||'KRW').trim().toUpperCase(),
         buy_price:    Number(r[ci('매입단가')])||null,
-        exchange_rate:Number(r[ci('적용환율')])||null,
         lg_cert_price:Number(r[ci('LG인증가(KRW)')])||null,
         customer:     String(r[ci('판매처명')]||'').trim(),
         sell_currency:String(r[ci('판매통화')]||'KRW').trim().toUpperCase(),
         sell_price:   Number(r[ci('판매단가')])||null,
+        sell_price_krw:Number(r[ci('판매단가(KRW)')])||null,
         valid_from:   fmtD(r[ci('적용일자')]),
         change_type:  String(r[ci('변동구분')]||'신규').trim(),
         change_reason:String(r[ci('변동사유')]||'').trim(),
         registered_by:String(r[ci('등록자')]||'').trim(),
+        remarks:      String(r[ci('비고')]||'').trim(),
       }));
       renderPreview();
     }catch(err){showToast('⚠ 파일 읽기 실패: '+err.message,'error');}
@@ -682,11 +686,12 @@ async function submitData(){
       erp_code:r.erp_code, description:r.description||null,
       trade_type:r.trade_type||null, supplier:r.supplier||null,
       buy_currency:r.buy_currency, buy_price:r.buy_price,
-      exchange_rate:r.exchange_rate||null, lg_cert_price:r.lg_cert_price||null,
+      lg_cert_price:r.lg_cert_price||null,
       customer:r.customer||null, sell_currency:r.sell_currency,
-      sell_price:r.sell_price||null, valid_from:r.valid_from||null,
+      sell_price:r.sell_price||null, sell_price_krw:r.sell_price_krw||null,
+      valid_from:r.valid_from||null,
       change_type:r.change_type, change_reason:r.change_reason||null,
-      registered_by:r.registered_by
+      registered_by:r.registered_by, remarks:r.remarks||null
     }));
     // 500건씩 청크 업로드
     const CHUNK=500;
@@ -709,13 +714,14 @@ async function downloadTemplate(){
     {h:'★ Maker',w:16},{h:'★ Maker P/N',w:22},{h:'LG P/N',w:18},
     {h:'★ ERP코드',w:14},{h:'★ Description',w:28},{h:'★ 공급구분',w:12},
     {h:'★ 구매처명',w:20},{h:'★ 매입통화',w:10},{h:'★ 매입단가',w:12},
-    {h:'적용환율',w:12},{h:'LG인증가(KRW)',w:14},{h:'★ 판매처명',w:24},
-    {h:'★ 판매통화',w:10},{h:'★ 판매단가',w:12},{h:'★ 적용일자',w:14},
-    {h:'★ 변동구분',w:16},{h:'★ 변동사유',w:30},{h:'★ 등록자',w:12},
+    {h:'LG인증가(KRW)',w:14},{h:'★ 판매처명',w:24},
+    {h:'★ 판매통화',w:10},{h:'★ 판매단가',w:12},{h:'판매단가(KRW)',w:14},
+    {h:'★ 적용일자',w:14},{h:'★ 변동구분',w:16},{h:'★ 변동사유',w:30},
+    {h:'★ 등록자',w:12},{h:'비고',w:24},
   ];
   cols.forEach((c,i)=>{ws2.getColumn(i+1).width=c.w;});
   // 타이틀
-  ws2.mergeCells('A1:R1');
+  ws2.mergeCells('A1:S1');
   const t=ws2.getCell('A1');
   t.value='SMERP — Cost Table 단가 등록 양식';
   t.font={bold:true,size:13,color:{argb:'FFC8501A'}};
@@ -723,9 +729,9 @@ async function downloadTemplate(){
   t.alignment={horizontal:'center',vertical:'middle'};
   ws2.getRow(1).height=24;
   // 안내
-  ws2.mergeCells('A2:R2');
+  ws2.mergeCells('A2:S2');
   const a=ws2.getCell('A2');
-  a.value='※ ★ 표시 컬럼은 필수 | 매입/판매단가는 통화 그대로 입력 | 적용환율: USD 거래 시 필수 | LG인증가: LG관련 거래 시 입력 | 구매처: Maker 직거래 시 Maker명';
+  a.value='※ ★ 표시 컬럼은 필수 | 매입/판매단가는 통화 그대로 입력 | 판매단가(KRW): USD 판매 시 원화 환산가 병기 (마진율 계산용) | LG인증가: LG관련 거래 시 입력 | 구매처: Maker 직거래 시 Maker명';
   a.font={size:9,color:{argb:'FF888888'}};
   a.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF9F9F9'}};
   ws2.getRow(2).height=15;
@@ -741,7 +747,7 @@ async function downloadTemplate(){
     cell.border={top:{style:'medium'},bottom:{style:'medium'},left:{style:'thin'},right:{style:'thin'}};
   });
   // 가이드
-  const guides=['제조사명','메이커 품번','LG품번(없으면공백)','이카운트품번','부품명(영문)','직거래/LG사급','KRW또는USD','통화그대로입력','USD만입력','LG관련거래시','매출처명칭','KRW또는USD','통화그대로입력','YYYY-MM-DD','신규/인상/인하/환율조정/수정','변동이유상세','담당자실명'];
+  const guides=['제조사명','메이커 품번','LG품번(없으면공백)','이카운트품번','부품명(영문)','직거래/LG사급','구매처명칭','KRW또는USD','통화그대로입력','LG관련거래시','매출처명칭','KRW또는USD','통화그대로입력','USD판매시원화환산(마진계산용)','YYYY-MM-DD','신규/인상/인하/환율조정/수정','변동이유상세','담당자실명','자유기재'];
   const gRow=ws2.getRow(4); gRow.height=18;
   guides.forEach((g,i)=>{
     const c=gRow.getCell(i+1);
@@ -750,7 +756,7 @@ async function downloadTemplate(){
     c.alignment={horizontal:'center',vertical:'middle'};
   });
   // 예시
-  const exVals=['SMART','RC-98TRJ1K20','0RH1201L622','9001-001','RESISTOR CHIP','LG사급','SMART','USD','0.35','1380','600','LG전자 협력사A','KRW','550','2026-04-09','신규','최초 단가 등록','배병대'];
+  const exVals=['SMART','RC-98TRJ1K20','0RH1201L622','9001-001','RESISTOR CHIP','LG사급','SMART','KRW','500','600','LG전자 협력사A','USD','0.40','552','2026-04-09','신규','최초 단가 등록','배병대',''];
   const eRow=ws2.getRow(5); eRow.height=20;
   exVals.forEach((v,i)=>{
     const c=eRow.getCell(i+1);
@@ -761,7 +767,7 @@ async function downloadTemplate(){
   // 입력영역
   for(let r=6;r<=105;r++){
     const row=ws2.getRow(r); row.height=18;
-    for(let c=1;c<=18;c++){
+    for(let c=1;c<=19;c++){
       const cell=row.getCell(c);
       cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:r%2===0?'FFFFFFFF':'FFFFFAF7'}};
       cell.border={top:{style:'thin',color:{argb:'FFDDDDDD'}},bottom:{style:'thin',color:{argb:'FFDDDDDD'}},left:{style:'thin',color:{argb:'FFDDDDDD'}},right:{style:'thin',color:{argb:'FFDDDDDD'}}};
@@ -779,10 +785,10 @@ async function downloadTemplate(){
 // ── 엑셀 다운로드 ──
 function exportExcel(){
   if(!listData.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
-  const h=['공급구분','Maker','ERP코드','Maker P/N','LG P/N','Description','구매처','매입통화','매입단가','적용환율','LG인증가','판매처','판매통화','판매단가','마진율','적용일자','변동구분','변동사유','등록자'];
+  const h=['공급구분','Maker','ERP코드','Maker P/N','LG P/N','Description','구매처','매입통화','매입단가','LG인증가','판매처','판매통화','판매단가','판매단가(KRW)','마진율','적용일자','변동구분','변동사유','등록자','비고'];
   const rows=listData.map(r=>{
     const m=calcMargin(r);
-    return[r.trade_type,r.maker,r.erp_code,r.maker_pn,r.lg_pn,r.description,r.supplier,r.buy_currency,r.buy_price,r.exchange_rate,r.lg_cert_price,r.customer,r.sell_currency,r.sell_price,m!==null?m+'%':'',r.valid_from,r.change_type,r.change_reason,r.registered_by];
+    return[r.trade_type,r.maker,r.erp_code,r.maker_pn,r.lg_pn,r.description,r.supplier,r.buy_currency,r.buy_price,r.lg_cert_price,r.customer,r.sell_currency,r.sell_price,r.sell_price_krw,m!==null?m+'%':'',r.valid_from,r.change_type,r.change_reason,r.registered_by,r.remarks];
   });
   const ws3=XLSX.utils.aoa_to_sheet([h,...rows]);
   const wb3=XLSX.utils.book_new();
