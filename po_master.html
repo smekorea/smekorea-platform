@@ -398,10 +398,10 @@
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker P/N</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker</th>
                 <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하수량</th>
+                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">판매단가(KRW)</th>
+                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);border-bottom:1px solid var(--border);">출하금액(KRW)</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하일</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">운송</th>
-                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">본사발주일</th>
-                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">메이커약속납기</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">상태</th>
               </tr>
             </thead>
@@ -1137,8 +1137,8 @@
 
         // SME_PO마스터 파일 기준
         // 0:구분 1:법인 2:주문일자 3:PO No. 4:LG P/N 5:Maker P/N 6:ERP품번 7:Maker
-        // 8:주문수량 9:출하수량 10:잔량 11:ETD요청일 12:운송 13:상태
-        // 14:출하수량(입력) 15:운송구분(입력) 16:인보이스No.(입력) 17:출하일(입력) 18:비고
+        // 8:주문수량 9:출하수량 10:잔량 11:판매단가(KRW) 12:ETD요청일 13:운송 14:상태
+        // 15:출하수량(입력) 16:운송구분(입력) 17:인보이스No.(입력) 18:출하일(입력) 19:비고
         let headerRow = -1;
         for (let i=0; i<Math.min(10, raw.length); i++) {
           if (raw[i].some(c => String(c).includes('구분')) && raw[i].some(c => String(c).includes('PO No.'))) {
@@ -1148,23 +1148,24 @@
         if (headerRow < 0) { showToast('⚠ SME_PO마스터 파일을 확인해주세요', 'error'); return; }
 
         // 출하수량(입력) 컬럼에 값이 있는 행만 파싱
-        const dataRows = raw.slice(headerRow + 1).filter(r => r.some(c => c !== '') && Number(r[14]) > 0);
+        const dataRows = raw.slice(headerRow + 1).filter(r => r.some(c => c !== '') && Number(r[15]) > 0);
         if (!dataRows.length) { showToast('⚠ 출하수량(입력) 컬럼에 값을 입력해주세요', 'warn'); return; }
 
         hqData = dataRows.map((r, idx) => ({
-          row:      idx + 1,
-          entity:   String(r[1]||'').trim(),
-          pono:     String(r[3]||'').trim(),
-          lgpn:     String(r[4]||'').trim(),
-          mkpn:     String(r[5]||'').trim(),
-          erp:      String(r[6]||'').trim(),
-          maker:    String(r[7]||'').trim(),
-          etd:      formatDate(r[11]),
-          shipqty:  Number(r[14])||0,
-          mode:     (String(r[15]||'').trim().toUpperCase().replace('VSSL','VSL')),
-          invoice:  String(r[16]||'').trim(),
-          shipdate: formatDate(r[17]),
-          remark:   String(r[18]||'').trim(),
+          row:           idx + 1,
+          entity:        String(r[1]||'').trim(),
+          pono:          String(r[3]||'').trim(),
+          lgpn:          String(r[4]||'').trim(),
+          mkpn:          String(r[5]||'').trim(),
+          erp:           String(r[6]||'').trim(),
+          maker:         String(r[7]||'').trim(),
+          sales_price:   Number(r[11])||null,
+          etd:           formatDate(r[12]),
+          shipqty:       Number(r[15])||0,
+          mode:          (String(r[16]||'').trim().toUpperCase().replace('VSSL','VSL')),
+          invoice:       String(r[17]||'').trim(),
+          shipdate:      formatDate(r[18]),
+          remark:        String(r[19]||'').trim(),
         }));
 
         renderHQPreview();
@@ -1209,6 +1210,7 @@
         : `<span style="background:rgba(14,159,110,0.1);color:#0e9f6e;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;">✓ OK</span>`;
 
       const bg = isErr ? 'rgba(200,0,30,0.03)' : (r.row%2===0?'#fff':'#f8fafc');
+      const shipAmt = (r.sales_price && r.shipqty) ? (r.sales_price * r.shipqty) : null;
       return `<tr style="background:${bg};border-bottom:1px solid #f0f4f9;">
         <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);">${r.row}</td>
         <td style="padding:8px 12px;">${r.entity||'—'}</td>
@@ -1216,10 +1218,10 @@
         <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn||'—'}</td>
         <td style="padding:8px 12px;">${r.maker||'—'}</td>
         <td style="padding:8px 12px;text-align:right;font-weight:700;">${r.shipqty?r.shipqty.toLocaleString():'—'}</td>
+        <td style="padding:8px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.sales_price?r.sales_price.toLocaleString()+'원':'—'}</td>
+        <td style="padding:8px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:var(--accent2);">${shipAmt?shipAmt.toLocaleString()+'원':'—'}</td>
         <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.shipdate||'—'}</td>
         <td style="padding:8px 12px;">${modeBadge}</td>
-        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.hqdate||'—'}</td>
-        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkcommit||'—'}</td>
         <td style="padding:8px 12px;">${statusBadge}</td>
       </tr>`;
     }).join('');
@@ -1255,19 +1257,20 @@
           .limit(1);
         const po = data?.[0];
         return {
-          po_id:      po?.id || null,
-          po_no:      r.pono || '',
-          entity:     r.entity,
-          item_code:  r.erp || null,
-          ship_date:  r.shipdate,
-          ship_qty:   r.shipqty,
-          transport:  r.mode,
-          invoice_no: r.invoice,
-          etd:        r.hqdate || null,
-          eta:        r.mkcommit || null,
-          status:     '출하완료',
-          remark:     r.remark || null,
-          created_by: 'HQ'
+          po_id:           po?.id || null,
+          po_no:           r.pono || '',
+          entity:          r.entity,
+          item_code:       r.erp || null,
+          ship_date:       r.shipdate,
+          ship_qty:        r.shipqty,
+          transport:       r.mode,
+          invoice_no:      r.invoice,
+          etd:             r.hqdate || null,
+          eta:             r.mkcommit || null,
+          sales_price_krw: r.sales_price || null,
+          status:          '출하완료',
+          remark:          r.remark || null,
+          created_by:      'HQ'
         };
       }));
       const {error} = await sb.from('shipment_po').insert(rows);
