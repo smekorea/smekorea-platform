@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMEKOREA — 재고현황 분석</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#f7f4ef;--surface:#fff;--border:#e5ddd4;--border-hover:#c8b8a8;
+  --accent:#c8001e;--accent2:#1a56db;--text:#1a1612;--muted:#a8998a;
+  --card-shadow:0 2px 12px rgba(80,60,40,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+.page-wrap{max-width:1440px;margin:0 auto;padding:32px 28px 60px;}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+.logo-wrap{display:flex;align-items:center;gap:10px;}
+.sm-mark{width:38px;height:38px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:900;color:#fff;box-shadow:0 4px 14px rgba(200,0,30,0.3);}
+.co-name{font-size:15px;font-weight:900;}
+.co-sub{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;margin-top:1px;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.back-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--muted);font-size:11px;font-weight:600;font-family:'Share Tech Mono',monospace;letter-spacing:.5px;transition:all .18s;}
+.back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+.upload-btn-top{display:flex;align-items:center;gap:5px;padding:7px 14px;background:var(--surface);border:1.5px solid #10b981;border-radius:8px;color:#059669;font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;cursor:pointer;transition:all .18s;}
+.upload-btn-top:hover{background:#f0fdf4;}
+
+.page-title{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:4px;}
+.page-title span{color:var(--accent2);}
+.page-sub{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:.5px;margin-bottom:22px;}
+
+.filter-card{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:18px 22px;margin-bottom:22px;box-shadow:var(--card-shadow);}
+.filter-row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}
+.filter-group{display:flex;flex-direction:column;gap:5px;}
+.filter-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;font-family:'Share Tech Mono',monospace;}
+.filter-select,.filter-input{height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;font-family:'Noto Sans KR',sans-serif;background:#faf8f5;color:var(--text);outline:none;transition:border-color .18s;min-width:130px;}
+.filter-select:focus,.filter-input:focus{border-color:var(--accent2);}
+.btn{height:36px;padding:0 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
+.btn-search{background:var(--accent);color:#fff;}
+.btn-search:hover{background:#a8001a;}
+.btn-excel{background:#1a56db;color:#fff;}
+.btn-excel:hover{background:#1344b0;}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:22px;}
+.kpi-card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--card-shadow);}
+.kpi-label{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1.5px;font-family:'Share Tech Mono',monospace;margin-bottom:7px;}
+.kpi-val{font-size:24px;font-weight:900;font-family:'Share Tech Mono',monospace;line-height:1;}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:4px;}
+.kpi-card.k-total{border-top:3px solid #6366f1;}
+.kpi-card.k-dead {border-top:3px solid #ef4444;}
+.kpi-card.k-over {border-top:3px solid #f97316;}
+.kpi-card.k-lack {border-top:3px solid #3b82f6;}
+.kpi-card.k-good {border-top:3px solid #10b981;}
+.kpi-card.k-amt  {border-top:3px solid #f59e0b;}
+
+.sec-label{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.sec-label-text{font-size:12px;font-weight:700;letter-spacing:3px;color:#1a1612;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+.sec-label-line{flex:1;height:1.5px;background:var(--accent);opacity:0.3;}
+
+.table-wrap{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--card-shadow);}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);}
+.table-count{font-size:12px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+.table-count b{color:var(--text);}
+.table-note{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+.tbl-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead tr{background:#f7f4ef;}
+th{padding:9px 11px;text-align:center;font-weight:700;font-size:10px;color:var(--muted);letter-spacing:.5px;border-bottom:1.5px solid var(--border);white-space:nowrap;font-family:'Share Tech Mono',monospace;}
+th.left{text-align:left;}
+td{padding:8px 11px;border-bottom:1px solid #f0ece6;vertical-align:middle;}
+td.left{text-align:left;}
+td.right{text-align:right;font-family:'Share Tech Mono',monospace;font-size:12px;}
+td.center{text-align:center;}
+tr:hover td{background:rgba(200,0,30,0.02);}
+tr:last-child td{border-bottom:none;}
+
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+.b-dead{background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);}
+.b-over{background:rgba(249,115,22,0.1);color:#ea580c;border:1px solid rgba(249,115,22,0.25);}
+.b-warn{background:rgba(234,179,8,0.1);color:#ca8a04;border:1px solid rgba(234,179,8,0.25);}
+.b-good{background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);}
+.b-lack{background:rgba(59,130,246,0.1);color:#2563eb;border:1px solid rgba(59,130,246,0.25);}
+.b-new {background:rgba(139,92,246,0.1);color:#7c3aed;border:1px solid rgba(139,92,246,0.25);}
+.type-d{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(26,86,219,0.08);color:#1a56db;border:1px solid rgba(26,86,219,0.2);}
+.type-l{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(200,0,30,0.07);color:#c8001e;border:1px solid rgba(200,0,30,0.2);}
+.num-over{color:#ea580c;font-weight:700;}
+.num-lack{color:#2563eb;font-weight:700;}
+.num-zero{color:var(--muted);}
+
+.loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;gap:14px;}
+.spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:12px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-icon{font-size:38px;margin-bottom:10px;}
+.empty-text{font-size:13px;line-height:1.9;}
+
+.pagination{display:flex;align-items:center;justify-content:center;gap:5px;padding:14px;}
+.page-btn{width:30px;height:30px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:'Share Tech Mono',monospace;}
+.page-btn:hover{border-color:var(--accent);color:var(--accent);}
+.page-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.page-btn:disabled{opacity:.35;cursor:default;}
+
+/* 업로드 모달 */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(26,34,51,0.5);backdrop-filter:blur(4px);z-index:400;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:#fff;border-radius:20px;padding:36px;width:480px;box-shadow:0 24px 64px rgba(0,0,0,0.18);animation:popIn .22s ease;}
+.modal-title{font-size:17px;font-weight:900;margin-bottom:6px;}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.7;}
+.upload-zone{border:2.5px dashed var(--border);border-radius:12px;padding:30px 20px;text-align:center;cursor:pointer;transition:all .18s;background:#faf8f5;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent2);background:#f0f4ff;}
+.upload-icon{font-size:30px;margin-bottom:10px;}
+.upload-hint{font-size:12px;color:var(--muted);line-height:1.7;}
+.upload-hint b{color:var(--text);}
+.file-info{font-size:12px;color:#059669;font-weight:700;margin-top:12px;padding:8px 14px;background:#f0fdf4;border-radius:8px;display:none;}
+.progress-wrap{height:6px;background:#f0ece6;border-radius:3px;margin-top:14px;overflow:hidden;display:none;}
+.progress-bar{height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .3s;}
+.modal-btns{display:flex;gap:10px;margin-top:18px;}
+.btn-cancel{flex:1;height:40px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.btn-do-upload{flex:2;height:40px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;display:none;}
+
+/* 비밀번호 오버레이 */
+.pw-overlay{position:fixed;inset:0;background:rgba(26,34,51,0.55);backdrop-filter:blur(4px);z-index:999;display:flex;align-items:center;justify-content:center;}
+.pw-overlay.hide{display:none;}
+.pw-box{background:#fff;border-radius:20px;padding:40px 36px;width:340px;box-shadow:0 24px 64px rgba(0,0,0,0.2);text-align:center;}
+.pw-icon{font-size:40px;margin-bottom:14px;}
+.pw-title{font-size:18px;font-weight:900;margin-bottom:4px;}
+.pw-sub{font-size:12px;color:var(--muted);margin-bottom:24px;}
+.pw-input{width:100%;padding:13px;border:2px solid var(--border);border-radius:10px;font-size:22px;font-family:'Share Tech Mono',monospace;letter-spacing:8px;text-align:center;outline:none;background:#f8fafc;transition:border-color .18s;}
+.pw-input:focus{border-color:var(--accent2);}
+.pw-input.error{border-color:var(--accent);animation:shake .3s ease;}
+.pw-error{font-size:12px;color:var(--accent);font-weight:600;margin:8px 0 12px;min-height:18px;}
+.pw-btn{width:100%;padding:13px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer;}
+.pw-btn:hover{background:#a80019;}
+.pw-back{display:block;margin-top:14px;font-size:12px;color:var(--muted);cursor:pointer;}
+.pw-back:hover{color:var(--accent2);}
+
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:700px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.page-wrap{padding:20px 14px 40px;}}
+</style>
+</head>
+<body>
+
+<!-- 비밀번호 오버레이 -->
+<div class="pw-overlay" id="pwOverlay">
+  <div class="pw-box">
+    <div class="pw-icon">🔐</div>
+    <div class="pw-title">접근 제한</div>
+    <div class="pw-sub">재고현황 시스템 · 비밀번호를 입력해주세요</div>
+    <input class="pw-input" type="password" id="pwInput" maxlength="10" placeholder="••••"
+           onkeydown="if(event.key==='Enter')checkPW()">
+    <div class="pw-error" id="pwError"></div>
+    <button class="pw-btn" onclick="checkPW()">확인</button>
+    <a class="pw-back" onclick="history.back()">← 메인으로 돌아가기</a>
+  </div>
+</div>
+
+<!-- 업로드 모달 -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal-box">
+    <div class="modal-title">📂 재고조사 데이터 업로드</div>
+    <div class="modal-sub">
+      매월 재고조사 완료 후 엑셀 파일을 업로드하세요.<br>
+      동일 연월+품목코드는 자동 덮어쓰기(upsert) 됩니다.
+    </div>
+    <div class="upload-zone" id="uploadZone"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+         onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📊</div>
+      <div class="upload-hint">
+        <b>클릭하거나 파일을 드래그</b>하여 업로드<br>
+        Excel (.xlsx) · 필수 컬럼: 연월 / 공급유형 / 브랜드명 / 품목코드 / 품명및규격<br>
+        / LG_PN / MAKER_PN / ERP재고수량 / 실재고수량 / 차이수량 / 입고단가 / 재고금액
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="onFileSelect(this)">
+    <div class="file-info" id="fileInfo"></div>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeUploadModal()">취소</button>
+      <button class="btn-do-upload" id="btnDoUpload" onclick="doUpload()">업로드 시작</button>
+    </div>
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <div class="topbar">
+    <div class="logo-wrap">
+      <div class="sm-mark">SM</div>
+      <div>
+        <div class="co-name">SME KOREA</div>
+        <div class="co-sub">STOCK ANALYSIS</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="upload-btn-top" onclick="openUploadModal()">📂 재고조사 업로드</div>
+      <a class="back-btn" href="index.html">← MAIN</a>
+    </div>
+  </div>
+
+  <div class="page-title">재고현황 <span>분석</span></div>
+  <div class="page-sub">INVENTORY STATUS · PURCHASE &amp; SALES DATA BASED ANALYSIS</div>
+
+  <!-- 필터 -->
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="filter-group">
+        <div class="filter-label">재고조사 기준월</div>
+        <select class="filter-select" id="f_month">
+          <option value="">— 선택 —</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">판매기준 기간</div>
+        <select class="filter-select" id="f_period">
+          <option value="3">최근 3개월</option>
+          <option value="6">최근 6개월</option>
+          <option value="12">최근 12개월</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">공급유형</div>
+        <select class="filter-select" id="f_type">
+          <option value="전체">전체</option>
+          <option value="직거래">직거래</option>
+          <option value="LG사급">LG사급</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">상태</div>
+        <select class="filter-select" id="f_status">
+          <option value="전체">전체</option>
+          <option value="데드스톡">🔴 데드스톡</option>
+          <option value="과잉">🟠 과잉</option>
+          <option value="주의">🟡 주의</option>
+          <option value="적정">🟢 적정</option>
+          <option value="부족">🔵 부족</option>
+          <option value="신규입고">🟣 신규입고</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">품목코드 / 품명</div>
+        <input class="filter-input" type="text" id="f_keyword" placeholder="검색어 입력"
+               style="min-width:160px;" onkeydown="if(event.key==='Enter')runAnalysis()">
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">&nbsp;</div>
+        <button class="btn btn-search" onclick="runAnalysis()">🔍 분석실행</button>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">&nbsp;</div>
+        <button class="btn btn-excel" onclick="exportExcel()">📥 엑셀다운</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card k-total">
+      <div class="kpi-label">TOTAL ITEMS</div>
+      <div class="kpi-val" id="kpi_total">—</div>
+      <div class="kpi-sub">조회 품목수</div>
+    </div>
+    <div class="kpi-card k-dead">
+      <div class="kpi-label">DEAD STOCK</div>
+      <div class="kpi-val" id="kpi_dead" style="color:#dc2626;">—</div>
+      <div class="kpi-sub">판매없음+실재고>0</div>
+    </div>
+    <div class="kpi-card k-over">
+      <div class="kpi-label">과잉재고</div>
+      <div class="kpi-val" id="kpi_over" style="color:#ea580c;">—</div>
+      <div class="kpi-sub">적정재고 150% 초과</div>
+    </div>
+    <div class="kpi-card k-lack">
+      <div class="kpi-label">부족재고</div>
+      <div class="kpi-val" id="kpi_lack" style="color:#2563eb;">—</div>
+      <div class="kpi-sub">적정재고 50% 미만</div>
+    </div>
+    <div class="kpi-card k-good">
+      <div class="kpi-label">적정재고</div>
+      <div class="kpi-val" id="kpi_good" style="color:#059669;">—</div>
+      <div class="kpi-sub">정상 범위</div>
+    </div>
+    <div class="kpi-card k-amt">
+      <div class="kpi-label">총 재고금액</div>
+      <div class="kpi-val" id="kpi_amt" style="font-size:18px;color:#d97706;">—</div>
+      <div class="kpi-sub">원 (KRW)</div>
+    </div>
+  </div>
+
+  <!-- 테이블 -->
+  <div class="sec-label">
+    <span class="sec-label-text">품목별 재고현황</span>
+    <div class="sec-label-line"></div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <div class="table-count">총 <b id="tbl_count">0</b>건</div>
+      <div class="table-note">적정재고=월평균판매량×2 &nbsp;|&nbsp; 과잉>150% &nbsp; 주의 100~150% &nbsp; 적정 50~100% &nbsp; 부족&lt;50%</div>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="left">품목코드</th>
+            <th class="left">브랜드</th>
+            <th class="left" style="min-width:200px;">품명및규격</th>
+            <th>공급유형</th>
+            <th>월평균판매량</th>
+            <th>적정재고(×2)</th>
+            <th>실재고수량</th>
+            <th>과부족수량</th>
+            <th>재고금액(원)</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody id="tblBody">
+          <tr><td colspan="10"><div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <div class="empty-text">기준월을 선택하고 분석실행을 눌러주세요</div>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <div style="margin-top:10px;font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;text-align:right;">
+    © 2026 SMEKOREA · STOCK ANALYSIS SYSTEM
+  </div>
+</div>
+
+<script>
+const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const PW='1120';
+
+// ── 인증 ──
+function checkPW(){
+  const val=document.getElementById('pwInput').value;
+  if(val===PW){
+    sessionStorage.setItem('po_auth','1');
+    document.getElementById('pwOverlay').classList.add('hide');
+    initPage();
+  } else {
+    const inp=document.getElementById('pwInput');
+    inp.classList.add('error');
+    document.getElementById('pwError').textContent='⚠ 비밀번호가 올바르지 않습니다';
+    inp.value='';
+    setTimeout(()=>inp.classList.remove('error'),400);
+  }
+}
+if(sessionStorage.getItem('po_auth')==='1'){
+  document.getElementById('pwOverlay').classList.add('hide');
+  initPage();
+}
+
+// ── 초기화: 기준월 드롭다운 ──
+async function initPage(){
+  const {data}=await sb.from('stock_inventory').select('ym').order('ym',{ascending:false});
+  if(data&&data.length){
+    const months=[...new Set(data.map(r=>r.ym))].sort((a,b)=>b.localeCompare(a));
+    const sel=document.getElementById('f_month');
+    sel.innerHTML='<option value="">— 선택 —</option>';
+    months.forEach(m=>{
+      const [y,mo]=m.split('-');
+      sel.innerHTML+=`<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;
+    });
+    if(months.length){sel.value=months[0];runAnalysis();}
+  }
+}
+
+// ── 분석 실행 ──
+let _allResult=[],_filtered=[],_curPage=1;
+const PAGE_SIZE=50;
+
+async function runAnalysis(){
+  const month=document.getElementById('f_month').value;
+  if(!month){alert('재고조사 기준월을 선택해주세요.');return;}
+  const period=parseInt(document.getElementById('f_period').value);
+
+  showLoading('재고조사 데이터 로딩 중...');
+
+  // 1. stock_inventory 조회
+  const PAGE=1000;let stockAll=[],pg=0;
+  while(true){
+    const {data,error}=await sb.from('stock_inventory').select('*')
+      .eq('ym',month).range(pg*PAGE,(pg+1)*PAGE-1);
+    if(error||!data||!data.length)break;
+    stockAll=[...stockAll,...data];pg++;
+  }
+  if(!stockAll.length){
+    document.getElementById('tblBody').innerHTML=`<tr><td colspan="10"><div class="empty-state">
+      <div class="empty-icon">📂</div>
+      <div class="empty-text">해당 월 재고조사 데이터가 없습니다<br>우측 상단 [재고조사 업로드] 버튼을 눌러 업로드해주세요.</div>
+    </div></td></tr>`;
+    document.getElementById('pagination').innerHTML='';
+    return;
+  }
+
+  // 2. 판매기간 계산 (기준월 이전 N개월)
+  showLoading('매출 데이터 집계 중...');
+  const baseDt=new Date(month+'-01');
+  const toDt=new Date(baseDt);toDt.setDate(0); // 기준월 전월 말일
+  const frDt=new Date(toDt);
+  frDt.setMonth(frDt.getMonth()-period+1);frDt.setDate(1);
+  const fromStr=`${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
+  const toStr=`${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
+
+  // 3. sales_data 집계
+  const codes=[...new Set(stockAll.map(r=>r.item_code))];
+  const salesMap={};
+  const CHUNK=150;
+  for(let i=0;i<codes.length;i+=CHUNK){
+    const chunk=codes.slice(i,i+CHUNK);
+    const {data}=await sb.from('sales_data').select('item_code,qty')
+      .in('item_code',chunk).gte('trade_date',fromStr).lte('trade_date',toStr);
+    if(data)data.forEach(r=>{salesMap[r.item_code]=(salesMap[r.item_code]||0)+(Number(r.qty)||0);});
+  }
+
+  // 4. 결과 생성
+  _allResult=stockAll.map(r=>{
+    const totalSales=salesMap[r.item_code]||0;
+    const avgMonthly=totalSales/period;
+    const optimal=avgMonthly*2;
+    const realQty=Number(r.real_qty)||0;
+    const surplus=optimal>0?realQty-optimal:0;
+    let state;
+    if(totalSales===0&&realQty>0)      state='데드스톡';
+    else if(optimal===0&&realQty>0)    state='신규입고';
+    else if(realQty===0&&optimal===0)  state='적정';
+    else if(realQty>optimal*1.5)       state='과잉';
+    else if(realQty>optimal*1.0)       state='주의';
+    else if(realQty>=optimal*0.5)      state='적정';
+    else                                state='부족';
+    return{
+      code:r.item_code,brand:r.brand||'',desc:r.description||'',
+      type:r.supply_type||'',lgpn:r.lg_pn||'',mkpn:r.maker_pn||'',
+      realQty,erpQty:Number(r.erp_qty)||0,
+      price:Number(r.unit_price)||0,amount:Number(r.stock_amount)||0,
+      totalSales,avgMonthly,optimal,surplus,state
+    };
+  });
+
+  applyFilter();
+}
+
+function applyFilter(){
+  const type=document.getElementById('f_type').value;
+  const status=document.getElementById('f_status').value;
+  const keyword=document.getElementById('f_keyword').value.trim().toLowerCase();
+
+  _filtered=_allResult;
+  if(type!=='전체')   _filtered=_filtered.filter(r=>r.type===type);
+  if(status!=='전체') _filtered=_filtered.filter(r=>r.state===status);
+  if(keyword)         _filtered=_filtered.filter(r=>
+    r.code.toLowerCase().includes(keyword)||
+    r.desc.toLowerCase().includes(keyword)||
+    r.brand.toLowerCase().includes(keyword)
+  );
+
+  const ord={데드스톡:0,과잉:1,주의:2,부족:3,신규입고:4,적정:5};
+  _filtered.sort((a,b)=>(ord[a.state]??9)-(ord[b.state]??9));
+
+  // KPI (공급유형 필터만 적용)
+  const base=type==='전체'?_allResult:_allResult.filter(r=>r.type===type);
+  document.getElementById('kpi_total').textContent=base.length.toLocaleString();
+  document.getElementById('kpi_dead').textContent =base.filter(r=>r.state==='데드스톡').length.toLocaleString();
+  document.getElementById('kpi_over').textContent =base.filter(r=>r.state==='과잉').length.toLocaleString();
+  document.getElementById('kpi_lack').textContent =base.filter(r=>r.state==='부족').length.toLocaleString();
+  document.getElementById('kpi_good').textContent =base.filter(r=>r.state==='적정').length.toLocaleString();
+  const amt=base.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('kpi_amt').textContent=(Math.round(amt/100000000*10)/10).toLocaleString()+'억';
+
+  _curPage=1;
+  renderTable();
+}
+
+// ── 테이블 렌더 ──
+const SM={데드스톡:['b-dead','🔴'],과잉:['b-over','🟠'],주의:['b-warn','🟡'],
+          적정:['b-good','🟢'],부족:['b-lack','🔵'],신규입고:['b-new','🟣']};
+
+function renderTable(){
+  document.getElementById('tbl_count').textContent=_filtered.length.toLocaleString();
+  const totalPages=Math.ceil(_filtered.length/PAGE_SIZE)||1;
+  const slice=_filtered.slice((_curPage-1)*PAGE_SIZE,_curPage*PAGE_SIZE);
+
+  if(!slice.length){
+    document.getElementById('tblBody').innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">조회된 데이터가 없습니다</div></div></td></tr>`;
+    document.getElementById('pagination').innerHTML='';
+    return;
+  }
+
+  document.getElementById('tblBody').innerHTML=slice.map(r=>{
+    const[cls,ico]=SM[r.state]||['b-good','🟢'];
+    const sCls=r.surplus>0?'num-over':r.surplus<0?'num-lack':'num-zero';
+    const sStr=r.optimal>0?(r.surplus>0?'+':'')+Math.round(r.surplus).toLocaleString():'—';
+    const tCls=r.type==='직거래'?'type-d':'type-l';
+    return`<tr>
+      <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.code}</td>
+      <td class="left" style="font-size:11px;">${r.brand}</td>
+      <td class="left" style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.desc}">${r.desc}</td>
+      <td class="center"><span class="${tCls}">${r.type}</span></td>
+      <td class="right">${r.avgMonthly>0?Math.round(r.avgMonthly).toLocaleString():'—'}</td>
+      <td class="right">${r.optimal>0?Math.round(r.optimal).toLocaleString():'—'}</td>
+      <td class="right" style="font-weight:700;">${r.realQty.toLocaleString()}</td>
+      <td class="right ${sCls}">${sStr}</td>
+      <td class="right">${r.amount>0?Math.round(r.amount).toLocaleString():'—'}</td>
+      <td class="center"><span class="badge ${cls}">${ico} ${r.state}</span></td>
+    </tr>`;
+  }).join('');
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages){
+  const pg=document.getElementById('pagination');
+  if(totalPages<=1){pg.innerHTML='';return;}
+  let h=`<button class="page-btn" onclick="goPage(${_curPage-1})" ${_curPage===1?'disabled':''}>‹</button>`;
+  const s=Math.max(1,_curPage-2),e=Math.min(totalPages,_curPage+2);
+  if(s>1)h+=`<button class="page-btn" onclick="goPage(1)">1</button>${s>2?'<span style="padding:0 4px;color:var(--muted)">…</span>':''}`;
+  for(let i=s;i<=e;i++)h+=`<button class="page-btn ${i===_curPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if(e<totalPages)h+=`${e<totalPages-1?'<span style="padding:0 4px;color:var(--muted)">…</span>':''}<button class="page-btn" onclick="goPage(${totalPages})">${totalPages}</button>`;
+  h+=`<button class="page-btn" onclick="goPage(${_curPage+1})" ${_curPage===totalPages?'disabled':''}>›</button>`;
+  pg.innerHTML=h;
+}
+
+function goPage(p){
+  _curPage=p;renderTable();
+  window.scrollTo({top:document.querySelector('.table-wrap').offsetTop-20,behavior:'smooth'});
+}
+
+// ── 엑셀 다운로드 ──
+function exportExcel(){
+  if(!_filtered.length){alert('먼저 분석실행을 해주세요.');return;}
+  const month=document.getElementById('f_month').value;
+  const period=document.getElementById('f_period').value;
+  const hdrs=['품목코드','브랜드','품명및규격','공급유형',
+    `월평균판매량(최근${period}M)`,'적정재고(×2)','실재고수량','과부족수량','재고금액(원)','상태'];
+  const rows=_filtered.map(r=>[
+    r.code,r.brand,r.desc,r.type,
+    r.avgMonthly>0?Math.round(r.avgMonthly):0,
+    r.optimal>0?Math.round(r.optimal):0,
+    r.realQty,
+    r.optimal>0?Math.round(r.surplus):'-',
+    Math.round(r.amount)||0,
+    r.state
+  ]);
+  const ws=XLSX.utils.aoa_to_sheet([hdrs,...rows]);
+  ws['!cols']=[14,12,32,8,16,14,12,12,14,10].map(w=>({wch:w}));
+  const wb2=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2,ws,'재고현황분석');
+  XLSX.writeFile(wb2,`SME_재고현황_${(month||'').replace('-','')}.xlsx`);
+}
+
+function showLoading(msg){
+  document.getElementById('tblBody').innerHTML=`<tr><td colspan="10"><div class="loading-wrap"><div class="spinner"></div><div class="loading-text">${msg||'로딩 중...'}</div></div></td></tr>`;
+  document.getElementById('pagination').innerHTML='';
+}
+
+// ── 업로드 모달 ──
+let _pendingData=[];
+
+function openUploadModal(){document.getElementById('uploadModal').classList.add('show');}
+function closeUploadModal(){
+  document.getElementById('uploadModal').classList.remove('show');
+  _pendingData=[];
+  document.getElementById('fileInfo').style.display='none';
+  document.getElementById('btnDoUpload').style.display='none';
+  document.getElementById('progressWrap').style.display='none';
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('fileInput').value='';
+}
+
+function onDragOver(e){e.preventDefault();document.getElementById('uploadZone').classList.add('drag');}
+function onDragLeave(){document.getElementById('uploadZone').classList.remove('drag');}
+function onDrop(e){
+  e.preventDefault();document.getElementById('uploadZone').classList.remove('drag');
+  if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);
+}
+function onFileSelect(input){if(input.files[0])processFile(input.files[0]);}
+
+async function processFile(file){
+  const ab=await file.arrayBuffer();
+  const wb=XLSX.read(ab,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+
+  let hdrRow=-1,hdr=null;
+  for(let i=0;i<6;i++){
+    if(rows[i]&&rows[i].some(c=>String(c||'').includes('품목코드'))){hdrRow=i;hdr=rows[i];break;}
+  }
+  if(!hdr){alert('"품목코드" 컬럼을 찾을 수 없습니다.');return;}
+
+  const ci=name=>hdr.findIndex(h=>String(h||'').replace(/\s/g,'').includes(name.replace(/\s/g,'')));
+  const iYm=ci('연월'),iType=ci('공급유형'),iBrand=ci('브랜드명'),iCode=ci('품목코드'),
+        iDesc=ci('품명'),iLg=ci('LG_PN'),iMk=ci('MAKER_PN'),
+        iErp=ci('ERP재고수량'),iReal=ci('실재고수량'),iDiff=ci('차이수량'),
+        iPrice=ci('입고단가'),iAmt=ci('재고금액');
+
+  _pendingData=[];
+  for(let i=hdrRow+1;i<rows.length;i++){
+    const r=rows[i];
+    if(!r||!r[iCode])continue;
+    const code=String(r[iCode]||'').trim();
+    if(!code)continue;
+    _pendingData.push({
+      ym:String(r[iYm]||'').trim(),
+      supply_type:String(r[iType]||'').trim(),
+      brand:String(r[iBrand]||'').trim(),
+      item_code:code,
+      description:String(r[iDesc]||'').trim(),
+      lg_pn:String(r[iLg]||'').trim(),
+      maker_pn:String(r[iMk]||'').trim(),
+      erp_qty:Number(r[iErp])||0,
+      real_qty:Number(r[iReal])||0,
+      diff_qty:Number(r[iDiff])||0,
+      unit_price:Number(r[iPrice])||0,
+      stock_amount:Number(r[iAmt])||0,
+    });
+  }
+
+  const ym=_pendingData[0]?.ym||'';
+  document.getElementById('fileInfo').textContent=`✅ ${file.name} — ${_pendingData.length.toLocaleString()}건 (기준월: ${ym})`;
+  document.getElementById('fileInfo').style.display='block';
+  document.getElementById('btnDoUpload').style.display='block';
+}
+
+async function doUpload(){
+  if(!_pendingData.length){alert('파일을 먼저 선택해주세요.');return;}
+  const btn=document.getElementById('btnDoUpload');
+  btn.disabled=true;btn.textContent='업로드 중...';
+  document.getElementById('progressWrap').style.display='block';
+
+  const CHUNK=200;let done=0;
+  for(let i=0;i<_pendingData.length;i+=CHUNK){
+    const chunk=_pendingData.slice(i,i+CHUNK);
+    const{error}=await sb.from('stock_inventory').upsert(chunk,{onConflict:'ym,item_code'});
+    if(error){
+      alert('업로드 오류: '+error.message);
+      btn.disabled=false;btn.textContent='업로드 시작';
+      return;
+    }
+    done+=chunk.length;
+    document.getElementById('progressBar').style.width=Math.round(done/_pendingData.length*100)+'%';
+  }
+
+  btn.textContent='✅ 완료!';
+  setTimeout(()=>{closeUploadModal();initPage();},800);
+}
+
+document.getElementById('uploadModal').addEventListener('click',function(e){if(e.target===this)closeUploadModal();});
+</script>
+</body>
+</html>
