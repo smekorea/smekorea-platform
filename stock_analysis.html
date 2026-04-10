@@ -340,6 +340,7 @@ tr:last-child td{border-bottom:none;}
     <button class="tab-btn active" onclick="switchTab('tab-stock',this)">📋 품목별 재고현황</button>
     <button class="tab-btn" onclick="switchTab('tab-pattern',this)">📊 변동패턴 분석</button>
     <button class="tab-btn" onclick="switchTab('tab-brand',this)">🏷️ 브랜드별 집계</button>
+    <button class="tab-btn" onclick="switchTab('tab-risk',this)">⚠️ 위험재고</button>
   </div>
 
   <!-- 탭1: 품목별 재고현황 -->
@@ -487,6 +488,62 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div><!-- /tab-brand -->
 
+  <!-- 탭4: 위험재고 -->
+  <div class="tab-panel" id="tab-risk">
+    <div class="sec-label">
+      <span class="sec-label-text">위험재고 분석</span>
+      <div class="sec-label-line"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'Share Tech Mono',monospace;">
+      ※ 고단가(재고금액 상위) × 정체(변동없음) × 대량(수량 상위) — 2개 이상 해당 시 위험재고
+    </div>
+    <!-- 위험도 기준 카드 -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+      <div class="kpi-card" style="border-top:3px solid #ef4444;">
+        <div class="kpi-label">고단가 위험</div>
+        <div class="kpi-val" id="rk_highamt" style="color:#dc2626;">—</div>
+        <div class="kpi-sub">재고금액 1,000만원 이상</div>
+      </div>
+      <div class="kpi-card" style="border-top:3px solid #f97316;">
+        <div class="kpi-label">정체 위험</div>
+        <div class="kpi-val" id="rk_stagnant" style="color:#ea580c;">—</div>
+        <div class="kpi-sub">3개월 이상 재고 변동없음</div>
+      </div>
+      <div class="kpi-card" style="border-top:3px solid #7c3aed;">
+        <div class="kpi-label">복합 위험</div>
+        <div class="kpi-val" id="rk_complex" style="color:#7c3aed;">—</div>
+        <div class="kpi-sub">2개 이상 위험요소 해당</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-count">총 <b id="rk_count">0</b>건</div>
+        <div class="table-note">위험점수 높은 순 정렬 &nbsp;|&nbsp; 🔴고단가 🟠정체 🟣대량</div>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>위험도</th>
+              <th class="left">품목코드</th>
+              <th class="left">브랜드</th>
+              <th class="left" style="min-width:180px;">품명및규격</th>
+              <th>공급유형</th>
+              <th>재고개월수</th>
+              <th>실재고수량</th>
+              <th>재고금액(원)</th>
+              <th>위험요소</th>
+              <th>조치필요</th>
+            </tr>
+          </thead>
+          <tbody id="rkBody">
+            <tr><td colspan="10"><div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-risk -->
+
   <div style="margin-top:10px;font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;text-align:right;">
     © 2026 SMEKOREA · STOCK ANALYSIS SYSTEM
   </div>
@@ -520,17 +577,23 @@ if(sessionStorage.getItem('po_auth')==='1'){
 
 // ── 초기화: 기준월 드롭다운 ──
 async function initPage(){
-  // ym 전수 조회 (페이지네이션)
-  const PAGE=1000; let ymAll=[], pg=0;
-  while(true){
-    const {data,error}=await sb.from('stock_inventory').select('ym,brand')
-      .order('ym',{ascending:false}).range(pg*PAGE,(pg+1)*PAGE-1);
-    if(error||!data||!data.length) break;
-    ymAll=[...ymAll,...data]; pg++;
+  // ym 목록: 오름차순으로 전수 조회 (1월부터 순서대로 가져와 모든 월 확보)
+  const PAGE=1000; let ymSet=new Set(), brandSet=new Set(), pg=0;
+  // 오름차순(1월→3월) + 내림차순(3월→1월) 두 번 조회로 모든 월 확보
+  for(const asc of [true, false]){
+    pg=0;
+    while(true){
+      const {data,error}=await sb.from('stock_inventory').select('ym,brand')
+        .order('ym',{ascending:asc}).range(pg*PAGE,(pg+1)*PAGE-1);
+      if(error||!data||!data.length) break;
+      data.forEach(r=>{ ymSet.add(r.ym); if(r.brand) brandSet.add(r.brand); });
+      if(data.length<PAGE) break; // 마지막 페이지
+      pg++;
+    }
   }
-  if(ymAll.length){
-    // 기준월 드롭다운
-    const months=[...new Set(ymAll.map(r=>r.ym))].sort((a,b)=>b.localeCompare(a));
+  if(ymSet.size){
+    // 기준월 드롭다운 (내림차순)
+    const months=[...ymSet].sort((a,b)=>b.localeCompare(a));
     const sel=document.getElementById('f_month');
     sel.innerHTML='<option value="">— 선택 —</option>';
     months.forEach(m=>{
@@ -539,8 +602,8 @@ async function initPage(){
     });
     if(months.length) sel.value=months[0];
 
-    // 브랜드 드롭다운 (같은 데이터 활용)
-    const brands=[...new Set(ymAll.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    // 브랜드 드롭다운
+    const brands=[...brandSet].sort((a,b)=>a.localeCompare(b,'ko'));
     const bsel=document.getElementById('f_brand');
     bsel.innerHTML='<option value="전체">전체</option>';
     brands.forEach(b=>{ bsel.innerHTML+=`<option value="${b}">${b}</option>`; });
@@ -671,6 +734,7 @@ function applyFilter(){
   // 탭2/3 활성화된 경우 갱신
   if(document.getElementById('tab-pattern').classList.contains('active')) renderPattern();
   if(document.getElementById('tab-brand').classList.contains('active')) renderBrand();
+  if(document.getElementById('tab-risk').classList.contains('active')) renderRisk();
 }
 
 // ── 테이블 렌더 ──
@@ -880,6 +944,7 @@ function switchTab(tabId, btn){
   btn.classList.add('active');
   if(tabId==='tab-pattern') renderPattern();
   if(tabId==='tab-brand')   renderBrand();
+  if(tabId==='tab-risk')    renderRisk();
 }
 
 // ── 변동패턴 분석 ──
@@ -1084,6 +1149,7 @@ function switchTab(tabId, btn){
   btn.classList.add('active');
   if(tabId==='tab-pattern') renderPattern();
   if(tabId==='tab-brand')   renderBrand();
+  if(tabId==='tab-risk')    renderRisk();
 }
 
 // ── 변동패턴 분석 ──
@@ -1278,6 +1344,88 @@ function renderBrand(){
       <td class="center" style="color:#2563eb;font-weight:700;">${b.lack||'—'}</td>
     </tr>`;
   }).join('');
+}
+
+// ── 위험재고 분석 ──
+function renderRisk(){
+  if(!_allResult.length){
+    document.getElementById('rkBody').innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    return;
+  }
+
+  // 기준값 계산
+  const withAmt = _allResult.filter(r=>r.amount>0);
+  const amtSorted = [...withAmt].sort((a,b)=>b.amount-a.amount);
+  const qtySorted = [..._allResult.filter(r=>r.realQty>0)].sort((a,b)=>b.realQty-a.realQty);
+
+  // 고단가 기준: 재고금액 1,000만원 이상
+  const HIGH_AMT = 10000000;
+  // 대량 기준: 수량 상위 20%
+  const TOP20_QTY = qtySorted[Math.floor(qtySorted.length*0.2)]?.realQty||0;
+  // 정체 기준: 재고개월수 3개월 이상 + 데드스톡
+  const isStagnant = r => r.state==='데드스톡' || r.stockMonths>=3;
+
+  // 위험점수 계산
+  const riskItems = _allResult
+    .filter(r=>r.realQty>0)
+    .map(r=>{
+      const flags=[];
+      if(r.amount>=HIGH_AMT)          flags.push({ico:'🔴',label:'고단가'});
+      if(isStagnant(r))               flags.push({ico:'🟠',label:'정체'});
+      if(r.realQty>=TOP20_QTY)        flags.push({ico:'🟣',label:'대량'});
+      // 위험점수: 고단가 3점, 정체 2점, 대량 1점
+      let score=0;
+      if(r.amount>=HIGH_AMT)   score+=3;
+      if(isStagnant(r))         score+=2;
+      if(r.realQty>=TOP20_QTY) score+=1;
+      return{...r, flags, score};
+    })
+    .filter(r=>r.flags.length>=2) // 2개 이상 위험요소
+    .sort((a,b)=>b.score-a.score||b.amount-a.amount);
+
+  // KPI
+  const highAmtCnt = _allResult.filter(r=>r.amount>=HIGH_AMT).length;
+  const stagnantCnt= _allResult.filter(r=>isStagnant(r)&&r.realQty>0).length;
+  document.getElementById('rk_highamt').textContent  = highAmtCnt.toLocaleString()+'개';
+  document.getElementById('rk_stagnant').textContent = stagnantCnt.toLocaleString()+'개';
+  document.getElementById('rk_complex').textContent  = riskItems.length.toLocaleString()+'개';
+  document.getElementById('rk_count').textContent    = riskItems.length.toLocaleString();
+
+  if(!riskItems.length){
+    document.getElementById('rkBody').innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">위험재고 없음</div></div></td></tr>`;
+    return;
+  }
+
+  // 위험도 바
+  const maxScore=6;
+  const tCls=t=>t==='직거래'?'type-d':'type-l';
+  const scoreBadge=s=>{
+    if(s>=5) return '<span class="badge b-dead">🔴 매우위험</span>';
+    if(s>=4) return '<span class="badge b-over">🟠 위험</span>';
+    return '<span class="badge b-warn">🟡 주의</span>';
+  };
+  // 조치 추천
+  const action=r=>{
+    if(r.state==='데드스톡') return '즉시 처분/반납 검토';
+    if(r.amount>=HIGH_AMT&&r.stockMonths>=6) return '발주 즉시 중단';
+    if(r.amount>=HIGH_AMT&&r.stockMonths>=3) return '발주 보류 검토';
+    if(r.stockMonths>=6) return '재고 소진 우선';
+    return '모니터링 강화';
+  };
+
+  document.getElementById('rkBody').innerHTML=riskItems.map(r=>`<tr>
+    <td class="center">${scoreBadge(r.score)}</td>
+    <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.code}</td>
+    <td class="left" style="font-size:11px;">${r.brand}</td>
+    <td class="left" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.desc}">${r.desc}</td>
+    <td class="center"><span class="${tCls(r.type)}">${r.type}</span></td>
+    <td class="right ${r.stockMonths>=6?'num-over':r.stockMonths>=3?'num-warn':''}" style="font-weight:700;">
+      ${r.stockMonths!==null?r.stockMonths.toFixed(1)+'M':'—'}</td>
+    <td class="right">${r.realQty.toLocaleString()}</td>
+    <td class="right" style="font-weight:700;color:#dc2626;">${Math.round(r.amount).toLocaleString()}</td>
+    <td class="center">${r.flags.map(f=>`<span style="font-size:12px;" title="${f.label}">${f.ico}</span>`).join(' ')}</td>
+    <td class="left" style="font-size:11px;color:#dc2626;font-weight:700;">${action(r)}</td>
+  </tr>`).join('');
 }
 
 ['f_keyword','f_month_min','f_month_max'].forEach(id=>{
