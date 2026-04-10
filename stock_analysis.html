@@ -92,6 +92,33 @@ tr:last-child td{border-bottom:none;}
 .sum-row td{background:#f7f4ef;font-weight:700;border-top:2px solid var(--border);border-bottom:2px solid var(--border);}
 .sum-row td.right{color:var(--accent);font-size:12px;}
 
+/* 탭 */
+.tab-bar{display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0;}
+.tab-btn{padding:9px 20px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;font-family:'Noto Sans KR',sans-serif;transition:all .18s;white-space:nowrap;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* 변동패턴 카드 */
+.pattern-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.pattern-card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--card-shadow);cursor:pointer;transition:all .18s;}
+.pattern-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover,0 8px 24px rgba(80,60,40,0.12));}
+.pattern-card.active-filter{border-color:var(--accent);box-shadow:0 0 0 2px rgba(200,0,30,0.15);}
+.pc-icon{font-size:22px;margin-bottom:6px;}
+.pc-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;font-family:'Share Tech Mono',monospace;margin-bottom:6px;}
+.pc-val{font-size:22px;font-weight:900;font-family:'Share Tech Mono',monospace;line-height:1;}
+.pc-sub{font-size:10px;color:var(--muted);margin-top:4px;}
+.pc-stagnant{border-top:3px solid #ef4444;}
+.pc-increase{border-top:3px solid #f97316;}
+.pc-decrease{border-top:3px solid #10b981;}
+.pc-cleared {border-top:3px solid #6366f1;}
+
+/* 브랜드 테이블 */
+.brand-bar-wrap{display:flex;align-items:center;gap:8px;}
+.brand-bar{height:8px;background:var(--accent);border-radius:4px;opacity:0.7;}
+@media(max-width:900px){.pattern-grid{grid-template-columns:repeat(2,1fr);}}
+
 .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;gap:14px;}
 .spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -308,7 +335,15 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div>
 
-  <!-- 테이블 -->
+  <!-- 탭 -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('tab-stock',this)">📋 품목별 재고현황</button>
+    <button class="tab-btn" onclick="switchTab('tab-pattern',this)">📊 변동패턴 분석</button>
+    <button class="tab-btn" onclick="switchTab('tab-brand',this)">🏷️ 브랜드별 집계</button>
+  </div>
+
+  <!-- 탭1: 품목별 재고현황 -->
+  <div class="tab-panel active" id="tab-stock">
   <div class="sec-label">
     <span class="sec-label-text">품목별 재고현황</span>
     <div class="sec-label-line"></div>
@@ -346,6 +381,112 @@ tr:last-child td{border-bottom:none;}
     <div class="pagination" id="pagination"></div>
   </div>
 
+  </div><!-- /tab-stock -->
+
+  <!-- 탭2: 변동패턴 분석 -->
+  <div class="tab-panel" id="tab-pattern">
+    <div class="sec-label">
+      <span class="sec-label-text">재고 변동패턴 분석</span>
+      <div class="sec-label-line"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:'Share Tech Mono',monospace;">
+      ※ 연속 5개월 동일 재고 = 정체 &nbsp;|&nbsp; 데이터 부족 시 보유 기간 기준 적용
+    </div>
+    <!-- 패턴 요약 카드 -->
+    <div class="pattern-grid">
+      <div class="pattern-card pc-stagnant" id="pc-stagnant" onclick="filterPattern('정체')">
+        <div class="pc-icon">🔴</div>
+        <div class="pc-label">정체 (5개월 동일)</div>
+        <div class="pc-val" id="pt_stagnant">—</div>
+        <div class="pc-sub" id="pt_stagnant_amt">—</div>
+      </div>
+      <div class="pattern-card pc-increase" id="pc-increase" onclick="filterPattern('증가')">
+        <div class="pc-icon">🟠</div>
+        <div class="pc-label">재고 증가 중</div>
+        <div class="pc-val" id="pt_increase">—</div>
+        <div class="pc-sub" id="pt_increase_amt">—</div>
+      </div>
+      <div class="pattern-card pc-decrease" id="pc-decrease" onclick="filterPattern('감소')">
+        <div class="pc-icon">🟢</div>
+        <div class="pc-label">재고 감소 중</div>
+        <div class="pc-val" id="pt_decrease">—</div>
+        <div class="pc-sub" id="pt_decrease_amt">—</div>
+      </div>
+      <div class="pattern-card pc-cleared" id="pc-cleared" onclick="filterPattern('소진')">
+        <div class="pc-icon">🟣</div>
+        <div class="pc-label">완전 소진</div>
+        <div class="pc-val" id="pt_cleared">—</div>
+        <div class="pc-sub" id="pt_cleared_sub">최신월 재고=0</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-count">총 <b id="pt_count">0</b>건</div>
+        <div class="table-note" id="pt_filter_label">전체 패턴</div>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="left">품목코드</th>
+              <th class="left">브랜드</th>
+              <th class="left" style="min-width:180px;">품명및규격</th>
+              <th>공급유형</th>
+              <th>변동패턴</th>
+              <th>보유기간</th>
+              <th id="pt_col_h1">1월</th>
+              <th id="pt_col_h2">2월</th>
+              <th id="pt_col_h3">3월</th>
+              <th id="pt_col_h4" style="display:none;">4월</th>
+              <th id="pt_col_h5" style="display:none;">5월</th>
+              <th>최신재고</th>
+              <th>재고금액(원)</th>
+            </tr>
+          </thead>
+          <tbody id="ptBody">
+            <tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-pattern -->
+
+  <!-- 탭3: 브랜드별 집계 -->
+  <div class="tab-panel" id="tab-brand">
+    <div class="sec-label">
+      <span class="sec-label-text">브랜드별 재고 집계</span>
+      <div class="sec-label-line"></div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-count">총 <b id="br_count">0</b>개 브랜드</div>
+        <div class="table-note">재고금액 높은 순 정렬</div>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>순위</th>
+              <th class="left">브랜드</th>
+              <th>공급유형</th>
+              <th>품목수</th>
+              <th>총 재고금액(원)</th>
+              <th>비중%</th>
+              <th>재고분포</th>
+              <th>데드스톡</th>
+              <th>과잉</th>
+              <th>적정</th>
+              <th>부족</th>
+            </tr>
+          </thead>
+          <tbody id="brBody">
+            <tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-brand -->
+
   <div style="margin-top:10px;font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;text-align:right;">
     © 2026 SMEKOREA · STOCK ANALYSIS SYSTEM
   </div>
@@ -379,29 +520,32 @@ if(sessionStorage.getItem('po_auth')==='1'){
 
 // ── 초기화: 기준월 드롭다운 ──
 async function initPage(){
-  const {data}=await sb.from('stock_inventory').select('ym').order('ym',{ascending:false}).limit(5000);
-  if(data&&data.length){
-    const months=[...new Set(data.map(r=>r.ym))].sort((a,b)=>b.localeCompare(a));
+  // ym 전수 조회 (페이지네이션)
+  const PAGE=1000; let ymAll=[], pg=0;
+  while(true){
+    const {data,error}=await sb.from('stock_inventory').select('ym,brand')
+      .order('ym',{ascending:false}).range(pg*PAGE,(pg+1)*PAGE-1);
+    if(error||!data||!data.length) break;
+    ymAll=[...ymAll,...data]; pg++;
+  }
+  if(ymAll.length){
+    // 기준월 드롭다운
+    const months=[...new Set(ymAll.map(r=>r.ym))].sort((a,b)=>b.localeCompare(a));
     const sel=document.getElementById('f_month');
     sel.innerHTML='<option value="">— 선택 —</option>';
     months.forEach(m=>{
       const [y,mo]=m.split('-');
       sel.innerHTML+=`<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;
     });
-    if(months.length){sel.value=months[0];}
-  }
-  // 브랜드 목록 로드
-  await loadBrands();
-  if(document.getElementById('f_month').value) runAnalysis();
-}
+    if(months.length) sel.value=months[0];
 
-async function loadBrands(){
-  const {data}=await sb.from('stock_inventory').select('brand').limit(5000);
-  if(!data) return;
-  const brands=[...new Set(data.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
-  const sel=document.getElementById('f_brand');
-  sel.innerHTML='<option value="전체">전체</option>';
-  brands.forEach(b=>{ sel.innerHTML+=`<option value="${b}">${b}</option>`; });
+    // 브랜드 드롭다운 (같은 데이터 활용)
+    const brands=[...new Set(ymAll.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    const bsel=document.getElementById('f_brand');
+    bsel.innerHTML='<option value="전체">전체</option>';
+    brands.forEach(b=>{ bsel.innerHTML+=`<option value="${b}">${b}</option>`; });
+  }
+  if(document.getElementById('f_month').value) runAnalysis();
 }
 
 // ── 분석 실행 ──
@@ -524,6 +668,9 @@ function applyFilter(){
 
   _curPage=1;
   renderTable();
+  // 탭2/3 활성화된 경우 갱신
+  if(document.getElementById('tab-pattern').classList.contains('active')) renderPattern();
+  if(document.getElementById('tab-brand').classList.contains('active')) renderBrand();
 }
 
 // ── 테이블 렌더 ──
@@ -723,6 +870,414 @@ async function doUpload(){
 
   btn.textContent='✅ 완료!';
   setTimeout(()=>{closeUploadModal();initPage();},800);
+}
+
+// ── 탭 전환 ──
+function switchTab(tabId, btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+  if(tabId==='tab-pattern') renderPattern();
+  if(tabId==='tab-brand')   renderBrand();
+}
+
+// ── 변동패턴 분석 ──
+let _ptFilter='전체';
+let _patternData=[];
+
+function renderPattern(){
+  if(!_allResult.length){
+    document.getElementById('ptBody').innerHTML=`<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    return;
+  }
+
+  // Supabase에서 전체 월 재고조사 데이터 로드 (월별 재고 이력)
+  buildPatternAsync();
+}
+
+async function buildPatternAsync(){
+  document.getElementById('ptBody').innerHTML=`<tr><td colspan="13"><div class="loading-wrap"><div class="spinner"></div><div class="loading-text">변동패턴 분석 중...</div></div></td></tr>`;
+
+  // 전체 월 목록 (재고조사 업로드된 모든 월)
+  const PAGE=1000; let allHist=[], pg=0;
+  while(true){
+    const {data,error}=await sb.from('stock_inventory')
+      .select('ym,item_code,brand,description,supply_type,real_qty,stock_amount')
+      .order('ym',{ascending:true}).range(pg*PAGE,(pg+1)*PAGE-1);
+    if(error||!data||!data.length) break;
+    allHist=[...allHist,...data]; pg++;
+  }
+
+  // 월 목록
+  const allMonths=[...new Set(allHist.map(r=>r.ym))].sort();
+  const colCount=allMonths.length;
+
+  // 헤더 업데이트
+  for(let i=1;i<=5;i++){
+    const th=document.getElementById(`pt_col_h${i}`);
+    if(!th) continue;
+    if(i<=colCount){
+      const [y,m]=allMonths[i-1].split('-');
+      th.textContent=`${parseInt(m)}월`;
+      th.style.display='';
+    } else {
+      th.style.display='none';
+    }
+  }
+
+  // 품목별 월별 재고 맵 구성
+  const itemMap={};
+  allHist.forEach(r=>{
+    if(!itemMap[r.item_code]) itemMap[r.item_code]={
+      brand:r.brand||'',desc:r.description||'',type:r.supply_type||'',
+      months:{}, latestAmt:0
+    };
+    itemMap[r.item_code].months[r.ym]=Number(r.real_qty)||0;
+    itemMap[r.item_code].latestAmt=Number(r.stock_amount)||0;
+  });
+
+  // 패턴 분류
+  const STAGNANT_MONTHS=Math.min(5, colCount); // 최대 5개월, 데이터 부족 시 보유기간
+  _patternData=Object.entries(itemMap).map(([code,info])=>{
+    const qtys=allMonths.map(m=>info.months[m]??null);
+    const validQtys=qtys.filter(q=>q!==null);
+    const latestQty=qtys[qtys.length-1]??0;
+    const firstQty=validQtys[0]??0;
+
+    // 보유기간: 재고>0인 연속 개월수
+    let holdMonths=0;
+    for(let i=qtys.length-1;i>=0;i--){
+      if(qtys[i]>0) holdMonths++;
+      else break;
+    }
+
+    // 패턴 판정
+    let pattern;
+    const allSame=validQtys.length>=STAGNANT_MONTHS &&
+      validQtys.slice(-STAGNANT_MONTHS).every(q=>q===validQtys[validQtys.length-STAGNANT_MONTHS]);
+
+    if(latestQty===0 && firstQty>0)           pattern='소진';
+    else if(latestQty===0)                     pattern='소진';
+    else if(allSame && latestQty>0)            pattern='정체';
+    else if(latestQty>firstQty && firstQty>0) pattern='증가';
+    else if(latestQty<firstQty && latestQty>0) pattern='감소';
+    else                                        pattern='감소';
+
+    return{code,brand:info.brand,desc:info.desc,type:info.type,
+      qtys,pattern,holdMonths,latestQty,latestAmt:info.latestAmt};
+  });
+
+  // 요약 카드 업데이트
+  const totalAmt=_allResult.reduce((s,r)=>s+r.amount,0);
+  ['정체','증가','감소','소진'].forEach((p,i)=>{
+    const ids=['stagnant','increase','decrease','cleared'];
+    const items=_patternData.filter(r=>r.pattern===p);
+    const amt=items.reduce((s,r)=>s+r.latestAmt,0);
+    document.getElementById(`pt_${ids[i]}`).textContent=items.length.toLocaleString()+'개';
+    if(p!=='소진') document.getElementById(`pt_${ids[i]}_amt`).textContent=
+      (Math.round(amt/1e8*10)/10).toLocaleString()+'억 / '+(amt/totalAmt*100).toFixed(1)+'%';
+  });
+
+  _ptFilter='전체';
+  renderPatternTable(allMonths);
+}
+
+function filterPattern(p){
+  _ptFilter=(_ptFilter===p)?'전체':p;
+  document.querySelectorAll('.pattern-card').forEach(c=>c.classList.remove('active-filter'));
+  if(_ptFilter!=='전체'){
+    const map={정체:'pc-stagnant',증가:'pc-increase',감소:'pc-decrease',소진:'pc-cleared'};
+    document.getElementById(map[_ptFilter])?.classList.add('active-filter');
+  }
+  const allMonths=[..._patternData.reduce((s,r)=>{r.qtys.forEach((_,i)=>s.add(i));return s;},new Set())];
+  renderPatternTable(null);
+}
+
+function renderPatternTable(allMonths){
+  const data=_ptFilter==='전체'?_patternData:_patternData.filter(r=>r.pattern===_ptFilter);
+  // 정렬: 정체>증가>감소>소진, 금액 내림차순
+  const ord={정체:0,증가:1,감소:2,소진:3};
+  data.sort((a,b)=>(ord[a.pattern]??9)-(ord[b.pattern]??9)||b.latestAmt-a.latestAmt);
+
+  document.getElementById('pt_count').textContent=data.length.toLocaleString();
+  document.getElementById('pt_filter_label').textContent=_ptFilter==='전체'?'전체 패턴':`${_ptFilter} 필터 적용`;
+
+  const patBadge={
+    정체:`<span class="badge b-dead">🔴 정체</span>`,
+    증가:`<span class="badge b-over">🟠 증가</span>`,
+    감소:`<span class="badge b-good">🟢 감소</span>`,
+    소진:`<span class="badge b-new">🟣 소진</span>`,
+  };
+
+  // 월 컬럼 수 (최대 5)
+  const monthCount=data[0]?.qtys.length||0;
+
+  document.getElementById('ptBody').innerHTML=data.slice(0,200).map(r=>{
+    const tCls=r.type==='직거래'?'type-d':'type-l';
+    const qCells=r.qtys.slice(0,5).map((q,i)=>{
+      if(i>=monthCount) return '<td style="display:none;"></td>';
+      const cls=q===0?'num-zero':q===r.qtys[0]&&r.pattern==='정체'?'num-over':'';
+      return `<td class="right ${cls}">${q!==null?q.toLocaleString():'—'}</td>`;
+    }).join('');
+    const hiddenCells=Array(Math.max(0,5-monthCount)).fill('<td style="display:none;"></td>').join('');
+    return`<tr>
+      <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.code}</td>
+      <td class="left" style="font-size:11px;">${r.brand}</td>
+      <td class="left" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.desc}">${r.desc}</td>
+      <td class="center"><span class="${tCls}">${r.type}</span></td>
+      <td class="center">${patBadge[r.pattern]||r.pattern}</td>
+      <td class="center" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.holdMonths}개월</td>
+      ${qCells}${hiddenCells}
+      <td class="right" style="font-weight:700;">${r.latestQty.toLocaleString()}</td>
+      <td class="right">${r.latestAmt>0?Math.round(r.latestAmt).toLocaleString():'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 브랜드별 집계 ──
+function renderBrand(){
+  if(!_allResult.length){
+    document.getElementById('brBody').innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    return;
+  }
+  const brandMap={};
+  _allResult.forEach(r=>{
+    if(!brandMap[r.brand]) brandMap[r.brand]={brand:r.brand,type:r.type,cnt:0,amt:0,
+      dead:0,over:0,good:0,lack:0};
+    const b=brandMap[r.brand];
+    b.cnt++; b.amt+=r.amount;
+    if(r.state==='데드스톡') b.dead++;
+    else if(r.state==='과잉'||r.state==='주의') b.over++;
+    else if(r.state==='적정') b.good++;
+    else if(r.state==='부족') b.lack++;
+  });
+  const brands=Object.values(brandMap).sort((a,b)=>b.amt-a.amt);
+  const totalAmt=brands.reduce((s,b)=>s+b.amt,0);
+  const maxAmt=brands[0]?.amt||1;
+  document.getElementById('br_count').textContent=brands.length.toLocaleString();
+  document.getElementById('brBody').innerHTML=brands.map((b,i)=>{
+    const pct=totalAmt>0?b.amt/totalAmt*100:0;
+    const barW=Math.round(b.amt/maxAmt*120);
+    const tCls=b.type==='직거래'?'type-d':'type-l';
+    return`<tr>
+      <td class="center" style="font-family:'Share Tech Mono',monospace;font-weight:700;color:var(--muted);">${i+1}</td>
+      <td class="left" style="font-weight:700;font-size:12px;">${b.brand}</td>
+      <td class="center"><span class="${tCls}">${b.type}</span></td>
+      <td class="right">${b.cnt}개</td>
+      <td class="right" style="font-weight:700;">${Math.round(b.amt).toLocaleString()}</td>
+      <td class="right" style="font-family:'Share Tech Mono',monospace;">${pct.toFixed(1)}%</td>
+      <td><div class="brand-bar-wrap"><div class="brand-bar" style="width:${barW}px;"></div></div></td>
+      <td class="center" style="color:#dc2626;font-weight:700;">${b.dead||'—'}</td>
+      <td class="center" style="color:#ea580c;font-weight:700;">${b.over||'—'}</td>
+      <td class="center" style="color:#059669;font-weight:700;">${b.good||'—'}</td>
+      <td class="center" style="color:#2563eb;font-weight:700;">${b.lack||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 탭 전환 ──
+function switchTab(tabId, btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+  if(tabId==='tab-pattern') renderPattern();
+  if(tabId==='tab-brand')   renderBrand();
+}
+
+// ── 변동패턴 분석 ──
+let _ptFilter='전체';
+let _patternData=[];
+
+function renderPattern(){
+  if(!_allResult.length){
+    document.getElementById('ptBody').innerHTML=`<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    return;
+  }
+
+  // Supabase에서 전체 월 재고조사 데이터 로드 (월별 재고 이력)
+  buildPatternAsync();
+}
+
+async function buildPatternAsync(){
+  document.getElementById('ptBody').innerHTML=`<tr><td colspan="13"><div class="loading-wrap"><div class="spinner"></div><div class="loading-text">변동패턴 분석 중...</div></div></td></tr>`;
+
+  // 전체 월 목록 (재고조사 업로드된 모든 월)
+  const PAGE=1000; let allHist=[], pg=0;
+  while(true){
+    const {data,error}=await sb.from('stock_inventory')
+      .select('ym,item_code,brand,description,supply_type,real_qty,stock_amount')
+      .order('ym',{ascending:true}).range(pg*PAGE,(pg+1)*PAGE-1);
+    if(error||!data||!data.length) break;
+    allHist=[...allHist,...data]; pg++;
+  }
+
+  // 월 목록
+  const allMonths=[...new Set(allHist.map(r=>r.ym))].sort();
+  const colCount=allMonths.length;
+
+  // 헤더 업데이트
+  for(let i=1;i<=5;i++){
+    const th=document.getElementById(`pt_col_h${i}`);
+    if(!th) continue;
+    if(i<=colCount){
+      const [y,m]=allMonths[i-1].split('-');
+      th.textContent=`${parseInt(m)}월`;
+      th.style.display='';
+    } else {
+      th.style.display='none';
+    }
+  }
+
+  // 품목별 월별 재고 맵 구성
+  const itemMap={};
+  allHist.forEach(r=>{
+    if(!itemMap[r.item_code]) itemMap[r.item_code]={
+      brand:r.brand||'',desc:r.description||'',type:r.supply_type||'',
+      months:{}, latestAmt:0
+    };
+    itemMap[r.item_code].months[r.ym]=Number(r.real_qty)||0;
+    itemMap[r.item_code].latestAmt=Number(r.stock_amount)||0;
+  });
+
+  // 패턴 분류
+  const STAGNANT_MONTHS=Math.min(5, colCount); // 최대 5개월, 데이터 부족 시 보유기간
+  _patternData=Object.entries(itemMap).map(([code,info])=>{
+    const qtys=allMonths.map(m=>info.months[m]??null);
+    const validQtys=qtys.filter(q=>q!==null);
+    const latestQty=qtys[qtys.length-1]??0;
+    const firstQty=validQtys[0]??0;
+
+    // 보유기간: 재고>0인 연속 개월수
+    let holdMonths=0;
+    for(let i=qtys.length-1;i>=0;i--){
+      if(qtys[i]>0) holdMonths++;
+      else break;
+    }
+
+    // 패턴 판정
+    let pattern;
+    const allSame=validQtys.length>=STAGNANT_MONTHS &&
+      validQtys.slice(-STAGNANT_MONTHS).every(q=>q===validQtys[validQtys.length-STAGNANT_MONTHS]);
+
+    if(latestQty===0 && firstQty>0)           pattern='소진';
+    else if(latestQty===0)                     pattern='소진';
+    else if(allSame && latestQty>0)            pattern='정체';
+    else if(latestQty>firstQty && firstQty>0) pattern='증가';
+    else if(latestQty<firstQty && latestQty>0) pattern='감소';
+    else                                        pattern='감소';
+
+    return{code,brand:info.brand,desc:info.desc,type:info.type,
+      qtys,pattern,holdMonths,latestQty,latestAmt:info.latestAmt};
+  });
+
+  // 요약 카드 업데이트
+  const totalAmt=_allResult.reduce((s,r)=>s+r.amount,0);
+  ['정체','증가','감소','소진'].forEach((p,i)=>{
+    const ids=['stagnant','increase','decrease','cleared'];
+    const items=_patternData.filter(r=>r.pattern===p);
+    const amt=items.reduce((s,r)=>s+r.latestAmt,0);
+    document.getElementById(`pt_${ids[i]}`).textContent=items.length.toLocaleString()+'개';
+    if(p!=='소진') document.getElementById(`pt_${ids[i]}_amt`).textContent=
+      (Math.round(amt/1e8*10)/10).toLocaleString()+'억 / '+(amt/totalAmt*100).toFixed(1)+'%';
+  });
+
+  _ptFilter='전체';
+  renderPatternTable(allMonths);
+}
+
+function filterPattern(p){
+  _ptFilter=(_ptFilter===p)?'전체':p;
+  document.querySelectorAll('.pattern-card').forEach(c=>c.classList.remove('active-filter'));
+  if(_ptFilter!=='전체'){
+    const map={정체:'pc-stagnant',증가:'pc-increase',감소:'pc-decrease',소진:'pc-cleared'};
+    document.getElementById(map[_ptFilter])?.classList.add('active-filter');
+  }
+  const allMonths=[..._patternData.reduce((s,r)=>{r.qtys.forEach((_,i)=>s.add(i));return s;},new Set())];
+  renderPatternTable(null);
+}
+
+function renderPatternTable(allMonths){
+  const data=_ptFilter==='전체'?_patternData:_patternData.filter(r=>r.pattern===_ptFilter);
+  // 정렬: 정체>증가>감소>소진, 금액 내림차순
+  const ord={정체:0,증가:1,감소:2,소진:3};
+  data.sort((a,b)=>(ord[a.pattern]??9)-(ord[b.pattern]??9)||b.latestAmt-a.latestAmt);
+
+  document.getElementById('pt_count').textContent=data.length.toLocaleString();
+  document.getElementById('pt_filter_label').textContent=_ptFilter==='전체'?'전체 패턴':`${_ptFilter} 필터 적용`;
+
+  const patBadge={
+    정체:`<span class="badge b-dead">🔴 정체</span>`,
+    증가:`<span class="badge b-over">🟠 증가</span>`,
+    감소:`<span class="badge b-good">🟢 감소</span>`,
+    소진:`<span class="badge b-new">🟣 소진</span>`,
+  };
+
+  // 월 컬럼 수 (최대 5)
+  const monthCount=data[0]?.qtys.length||0;
+
+  document.getElementById('ptBody').innerHTML=data.slice(0,200).map(r=>{
+    const tCls=r.type==='직거래'?'type-d':'type-l';
+    const qCells=r.qtys.slice(0,5).map((q,i)=>{
+      if(i>=monthCount) return '<td style="display:none;"></td>';
+      const cls=q===0?'num-zero':q===r.qtys[0]&&r.pattern==='정체'?'num-over':'';
+      return `<td class="right ${cls}">${q!==null?q.toLocaleString():'—'}</td>`;
+    }).join('');
+    const hiddenCells=Array(Math.max(0,5-monthCount)).fill('<td style="display:none;"></td>').join('');
+    return`<tr>
+      <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.code}</td>
+      <td class="left" style="font-size:11px;">${r.brand}</td>
+      <td class="left" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.desc}">${r.desc}</td>
+      <td class="center"><span class="${tCls}">${r.type}</span></td>
+      <td class="center">${patBadge[r.pattern]||r.pattern}</td>
+      <td class="center" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.holdMonths}개월</td>
+      ${qCells}${hiddenCells}
+      <td class="right" style="font-weight:700;">${r.latestQty.toLocaleString()}</td>
+      <td class="right">${r.latestAmt>0?Math.round(r.latestAmt).toLocaleString():'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 브랜드별 집계 ──
+function renderBrand(){
+  if(!_allResult.length){
+    document.getElementById('brBody').innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    return;
+  }
+  const brandMap={};
+  _allResult.forEach(r=>{
+    if(!brandMap[r.brand]) brandMap[r.brand]={brand:r.brand,type:r.type,cnt:0,amt:0,
+      dead:0,over:0,good:0,lack:0};
+    const b=brandMap[r.brand];
+    b.cnt++; b.amt+=r.amount;
+    if(r.state==='데드스톡') b.dead++;
+    else if(r.state==='과잉'||r.state==='주의') b.over++;
+    else if(r.state==='적정') b.good++;
+    else if(r.state==='부족') b.lack++;
+  });
+  const brands=Object.values(brandMap).sort((a,b)=>b.amt-a.amt);
+  const totalAmt=brands.reduce((s,b)=>s+b.amt,0);
+  const maxAmt=brands[0]?.amt||1;
+  document.getElementById('br_count').textContent=brands.length.toLocaleString();
+  document.getElementById('brBody').innerHTML=brands.map((b,i)=>{
+    const pct=totalAmt>0?b.amt/totalAmt*100:0;
+    const barW=Math.round(b.amt/maxAmt*120);
+    const tCls=b.type==='직거래'?'type-d':'type-l';
+    return`<tr>
+      <td class="center" style="font-family:'Share Tech Mono',monospace;font-weight:700;color:var(--muted);">${i+1}</td>
+      <td class="left" style="font-weight:700;font-size:12px;">${b.brand}</td>
+      <td class="center"><span class="${tCls}">${b.type}</span></td>
+      <td class="right">${b.cnt}개</td>
+      <td class="right" style="font-weight:700;">${Math.round(b.amt).toLocaleString()}</td>
+      <td class="right" style="font-family:'Share Tech Mono',monospace;">${pct.toFixed(1)}%</td>
+      <td><div class="brand-bar-wrap"><div class="brand-bar" style="width:${barW}px;"></div></div></td>
+      <td class="center" style="color:#dc2626;font-weight:700;">${b.dead||'—'}</td>
+      <td class="center" style="color:#ea580c;font-weight:700;">${b.over||'—'}</td>
+      <td class="center" style="color:#059669;font-weight:700;">${b.good||'—'}</td>
+      <td class="center" style="color:#2563eb;font-weight:700;">${b.lack||'—'}</td>
+    </tr>`;
+  }).join('');
 }
 
 ['f_keyword','f_month_min','f_month_max'].forEach(id=>{
