@@ -681,6 +681,18 @@
 
   async function writeLog(userName, screen) {
     try {
+      let ip = '', device = '';
+      try {
+        const r = await fetch('https://api.ipify.org?format=json');
+        const d = await r.json();
+        ip = d.ip || '';
+      } catch(e) {}
+      const ua = navigator.userAgent;
+      if(/Mobile|Android|iPhone|iPad/i.test(ua)) {
+        device = /iPad/i.test(ua) ? '태블릿' : '모바일';
+      } else {
+        device = 'PC';
+      }
       await fetch(`${SUPABASE_URL}/rest/v1/access_log`, {
         method: 'POST',
         headers: {
@@ -689,7 +701,7 @@
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ user_name: userName, screen: screen })
+        body: JSON.stringify({ user_name: userName, screen: screen, ip_address: ip, device: device })
       });
     } catch(e) { console.warn('로그 기록 실패', e); }
   }
@@ -791,10 +803,10 @@
   }
 
   function handleTarget(target, name) {
-    if      (target === 'ship')     document.getElementById('shipModal').style.display = 'flex';
-    else if (target === 'po')       window.location.href = 'po_hub.html';
-    else if (target === 'monitor')  window.location.href = 'po_monitor.html';
-    else if (target === 'schedule') document.getElementById('scheduleModal').style.display = 'flex';
+    if      (target === 'ship')     { writeLog(name, '출하관리'); document.getElementById('shipModal').style.display = 'flex'; }
+    else if (target === 'po')       { writeLog(name, 'PO관리'); window.location.href = 'po_hub.html'; }
+    else if (target === 'monitor')  { writeLog(name, '납기모니터링'); window.location.href = 'po_monitor.html'; }
+    else if (target === 'schedule') { writeLog(name, 'SME CALENDAR'); document.getElementById('scheduleModal').style.display = 'flex'; }
     else if (target === 'hq')       openHQOverlay('hq_analysis.html', 'HQ 거래현황분석');
     else if (target === 'cost')     openHQOverlay('cost_table.html',  'Cost Table');
     else if (target === 'kpi')      openHQOverlay('kpi_dashboard.html','KPI 대시보드');
