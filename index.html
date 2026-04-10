@@ -311,6 +311,10 @@
         <div class="hq-clock-label"><span class="dot-live"></span> &nbsp;HQ · KOREA (KST)</div>
         <div class="hq-clock" id="hqClock">--<em>:</em>--<em>:</em>--</div>
         <div class="hq-date" id="hqDate"></div>
+        <div id="loginStatus" style="display:none;margin-top:6px;display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+          <span id="loginName" style="font-size:11px;font-family:'Share Tech Mono',monospace;color:var(--muted);letter-spacing:1px;"></span>
+          <button onclick="doLogout()" style="font-size:10px;font-family:'Share Tech Mono',monospace;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;letter-spacing:1px;">LOGOUT</button>
+        </div>
       </div>
       <!-- 해외법인 시계 바 -->
       <div class="tz-bar">
@@ -557,19 +561,71 @@
   <div class="footer">© 2026 SMEKOREA · INTEGRATED PLATFORM v1.5 · ALL RIGHTS RESERVED</div>
 </div>
 
-<!-- 비밀번호 팝업 -->
+<!-- 로그인 팝업 -->
 <div class="overlay" id="pwOverlay">
-  <div class="popup-box">
+  <div class="popup-box" style="width:360px;">
     <div class="popup-icon">🔐</div>
-    <div class="popup-title">접근 인증</div>
-    <div class="popup-sub">비밀번호를 입력해주세요</div>
-    <input class="pw-input" id="pwInput" type="password" maxlength="10" placeholder="••••"
+    <div class="popup-title">SMERP 로그인</div>
+    <div class="popup-sub">이름과 비밀번호를 입력해주세요</div>
+    <div style="text-align:left;margin-bottom:8px;">
+      <div style="font-size:10px;font-weight:700;color:#a8998a;letter-spacing:1px;margin-bottom:5px;">이름</div>
+      <select id="nameSelect" onchange="onNameSelect()"
+        style="width:100%;height:44px;border:2px solid var(--border);border-radius:12px;font-size:14px;padding:0 12px;background:#f8f5f1;font-family:'Noto Sans KR',sans-serif;outline:none;color:#1a1612;margin-bottom:8px;">
+        <option value="">— 선택해주세요 —</option>
+        <option value="사장님">사장님</option>
+        <option value="박정용">박정용</option>
+        <option value="김근복">김근복</option>
+        <option value="이서연">이서연</option>
+        <option value="김봉승">김봉승</option>
+        <option value="배병대">배병대</option>
+        <option value="조승연">조승연</option>
+        <option value="곽경민">곽경민</option>
+        <option value="박영주">박영주</option>
+        <option value="김종길">김종길</option>
+        <option value="최성빈">최성빈</option>
+        <option value="최세진">최세진</option>
+        <option value="박형호">박형호</option>
+        <option value="김재옥">김재옥</option>
+        <option value="최혜영">최혜영</option>
+        <option value="송윤석">송윤석</option>
+        <option value="최경훈">최경훈</option>
+        <option value="문상호">문상호</option>
+        <option value="장우승">장우승</option>
+        <option value="김기훈">김기훈</option>
+        <option value="김아현">김아현</option>
+        <option value="윤선정">윤선정</option>
+        <option value="공수지">공수지</option>
+        <option value="__direct__">직접입력...</option>
+      </select>
+      <input id="nameDirectInput" type="text" placeholder="이름 직접 입력"
+        style="display:none;width:100%;height:44px;border:2px solid #1a56db;border-radius:12px;font-size:14px;padding:0 12px;background:#f8f5f1;font-family:'Noto Sans KR',sans-serif;outline:none;color:#1a1612;margin-bottom:8px;">
+    </div>
+    <div style="text-align:left;margin-bottom:6px;">
+      <div style="font-size:10px;font-weight:700;color:#a8998a;letter-spacing:1px;margin-bottom:5px;">비밀번호</div>
+      <input class="pw-input" id="pwInput" type="password" maxlength="10" placeholder="••••"
+        onfocus="this.style.borderColor='#1a56db'"
+        onblur="this.style.borderColor='#dde3ee'"
+        onkeydown="if(event.key==='Enter')checkPW()" style="margin-bottom:0;">
+    </div>
+    <div class="pw-error" id="pwError"></div>
+    <button class="pw-btn" onclick="checkPW()">로그인</button>
+    <div class="popup-cancel" onclick="closePW()">✕ 취소</div>
+  </div>
+</div>
+
+<!-- 경영전용 팝업 -->
+<div class="overlay" id="hqOverlay">
+  <div class="popup-box">
+    <div class="popup-icon">🏢</div>
+    <div class="popup-title">경영 전용</div>
+    <div class="popup-sub" id="hqOverlaySub">경영 전용 비밀번호를 입력해주세요</div>
+    <input class="pw-input" id="hqPwInput" type="password" maxlength="10" placeholder="••••"
       onfocus="this.style.borderColor='#1a56db'"
       onblur="this.style.borderColor='#dde3ee'"
-      onkeydown="if(event.key==='Enter')checkPW()">
-    <div class="pw-error" id="pwError"></div>
-    <button class="pw-btn" onclick="checkPW()">확인</button>
-    <div class="popup-cancel" onclick="closePW()">✕ 취소</div>
+      onkeydown="if(event.key==='Enter')checkHQPW()">
+    <div class="pw-error" id="hqPwError"></div>
+    <button class="pw-btn" onclick="checkHQPW()">확인</button>
+    <div class="popup-cancel" onclick="closeHQOverlay()">✕ 취소</div>
   </div>
 </div>
 
@@ -619,58 +675,183 @@
   </div>
 </div>
 <script>
-  const PW = '1120';
+  // ── Supabase ──
+  const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+
+  async function writeLog(userName, screen) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/access_log`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ user_name: userName, screen: screen })
+      });
+    } catch(e) { console.warn('로그 기록 실패', e); }
+  }
+
+  // ── 인증 상수 ──
+  const PW_MAIN = '1120';
+  const PW_HQ   = '0616';
+
   let pendingTarget = '';
 
+  // ── 로그인 상태 초기화 ──
+  function initAuth() {
+    const name = localStorage.getItem('sme_user');
+    if(name) {
+      document.getElementById('loginStatus').style.display = 'flex';
+      document.getElementById('loginName').textContent = name + ' 님';
+    }
+  }
+
+  function doLogout() {
+    if(!confirm('로그아웃 하시겠습니까?')) return;
+    localStorage.removeItem('sme_user');
+    localStorage.removeItem('sme_auth');
+    localStorage.removeItem('sme_hq_auth');
+    sessionStorage.removeItem('po_auth');
+    sessionStorage.removeItem('hq_auth');
+    document.getElementById('loginStatus').style.display = 'none';
+    document.getElementById('loginName').textContent = '';
+  }
+
+  // ── 이름 직접입력 토글 ──
+  function onNameSelect() {
+    const sel = document.getElementById('nameSelect');
+    const direct = document.getElementById('nameDirectInput');
+    if(sel.value === '__direct__') {
+      direct.style.display = 'block';
+      setTimeout(() => direct.focus(), 50);
+    } else {
+      direct.style.display = 'none';
+    }
+  }
+
+  function getInputName() {
+    const sel = document.getElementById('nameSelect');
+    if(sel.value === '__direct__') {
+      return document.getElementById('nameDirectInput').value.trim();
+    }
+    return sel.value;
+  }
+
+  // ── 카드 클릭 ──
   function openWithPW(target) {
     pendingTarget = target;
+    const name = localStorage.getItem('sme_user');
+    const auth = localStorage.getItem('sme_auth');
+
+    // 이미 로그인된 경우
+    if(name && auth === '1') {
+      sessionStorage.setItem('po_auth', '1');
+      handleTarget(target, name);
+      return;
+    }
+
+    // 로그인 팝업
+    document.getElementById('nameSelect').value = '';
+    document.getElementById('nameDirectInput').style.display = 'none';
+    document.getElementById('nameDirectInput').value = '';
     document.getElementById('pwInput').value = '';
     document.getElementById('pwError').textContent = '';
     document.getElementById('pwOverlay').style.display = 'flex';
-    setTimeout(() => document.getElementById('pwInput').focus(), 100);
-  }
-  function checkPW() {
-    const val = document.getElementById('pwInput').value;
-    const input = document.getElementById('pwInput');
-    if (val === PW) {
-      closePW();
-      sessionStorage.setItem('po_auth','1');
-      if      (pendingTarget === 'ship')    document.getElementById('shipModal').style.display = 'flex';
-      else if (pendingTarget === 'po')      window.location.href = 'po_hub.html';
-      else if (pendingTarget === 'monitor') window.location.href = 'po_monitor.html';
-      else if (pendingTarget === 'schedule') document.getElementById('scheduleModal').style.display = 'flex';
-      else if (pendingTarget === 'hq')      checkHQPW();
-      else if (pendingTarget === 'cost')    checkHQPW();
-      else if (pendingTarget === 'kpi')     checkHQPW();
-    } else {
-      input.style.borderColor = '#c8001e';
-      document.getElementById('pwError').textContent = '⚠ 비밀번호가 올바르지 않습니다';
-      input.value = '';
-      setTimeout(() => { input.style.borderColor = '#dde3ee'; }, 1000);
-    }
+    setTimeout(() => document.getElementById('nameSelect').focus(), 100);
   }
 
-  // 경영 전용 2차 비번 확인
-  function checkHQPW() {
-    const pw2 = prompt('경영 전용 비밀번호를 입력하세요');
-    if(pw2 === '1121'){
-      sessionStorage.setItem('hq_auth','1');
-      if(pendingTarget==='hq') window.location.href='hq_analysis.html';
-      else if(pendingTarget==='cost') window.location.href='cost_table.html';
-      else if(pendingTarget==='kpi') window.location.href='kpi_dashboard.html';
-    } else {
-      alert('경영 비밀번호가 올바르지 않습니다.');
+  function checkPW() {
+    const name = getInputName();
+    const pw   = document.getElementById('pwInput').value;
+    const err  = document.getElementById('pwError');
+
+    if(!name) { err.textContent = '⚠ 이름을 선택해주세요'; return; }
+    if(pw !== PW_MAIN) {
+      document.getElementById('pwInput').style.borderColor = '#c8001e';
+      err.textContent = '⚠ 비밀번호가 올바르지 않습니다';
+      document.getElementById('pwInput').value = '';
+      setTimeout(() => document.getElementById('pwInput').style.borderColor = '#dde3ee', 1000);
+      return;
     }
+
+    // 로그인 성공
+    localStorage.setItem('sme_user', name);
+    localStorage.setItem('sme_auth', '1');
+    sessionStorage.setItem('po_auth', '1');
+    document.getElementById('loginStatus').style.display = 'flex';
+    document.getElementById('loginName').textContent = name + ' 님';
+    closePW();
+
+    // 로그 기록
+    writeLog(name, 'SMERP 로그인');
+    handleTarget(pendingTarget, name);
   }
-  function showComing() {
-    alert('준비 중인 기능입니다.\n빠른 시일 내에 오픈할 예정입니다.');
+
+  function handleTarget(target, name) {
+    if      (target === 'ship')     document.getElementById('shipModal').style.display = 'flex';
+    else if (target === 'po')       window.location.href = 'po_hub.html';
+    else if (target === 'monitor')  window.location.href = 'po_monitor.html';
+    else if (target === 'schedule') document.getElementById('scheduleModal').style.display = 'flex';
+    else if (target === 'hq')       openHQOverlay('hq_analysis.html', 'HQ 거래현황분석');
+    else if (target === 'cost')     openHQOverlay('cost_table.html',  'Cost Table');
+    else if (target === 'kpi')      openHQOverlay('kpi_dashboard.html','KPI 대시보드');
   }
-  function closePW() { document.getElementById('pwOverlay').style.display = 'none'; }
-  function closeShipModal() { document.getElementById('shipModal').style.display = 'none'; }
+
+  // ── 경영전용 팝업 ──
+  let hqTargetUrl = '', hqTargetScreen = '';
+  function openHQOverlay(url, screen) {
+    // 이미 경영 인증된 경우
+    if(localStorage.getItem('sme_hq_auth') === '1') {
+      const name = localStorage.getItem('sme_user');
+      sessionStorage.setItem('hq_auth', '1');
+      writeLog(name, screen);
+      window.location.href = url;
+      return;
+    }
+    hqTargetUrl    = url;
+    hqTargetScreen = screen;
+    document.getElementById('hqOverlaySub').textContent = `[${screen}] 경영 전용 비밀번호를 입력해주세요`;
+    document.getElementById('hqPwInput').value = '';
+    document.getElementById('hqPwError').textContent = '';
+    document.getElementById('hqOverlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('hqPwInput').focus(), 100);
+  }
+
+  function checkHQPW() {
+    const pw  = document.getElementById('hqPwInput').value;
+    const err = document.getElementById('hqPwError');
+    if(pw !== PW_HQ) {
+      document.getElementById('hqPwInput').style.borderColor = '#c8001e';
+      err.textContent = '⚠ 비밀번호가 올바르지 않습니다';
+      document.getElementById('hqPwInput').value = '';
+      setTimeout(() => document.getElementById('hqPwInput').style.borderColor = '#dde3ee', 1000);
+      return;
+    }
+    const name = localStorage.getItem('sme_user');
+    localStorage.setItem('sme_hq_auth', '1');
+    sessionStorage.setItem('hq_auth', '1');
+    closeHQOverlay();
+    writeLog(name, hqTargetScreen);
+    window.location.href = hqTargetUrl;
+  }
+
+  function closePW()        { document.getElementById('pwOverlay').style.display  = 'none'; }
+  function closeHQOverlay() { document.getElementById('hqOverlay').style.display  = 'none'; }
+  function closeShipModal() { document.getElementById('shipModal').style.display  = 'none'; }
   function closeScheduleModal() { document.getElementById('scheduleModal').style.display = 'none'; }
-  document.getElementById('pwOverlay').addEventListener('click', function(e){ if(e.target===this) closePW(); });
-  document.getElementById('shipModal').addEventListener('click', function(e){ if(e.target===this) closeShipModal(); });
-  document.getElementById('scheduleModal').addEventListener('click', function(e){ if(e.target===this) closeScheduleModal(); });
+
+  function showComing() { alert('준비 중인 기능입니다.\n빠른 시일 내에 오픈할 예정입니다.'); }
+
+  document.getElementById('pwOverlay').addEventListener('click',       function(e){ if(e.target===this) closePW(); });
+  document.getElementById('hqOverlay').addEventListener('click',       function(e){ if(e.target===this) closeHQOverlay(); });
+  document.getElementById('shipModal').addEventListener('click',       function(e){ if(e.target===this) closeShipModal(); });
+  document.getElementById('scheduleModal').addEventListener('click',   function(e){ if(e.target===this) closeScheduleModal(); });
+
+  // 초기화
+  initAuth();
 
   /* ── 시계 ── */
   const DAYS = ['일','월','화','수','목','금','토'];
