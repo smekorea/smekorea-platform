@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMERP — 관리자 설정</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#f0f4f9;--surface:#fff;--border:#d0daea;
+  --accent:#c8001e;--accent2:#1a56db;--accent3:#0e9f6e;--amber:#d97706;
+  --text:#1a2233;--muted:#7a8baa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:11px 28px;background:var(--surface);border-bottom:2px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.06);position:sticky;top:0;z-index:50;}
+.logo-box{width:38px;height:38px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:900;color:#fff;}
+.co-name{font-size:14px;font-weight:700;}.co-sub{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;}
+.back-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;background:var(--surface);border:1px solid var(--border);text-decoration:none;color:var(--muted);font-size:11px;font-family:'Share Tech Mono',monospace;transition:all .18s;}
+.back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+
+.tab-bar{display:flex;gap:6px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tab-btn{padding:8px 20px;border:none;border-radius:8px;background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--muted);transition:all .18s;}
+.tab-btn.active{background:var(--accent);color:#fff;font-weight:700;}
+
+.content{padding:20px 28px;}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;border-top:3px solid var(--border);}
+.kpi-card.red{border-top-color:var(--accent);}
+.kpi-card.blue{border-top-color:var(--accent2);}
+.kpi-card.green{border-top-color:var(--accent3);}
+.kpi-card.amber{border-top-color:var(--amber);}
+.kpi-label{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;margin-bottom:6px;}
+.kpi-value{font-size:28px;font-weight:900;color:var(--text);}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* 필터 */
+.filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:16px;}
+.f-group{display:flex;flex-direction:column;gap:4px;}
+.f-label{font-size:9px;font-family:'Share Tech Mono',monospace;color:var(--muted);letter-spacing:1px;}
+.f-select,.f-input{height:34px;border:1.5px solid var(--border);border-radius:8px;padding:0 10px;font-size:12px;background:#f8fafc;color:var(--text);font-family:'Noto Sans KR',sans-serif;outline:none;}
+.f-select:focus,.f-input:focus{border-color:var(--accent2);}
+.btn-search{height:34px;padding:0 18px;border-radius:8px;border:none;background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.btn-excel{height:34px;padding:0 14px;border-radius:8px;border:1.5px solid var(--accent3);background:#fff;color:var(--accent3);font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.q-btn{height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.q-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;}
+
+/* 테이블 */
+.table-wrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
+thead th{background:#1a2233;padding:10px 12px;text-align:left;font-weight:700;color:#fff;font-size:11px;}
+tbody tr{border-bottom:1px solid #e8edf5;transition:background .1s;}
+tbody tr:hover{background:rgba(26,86,219,.04);}
+tbody td{padding:9px 12px;font-size:12px;}
+.badge{display:inline-flex;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+.b-pc{background:rgba(26,86,219,.08);color:var(--accent2);}
+.b-mobile{background:rgba(14,159,110,.1);color:var(--accent3);}
+.b-tablet{background:rgba(217,119,6,.1);color:var(--amber);}
+
+/* 순위 바 */
+.rank-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+.rank-title{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text);}
+.rank-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.rank-num{font-size:11px;font-weight:700;color:var(--muted);font-family:'Share Tech Mono',monospace;min-width:20px;}
+.rank-num.top{color:var(--accent);}
+.rank-name{font-size:12px;font-weight:600;min-width:80px;}
+.rank-bar-wrap{flex:1;background:#f0f4f9;border-radius:4px;height:12px;overflow:hidden;}
+.rank-bar-fill{height:12px;border-radius:4px;background:var(--accent2);opacity:0.75;transition:width .3s;}
+.rank-cnt{font-size:12px;font-weight:700;color:var(--text);min-width:40px;text-align:right;font-family:'Share Tech Mono',monospace;}
+
+.empty-state{text-align:center;padding:48px;color:var(--muted);}
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:24px;color:var(--muted);font-size:12px;}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 준비중 */
+.coming-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px;color:var(--muted);}
+.coming-icon{font-size:48px;margin-bottom:16px;}
+.coming-title{font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);}
+.coming-sub{font-size:13px;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="logo-box">SME</div>
+    <div><div class="co-name">SMERP</div><div class="co-sub">ADMIN</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:5px;background:rgba(200,0,30,.07);border:1px solid rgba(200,0,30,.2);border-radius:20px;padding:5px 12px;font-size:10px;font-family:'Share Tech Mono',monospace;color:var(--accent);font-weight:700;">⚙ 관리자 설정</div>
+    <a class="back-btn" href="index.html">← 홈으로</a>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-log-btn" onclick="switchTab('log')">📋 접속 이력</button>
+  <button class="tab-btn" id="tab-master-btn" onclick="switchTab('master')">📦 기본정보 관리</button>
+</div>
+
+<!-- 접속이력 탭 -->
+<div id="tab-log" class="content">
+
+  <!-- KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card red"><div class="kpi-label">TODAY 접속</div><div class="kpi-value" id="kpi-today">-</div><div class="kpi-sub">오늘 총 접속 횟수</div></div>
+    <div class="kpi-card blue"><div class="kpi-label">이번달 접속</div><div class="kpi-value" id="kpi-month">-</div><div class="kpi-sub">이번달 누적</div></div>
+    <div class="kpi-card green"><div class="kpi-label">전체 접속</div><div class="kpi-value" id="kpi-total">-</div><div class="kpi-sub">전체 누적</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">최다 접속자</div><div class="kpi-value" style="font-size:18px;padding-top:4px;" id="kpi-top">-</div><div class="kpi-sub" id="kpi-top-cnt">이번달 기준</div></div>
+  </div>
+
+  <!-- 순위 -->
+  <div class="rank-section">
+    <div class="rank-title">👥 이름별 접속 순위 <span style="font-size:11px;font-weight:400;color:var(--muted);">이번달 기준</span></div>
+    <div id="rank-list"><div class="loading"><div class="spinner"></div> 로딩 중...</div></div>
+  </div>
+
+  <!-- 필터 -->
+  <div class="filter-bar">
+    <div class="f-group">
+      <div class="f-label">기간</div>
+      <div style="display:flex;gap:4px;">
+        <button class="q-btn active" id="q-today" onclick="setQ('today',this)">오늘</button>
+        <button class="q-btn" id="q-week" onclick="setQ('week',this)">이번주</button>
+        <button class="q-btn" id="q-month" onclick="setQ('month',this)">이번달</button>
+        <button class="q-btn" id="q-all" onclick="setQ('all',this)">전체</button>
+      </div>
+    </div>
+    <div class="f-group">
+      <div class="f-label">이름</div>
+      <select class="f-select" id="f-name" style="width:120px;"><option value="">전체</option></select>
+    </div>
+    <div class="f-group">
+      <div class="f-label">화면</div>
+      <select class="f-select" id="f-screen" style="width:140px;"><option value="">전체</option></select>
+    </div>
+    <div class="f-group">
+      <div class="f-label">기기</div>
+      <select class="f-select" id="f-device" style="width:100px;">
+        <option value="">전체</option>
+        <option value="PC">PC</option>
+        <option value="모바일">모바일</option>
+        <option value="태블릿">태블릿</option>
+      </select>
+    </div>
+    <button class="btn-search" onclick="loadLog()">🔍 조회</button>
+    <button class="btn-excel" onclick="exportExcel()" style="margin-left:auto;">⬇ 엑셀</button>
+  </div>
+
+  <!-- 결과 카운트 -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+    <div style="font-size:13px;font-weight:700;">접속 이력 <span id="logCount" style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;"></span></div>
+  </div>
+
+  <!-- 테이블 -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>이름</th>
+          <th>화면</th>
+          <th>기기</th>
+          <th>IP 주소</th>
+          <th>접속 일시</th>
+        </tr>
+      </thead>
+      <tbody id="logBody">
+        <tr><td colspan="6"><div class="loading"><div class="spinner"></div> 데이터 로딩 중...</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 기본정보 관리 탭 -->
+<div id="tab-master" class="content" style="display:none;">
+  <div class="coming-wrap">
+    <div class="coming-icon">📦</div>
+    <div class="coming-title">기본정보 관리</div>
+    <div class="coming-sub">품목 마스터 · ERP코드 · Maker 정보 등록 및 관리<br>빠른 시일 내에 오픈할 예정입니다.</div>
+  </div>
+</div>
+
+<script>
+// ── 인증 ──
+(function(){
+  const hqAuth = localStorage.getItem('sme_hq_auth') || sessionStorage.getItem('hq_auth');
+  const mainAuth = localStorage.getItem('sme_auth');
+  if(hqAuth !== '1' || mainAuth !== '1'){
+    alert('접근 권한이 없습니다.');
+    window.location.href = 'index.html';
+  }
+})();
+
+// ── Supabase ──
+const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allLogs = [];
+let _from = '', _to = '';
+
+// ── 탭 전환 ──
+function switchTab(t) {
+  ['log','master'].forEach(x => {
+    document.getElementById('tab-'+x).style.display = x===t?'block':'none';
+    document.getElementById('tab-'+x+'-btn').classList.toggle('active', x===t);
+  });
+}
+
+// ── 기간 버튼 ──
+function setQ(type, el) {
+  document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const toISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  if(type === 'today') {
+    _from = toISO(now) + 'T00:00:00';
+    _to   = toISO(now) + 'T23:59:59';
+  } else if(type === 'week') {
+    const mon = new Date(now); mon.setDate(now.getDate() - now.getDay() + 1);
+    _from = toISO(mon) + 'T00:00:00';
+    _to   = toISO(now) + 'T23:59:59';
+  } else if(type === 'month') {
+    _from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01T00:00:00`;
+    _to   = toISO(now) + 'T23:59:59';
+  } else {
+    _from = ''; _to = '';
+  }
+  loadLog();
+}
+
+// ── 로그 조회 ──
+async function loadLog() {
+  document.getElementById('logBody').innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div> 조회 중...</div></td></tr>';
+
+  try {
+    let q = sb.from('access_log').select('*').order('accessed_at', {ascending: false}).limit(1000);
+    if(_from) q = q.gte('accessed_at', _from);
+    if(_to)   q = q.lte('accessed_at', _to);
+
+    const name   = document.getElementById('f-name').value;
+    const screen = document.getElementById('f-screen').value;
+    const device = document.getElementById('f-device').value;
+    if(name)   q = q.eq('user_name', name);
+    if(screen) q = q.eq('screen', screen);
+    if(device) q = q.eq('device', device);
+
+    const {data, error} = await q;
+    if(error) throw error;
+    allLogs = data || [];
+    renderLog(allLogs);
+    updateKPI();
+    loadRank();
+  } catch(e) {
+    document.getElementById('logBody').innerHTML = `<tr><td colspan="6"><div class="empty-state">조회 실패: ${e.message}</div></td></tr>`;
+  }
+}
+
+function renderLog(data) {
+  document.getElementById('logCount').textContent = `— ${data.length.toLocaleString()}건`;
+  if(!data.length) {
+    document.getElementById('logBody').innerHTML = '<tr><td colspan="6"><div class="empty-state">📭 조회 결과가 없습니다</div></td></tr>';
+    return;
+  }
+  document.getElementById('logBody').innerHTML = data.map((r, i) => {
+    const dt = new Date(r.accessed_at);
+    const dtStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`;
+    const devBadge = r.device === 'PC' ? '<span class="badge b-pc">PC</span>'
+      : r.device === '모바일' ? '<span class="badge b-mobile">모바일</span>'
+      : r.device === '태블릿' ? '<span class="badge b-tablet">태블릿</span>'
+      : `<span class="badge">${r.device||'—'}</span>`;
+    return `<tr>
+      <td style="color:var(--muted);font-family:'Share Tech Mono',monospace;">${i+1}</td>
+      <td style="font-weight:700;">${r.user_name||'—'}</td>
+      <td>${r.screen||'—'}</td>
+      <td>${devBadge}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);">${r.ip_address||'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);">${dtStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── KPI ──
+async function updateKPI() {
+  try {
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    const monthStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+
+    const [{data:d1},{data:d2},{data:d3}] = await Promise.all([
+      sb.from('access_log').select('id', {count:'exact'}).gte('accessed_at', todayStr+'T00:00:00'),
+      sb.from('access_log').select('id', {count:'exact'}).gte('accessed_at', monthStr+'T00:00:00'),
+      sb.from('access_log').select('id', {count:'exact'})
+    ]);
+    document.getElementById('kpi-today').textContent = (d1?.length||0).toLocaleString();
+    document.getElementById('kpi-month').textContent = (d2?.length||0).toLocaleString();
+    document.getElementById('kpi-total').textContent = (d3?.length||0).toLocaleString();
+  } catch(e) {}
+}
+
+// ── 순위 ──
+async function loadRank() {
+  try {
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const monthStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+    const {data} = await sb.from('access_log').select('user_name').gte('accessed_at', monthStr+'T00:00:00');
+    if(!data) return;
+
+    const cnt = {};
+    data.forEach(r => { cnt[r.user_name] = (cnt[r.user_name]||0) + 1; });
+    const sorted = Object.entries(cnt).sort((a,b) => b[1]-a[1]);
+    const max = sorted[0]?.[1] || 1;
+
+    // 최다 접속자 KPI
+    if(sorted[0]) {
+      document.getElementById('kpi-top').textContent = sorted[0][0];
+      document.getElementById('kpi-top-cnt').textContent = `${sorted[0][1]}회 접속`;
+    }
+
+    // 드롭다운 채우기
+    const nameSel = document.getElementById('f-name');
+    const screenSel = document.getElementById('f-screen');
+    if(nameSel.options.length === 1) {
+      const names = [...new Set(data.map(r=>r.user_name).filter(Boolean))].sort();
+      names.forEach(n => { const o=document.createElement('option'); o.value=n; o.textContent=n; nameSel.appendChild(o); });
+    }
+
+    // 화면 드롭다운 (전체 로그 기준)
+    const {data: sd} = await sb.from('access_log').select('screen');
+    if(sd && screenSel.options.length === 1) {
+      const screens = [...new Set(sd.map(r=>r.screen).filter(Boolean))].sort();
+      screens.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; screenSel.appendChild(o); });
+    }
+
+    document.getElementById('rank-list').innerHTML = sorted.slice(0,10).map(([nm,c], i) => {
+      const pct = Math.round(c/max*100);
+      return `<div class="rank-row">
+        <span class="rank-num ${i<3?'top':''}">${i+1}</span>
+        <span class="rank-name">${nm}</span>
+        <div class="rank-bar-wrap"><div class="rank-bar-fill" style="width:${pct}%;"></div></div>
+        <span class="rank-cnt">${c}회</span>
+      </div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px;">데이터 없음</div>';
+  } catch(e) {}
+}
+
+// ── 엑셀 다운로드 ──
+function exportExcel() {
+  if(!allLogs.length) { alert('먼저 조회해주세요.'); return; }
+  const h = ['#','이름','화면','기기','IP주소','접속일시'];
+  const rows = allLogs.map((r,i) => {
+    const dt = new Date(r.accessed_at);
+    const dtStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`;
+    return [i+1, r.user_name, r.screen, r.device, r.ip_address, dtStr];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([h, ...rows]);
+  ws['!cols'] = [{wch:5},{wch:12},{wch:20},{wch:10},{wch:18},{wch:22}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '접속이력');
+  const _d = new Date();
+  const ds = _d.getFullYear()+String(_d.getMonth()+1).padStart(2,'0')+String(_d.getDate()).padStart(2,'0');
+  XLSX.writeFile(wb, `SME_접속이력_${ds}.xlsx`);
+}
+
+// ── 초기화 ──
+setQ('today', document.getElementById('q-today'));
+</script>
+</body>
+</html>
