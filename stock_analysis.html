@@ -89,6 +89,8 @@ tr:last-child td{border-bottom:none;}
 .num-over{color:#ea580c;font-weight:700;}
 .num-lack{color:#2563eb;font-weight:700;}
 .num-zero{color:var(--muted);}
+.sum-row td{background:#f7f4ef;font-weight:700;border-top:2px solid var(--border);border-bottom:2px solid var(--border);}
+.sum-row td.right{color:var(--accent);font-size:12px;}
 
 .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;gap:14px;}
 .spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
@@ -218,14 +220,7 @@ tr:last-child td{border-bottom:none;}
           <option value="">— 선택 —</option>
         </select>
       </div>
-      <div class="filter-group">
-        <div class="filter-label">판매기준 기간</div>
-        <select class="filter-select" id="f_period">
-          <option value="3">최근 3개월</option>
-          <option value="6">최근 6개월</option>
-          <option value="12">최근 12개월</option>
-        </select>
-      </div>
+
       <div class="filter-group">
         <div class="filter-label">공급유형</div>
         <select class="filter-select" id="f_type">
@@ -245,6 +240,23 @@ tr:last-child td{border-bottom:none;}
           <option value="부족">🔵 부족</option>
           <option value="신규입고">🟣 신규입고</option>
         </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">브랜드</div>
+        <select class="filter-select" id="f_brand" style="min-width:140px;">
+          <option value="전체">전체</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">재고개월수 범위</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input class="filter-input" type="number" id="f_month_min" placeholder="이상" min="0" step="0.5"
+                 style="min-width:72px;width:72px;" onkeydown="if(event.key==='Enter')runAnalysis()">
+          <span style="font-size:12px;color:var(--muted);">M ~</span>
+          <input class="filter-input" type="number" id="f_month_max" placeholder="이하" min="0" step="0.5"
+                 style="min-width:72px;width:72px;" onkeydown="if(event.key==='Enter')runAnalysis()">
+          <span style="font-size:12px;color:var(--muted);">M</span>
+        </div>
       </div>
       <div class="filter-group">
         <div class="filter-label">품목코드 / 품명</div>
@@ -277,17 +289,17 @@ tr:last-child td{border-bottom:none;}
     <div class="kpi-card k-over">
       <div class="kpi-label">과잉재고</div>
       <div class="kpi-val" id="kpi_over" style="color:#ea580c;">—</div>
-      <div class="kpi-sub">적정재고 150% 초과</div>
+      <div class="kpi-sub">재고개월수 &gt; 3개월</div>
     </div>
     <div class="kpi-card k-lack">
       <div class="kpi-label">부족재고</div>
       <div class="kpi-val" id="kpi_lack" style="color:#2563eb;">—</div>
-      <div class="kpi-sub">적정재고 50% 미만</div>
+      <div class="kpi-sub">재고개월수 &lt; 1개월</div>
     </div>
     <div class="kpi-card k-good">
       <div class="kpi-label">적정재고</div>
       <div class="kpi-val" id="kpi_good" style="color:#059669;">—</div>
-      <div class="kpi-sub">정상 범위</div>
+      <div class="kpi-sub">재고개월수 1~2개월</div>
     </div>
     <div class="kpi-card k-amt">
       <div class="kpi-label">총 재고금액</div>
@@ -305,7 +317,7 @@ tr:last-child td{border-bottom:none;}
   <div class="table-wrap">
     <div class="table-header">
       <div class="table-count">총 <b id="tbl_count">0</b>건</div>
-      <div class="table-note">적정재고=월평균판매량×2 &nbsp;|&nbsp; 과잉>150% &nbsp; 주의 100~150% &nbsp; 적정 50~100% &nbsp; 부족&lt;50%</div>
+      <div class="table-note">재고개월수 = 실재고 ÷ 월평균(6M) &nbsp;·&nbsp; 재고비중% = 재고개월수 × 100 &nbsp;|&nbsp; 🔴데드스톡: 6M판매=0 &nbsp; 🟠과잉: >3M &nbsp; 🟡주의: 2~3M &nbsp; 🟢적정: 1~2M &nbsp; 🔵부족: &lt;1M</div>
     </div>
     <div class="tbl-scroll">
       <table>
@@ -315,10 +327,10 @@ tr:last-child td{border-bottom:none;}
             <th class="left">브랜드</th>
             <th class="left" style="min-width:200px;">품명및규격</th>
             <th>공급유형</th>
-            <th>월평균판매량</th>
-            <th>적정재고(×2)</th>
+            <th>월평균판매량<br><span style="font-weight:400;font-size:9px;">(최근6M)</span></th>
             <th>실재고수량</th>
-            <th>과부족수량</th>
+            <th>재고개월수</th>
+            <th>재고비중%</th>
             <th>재고금액(원)</th>
             <th>상태</th>
           </tr>
@@ -367,7 +379,7 @@ if(sessionStorage.getItem('po_auth')==='1'){
 
 // ── 초기화: 기준월 드롭다운 ──
 async function initPage(){
-  const {data}=await sb.from('stock_inventory').select('ym').order('ym',{ascending:false});
+  const {data}=await sb.from('stock_inventory').select('ym').order('ym',{ascending:false}).limit(5000);
   if(data&&data.length){
     const months=[...new Set(data.map(r=>r.ym))].sort((a,b)=>b.localeCompare(a));
     const sel=document.getElementById('f_month');
@@ -376,8 +388,20 @@ async function initPage(){
       const [y,mo]=m.split('-');
       sel.innerHTML+=`<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;
     });
-    if(months.length){sel.value=months[0];runAnalysis();}
+    if(months.length){sel.value=months[0];}
   }
+  // 브랜드 목록 로드
+  await loadBrands();
+  if(document.getElementById('f_month').value) runAnalysis();
+}
+
+async function loadBrands(){
+  const {data}=await sb.from('stock_inventory').select('brand').limit(5000);
+  if(!data) return;
+  const brands=[...new Set(data.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const sel=document.getElementById('f_brand');
+  sel.innerHTML='<option value="전체">전체</option>';
+  brands.forEach(b=>{ sel.innerHTML+=`<option value="${b}">${b}</option>`; });
 }
 
 // ── 분석 실행 ──
@@ -387,7 +411,7 @@ const PAGE_SIZE=50;
 async function runAnalysis(){
   const month=document.getElementById('f_month').value;
   if(!month){alert('재고조사 기준월을 선택해주세요.');return;}
-  const period=parseInt(document.getElementById('f_period').value);
+  const period=6; // 월평균 6개월 고정
 
   showLoading('재고조사 데이터 로딩 중...');
 
@@ -400,20 +424,20 @@ async function runAnalysis(){
     stockAll=[...stockAll,...data];pg++;
   }
   if(!stockAll.length){
-    document.getElementById('tblBody').innerHTML=`<tr><td colspan="10"><div class="empty-state">
-      <div class="empty-icon">📂</div>
+    document.getElementById('tblBody').innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📂</div>
       <div class="empty-text">해당 월 재고조사 데이터가 없습니다<br>우측 상단 [재고조사 업로드] 버튼을 눌러 업로드해주세요.</div>
     </div></td></tr>`;
     document.getElementById('pagination').innerHTML='';
     return;
   }
 
-  // 2. 판매기간 계산 (기준월 이전 N개월)
+  // 2. 판매기간 계산 (기준월 포함 N개월)
   showLoading('매출 데이터 집계 중...');
   const baseDt=new Date(month+'-01');
-  const toDt=new Date(baseDt);toDt.setDate(0); // 기준월 전월 말일
-  const frDt=new Date(toDt);
-  frDt.setMonth(frDt.getMonth()-period+1);frDt.setDate(1);
+  // toDate: 기준월 말일
+  const toDt=new Date(baseDt.getFullYear(), baseDt.getMonth()+1, 0);
+  // fromDate: N개월 전 1일
+  const frDt=new Date(baseDt.getFullYear(), baseDt.getMonth()-period+1, 1);
   const fromStr=`${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
   const toStr=`${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
 
@@ -428,27 +452,29 @@ async function runAnalysis(){
     if(data)data.forEach(r=>{salesMap[r.item_code]=(salesMap[r.item_code]||0)+(Number(r.qty)||0);});
   }
 
-  // 4. 결과 생성
+  // 4. 결과 생성 (6개월 고정 평균 / 재고개월수 기준 상태)
   _allResult=stockAll.map(r=>{
     const totalSales=salesMap[r.item_code]||0;
-    const avgMonthly=totalSales/period;
-    const optimal=avgMonthly*2;
+    const avgMonthly=totalSales/6; // 6개월 고정
     const realQty=Number(r.real_qty)||0;
-    const surplus=optimal>0?realQty-optimal:0;
+    // 재고개월수: 실재고 ÷ 월평균 (소수점 1자리)
+    const stockMonths=avgMonthly>0?realQty/avgMonthly:null;
+    // 재고비중%: 실재고 ÷ (월평균×2) × 100 (임시기준 2개월)
+    const stockRatio=avgMonthly>0?realQty/avgMonthly*100:null; // 월평균 대비 순수배율 (개월수×100)
     let state;
-    if(totalSales===0&&realQty>0)      state='데드스톡';
-    else if(optimal===0&&realQty>0)    state='신규입고';
-    else if(realQty===0&&optimal===0)  state='적정';
-    else if(realQty>optimal*1.5)       state='과잉';
-    else if(realQty>optimal*1.0)       state='주의';
-    else if(realQty>=optimal*0.5)      state='적정';
-    else                                state='부족';
+    if(totalSales===0&&realQty>0)         state='데드스톡';
+    else if(avgMonthly===0&&realQty>0)    state='신규입고';
+    else if(realQty===0)                  state='적정';
+    else if(stockMonths>3)                state='과잉';
+    else if(stockMonths>2)                state='주의';
+    else if(stockMonths>=1)               state='적정';
+    else                                   state='부족';
     return{
       code:r.item_code,brand:r.brand||'',desc:r.description||'',
       type:r.supply_type||'',lgpn:r.lg_pn||'',mkpn:r.maker_pn||'',
       realQty,erpQty:Number(r.erp_qty)||0,
       price:Number(r.unit_price)||0,amount:Number(r.stock_amount)||0,
-      totalSales,avgMonthly,optimal,surplus,state
+      totalSales,avgMonthly,stockMonths,stockRatio,state
     };
   });
 
@@ -458,11 +484,25 @@ async function runAnalysis(){
 function applyFilter(){
   const type=document.getElementById('f_type').value;
   const status=document.getElementById('f_status').value;
+  const brand=document.getElementById('f_brand').value;
   const keyword=document.getElementById('f_keyword').value.trim().toLowerCase();
+
+  const mMin = document.getElementById('f_month_min').value;
+  const mMax = document.getElementById('f_month_max').value;
 
   _filtered=_allResult;
   if(type!=='전체')   _filtered=_filtered.filter(r=>r.type===type);
   if(status!=='전체') _filtered=_filtered.filter(r=>r.state===status);
+  if(brand!=='전체')  _filtered=_filtered.filter(r=>r.brand===brand);
+  // 개월수 범위 필터
+  if(mMin!==''){
+    const min=parseFloat(mMin);
+    _filtered=_filtered.filter(r=>r.stockMonths!==null&&r.stockMonths>=min);
+  }
+  if(mMax!==''){
+    const max=parseFloat(mMax);
+    _filtered=_filtered.filter(r=>r.stockMonths!==null&&r.stockMonths<=max);
+  }
   if(keyword)         _filtered=_filtered.filter(r=>
     r.code.toLowerCase().includes(keyword)||
     r.desc.toLowerCase().includes(keyword)||
@@ -501,24 +541,50 @@ function renderTable(){
     return;
   }
 
+  // 합계 계산 (전체 _filtered 기준)
+  const sumReal=_filtered.reduce((s,r)=>s+r.realQty,0);
+  const sumAmt =_filtered.reduce((s,r)=>s+r.amount,0);
+
   document.getElementById('tblBody').innerHTML=slice.map(r=>{
     const[cls,ico]=SM[r.state]||['b-good','🟢'];
-    const sCls=r.surplus>0?'num-over':r.surplus<0?'num-lack':'num-zero';
-    const sStr=r.optimal>0?(r.surplus>0?'+':'')+Math.round(r.surplus).toLocaleString():'—';
     const tCls=r.type==='직거래'?'type-d':'type-l';
+    // 재고개월수 표시 및 색상
+    let mStr='—', mCls='num-zero';
+    if(r.stockMonths!==null&&r.stockMonths!==undefined){
+      mStr=r.stockMonths.toFixed(1)+'M';
+      mCls=r.stockMonths>3?'num-over':r.stockMonths<1?'num-lack':'';
+    }
+    // 재고비중% 표시 및 색상
+    let rStr='—', rCls='num-zero';
+    if(r.stockRatio!==null&&r.stockRatio!==undefined){
+      rStr=Math.round(r.stockRatio)+'%';
+      rCls=r.stockRatio>150?'num-over':r.stockRatio<50?'num-lack':'';
+    }
     return`<tr>
       <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${r.code}</td>
       <td class="left" style="font-size:11px;">${r.brand}</td>
       <td class="left" style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.desc}">${r.desc}</td>
       <td class="center"><span class="${tCls}">${r.type}</span></td>
       <td class="right">${r.avgMonthly>0?Math.round(r.avgMonthly).toLocaleString():'—'}</td>
-      <td class="right">${r.optimal>0?Math.round(r.optimal).toLocaleString():'—'}</td>
       <td class="right" style="font-weight:700;">${r.realQty.toLocaleString()}</td>
-      <td class="right ${sCls}">${sStr}</td>
+      <td class="right ${mCls}" style="font-weight:700;">${mStr}</td>
+      <td class="right ${rCls}">${rStr}</td>
       <td class="right">${r.amount>0?Math.round(r.amount).toLocaleString():'—'}</td>
       <td class="center"><span class="badge ${cls}">${ico} ${r.state}</span></td>
     </tr>`;
   }).join('');
+
+  // 합계행 추가
+  const sumRow=`<tr class="sum-row">
+    <td colspan="3" class="left" style="font-size:11px;font-family:'Share Tech Mono',monospace;color:var(--muted);">합 계 — 필터 적용 ${_filtered.length.toLocaleString()}건</td>
+    <td></td>
+    <td></td>
+    <td class="right" style="color:var(--accent);">${sumReal.toLocaleString()}</td>
+    <td></td><td></td>
+    <td class="right" style="color:var(--accent);">${Math.round(sumAmt).toLocaleString()}</td>
+    <td></td>
+  </tr>`;
+  document.getElementById('tblBody').innerHTML += sumRow;
 
   renderPagination(totalPages);
 }
@@ -544,15 +610,15 @@ function goPage(p){
 function exportExcel(){
   if(!_filtered.length){alert('먼저 분석실행을 해주세요.');return;}
   const month=document.getElementById('f_month').value;
-  const period=document.getElementById('f_period').value;
+  const period=6;
   const hdrs=['품목코드','브랜드','품명및규격','공급유형',
-    `월평균판매량(최근${period}M)`,'적정재고(×2)','실재고수량','과부족수량','재고금액(원)','상태'];
+    '월평균판매량(6M)','실재고수량','재고개월수','재고비중%','재고금액(원)','상태'];
   const rows=_filtered.map(r=>[
     r.code,r.brand,r.desc,r.type,
     r.avgMonthly>0?Math.round(r.avgMonthly):0,
-    r.optimal>0?Math.round(r.optimal):0,
     r.realQty,
-    r.optimal>0?Math.round(r.surplus):'-',
+    r.stockMonths!==null?Math.round(r.stockMonths*10)/10:'-',
+    r.stockRatio!==null?Math.round(r.stockRatio):'-',
     Math.round(r.amount)||0,
     r.state
   ]);
@@ -659,6 +725,9 @@ async function doUpload(){
   setTimeout(()=>{closeUploadModal();initPage();},800);
 }
 
+['f_keyword','f_month_min','f_month_max'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')runAnalysis();});
+});
 document.getElementById('uploadModal').addEventListener('click',function(e){if(e.target===this)closeUploadModal();});
 </script>
 </body>
