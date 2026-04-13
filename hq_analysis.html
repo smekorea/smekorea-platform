@@ -407,6 +407,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
       <div class="load-progress-bg"><div class="load-progress-fill" id="ld-s-bar" style="background:#c8001e;"></div></div>
     </div>
     <div class="load-status" id="ld-status">초기화 중...</div>
+    <button onclick="cancelLoad()" style="margin-top:18px;padding:9px 24px;border:1.5px solid #e5ddd4;border-radius:8px;background:#f7f4ef;color:#a8998a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .18s;" onmouseover="this.style.borderColor='#c8001e';this.style.color='#c8001e';" onmouseout="this.style.borderColor='#e5ddd4';this.style.color='#a8998a';">
+      취소 — 기간 조회로 사용
+    </button>
   </div>
 </div>
 
@@ -459,6 +462,15 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
     <div class="upload-info" id="uploadInfo">데이터 로드 대기중</div>
     <button class="upload-btn" id="loadBtn" onclick="loadFromSupabase()">🔄 데이터 로드</button>
   </div>
+</div>
+
+<!-- 모드 상태 바 -->
+<div id="loadModeBar" style="display:none;align-items:center;gap:10px;padding:8px 24px;border-bottom:1px solid #e5ddd4;background:#fffbf5;">
+  <span id="loadModeMsg" style="font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;"></span>
+  <button onclick="loadFromSupabase()" id="reloadBtn"
+    style="padding:4px 12px;border:1.5px solid #c8001e;border-radius:6px;background:#fff;color:#c8001e;font-size:11px;font-weight:700;cursor:pointer;font-family:'Share Tech Mono',monospace;margin-left:auto;">
+    🔄 전체 데이터 로드
+  </button>
 </div>
 
 <!-- 탭 -->
@@ -700,6 +712,8 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let rawP=[],rawS=[],loaded=false;
 let _rawPAll=[],_rawSAll=[]; // 전체 데이터 캐시
 let _priceFrom='',_priceTo=''; // 단가마진 기간
+let _fullLoaded=false; // 전체 로드 완료 여부
+let _cancelLoad=false; // 로드 취소 플래그
 let LG_M=['GRUNDFOS','MEC-CON','Techshine','Microchip','SKYWORTH','경전산업','CUMSUMI']; // 기본값
 // Supabase에서 LG사급 브랜드 로드
 async function loadLGBrands(){
@@ -714,8 +728,11 @@ async function loadFromSupabase(){
   const btn=document.getElementById('loadBtn');
   const info=document.getElementById('uploadInfo');
   const overlay=document.getElementById('loadOverlay');
+  _cancelLoad=false; // 취소 플래그 초기화
+  document.getElementById('loadModeBar').style.display='none'; // 모드바 숨김
   btn.disabled=true; btn.textContent='로드 중...';
   info.textContent='데이터 조회 중...'; info.classList.remove('ok');
+  info.style.color='';
   overlay.classList.remove('hide');
   document.getElementById('ld-status').textContent='LG브랜드 로드 중...';
 
@@ -724,19 +741,21 @@ async function loadFromSupabase(){
 
     // 전체 데이터 로드 (기간 무관)
     document.getElementById('ld-status').textContent='매입 데이터 로드 중...';
-    _rawPAll=await fetchAllFull('purchase_data',(pg,tot)=>{
-      document.getElementById('ld-p-cnt').textContent=(pg*1000).toLocaleString()+'건+';
-      if(tot) document.getElementById('ld-p-bar').style.width=Math.min(Math.round(pg/tot*100),99)+'%';
+    // 매입: 약 119,916건 기준 진행률
+    const P_TOTAL=120000, S_TOTAL=320000;
+    _rawPAll=await fetchAllFull('purchase_data',(loaded)=>{
+      document.getElementById('ld-p-cnt').textContent=loaded.toLocaleString()+'건';
+      document.getElementById('ld-p-bar').style.width=Math.min(Math.round(loaded/P_TOTAL*100),99)+'%';
     });
-    document.getElementById('ld-p-cnt').textContent=_rawPAll.length.toLocaleString()+'건';
+    document.getElementById('ld-p-cnt').textContent=_rawPAll.length.toLocaleString()+'건 완료';
     document.getElementById('ld-p-bar').style.width='100%';
 
     document.getElementById('ld-status').textContent='매출 데이터 로드 중...';
-    _rawSAll=await fetchAllFull('sales_data',(pg,tot)=>{
-      document.getElementById('ld-s-cnt').textContent=(pg*1000).toLocaleString()+'건+';
-      if(tot) document.getElementById('ld-s-bar').style.width=Math.min(Math.round(pg/tot*100),99)+'%';
+    _rawSAll=await fetchAllFull('sales_data',(loaded)=>{
+      document.getElementById('ld-s-cnt').textContent=loaded.toLocaleString()+'건';
+      document.getElementById('ld-s-bar').style.width=Math.min(Math.round(loaded/S_TOTAL*100),99)+'%';
     });
-    document.getElementById('ld-s-cnt').textContent=_rawSAll.length.toLocaleString()+'건';
+    document.getElementById('ld-s-cnt').textContent=_rawSAll.length.toLocaleString()+'건 완료';
     document.getElementById('ld-s-bar').style.width='100%';
 
     // 기간 필터 적용
@@ -744,11 +763,27 @@ async function loadFromSupabase(){
     rawP=_rawPAll.filter(r=>inPer(r,from,to));
     rawS=_rawSAll.filter(r=>inPer(r,from,to));
 
-    loaded=true;
-    document.getElementById('ld-status').textContent='완료!';
-    info.textContent=`전체 매입 ${_rawPAll.length.toLocaleString()}건 / 매출 ${_rawSAll.length.toLocaleString()}건 로드완료`;
-    info.classList.add('ok');
-
+    if(_cancelLoad){
+      // 취소된 경우 — 기간 조회 모드로 전환 (부분 데이터로 진행)
+      const {from,to}=getFT();
+      rawP=await fetchAll('purchase_data',from,to);
+      rawS=await fetchAll('sales_data',from,to);
+      loaded=true; _fullLoaded=false;
+      info.textContent=`기간 조회 완료 · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+      info.classList.add('ok'); info.style.color='#ea580c';
+      document.getElementById('loadModeBar').style.display='flex';
+      document.getElementById('loadModeMsg').textContent=`⚠ 기간 조회 모드 (${from.slice(0,4)}.${from.slice(4,6)}~${to.slice(0,4)}.${to.slice(4,6)}) — 기간 변경 시 [데이터 로드] 필요`;
+      document.getElementById('loadModeMsg').style.color='#ea580c';
+    } else {
+      // 전체 로드 완료
+      loaded=true; _fullLoaded=true;
+      document.getElementById('ld-status').textContent='완료!';
+      info.textContent=`✅ 전체 데이터 로드 완료 · 매입 ${_rawPAll.length.toLocaleString()}건 / 매출 ${_rawSAll.length.toLocaleString()}건`;
+      info.classList.add('ok'); info.style.color='#059669';
+      document.getElementById('loadModeBar').style.display='flex';
+      document.getElementById('loadModeMsg').textContent='✅ 전체 데이터 로드 완료 — 기간 변경 시 즉시 반영됩니다';
+      document.getElementById('loadModeMsg').style.color='#059669';
+    }
     // 단가마진 기간 초기화 (최근 6개월)
     setPricePeriodInit();
     fillDrops();
@@ -762,6 +797,22 @@ async function loadFromSupabase(){
 }
 
 // 전체 데이터 페이지네이션 조회 (기간 필터 없음)
+// ── 로드 취소 ──
+function cancelLoad(){
+  _cancelLoad=true;
+  document.getElementById('loadOverlay').classList.add('hide');
+  const info=document.getElementById('uploadInfo');
+  info.textContent='⚠ 부분 로드 — 기간 선택 후 [데이터 로드] 버튼 사용';
+  info.classList.remove('ok');
+  info.style.color='#ea580c';
+  document.getElementById('loadBtn').disabled=false;
+  document.getElementById('loadBtn').textContent='🔄 데이터 로드';
+  // 모드 표시
+  document.getElementById('loadModeBar').style.display='flex';
+  document.getElementById('loadModeMsg').textContent='⚠ 기간 조회 모드 — 전체 데이터 미로드 상태입니다. 기간 선택 후 [데이터 로드] 버튼을 눌러주세요.';
+  document.getElementById('loadModeMsg').style.color='#ea580c';
+}
+
 async function fetchAllFull(table, onProgress){
   const PAGE=1000; let all=[], page=0;
   while(true){
@@ -783,7 +834,8 @@ async function fetchAllFull(table, onProgress){
       '판매처명': table==='sales_data'?r.customer:'',
     }));
     all=[...all,...mapped];
-    if(onProgress) onProgress(page+1, null);
+    if(onProgress) onProgress(all.length);
+    if(_cancelLoad) break; // 취소 시 중단
     if(data.length<PAGE) break;
     page++;
   }
@@ -854,11 +906,21 @@ function ss(id,v){const s=document.getElementById(id);for(let o of s.options)if(
 function getFT(){return{from:document.getElementById('fromYear').value+document.getElementById('fromMonth').value,to:document.getElementById('toYear').value+document.getElementById('toMonth').value};}
 function applyPeriod(){
   if(!loaded){loadFromSupabase();return;}
+  if(!_fullLoaded){
+    // 기간 조회 모드 — 재조회 필요 안내
+    const info=document.getElementById('uploadInfo');
+    info.textContent='⚠ 기간 조회 모드 — [데이터 로드] 버튼을 눌러 해당 기간 데이터를 가져오세요';
+    info.style.color='#ea580c';
+    document.getElementById('loadModeMsg').textContent='⚠ 기간 변경 시 [데이터 로드] 버튼을 눌러주세요';
+    return;
+  }
+  // 전체 로드 완료 상태 — 메모리에서 즉시 필터
   const {from,to}=getFT();
   rawP=_rawPAll.filter(r=>inPer(r,from,to));
   rawS=_rawSAll.filter(r=>inPer(r,from,to));
   const info=document.getElementById('uploadInfo');
-  info.textContent=`기간필터 · 구매 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+  info.textContent=`✅ 기간필터 적용 · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+  info.style.color='#059669';
   fillDrops(); updateAll();
 }
 
