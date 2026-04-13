@@ -171,6 +171,26 @@ tr:last-child td{border-bottom:none;}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:700px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.page-wrap{padding:20px 14px 40px;}}
+/* 목표분석 탭 */
+.goal-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.goal-card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--card-shadow);}
+.goal-card-title{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.5px;font-family:'Share Tech Mono',monospace;margin-bottom:8px;}
+.goal-card-val{font-size:20px;font-weight:900;font-family:'Share Tech Mono',monospace;line-height:1;margin-bottom:4px;}
+.goal-card-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.goal-over{border-top:3px solid #ef4444;}
+.goal-good{border-top:3px solid #10b981;}
+.goal-info{border-top:3px solid #6366f1;}
+.goal-bar-wrap{display:flex;align-items:center;gap:10px;margin-top:6px;}
+.goal-bar-bg{flex:1;height:8px;background:#f0ece6;border-radius:4px;overflow:hidden;}
+.goal-bar-fill{height:100%;border-radius:4px;transition:width .5s;}
+.goal-pct{font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;min-width:42px;text-align:right;}
+.goal-table tr.goal-over-row td{background:rgba(239,68,68,0.04);}
+.goal-table tr.goal-ok-row td{background:rgba(16,185,129,0.04);}
+.goal-table tr.goal-none-row td{background:#fafafa;}
+.achieve-badge{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+.ab-over{background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);}
+.ab-good{background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);}
+.ab-none{background:#f0ece6;color:var(--muted);border:1px solid var(--border);}
 </style>
 </head>
 <body>
@@ -337,6 +357,7 @@ tr:last-child td{border-bottom:none;}
     <button class="tab-btn" onclick="switchTab('tab-pattern',this)">📊 변동패턴 분석</button>
     <button class="tab-btn" onclick="switchTab('tab-brand',this)">🏷️ 브랜드별 집계</button>
     <button class="tab-btn" onclick="switchTab('tab-risk',this)">⚠️ 위험재고</button>
+    <button class="tab-btn" onclick="switchTab('tab-goal',this)">🎯 목표 대비 분석</button>
   </div>
 
   <!-- 탭1: 품목별 재고현황 -->
@@ -540,6 +561,78 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div><!-- /tab-risk -->
 
+  <!-- 탭5: 목표 대비 분석 -->
+  <div class="tab-panel" id="tab-goal">
+    <div class="sec-label">
+      <span class="sec-label-text">목표 대비 재고 분석</span>
+      <div class="sec-label-line"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'Share Tech Mono',monospace;">
+      ※ brand_stock_rule 기준 — 목표개월수 대비 실재고개월수 / 목표금액 대비 실재고금액 비교
+    </div>
+    <!-- 전체 요약 KPI -->
+    <div class="goal-summary">
+      <div class="goal-card goal-info">
+        <div class="goal-card-title">LG사급 재고목표</div>
+        <div class="goal-card-val" id="gl_lg_target">—</div>
+        <div class="goal-card-sub">원 (목표금액)</div>
+        <div class="goal-bar-wrap">
+          <div class="goal-bar-bg"><div class="goal-bar-fill" id="gl_lg_bar" style="background:#6366f1;width:0%"></div></div>
+          <div class="goal-pct" id="gl_lg_pct" style="color:#6366f1;">—</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">실재고: <b id="gl_lg_real">—</b></div>
+      </div>
+      <div class="goal-card goal-info">
+        <div class="goal-card-title">직거래 재고목표</div>
+        <div class="goal-card-val" id="gl_dt_target">—</div>
+        <div class="goal-card-sub">원 (목표금액)</div>
+        <div class="goal-bar-wrap">
+          <div class="goal-bar-bg"><div class="goal-bar-fill" id="gl_dt_bar" style="background:#1a56db;width:0%"></div></div>
+          <div class="goal-pct" id="gl_dt_pct" style="color:#1a56db;">—</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">실재고: <b id="gl_dt_real">—</b></div>
+      </div>
+      <div class="goal-card goal-info">
+        <div class="goal-card-title">전체 재고목표</div>
+        <div class="goal-card-val" id="gl_all_target">—</div>
+        <div class="goal-card-sub">원 (목표금액)</div>
+        <div class="goal-bar-wrap">
+          <div class="goal-bar-bg"><div class="goal-bar-fill" id="gl_all_bar" style="background:#c8001e;width:0%"></div></div>
+          <div class="goal-pct" id="gl_all_pct" style="color:#c8001e;">—</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">실재고: <b id="gl_all_real">—</b></div>
+      </div>
+    </div>
+
+    <!-- 브랜드별 목표 vs 실재고 테이블 -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-count">총 <b id="gl_count">0</b>개 브랜드 (목표설정 브랜드만 표시)</div>
+        <div class="table-note">실재고/목표 &gt; 100% = 초과 / &lt; 100% = 미달</div>
+      </div>
+      <div class="tbl-scroll">
+        <table class="goal-table">
+          <thead>
+            <tr>
+              <th class="left">브랜드</th>
+              <th>공급유형</th>
+              <th>목표개월</th>
+              <th>실재고개월</th>
+              <th>개월수 달성률</th>
+              <th>목표금액(원)</th>
+              <th>실재고금액(원)</th>
+              <th>금액 달성률</th>
+              <th>판정</th>
+            </tr>
+          </thead>
+          <tbody id="glBody">
+            <tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-goal -->
+
   <div style="margin-top:10px;font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;text-align:right;">
     © 2026 SMEKOREA · STOCK ANALYSIS SYSTEM
   </div>
@@ -720,6 +813,7 @@ function applyFilter(){
   if(document.getElementById('tab-pattern').classList.contains('active')) renderPattern();
   if(document.getElementById('tab-brand').classList.contains('active')) renderBrand();
   if(document.getElementById('tab-risk').classList.contains('active')) renderRisk();
+  if(document.getElementById('tab-goal').classList.contains('active')) renderGoal();
 }
 
 // ── 테이블 렌더 ──
@@ -930,6 +1024,7 @@ function switchTab(tabId, btn){
   if(tabId==='tab-pattern') renderPattern();
   if(tabId==='tab-brand')   renderBrand();
   if(tabId==='tab-risk')    renderRisk();
+  if(tabId==='tab-goal')    renderGoal();
 }
 
 // ── 변동패턴 분석 ──
@@ -1206,6 +1301,133 @@ function renderRisk(){
     <td class="center">${r.flags.map(f=>`<span style="font-size:12px;" title="${f.label}">${f.ico}</span>`).join(' ')}</td>
     <td class="left" style="font-size:11px;color:#dc2626;font-weight:700;">${action(r)}</td>
   </tr>`).join('');
+}
+
+// ── 목표 대비 분석 ──
+let _goalRules = []; // brand_stock_rule 캐시
+
+async function loadGoalRules(){
+  if(_goalRules.length) return; // 캐시 있으면 재사용
+  const {data} = await sb.from('brand_stock_rule').select('*');
+  if(data) _goalRules = data;
+}
+
+async function renderGoal(){
+  if(!_allResult.length){
+    document.getElementById('glBody').innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    return;
+  }
+  await loadGoalRules();
+  if(!_goalRules.length){
+    document.getElementById('glBody').innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">brand_stock_rule 데이터가 없습니다</div></div></td></tr>`;
+    return;
+  }
+
+  // 브랜드별 실재고 집계 (현재 _allResult 기준)
+  const brandMap={};
+  _allResult.forEach(r=>{
+    if(!brandMap[r.brand]) brandMap[r.brand]={realAmt:0, realQty:0, stockMonths:null, type:r.type};
+    brandMap[r.brand].realAmt += r.amount;
+    brandMap[r.brand].realQty += r.realQty;
+    // 브랜드 대표 재고개월수 (금액 가중 평균)
+    if(r.stockMonths!==null){
+      if(brandMap[r.brand].stockMonths===null) brandMap[r.brand].stockMonths=0;
+    }
+  });
+
+  // 브랜드별 재고개월수 (금액 가중평균)
+  const brandMonths={};
+  _allResult.filter(r=>r.stockMonths!==null&&r.amount>0).forEach(r=>{
+    if(!brandMonths[r.brand]) brandMonths[r.brand]={sumWt:0,sumAmt:0};
+    brandMonths[r.brand].sumWt += r.stockMonths * r.amount;
+    brandMonths[r.brand].sumAmt += r.amount;
+  });
+  Object.keys(brandMonths).forEach(b=>{
+    const bm = brandMonths[b];
+    if(brandMap[b]) brandMap[b].stockMonths = bm.sumAmt>0 ? bm.sumWt/bm.sumAmt : null;
+  });
+
+  // 목표기준 브랜드만 (target_months 또는 target_amount 있는 것)
+  const rows = _goalRules
+    .filter(rule => rule.target_months!==null || rule.target_amount!==null)
+    .map(rule=>{
+      const real = brandMap[rule.brand] || {realAmt:0, realQty:0, stockMonths:null, type:rule.supply_type};
+      const monthPct = (rule.target_months && real.stockMonths!==null)
+        ? real.stockMonths / rule.target_months * 100 : null;
+      const amtPct = (rule.target_amount && real.realAmt>0)
+        ? real.realAmt / rule.target_amount * 100 : null;
+      return { rule, real, monthPct, amtPct };
+    })
+    .sort((a,b)=>{
+      // 초과(금액) 먼저, 미달, 목표없음
+      const ap = a.amtPct||0, bp = b.amtPct||0;
+      return bp-ap;
+    });
+
+  // 전체 KPI 계산
+  const lgRules = _goalRules.filter(r=>r.supply_type==='LG사급품'&&r.target_amount);
+  const dtRules = _goalRules.filter(r=>r.supply_type==='직거래품'&&r.target_amount);
+  const lgTarget = lgRules.reduce((s,r)=>s+(r.target_amount||0),0);
+  const dtTarget = dtRules.reduce((s,r)=>s+(r.target_amount||0),0);
+  const allTarget= lgTarget+dtTarget;
+  const lgReal = lgRules.reduce((s,r)=>s+(brandMap[r.brand]?.realAmt||0),0);
+  const dtReal = dtRules.reduce((s,r)=>s+(brandMap[r.brand]?.realAmt||0),0);
+  const allReal= lgReal+dtReal;
+
+  // KPI 표시
+  const fmt = v => v>=100000000 ? (Math.round(v/100000000*10)/10).toLocaleString()+'억'
+                 : v>=10000000  ? Math.round(v/10000000).toLocaleString()+'천만'
+                 : Math.round(v).toLocaleString()+'원';
+  const pctColor = p => p>130?'#dc2626':p>100?'#ea580c':p>80?'#059669':'#2563eb';
+  const barColor = p => p>130?'#ef4444':p>100?'#f97316':p>80?'#10b981':'#3b82f6';
+  const barW = p => Math.min(Math.round(p), 100);
+
+  [['lg',lgTarget,lgReal],['dt',dtTarget,dtReal],['all',allTarget,allReal]].forEach(([k,target,real])=>{
+    const pct = target>0 ? real/target*100 : 0;
+    document.getElementById(`gl_${k}_target`).textContent = fmt(target);
+    document.getElementById(`gl_${k}_real`).textContent   = fmt(real);
+    document.getElementById(`gl_${k}_pct`).textContent    = Math.round(pct)+'%';
+    document.getElementById(`gl_${k}_pct`).style.color    = pctColor(pct);
+    document.getElementById(`gl_${k}_bar`).style.width    = barW(pct)+'%';
+    document.getElementById(`gl_${k}_bar`).style.background = barColor(pct);
+  });
+
+  document.getElementById('gl_count').textContent = rows.length;
+
+  // 테이블 렌더
+  const tCls = t => t==='직거래품'?'type-d':'type-l';
+  document.getElementById('glBody').innerHTML = rows.map(({rule,real,monthPct,amtPct})=>{
+    // 금액 달성률 기준 행 클래스
+    const rowCls = amtPct===null?'goal-none-row':amtPct>100?'goal-over-row':'goal-ok-row';
+
+    // 개월수 달성률
+    const mPctStr = monthPct!==null ? Math.round(monthPct)+'%' : '—';
+    const mColor  = monthPct===null?'var(--muted)':monthPct>130?'#dc2626':monthPct>100?'#ea580c':monthPct>80?'#059669':'#2563eb';
+
+    // 금액 달성률
+    const aPctStr = amtPct!==null ? Math.round(amtPct)+'%' : '—';
+    const aColor  = amtPct===null?'var(--muted)':amtPct>130?'#dc2626':amtPct>100?'#ea580c':amtPct>80?'#059669':'#2563eb';
+
+    // 판정
+    let judge, jCls;
+    if(amtPct===null){ judge='기준없음'; jCls='ab-none'; }
+    else if(amtPct>130){ judge='🔴 크게초과'; jCls='ab-over'; }
+    else if(amtPct>100){ judge='🟠 초과'; jCls='ab-over'; }
+    else if(amtPct>=80){ judge='🟢 적정'; jCls='ab-good'; }
+    else { judge='🔵 미달'; jCls='ab-good'; }
+
+    return`<tr class="${rowCls}">
+      <td class="left" style="font-weight:700;font-size:12px;">${rule.brand}</td>
+      <td class="center"><span class="${tCls(rule.supply_type)}">${rule.supply_type||'—'}</span></td>
+      <td class="right" style="font-family:'Share Tech Mono',monospace;">${rule.target_months!==null?rule.target_months+'M':'—'}</td>
+      <td class="right" style="font-family:'Share Tech Mono',monospace;font-weight:700;color:${mColor};">${real.stockMonths!==null?real.stockMonths.toFixed(1)+'M':'—'}</td>
+      <td class="center" style="font-family:'Share Tech Mono',monospace;font-weight:700;color:${mColor};">${mPctStr}</td>
+      <td class="right">${rule.target_amount?Math.round(rule.target_amount).toLocaleString():'—'}</td>
+      <td class="right" style="font-weight:700;">${real.realAmt>0?Math.round(real.realAmt).toLocaleString():'—'}</td>
+      <td class="center" style="font-family:'Share Tech Mono',monospace;font-weight:700;color:${aColor};">${aPctStr}</td>
+      <td class="center"><span class="achieve-badge ${jCls}">${judge}</span></td>
+    </tr>`;
+  }).join('');
 }
 
 ['f_keyword','f_month_min','f_month_max'].forEach(id=>{
