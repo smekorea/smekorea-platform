@@ -388,28 +388,44 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
 </head>
 <body>
 
-<!-- 전체 데이터 로딩 오버레이 -->
-<div class="load-overlay" id="loadOverlay">
+<!-- ① 로드 방식 선택 팝업 -->
+<div class="load-overlay" id="selectOverlay">
   <div class="load-box">
     <div class="load-icon">📊</div>
-    <div class="load-title">데이터 로딩 중...</div>
-    <div class="load-sub">전체 매입·매출 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요</div>
+    <div class="load-title">데이터 로드 방식 선택</div>
+    <div class="load-sub">분석에 사용할 데이터 범위를 선택해주세요</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+      <button onclick="startFullLoad()" style="padding:16px 20px;border:2px solid #1a56db;border-radius:12px;background:#f0f4ff;color:#1a56db;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;text-align:left;transition:all .18s;" onmouseover="this.style.background='#1a56db';this.style.color='#fff';" onmouseout="this.style.background='#f0f4ff';this.style.color='#1a56db';">
+        🗄 전체 데이터 로드
+        <div style="font-size:11px;font-weight:400;margin-top:4px;opacity:0.8;">매입 119,916건 + 매출 319,506건 전체 로드<br>기간 변경 시 즉시 반영 (재조회 없음)</div>
+      </button>
+      <button onclick="startPeriodLoad()" style="padding:16px 20px;border:2px solid #e5ddd4;border-radius:12px;background:#f7f4ef;color:#1a1612;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;text-align:left;transition:all .18s;" onmouseover="this.style.borderColor='#c8001e';this.style.color='#c8001e';" onmouseout="this.style.borderColor='#e5ddd4';this.style.color='#1a1612';">
+        📅 기간 선택 조회
+        <div style="font-size:11px;font-weight:400;margin-top:4px;opacity:0.8;">선택한 기간만 빠르게 조회<br>기간 변경 시 [데이터 로드] 버튼 필요</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ② 전체 로딩 진행 팝업 -->
+<div class="load-overlay hide" id="loadOverlay">
+  <div class="load-box">
+    <div class="load-icon">⏳</div>
+    <div class="load-title">전체 데이터 로딩 중...</div>
+    <div class="load-sub">매입·매출 전체 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요</div>
     <div class="load-progress-wrap">
       <div class="load-progress-label">
         <span>매입 데이터</span>
         <span id="ld-p-cnt">0건</span>
       </div>
-      <div class="load-progress-bg"><div class="load-progress-fill" id="ld-p-bar" style="background:#1a56db;"></div></div>
-      <div class="load-progress-label">
+      <div class="load-progress-bg"><div class="load-progress-fill" id="ld-p-bar" style="background:#1a56db;width:0%;"></div></div>
+      <div class="load-progress-label" style="margin-top:8px;">
         <span>매출 데이터</span>
         <span id="ld-s-cnt">0건</span>
       </div>
-      <div class="load-progress-bg"><div class="load-progress-fill" id="ld-s-bar" style="background:#c8001e;"></div></div>
+      <div class="load-progress-bg"><div class="load-progress-fill" id="ld-s-bar" style="background:#c8001e;width:0%;"></div></div>
     </div>
     <div class="load-status" id="ld-status">초기화 중...</div>
-    <button onclick="cancelLoad()" style="margin-top:18px;padding:9px 24px;border:1.5px solid #e5ddd4;border-radius:8px;background:#f7f4ef;color:#a8998a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .18s;" onmouseover="this.style.borderColor='#c8001e';this.style.color='#c8001e';" onmouseout="this.style.borderColor='#e5ddd4';this.style.color='#a8998a';">
-      취소 — 기간 조회로 사용
-    </button>
   </div>
 </div>
 
@@ -467,9 +483,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
 <!-- 모드 상태 바 -->
 <div id="loadModeBar" style="display:none;align-items:center;gap:10px;padding:8px 24px;border-bottom:1px solid #e5ddd4;background:#fffbf5;">
   <span id="loadModeMsg" style="font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;"></span>
-  <button onclick="loadFromSupabase()" id="reloadBtn"
-    style="padding:4px 12px;border:1.5px solid #c8001e;border-radius:6px;background:#fff;color:#c8001e;font-size:11px;font-weight:700;cursor:pointer;font-family:'Share Tech Mono',monospace;margin-left:auto;">
-    🔄 전체 데이터 로드
+  <button onclick="startFullLoad()" id="reloadBtn"
+    style="padding:4px 12px;border:1.5px solid #c8001e;border-radius:6px;background:#fff;color:#c8001e;font-size:11px;font-weight:700;cursor:pointer;font-family:'Share Tech Mono',monospace;margin-left:auto;display:none;">
+    🗄 전체 데이터 로드
   </button>
 </div>
 
@@ -724,37 +740,78 @@ async function loadLGBrands(){
 }
 
 // ── Supabase에서 데이터 로드 ──
-async function loadFromSupabase(){
+// ── 모드 선택 ──
+function startFullLoad(){
+  // 선택 팝업 닫고 로딩 팝업 열기
+  document.getElementById('selectOverlay').classList.add('hide');
+  document.getElementById('loadOverlay').classList.remove('hide');
+  // 진행바 초기화
+  document.getElementById('ld-p-cnt').textContent='0건';
+  document.getElementById('ld-p-bar').style.width='0%';
+  document.getElementById('ld-s-cnt').textContent='0건';
+  document.getElementById('ld-s-bar').style.width='0%';
+  document.getElementById('ld-status').textContent='LG브랜드 로드 중...';
+  doFullLoad();
+}
+
+function startPeriodLoad(){
+  // 선택 팝업 닫고 기간 조회 모드로
+  document.getElementById('selectOverlay').classList.add('hide');
+  _fullLoaded=false;
+  setModeBar(false);
+  const info=document.getElementById('uploadInfo');
+  info.textContent='📅 기간 선택 후 [데이터 로드] 버튼을 눌러주세요';
+  info.style.color='#ea580c';
+}
+
+async function doFullLoad(){
   const btn=document.getElementById('loadBtn');
   const info=document.getElementById('uploadInfo');
-  const overlay=document.getElementById('loadOverlay');
-  _cancelLoad=false; // 취소 플래그 초기화
-  document.getElementById('loadModeBar').style.display='none'; // 모드바 숨김
   btn.disabled=true; btn.textContent='로드 중...';
-  info.textContent='데이터 조회 중...'; info.classList.remove('ok');
-  info.style.color='';
-  overlay.classList.remove('hide');
-  document.getElementById('ld-status').textContent='LG브랜드 로드 중...';
-
   try{
     await loadLGBrands();
-
-    // 전체 데이터 로드 (기간 무관)
-    document.getElementById('ld-status').textContent='매입 데이터 로드 중...';
-    // 매입: 약 119,916건 기준 진행률
     const P_TOTAL=120000, S_TOTAL=320000;
-    _rawPAll=await fetchAllFull('purchase_data',(loaded)=>{
-      document.getElementById('ld-p-cnt').textContent=loaded.toLocaleString()+'건';
-      document.getElementById('ld-p-bar').style.width=Math.min(Math.round(loaded/P_TOTAL*100),99)+'%';
-    });
+
+    // 매입 전체 로드
+    document.getElementById('ld-status').textContent='매입 데이터 로드 중...';
+    _rawPAll=[];
+    let page=0;
+    while(true){
+      const {data,error}=await sb.from('purchase_data')
+        .select('year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,supplier,maker_pn')
+        .order('trade_date',{ascending:true})
+        .range(page*1000,(page+1)*1000-1);
+      if(error) throw error;
+      if(!data||!data.length) break;
+      const mapped=data.map(r=>mapRow(r,'purchase_data'));
+      _rawPAll=[..._rawPAll,...mapped];
+      // 진행률 업데이트
+      document.getElementById('ld-p-cnt').textContent=_rawPAll.length.toLocaleString()+'건';
+      document.getElementById('ld-p-bar').style.width=Math.min(Math.round(_rawPAll.length/P_TOTAL*100),99)+'%';
+      if(data.length<1000) break;
+      page++;
+    }
     document.getElementById('ld-p-cnt').textContent=_rawPAll.length.toLocaleString()+'건 완료';
     document.getElementById('ld-p-bar').style.width='100%';
 
+    // 매출 전체 로드
     document.getElementById('ld-status').textContent='매출 데이터 로드 중...';
-    _rawSAll=await fetchAllFull('sales_data',(loaded)=>{
-      document.getElementById('ld-s-cnt').textContent=loaded.toLocaleString()+'건';
-      document.getElementById('ld-s-bar').style.width=Math.min(Math.round(loaded/S_TOTAL*100),99)+'%';
-    });
+    _rawSAll=[];
+    page=0;
+    while(true){
+      const {data,error}=await sb.from('sales_data')
+        .select('year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,customer,maker_pn')
+        .order('trade_date',{ascending:true})
+        .range(page*1000,(page+1)*1000-1);
+      if(error) throw error;
+      if(!data||!data.length) break;
+      const mapped=data.map(r=>mapRow(r,'sales_data'));
+      _rawSAll=[..._rawSAll,...mapped];
+      document.getElementById('ld-s-cnt').textContent=_rawSAll.length.toLocaleString()+'건';
+      document.getElementById('ld-s-bar').style.width=Math.min(Math.round(_rawSAll.length/S_TOTAL*100),99)+'%';
+      if(data.length<1000) break;
+      page++;
+    }
     document.getElementById('ld-s-cnt').textContent=_rawSAll.length.toLocaleString()+'건 완료';
     document.getElementById('ld-s-bar').style.width='100%';
 
@@ -763,54 +820,80 @@ async function loadFromSupabase(){
     rawP=_rawPAll.filter(r=>inPer(r,from,to));
     rawS=_rawSAll.filter(r=>inPer(r,from,to));
 
-    if(_cancelLoad){
-      // 취소된 경우 — 기간 조회 모드로 전환 (부분 데이터로 진행)
-      const {from,to}=getFT();
-      rawP=await fetchAll('purchase_data',from,to);
-      rawS=await fetchAll('sales_data',from,to);
-      loaded=true; _fullLoaded=false;
-      info.textContent=`기간 조회 완료 · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
-      info.classList.add('ok'); info.style.color='#ea580c';
-      document.getElementById('loadModeBar').style.display='flex';
-      document.getElementById('loadModeMsg').textContent=`⚠ 기간 조회 모드 (${from.slice(0,4)}.${from.slice(4,6)}~${to.slice(0,4)}.${to.slice(4,6)}) — 기간 변경 시 [데이터 로드] 필요`;
-      document.getElementById('loadModeMsg').style.color='#ea580c';
-    } else {
-      // 전체 로드 완료
-      loaded=true; _fullLoaded=true;
-      document.getElementById('ld-status').textContent='완료!';
-      info.textContent=`✅ 전체 데이터 로드 완료 · 매입 ${_rawPAll.length.toLocaleString()}건 / 매출 ${_rawSAll.length.toLocaleString()}건`;
-      info.classList.add('ok'); info.style.color='#059669';
-      document.getElementById('loadModeBar').style.display='flex';
-      document.getElementById('loadModeMsg').textContent='✅ 전체 데이터 로드 완료 — 기간 변경 시 즉시 반영됩니다';
-      document.getElementById('loadModeMsg').style.color='#059669';
-    }
-    // 단가마진 기간 초기화 (최근 6개월)
+    loaded=true; _fullLoaded=true;
+    document.getElementById('ld-status').textContent='✅ 완료!';
+    info.textContent=`✅ 전체 로드 완료 · 매입 ${_rawPAll.length.toLocaleString()}건 / 매출 ${_rawSAll.length.toLocaleString()}건`;
+    info.classList.add('ok'); info.style.color='#059669';
+    setModeBar(true);
     setPricePeriodInit();
-    fillDrops();
-    updateAll();
+    fillDrops(); updateAll();
   }catch(e){
     info.textContent='로드 실패: '+e.message;
     console.error(e);
   }
   btn.disabled=false; btn.textContent='🔄 데이터 로드';
-  overlay.classList.add('hide');
+  document.getElementById('loadOverlay').classList.add('hide');
 }
 
-// 전체 데이터 페이지네이션 조회 (기간 필터 없음)
-// ── 로드 취소 ──
-function cancelLoad(){
-  _cancelLoad=true;
-  document.getElementById('loadOverlay').classList.add('hide');
+// 기간 조회 모드 — [데이터 로드] 버튼 클릭 시
+async function loadFromSupabase(){
+  if(_fullLoaded){
+    // 전체 로드 완료 상태 → 메모리 필터만
+    applyPeriod(); return;
+  }
+  const btn=document.getElementById('loadBtn');
   const info=document.getElementById('uploadInfo');
-  info.textContent='⚠ 부분 로드 — 기간 선택 후 [데이터 로드] 버튼 사용';
-  info.classList.remove('ok');
-  info.style.color='#ea580c';
-  document.getElementById('loadBtn').disabled=false;
-  document.getElementById('loadBtn').textContent='🔄 데이터 로드';
-  // 모드 표시
-  document.getElementById('loadModeBar').style.display='flex';
-  document.getElementById('loadModeMsg').textContent='⚠ 기간 조회 모드 — 전체 데이터 미로드 상태입니다. 기간 선택 후 [데이터 로드] 버튼을 눌러주세요.';
-  document.getElementById('loadModeMsg').style.color='#ea580c';
+  btn.disabled=true; btn.textContent='로드 중...';
+  info.textContent='기간 데이터 조회 중...'; info.classList.remove('ok');
+  try{
+    await loadLGBrands();
+    const {from,to}=getFT();
+    rawP=await fetchAll('purchase_data',from,to);
+    rawS=await fetchAll('sales_data',from,to);
+    loaded=true;
+    const f=`${from.slice(0,4)}.${from.slice(4,6)}`;
+    const t=`${to.slice(0,4)}.${to.slice(4,6)}`;
+    info.textContent=`📅 기간조회(${f}~${t}) · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+    info.classList.add('ok'); info.style.color='#ea580c';
+    setModeBar(false);
+    setPricePeriodInit();
+    fillDrops(); updateAll();
+  }catch(e){
+    info.textContent='로드 실패: '+e.message;
+    console.error(e);
+  }
+  btn.disabled=false; btn.textContent='🔄 데이터 로드';
+}
+
+function setModeBar(isFull){
+  const bar=document.getElementById('loadModeBar');
+  const msg=document.getElementById('loadModeMsg');
+  bar.style.display='flex';
+  if(isFull){
+    msg.textContent='✅ 전체 데이터 로드 완료 — 기간 변경 시 즉시 반영됩니다';
+    msg.style.color='#059669';
+    bar.style.background='#f0fdf4';
+    document.getElementById('reloadBtn').style.display='none';
+  } else {
+    msg.textContent='⚠ 기간 조회 모드 — 기간 변경 시 [데이터 로드] 버튼을 눌러주세요';
+    msg.style.color='#ea580c';
+    bar.style.background='#fffbf5';
+    document.getElementById('reloadBtn').style.display='block';
+  }
+}
+
+// ── 행 매핑 헬퍼 ──
+function mapRow(r, table){
+  return{
+    '년': r.year, '월': r.month, '구분': r.trade_date, '일자': r.slip_no||'',
+    '품목코드': r.item_code, '품명 및 규격': r.description,
+    '메이커P/N': r.maker_pn||'',
+    '수량': r.qty, '단가': r.unit_price,
+    '공급가액': r.supply_amt, '부가세': r.vat, '합 계': r.total_amt,
+    '브랜드명': r.brand,
+    '구매처명': table==='purchase_data'?r.supplier:'',
+    '판매처명': table==='sales_data'?r.customer:'',
+  };
 }
 
 async function fetchAllFull(table, onProgress){
@@ -905,23 +988,25 @@ function setQ(type,el){
 function ss(id,v){const s=document.getElementById(id);for(let o of s.options)if(o.value==v||o.textContent==v){o.selected=true;break;}}
 function getFT(){return{from:document.getElementById('fromYear').value+document.getElementById('fromMonth').value,to:document.getElementById('toYear').value+document.getElementById('toMonth').value};}
 function applyPeriod(){
-  if(!loaded){loadFromSupabase();return;}
-  if(!_fullLoaded){
-    // 기간 조회 모드 — 재조회 필요 안내
-    const info=document.getElementById('uploadInfo');
-    info.textContent='⚠ 기간 조회 모드 — [데이터 로드] 버튼을 눌러 해당 기간 데이터를 가져오세요';
-    info.style.color='#ea580c';
-    document.getElementById('loadModeMsg').textContent='⚠ 기간 변경 시 [데이터 로드] 버튼을 눌러주세요';
+  if(!loaded&&!_fullLoaded){
+    // 첫 로드 — 선택 팝업 표시
+    document.getElementById('selectOverlay').classList.remove('hide');
     return;
   }
-  // 전체 로드 완료 상태 — 메모리에서 즉시 필터
-  const {from,to}=getFT();
-  rawP=_rawPAll.filter(r=>inPer(r,from,to));
-  rawS=_rawSAll.filter(r=>inPer(r,from,to));
-  const info=document.getElementById('uploadInfo');
-  info.textContent=`✅ 기간필터 적용 · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
-  info.style.color='#059669';
-  fillDrops(); updateAll();
+  if(_fullLoaded){
+    // 전체 로드 완료 — 메모리에서 즉시 필터
+    const {from,to}=getFT();
+    rawP=_rawPAll.filter(r=>inPer(r,from,to));
+    rawS=_rawSAll.filter(r=>inPer(r,from,to));
+    const info=document.getElementById('uploadInfo');
+    info.textContent=`✅ 기간필터 적용 · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+    info.style.color='#059669';
+    fillDrops(); updateAll();
+  } else {
+    // 기간 조회 모드 — 재조회 안내
+    document.getElementById('uploadInfo').textContent='⚠ 기간 변경 후 [데이터 로드] 버튼을 눌러주세요';
+    document.getElementById('uploadInfo').style.color='#ea580c';
+  }
 }
 
 // handleFile 제거 - Supabase 연동으로 대체
@@ -1746,7 +1831,10 @@ function resetPrice(){
 
 
 // 진입 시 자동 전체 데이터 로드
-(function(){ loadFromSupabase(); })();
+// 진입 시 모드 선택 팝업 표시
+(function(){
+  document.getElementById('selectOverlay').classList.remove('hide');
+})();
 </script>
 
 <!-- ── 업체선택 팝업 모달 ── -->
