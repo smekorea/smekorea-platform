@@ -760,30 +760,17 @@ async function runAnalysis(){
   _acDescs=[...new Set(stockAll.map(r=>r.description||'').filter(Boolean))].sort();
   _acCodes=[...new Set(stockAll.map(r=>r.item_code||'').filter(Boolean))].sort();
 
-  // 2. 판매기간 계산 — sales_data 최신 trade_date 기준 최근 6개월
+  // 2. 판매기간 계산 — 기준월 기준 최근 6개월
   showLoading('매출 데이터 집계 중...');
 
-  // sales_data 최신 trade_date 조회 (문자열로 받아서 파싱)
-  let latestYM='';
-  try{
-    const res=await sb.from('sales_data').select('trade_date')
-      .order('trade_date',{ascending:false}).limit(1);
-    const latestData=res?.data;
-    if(latestData&&latestData.length&&latestData[0]&&latestData[0].trade_date){
-      latestYM=String(latestData[0].trade_date).substring(0,7);
-    }
-  }catch(e){ console.warn('최신 판매일자 조회 실패',e); }
-  if(!latestYM){
-    const now=new Date();
-    latestYM=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  }
-  const [latestY, latestM] = latestYM.split('-').map(Number);
-  // toDate: 최신 월 말일
-  const toDt=new Date(latestY, latestM, 0); // latestM은 0-indexed+1이므로 그대로
-  // fromDate: 최신 월 기준 6개월 전 1일
-  const frDt=new Date(latestY, latestM-period, 1);
-  const fromStr=`${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
-  const toStr=`${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
+  // 기준월에서 직접 파싱 (month = 'YYYY-MM')
+  const [baseY, baseM] = month.split('-').map(Number);
+  // toDate: 기준월 말일
+  const toDt = new Date(baseY, baseM, 0);
+  // fromDate: 6개월 전 1일
+  const frDt = new Date(baseY, baseM - period, 1);
+  const fromStr = `${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
+  const toStr   = `${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
 
   // 판매기간 표시
   const periodEl=document.getElementById('salesPeriodLabel');
