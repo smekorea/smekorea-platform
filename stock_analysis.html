@@ -168,6 +168,13 @@ tr:last-child td{border-bottom:none;}
 .pw-back:hover{color:var(--accent2);}
 
 @keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+/* 자동완성 */
+.ac-wrap{position:relative;display:inline-block;}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #d0daea;border-radius:8px;max-height:200px;overflow-y:auto;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.1);display:none;min-width:160px;}
+.ac-list.show{display:block;}
+.ac-item{padding:7px 12px;font-size:12px;cursor:pointer;color:#1a2233;border-bottom:1px solid #f0f4f9;font-family:'Noto Sans KR',sans-serif;}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:hover,.ac-item.sel{background:#fff5f5;color:#c8001e;}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:700px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.page-wrap{padding:20px 14px 40px;}}
@@ -263,7 +270,6 @@ tr:last-child td{border-bottom:none;}
           <option value="">— 선택 —</option>
         </select>
       </div>
-
       <div class="filter-group">
         <div class="filter-label">공급유형</div>
         <select class="filter-select" id="f_type">
@@ -286,9 +292,30 @@ tr:last-child td{border-bottom:none;}
       </div>
       <div class="filter-group">
         <div class="filter-label">브랜드</div>
-        <select class="filter-select" id="f_brand" style="min-width:140px;">
-          <option value="전체">전체</option>
-        </select>
+        <div class="ac-wrap">
+          <input class="filter-input" type="text" id="f_brand" placeholder="브랜드 검색..." autocomplete="off"
+            style="min-width:140px;" oninput="acSearch('f_brand','ac_brand',_acBrands)" onblur="setTimeout(()=>hideAc('ac_brand'),200)"
+            onkeydown="if(event.key==='Enter')runAnalysis()">
+          <div class="ac-list" id="ac_brand"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">품명및규격</div>
+        <div class="ac-wrap">
+          <input class="filter-input" type="text" id="f_desc" placeholder="품명 검색..." autocomplete="off"
+            style="min-width:160px;" oninput="acSearch('f_desc','ac_desc',_acDescs)" onblur="setTimeout(()=>hideAc('ac_desc'),200)"
+            onkeydown="if(event.key==='Enter')runAnalysis()">
+          <div class="ac-list" id="ac_desc"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">ERP품목코드</div>
+        <div class="ac-wrap">
+          <input class="filter-input" type="text" id="f_keyword" placeholder="품목코드 검색..." autocomplete="off"
+            style="min-width:140px;" oninput="acSearch('f_keyword','ac_keyword',_acCodes)" onblur="setTimeout(()=>hideAc('ac_keyword'),200)"
+            onkeydown="if(event.key==='Enter')runAnalysis()">
+          <div class="ac-list" id="ac_keyword"></div>
+        </div>
       </div>
       <div class="filter-group">
         <div class="filter-label">재고개월수 범위</div>
@@ -300,11 +327,6 @@ tr:last-child td{border-bottom:none;}
                  style="min-width:72px;width:72px;" onkeydown="if(event.key==='Enter')runAnalysis()">
           <span style="font-size:12px;color:var(--muted);">M</span>
         </div>
-      </div>
-      <div class="filter-group">
-        <div class="filter-label">품목코드 / 품명</div>
-        <input class="filter-input" type="text" id="f_keyword" placeholder="검색어 입력"
-               style="min-width:160px;" onkeydown="if(event.key==='Enter')runAnalysis()">
       </div>
       <div class="filter-group">
         <div class="filter-label">&nbsp;</div>
@@ -680,13 +702,38 @@ async function initPage(){
     });
     if(months.length) sel.value=months[0];
 
-    // 브랜드 드롭다운
+    // 브랜드 드롭다운 → 자동완성 데이터
     const brands=[...brandSet].sort((a,b)=>a.localeCompare(b,'ko'));
-    const bsel=document.getElementById('f_brand');
-    bsel.innerHTML='<option value="전체">전체</option>';
-    brands.forEach(b=>{ bsel.innerHTML+=`<option value="${b}">${b}</option>`; });
+    _acBrands = brands;
+    // 품명및규격, ERP코드 자동완성 데이터
+    _acDescs  = [...new Set(stockAll.map(r=>r.description||'').filter(Boolean))].sort();
+    _acCodes  = [...new Set(stockAll.map(r=>r.item_code||'').filter(Boolean))].sort();
   }
   if(document.getElementById('f_month').value) runAnalysis();
+}
+
+// ── 자동완성 ──
+let _acBrands=[], _acDescs=[], _acCodes=[];
+
+function acSearch(inputId, listId, data){
+  const val=document.getElementById(inputId).value.trim().toLowerCase();
+  const list=document.getElementById(listId);
+  if(!val){list.classList.remove('show');list.innerHTML='';return;}
+  const matches=data.filter(d=>d.toLowerCase().includes(val)).slice(0,30);
+  if(!matches.length){list.classList.remove('show');return;}
+  list.innerHTML=matches.map(m=>{
+    const hl=m.replace(new RegExp('('+val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong>$1</strong>');
+    return `<div class="ac-item" onmousedown="acSelect('${inputId}','${listId}','${m.replace(/'/g,"\\'")}')">${hl}</div>`;
+  }).join('');
+  list.classList.add('show');
+}
+function acSelect(inputId, listId, val){
+  document.getElementById(inputId).value=val;
+  hideAc(listId);
+}
+function hideAc(listId){
+  const el=document.getElementById(listId);
+  if(el){el.classList.remove('show');}
 }
 
 // ── 분석 실행 ──
@@ -769,7 +816,8 @@ async function runAnalysis(){
 function applyFilter(){
   const type=document.getElementById('f_type').value;
   const status=document.getElementById('f_status').value;
-  const brand=document.getElementById('f_brand').value;
+  const brand=document.getElementById('f_brand').value.trim().toLowerCase();
+  const desc=document.getElementById('f_desc').value.trim().toLowerCase();
   const keyword=document.getElementById('f_keyword').value.trim().toLowerCase();
 
   const mMin = document.getElementById('f_month_min').value;
@@ -778,7 +826,9 @@ function applyFilter(){
   _filtered=_allResult;
   if(type!=='전체')   _filtered=_filtered.filter(r=>r.type===type);
   if(status!=='전체') _filtered=_filtered.filter(r=>r.state===status);
-  if(brand!=='전체')  _filtered=_filtered.filter(r=>r.brand===brand);
+  if(brand)           _filtered=_filtered.filter(r=>r.brand.toLowerCase().includes(brand));
+  if(desc)            _filtered=_filtered.filter(r=>r.desc.toLowerCase().includes(desc));
+  if(keyword)         _filtered=_filtered.filter(r=>r.code.toLowerCase().includes(keyword));
   // 개월수 범위 필터
   if(mMin!==''){
     const min=parseFloat(mMin);
@@ -788,14 +838,14 @@ function applyFilter(){
     const max=parseFloat(mMax);
     _filtered=_filtered.filter(r=>r.stockMonths!==null&&r.stockMonths<=max);
   }
-  if(keyword)         _filtered=_filtered.filter(r=>
-    r.code.toLowerCase().includes(keyword)||
-    r.desc.toLowerCase().includes(keyword)||
-    r.brand.toLowerCase().includes(keyword)
-  );
 
-  const ord={데드스톡:0,과잉:1,주의:2,부족:3,신규입고:4,적정:5};
-  _filtered.sort((a,b)=>(ord[a.state]??9)-(ord[b.state]??9));
+  // 재고개월수 범위 입력 시 → 개월수 내림차순 정렬 / 아니면 상태순
+  if(mMin!==''||mMax!==''){
+    _filtered.sort((a,b)=>(b.stockMonths??-1)-(a.stockMonths??-1));
+  } else {
+    const ord={데드스톡:0,과잉:1,주의:2,부족:3,신규입고:4,적정:5};
+    _filtered.sort((a,b)=>(ord[a.state]??9)-(ord[b.state]??9));
+  }
 
   // KPI (공급유형 필터만 적용)
   const base=type==='전체'?_allResult:_allResult.filter(r=>r.type===type);
