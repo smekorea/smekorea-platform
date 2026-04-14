@@ -392,7 +392,7 @@ tr:last-child td{border-bottom:none;}
   <div class="table-wrap">
     <div class="table-header">
       <div class="table-count">총 <b id="tbl_count">0</b>건</div>
-      <div class="table-note">재고개월수 = 실재고 ÷ 월평균(6M) &nbsp;·&nbsp; 재고비중% = 재고개월수 × 100 &nbsp;|&nbsp; 🔴데드스톡: 6M판매=0 &nbsp; 🟠과잉: >3M &nbsp; 🟡주의: 2~3M &nbsp; 🟢적정: 1~2M &nbsp; 🔵부족: &lt;1M</div>
+      <div class="table-note">재고개월수 = 실재고 ÷ 월평균(6M) &nbsp;·&nbsp; 재고비중% = 재고개월수 × 100 &nbsp;|&nbsp; 🔴데드스톡: 6M판매=0 &nbsp; 🟠과잉: >3M &nbsp; 🟡주의: 2~3M &nbsp; 🟢적정: 1~2M &nbsp; 🔵부족: &lt;1M &nbsp;|&nbsp; <span id="salesPeriodLabel" style="color:#1a56db;font-weight:700;">판매기준: —</span></div>
     </div>
     <div class="tbl-scroll">
       <table>
@@ -760,15 +760,23 @@ async function runAnalysis(){
   _acDescs=[...new Set(stockAll.map(r=>r.description||'').filter(Boolean))].sort();
   _acCodes=[...new Set(stockAll.map(r=>r.item_code||'').filter(Boolean))].sort();
 
-  // 2. 판매기간 계산 (기준월 포함 N개월)
+  // 2. 판매기간 계산 — sales_data 최신 날짜 기준 최근 6개월
   showLoading('매출 데이터 집계 중...');
-  const baseDt=new Date(month+'-01');
-  // toDate: 기준월 말일
-  const toDt=new Date(baseDt.getFullYear(), baseDt.getMonth()+1, 0);
-  // fromDate: N개월 전 1일
-  const frDt=new Date(baseDt.getFullYear(), baseDt.getMonth()-period+1, 1);
+
+  // sales_data 최신 trade_date 조회
+  const {data:latestData}=await sb.from('sales_data').select('trade_date')
+    .order('trade_date',{ascending:false}).limit(1);
+  const latestDate=latestData&&latestData.length?new Date(latestData[0].trade_date):new Date();
+
+  // toDate: 최신 데이터 월 말일
+  const toDt=new Date(latestDate.getFullYear(), latestDate.getMonth()+1, 0);
+  // fromDate: 최신 데이터 기준 6개월 전 1일
+  const frDt=new Date(latestDate.getFullYear(), latestDate.getMonth()-period+1, 1);
   const fromStr=`${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
   const toStr=`${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
+
+  // 상태바에 실제 판매기간 표시
+  document.getElementById('salesPeriodLabel').textContent=`판매기준: ${fromStr} ~ ${toStr}`;
 
   // 3. sales_data 집계
   const codes=[...new Set(stockAll.map(r=>r.item_code))];
