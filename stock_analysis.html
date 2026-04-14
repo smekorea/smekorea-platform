@@ -678,16 +678,15 @@ if(localStorage.getItem('sme_auth')==='1'){
 // ── 초기화: 기준월 드롭다운 ──
 async function initPage(){
   // ym 목록: 오름차순으로 전수 조회 (1월부터 순서대로 가져와 모든 월 확보)
-  const PAGE=1000; let ymSet=new Set(), brandSet=new Set(), pg=0;
-  // 오름차순(1월→3월) + 내림차순(3월→1월) 두 번 조회로 모든 월 확보
+  const PAGE=1000; let ymSet=new Set(), pg=0;
   for(const asc of [true, false]){
     pg=0;
     while(true){
-      const {data,error}=await sb.from('stock_inventory').select('ym,brand')
+      const {data,error}=await sb.from('stock_inventory').select('ym')
         .order('ym',{ascending:asc}).range(pg*PAGE,(pg+1)*PAGE-1);
       if(error||!data||!data.length) break;
-      data.forEach(r=>{ ymSet.add(r.ym); if(r.brand) brandSet.add(r.brand); });
-      if(data.length<PAGE) break; // 마지막 페이지
+      data.forEach(r=>{ ymSet.add(r.ym); });
+      if(data.length<PAGE) break;
       pg++;
     }
   }
@@ -701,10 +700,6 @@ async function initPage(){
       sel.innerHTML+=`<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;
     });
     if(months.length) sel.value=months[0];
-
-    // 브랜드 드롭다운 → 자동완성 데이터
-    const brands=[...brandSet].sort((a,b)=>a.localeCompare(b,'ko'));
-    _acBrands = brands;
   }
   if(document.getElementById('f_month').value) runAnalysis();
 }
@@ -761,6 +756,7 @@ async function runAnalysis(){
   }
 
   // 자동완성 데이터 채우기 (stockAll 로드 완료 후)
+  _acBrands=[...new Set(stockAll.map(r=>r.brand||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
   _acDescs=[...new Set(stockAll.map(r=>r.description||'').filter(Boolean))].sort();
   _acCodes=[...new Set(stockAll.map(r=>r.item_code||'').filter(Boolean))].sort();
 
