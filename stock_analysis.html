@@ -777,15 +777,24 @@ async function runAnalysis(){
   const periodEl=document.getElementById('salesPeriodLabel');
   if(periodEl) periodEl.textContent=`판매기준: ${fromStr} ~ ${toStr}`;
 
-  // 3. sales_data 집계
+  // 3. sales_data 집계 (페이지네이션으로 전수 조회)
   const codes=[...new Set(stockAll.map(r=>r.item_code))];
   const salesMap={};
-  const CHUNK=150;
+  const CHUNK=100; // 품목 CHUNK 줄임
   for(let i=0;i<codes.length;i+=CHUNK){
     const chunk=codes.slice(i,i+CHUNK);
-    const {data}=await sb.from('sales_data').select('item_code,qty')
-      .in('item_code',chunk).gte('trade_date',fromStr).lte('trade_date',toStr);
-    if(data)data.forEach(r=>{salesMap[r.item_code]=(salesMap[r.item_code]||0)+(Number(r.qty)||0);});
+    // 페이지네이션으로 전수 조회 (Supabase 기본 limit 1000 우회)
+    let pg=0; const SZ=1000;
+    while(true){
+      const {data}=await sb.from('sales_data').select('item_code,qty')
+        .in('item_code',chunk)
+        .gte('trade_date',fromStr).lte('trade_date',toStr)
+        .range(pg*SZ,(pg+1)*SZ-1);
+      if(!data||!data.length) break;
+      data.forEach(r=>{salesMap[r.item_code]=(salesMap[r.item_code]||0)+(Number(r.qty)||0);});
+      if(data.length<SZ) break;
+      pg++;
+    }
   }
   // 매칭 결과 확인
   const matchedCnt=Object.keys(salesMap).length;
