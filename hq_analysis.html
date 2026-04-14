@@ -680,7 +680,11 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
   <div style="padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
     <div style="display:flex;flex-direction:column;gap:4px;">
       <div style="font-size:9px;font-family:Share Tech Mono,monospace;color:var(--muted);letter-spacing:1px;">브랜드</div>
-      <select class="f-select" id="pf-brand" style="height:34px;min-width:110px;"><option value="">전체</option></select>
+      <div class="autocomplete-wrap">
+        <input class="f-input" id="pf-brand" placeholder="브랜드..." style="height:34px;width:120px;"
+          oninput="acSearch('pf-brand','ac-brand',_allBrands)" onblur="setTimeout(()=>hideAc('ac-brand'),200)" autocomplete="off">
+        <div class="autocomplete-list" id="ac-brand"></div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px;">
       <div style="font-size:9px;font-family:Share Tech Mono,monospace;color:var(--muted);letter-spacing:1px;">메이커 P/N</div>
@@ -688,6 +692,14 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', s
         <input class="f-input" id="pf-mkpn" placeholder="메이커 품번..." style="height:34px;width:150px;"
           oninput="acSearch('pf-mkpn','ac-mkpn',_allMkpn)" onblur="setTimeout(()=>hideAc('ac-mkpn'),200)" autocomplete="off">
         <div class="autocomplete-list" id="ac-mkpn"></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="font-size:9px;font-family:Share Tech Mono,monospace;color:var(--muted);letter-spacing:1px;">품명및규격</div>
+      <div class="autocomplete-wrap">
+        <input class="f-input" id="pf-desc" placeholder="품명및규격..." style="height:34px;width:160px;"
+          oninput="acSearch('pf-desc','ac-desc',_allDescs)" onblur="setTimeout(()=>hideAc('ac-desc'),200)" autocomplete="off">
+        <div class="autocomplete-list" id="ac-desc"></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px;">
@@ -744,6 +756,7 @@ let _rawPAll=[],_rawSAll=[]; // 전체 데이터 캐시
 let _itemMakerMap={}; // item_code → maker_pn 맵
 let _allMkpn=[]; // 메이커P/N 자동완성
 let _allErpCodes=[]; // ERP품번 자동완성
+let _allDescs=[]; // 품명및규격 자동완성
 let _priceFrom='',_priceTo=''; // 단가마진 기간
 let _fullLoaded=false; // 전체 로드 완료 여부
 let _cancelLoad=false; // 로드 취소 플래그
@@ -1064,11 +1077,12 @@ function fillDrops(){
   _allBrands=br;
   allBuyers=[...new Set(rawP.map(r=>r['구매처명']).filter(Boolean))].sort();
   allSellers=[...new Set(rawS.map(r=>r['판매처명']).filter(Boolean))].sort();
-  // 메이커P/N, ERP품번 자동완성 데이터
+  // 메이커P/N, ERP품번, 품명및규격 자동완성 데이터
   _allMkpn=[...new Set([...rawP.map(r=>r['메이커P/N']),...rawS.map(r=>r['메이커P/N'])].filter(Boolean))].sort();
   _allErpCodes=[...new Set([...rawP.map(r=>r['품목코드']),...rawS.map(r=>r['품목코드'])].filter(Boolean))].sort();
-  // 브랜드 select 채우기
-  ['f-brand','pf-brand'].forEach(id=>fillSel(id,br));
+  _allDescs=[...new Set([...rawP.map(r=>r['품명 및 규격']),...rawS.map(r=>r['품명 및 규격'])].filter(Boolean))].sort();
+  // 브랜드는 autocomplete로 변경됨 (f-brand select만 유지)
+  ['f-brand'].forEach(id=>fillSel(id,br));
   ['pf-buyer'].forEach(id=>fillSel(id,allBuyers));
   ['pf-seller'].forEach(id=>fillSel(id,allSellers));
 }
@@ -1652,9 +1666,10 @@ async function runPrice(){
   if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
   // 단가마진 전용 기간
   const {from:pFrom, to:pTo}=getPriceRange();
-  const brand=document.getElementById('pf-brand').value;
+  const brand=(document.getElementById('pf-brand')||{}).value||'';
   const pcode=document.getElementById('pf-pcode').value.trim();
   const mkpn =(document.getElementById('pf-mkpn')||{}).value||'';
+  const desc =(document.getElementById('pf-desc')||{}).value||'';
   const buyer=document.getElementById('pf-buyer').value;
   const seller=document.getElementById('pf-seller').value;
 
@@ -1671,12 +1686,14 @@ async function runPrice(){
     &&(!brand||r['브랜드명']===brand)
     &&(!seller||r['판매처명']===seller)
     &&(!pcode||(r['품목코드']||'').includes(pcode))
-    &&(!mkpn||(r['메이커P/N']||'').toLowerCase().includes(mkpn.toLowerCase())));
+    &&(!mkpn||(r['메이커P/N']||'').toLowerCase().includes(mkpn.toLowerCase()))
+    &&(!desc||(r['품명 및 규격']||'').toLowerCase().includes(desc.toLowerCase())));
   const fP=_rawPAll.filter(r=>inPP(r)
     &&(!brand||r['브랜드명']===brand)
     &&(!buyer||r['구매처명']===buyer)
     &&(!pcode||(r['품목코드']||'').includes(pcode))
-    &&(!mkpn||(r['메이커P/N']||'').toLowerCase().includes(mkpn.toLowerCase())));
+    &&(!mkpn||(r['메이커P/N']||'').toLowerCase().includes(mkpn.toLowerCase()))
+    &&(!desc||(r['품명 및 규격']||'').toLowerCase().includes(desc.toLowerCase())));
 
   if(!fS.length&&!fP.length){
     document.getElementById('price-result').innerHTML='<div class="empty-wrap"><div class="empty-icon">🔍</div><div class="empty-title">조회 결과 없음</div></div>';
@@ -1738,50 +1755,35 @@ async function runPrice(){
   const itemList=Object.values(itemMap).sort((a,b)=>b.sellAmt-a.sellAmt);
   const periodLabel=`${pFrom} ~ ${pTo}`;
 
+  // 기간 개월수 계산
+  const [fy,fm]=pFrom.split('-').map(Number);
+  const [ty,tm]=pTo.split('-').map(Number);
+  const periodMonths=Math.max(1,(ty-fy)*12+(tm-fm)+1);
+
   let html='';
+
+  // ① 품목별 단가·마진 분석 테이블
   if(itemList.length>0){
     html+=`<div style="margin-bottom:20px;">
     <div style="font-size:13px;font-weight:700;margin-bottom:4px;">품목별 단가·마진 분석
-      <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">기간: ${periodLabel}</span>
+      <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">기간: ${periodLabel} · ${itemList.length}개 품목</span>
     </div>
-    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;">
-    <table class="price-avg-table">
-      <thead><tr>
-        <th class="left" style="min-width:100px;">ERP품번</th>
-        <th class="left" style="min-width:100px;">LG품번</th>
-        <th class="left" style="min-width:80px;">메이커P/N</th>
-        <th class="left">브랜드</th>
-        <th>최신<br>구매가</th>
-        <th>최신<br>판매가</th>
-        <th>기간평균<br>구매가</th>
-        <th>기간평균<br>판매가</th>
-        <th>기간평균<br>판매수량</th>
-        <th id="monthly-amt-header">년/월별 매출금액</th>
-        <th>마진율</th>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">
+    <table class="price-avg-table" style="min-width:900px;">
+      <thead style="position:sticky;top:0;z-index:2;">
+      <tr>
+        <th class="left" style="min-width:70px;background:#f7f4ef;">브랜드</th>
+        <th class="left" style="min-width:130px;background:#f7f4ef;">메이커P/N</th>
+        <th class="left" style="min-width:160px;background:#f7f4ef;">품명및규격</th>
+        <th class="left" style="min-width:90px;background:#f7f4ef;">ERP품번</th>
+        <th style="min-width:90px;background:#f7f4ef;">최신<br>구매가</th>
+        <th style="min-width:90px;background:#f7f4ef;">최신<br>판매가</th>
+        <th style="min-width:90px;background:#f7f4ef;">기간평균<br>구매가</th>
+        <th style="min-width:90px;background:#f7f4ef;">기간평균<br>판매가</th>
+        <th style="min-width:80px;background:#f7f4ef;">기간평균<br>수량/월</th>
+        <th style="min-width:70px;background:#f7f4ef;">마진율</th>
       </tr></thead>
       <tbody>`;
-    // 기간 개월수 계산
-    const [fy,fm]=pFrom.split('-').map(Number);
-    const [ty,tm]=pTo.split('-').map(Number);
-    const periodMonths=Math.max(1,(ty-fy)*12+(tm-fm)+1);
-
-    // 월 목록 수집 (모든 품목의 월을 합산)
-    const allMonths=[...new Set(itemList.flatMap(it=>Object.keys(it.monthlyAmt)))].sort();
-    // 헤더에 월 컬럼 추가
-    if(allMonths.length){
-      const mHeader=document.getElementById('monthly-amt-header');
-      if(mHeader){
-        const th=mHeader.parentElement;
-        mHeader.remove();
-        allMonths.forEach(ym=>{
-          const t=document.createElement('th');
-          t.textContent=ym;
-          t.style.minWidth='90px';
-          t.style.whiteSpace='nowrap';
-          th.appendChild(t);
-        });
-      }
-    }
 
     itemList.forEach((it,i)=>{
       const avgBuy=it.buyQty>0?it.buyAmt/it.buyQty:0;
@@ -1790,26 +1792,18 @@ async function runPrice(){
       const margin=avgBuy>0&&avgSell>0?(avgSell-avgBuy)/avgSell*100:null;
       const mCls=margin===null?'':margin>=10?'margin-pos':margin>=0?'':'margin-neg';
       const mStr=margin===null?'—':margin.toFixed(2)+'%';
-      const lgPn=lgPnMap[it.code]||'—';
-
-      // 월별 매출금액 셀
-      const monthlyCells=allMonths.map(ym=>{
-        const v=it.monthlyAmt[ym]||0;
-        return `<td class="right" style="font-size:11px;">${v>0?v.toLocaleString('ko-KR',{maximumFractionDigits:2}):'—'}</td>`;
-      }).join('');
-
-      html+=`<tr>
-        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${it.code}</td>
-        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${lgPn}</td>
-        <td class="left" style="font-size:11px;">${it.mkpn||'—'}</td>
-        <td class="left" style="font-size:11px;">${it.brand}</td>
-        <td class="right">${it.latestBuyPrice>0?'₩'+it.latestBuyPrice.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-        <td class="right" style="color:#059669;font-weight:700;">${it.latestSellPrice>0?'₩'+it.latestSellPrice.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-        <td class="right">${avgBuy>0?'₩'+avgBuy.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-        <td class="right" style="color:#1a56db;font-weight:700;">${avgSell>0?'₩'+avgSell.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-        <td class="right">${avgSellQty>0?avgSellQty.toFixed(2)+'/월':'—'}</td>
-        ${monthlyCells}
-        <td class="center ${mCls}">${mStr}</td>
+      const rowBg=i%2===0?'#fff':'#f8fafc';
+      html+=`<tr style="background:${rowBg};">
+        <td class="left" style="font-size:11px;font-weight:700;">${it.brand||'—'}</td>
+        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;">${it.mkpn||'—'}</td>
+        <td class="left" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${it.desc||''}">${it.desc||'—'}</td>
+        <td class="left" style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);">${it.code}</td>
+        <td class="right" style="font-size:11px;">${it.latestBuyPrice>0?'₩'+it.latestBuyPrice.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+        <td class="right" style="font-size:11px;color:#059669;font-weight:700;">${it.latestSellPrice>0?'₩'+it.latestSellPrice.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+        <td class="right" style="font-size:11px;">${avgBuy>0?'₩'+avgBuy.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+        <td class="right" style="font-size:11px;color:#1a56db;font-weight:700;">${avgSell>0?'₩'+avgSell.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+        <td class="right" style="font-size:11px;">${avgSellQty>0?avgSellQty.toFixed(1):'—'}</td>
+        <td class="center ${mCls}" style="font-size:11px;font-weight:700;">${mStr}</td>
       </tr>`;
     });
     html+=`</tbody></table></div></div>`;
@@ -1821,16 +1815,51 @@ async function runPrice(){
   fS.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(!sByY[y])sByY[y]={t:0,q:0};sByY[y].t+=(Number(r['단가'])||0)*(Number(r['수량'])||1);sByY[y].q+=Number(r['수량'])||1;});
   const years=[...new Set([...Object.keys(pByY),...Object.keys(sByY)])].sort();
 
-  // 매출처별 단가 비교
+  // ② 년도별 단가 추이 (표)
+  if(years.length>0){
+    html+=`<div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">년도별 단가 추이</div>
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:400px;">
+        <thead><tr style="background:#f7f4ef;">
+          <th style="padding:9px 14px;text-align:left;font-size:11px;color:#3a4a6a;font-family:'Share Tech Mono',monospace;">년도</th>
+          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#c8001e;font-family:'Share Tech Mono',monospace;">매입평균단가</th>
+          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#1a56db;font-family:'Share Tech Mono',monospace;">매출평균단가</th>
+          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#1e7e4a;font-family:'Share Tech Mono',monospace;">마진율</th>
+          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#3a4a6a;font-family:'Share Tech Mono',monospace;">전년대비(매출)</th>
+        </tr></thead>
+        <tbody>`;
+    let prevSell=0;
+    years.forEach((y,i)=>{
+      const pAvg=pByY[y]&&pByY[y].q>0?pByY[y].t/pByY[y].q:0;
+      const sAvg=sByY[y]&&sByY[y].q>0?sByY[y].t/sByY[y].q:0;
+      const mg=pAvg>0&&sAvg>0?(sAvg-pAvg)/sAvg*100:null;
+      const mgStr=mg===null?'—':`${mg.toFixed(1)}%`;
+      const mgColor=mg===null?'#7a8baa':mg>=10?'#1e7e4a':mg>=5?'#1a56db':mg>=0?'#b46400':'#c8001e';
+      const diff=prevSell>0&&sAvg>0?((sAvg-prevSell)/prevSell*100):null;
+      const diffStr=diff===null?(i===0?'기준':'—'):`${diff>=0?'▲':'▼'}${Math.abs(diff).toFixed(1)}%`;
+      const diffColor=diff===null?'#7a8baa':diff>=0?'#c8001e':'#1e7e4a';
+      html+=`<tr style="border-bottom:1px solid #f0ece6;background:${i%2===0?'#fff':'#f8fafc'};">
+        <td style="padding:9px 14px;font-weight:700;font-family:'Share Tech Mono',monospace;">${y}년</td>
+        <td style="padding:9px 14px;text-align:right;font-family:'Share Tech Mono',monospace;color:#c8001e;font-weight:700;">${pAvg>0?'₩'+Math.round(pAvg).toLocaleString():'—'}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:'Share Tech Mono',monospace;color:#1a56db;font-weight:700;">${sAvg>0?'₩'+Math.round(sAvg).toLocaleString():'—'}</td>
+        <td style="padding:9px 14px;text-align:right;font-weight:700;color:${mgColor};">${mgStr}</td>
+        <td style="padding:9px 14px;text-align:right;font-weight:700;color:${diffColor};">${diffStr}</td>
+      </tr>`;
+      if(sAvg>0) prevSell=sAvg;
+    });
+    html+=`</tbody></table></div></div>`;
+  }
+
+  // ③ 매출처별 공급단가 비교 테이블
   const sBySel={};
   fS.forEach(r=>{const s=String(r['판매처명']||'-');if(!sBySel[s])sBySel[s]={t:0,q:0,amt:0};sBySel[s].t+=(Number(r['단가'])||0)*(Number(r['수량'])||1);sBySel[s].q+=Number(r['수량'])||1;sBySel[s].amt+=Number(r['공급가액'])||0;});
   const avgPurch=fP.length>0?fP.reduce((a,r)=>a+(Number(r['단가'])||0),0)/fP.length:0;
-
-  // ① 매출처별 공급단가 비교 테이블
   const selList=Object.entries(sBySel).sort((a,b)=>b[1].amt-a[1].amt);
   const maxSelAmt=selList[0]?.[1]?.amt||1;
 
-  html+=`<div style="margin-bottom:16px;">
+  if(selList.length>0){
+    html+=`<div style="margin-bottom:16px;">
     <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text);">매출처별 공급단가 비교
       ${avgPurch>0?`<span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">매입평균단가: <strong style="color:var(--accent);">₩${Math.round(avgPurch).toLocaleString()}</strong></span>`:''}
     </div>
@@ -1844,64 +1873,27 @@ async function runPrice(){
         <th style="padding:9px 14px;text-align:left;font-size:11px;color:#3a4a6a;min-width:120px;">비중</th>
       </tr></thead>
       <tbody>`;
-
-  selList.forEach(([nm,d],i)=>{
-    const avgSell=d.q>0?d.t/d.q:0;
-    const rate=avgPurch>0&&avgSell>0?((avgSell-avgPurch)/avgSell*100):0;
-    const rateColor=rate>=10?'#1e7e4a':rate>=5?'#1a56db':rate>=0?'#b46400':'#c8001e';
-    const barPct=Math.round(d.amt/maxSelAmt*100);
-    const warn=rate<5&&avgPurch>0?'⚠':''
-    html+=`<tr style="border-bottom:1px solid #f0f4f9;background:${rate<5&&avgPurch>0?'rgba(200,0,30,0.02)':i%2===0?'#fff':'#f8fafc'};">
-      <td style="padding:9px 14px;font-size:12px;font-weight:600;">${warn} ${nm}</td>
-      <td style="padding:9px 14px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;font-weight:700;color:#1a56db;">₩${Math.round(avgSell).toLocaleString()}</td>
-      <td style="padding:9px 14px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;">${fmt(d.amt)}</td>
-      <td style="padding:9px 14px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;font-weight:700;color:${rateColor};">${avgPurch>0?rate.toFixed(1)+'%':'-'}</td>
-      <td style="padding:9px 14px;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="flex:1;background:#f0f4f9;border-radius:3px;height:10px;"><div style="height:10px;width:${barPct}%;background:${rateColor};opacity:0.7;border-radius:3px;"></div></div>
-          <span style="font-size:10px;color:var(--muted);min-width:32px;">${Math.round(d.amt/selList.reduce((s,x)=>s+x[1].amt,0)*100)}%</span>
-        </div>
-      </td>
-    </tr>`;
-  });
-  html+=`</tbody></table></div>
-  ${avgPurch>0?'<div style="font-size:10px;color:var(--accent);margin-top:6px;">⚠ 마진율 5% 미만 항목 하이라이트</div>':''}
-  </div>`;
-
-  // ② 년도별 단가 추이 (SVG)
-  if(years.length>0){
-    const pA=years.map(y=>pByY[y]?pByY[y].t/pByY[y].q:0);
-    const sA=years.map(y=>sByY[y]?sByY[y].t/sByY[y].q:0);
-    const maxA=Math.max(...pA,...sA,1);
-    const svgW=Math.max(300,years.length*80), svgH=160;
-    const padL=10,padT=25,chartW=svgW-padL*2,chartH=100;
-    const colW=chartW/years.length;
-    let pLine='',sLine='',pDots='',sDots='',lbls='',pVals='',sVals='';
-    years.forEach((y,i)=>{
-      const cx=padL+colW*i+colW/2;
-      const pY=padT+chartH-(pA[i]/maxA*chartH);
-      const sY=padT+chartH-(sA[i]/maxA*chartH);
-      if(i===0){pLine=`M${cx},${pY}`;sLine=`M${cx},${sY}`;}
-      else{pLine+=` L${cx},${pY}`;sLine+=` L${cx},${sY}`;}
-      pDots+=`<circle cx="${cx}" cy="${pY}" r="4" fill="#c8001e" opacity="0.8"/>`;
-      sDots+=`<circle cx="${cx}" cy="${sY}" r="4" fill="#1a56db" opacity="0.8"/>`;
-      pVals+=`<text x="${cx}" y="${pY-8}" text-anchor="middle" font-size="8" fill="#c8001e">₩${Math.round(pA[i]).toLocaleString()}</text>`;
-      sVals+=`<text x="${cx}" y="${sY-8}" text-anchor="middle" font-size="8" fill="#1a56db">₩${Math.round(sA[i]).toLocaleString()}</text>`;
-      lbls+=`<text x="${cx}" y="${padT+chartH+15}" text-anchor="middle" font-size="10" font-weight="700" fill="#1a2233">${y}년</text>`;
+    selList.forEach(([nm,d],i)=>{
+      const avgSell=d.q>0?d.t/d.q:0;
+      const rate=avgPurch>0&&avgSell>0?((avgSell-avgPurch)/avgSell*100):0;
+      const rateColor=rate>=10?'#1e7e4a':rate>=5?'#1a56db':rate>=0?'#b46400':'#c8001e';
+      const barPct=Math.round(d.amt/maxSelAmt*100);
+      const warn=rate<5&&avgPurch>0?'⚠':'';
+      html+=`<tr style="border-bottom:1px solid #f0f4f9;background:${rate<5&&avgPurch>0?'rgba(200,0,30,0.02)':i%2===0?'#fff':'#f8fafc'};">
+        <td style="padding:9px 14px;font-size:12px;font-weight:600;">${warn} ${nm}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;font-weight:700;color:#1a56db;">₩${Math.round(avgSell).toLocaleString()}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;">${fmt(d.amt)}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;font-weight:700;color:${rateColor};">${avgPurch>0?rate.toFixed(1)+'%':'-'}</td>
+        <td style="padding:9px 14px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="flex:1;background:#f0f4f9;border-radius:3px;height:10px;"><div style="height:10px;width:${barPct}%;background:${rateColor};opacity:0.7;border-radius:3px;"></div></div>
+            <span style="font-size:10px;color:var(--muted);min-width:32px;">${Math.round(d.amt/selList.reduce((s,x)=>s+x[1].amt,0)*100)}%</span>
+          </div>
+        </td>
+      </tr>`;
     });
-    html+=`<div style="margin-bottom:16px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">년도별 단가 추이</div>
-      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;padding:12px;">
-        <svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="overflow:visible;">
-          <path d="${pLine}" fill="none" stroke="#c8001e" stroke-width="2" opacity="0.8"/>
-          <path d="${sLine}" fill="none" stroke="#1a56db" stroke-width="2" opacity="0.8"/>
-          ${pDots}${sDots}${pVals}${sVals}${lbls}
-        </svg>
-        <div style="display:flex;gap:14px;font-size:10px;color:var(--muted);margin-top:4px;">
-          <span><span style="display:inline-block;width:10px;height:10px;background:#c8001e;border-radius:50%;margin-right:3px;opacity:0.8;"></span>매입단가</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:#1a56db;border-radius:50%;margin-right:3px;opacity:0.8;"></span>매출단가</span>
-        </div>
-      </div>
+    html+=`</tbody></table></div>
+    ${avgPurch>0?'<div style="font-size:10px;color:var(--accent);margin-top:6px;">⚠ 마진율 5% 미만 항목 하이라이트</div>':''}
     </div>`;
   }
 
@@ -1950,11 +1942,9 @@ function getPriceRange(){
 }
 
 function resetPrice(){
-
-  ['pf-brand','pf-buyer','pf-seller'].forEach(id=>document.getElementById(id).value='');
-  ['pf-mkpn','pf-pcode'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  ['ac-mkpn','ac-pcode'].forEach(id=>hideAc(id));
-  document.getElementById('pf-pcode').value='';
+  ['pf-brand','pf-mkpn','pf-desc','pf-pcode'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['pf-buyer','pf-seller'].forEach(id=>document.getElementById(id).value='');
+  ['ac-brand','ac-mkpn','ac-desc','ac-pcode'].forEach(id=>hideAc(id));
 }
 
 
