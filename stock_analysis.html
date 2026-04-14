@@ -682,7 +682,7 @@ async function initPage(){
   for(const asc of [true, false]){
     pg=0;
     while(true){
-      const {data,error}=await sb.from('stock_inventory').select('ym')
+      const {data,error}=await sb.from('stock_inventory_v').select('ym')
         .order('ym',{ascending:asc}).range(pg*PAGE,(pg+1)*PAGE-1);
       if(error||!data||!data.length) break;
       data.forEach(r=>{ ymSet.add(r.ym); });
@@ -742,7 +742,7 @@ async function runAnalysis(){
   // 1. stock_inventory 조회
   const PAGE=1000;let stockAll=[],pg=0;
   while(true){
-    const {data,error}=await sb.from('stock_inventory').select('*')
+    const {data,error}=await sb.from('stock_inventory_v').select('*')
       .eq('ym',month).range(pg*PAGE,(pg+1)*PAGE-1);
     if(error||!data||!data.length)break;
     stockAll=[...stockAll,...data];pg++;
@@ -799,7 +799,7 @@ async function runAnalysis(){
     else if(stockMonths>=1)               state='적정';
     else                                   state='부족';
     return{
-      code:r.item_code,brand:r.brand||'',desc:r.description||'',
+      code:r.item_code,brand:r.brand_std||r.brand||'',desc:r.description||'',
       type:r.supply_type||'',lgpn:r.lg_pn||'',mkpn:r.maker_pn||'',
       realQty,erpQty:Number(r.erp_qty)||0,
       price:Number(r.unit_price)||0,amount:Number(r.stock_amount)||0,
@@ -1094,8 +1094,8 @@ async function buildPatternAsync(){
   // 전체 월 목록 (재고조사 업로드된 모든 월)
   const PAGE=1000; let allHist=[], pg=0;
   while(true){
-    const {data,error}=await sb.from('stock_inventory')
-      .select('ym,item_code,brand,description,supply_type,real_qty,stock_amount')
+    const {data,error}=await sb.from('stock_inventory_v')
+      .select('ym,item_code,brand,brand_std,description,supply_type,real_qty,stock_amount')
       .order('ym',{ascending:true}).range(pg*PAGE,(pg+1)*PAGE-1);
     if(error||!data||!data.length) break;
     allHist=[...allHist,...data]; pg++;
@@ -1122,7 +1122,7 @@ async function buildPatternAsync(){
   const itemMap={};
   allHist.forEach(r=>{
     if(!itemMap[r.item_code]) itemMap[r.item_code]={
-      brand:r.brand||'',desc:r.description||'',type:r.supply_type||'',
+      brand:r.brand_std||r.brand||'',desc:r.description||'',type:r.supply_type||'',
       months:{}, latestAmt:0
     };
     itemMap[r.item_code].months[r.ym]=Number(r.real_qty)||0;
