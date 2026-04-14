@@ -760,15 +760,16 @@ async function runAnalysis(){
   _acDescs=[...new Set(stockAll.map(r=>r.description||'').filter(Boolean))].sort();
   _acCodes=[...new Set(stockAll.map(r=>r.item_code||'').filter(Boolean))].sort();
 
-  // 2. 판매기간 계산 — 기준월 기준 최근 6개월
+  // 2. 판매기간 계산 — 기준월 기준 최근 12개월
   showLoading('매출 데이터 집계 중...');
 
   // 기준월에서 직접 파싱 (month = 'YYYY-MM')
   const [baseY, baseM] = month.split('-').map(Number);
-  // toDate: 기준월 말일
-  const toDt = new Date(baseY, baseM, 0);
-  // fromDate: 6개월 전 1일
-  const frDt = new Date(baseY, baseM - period, 1);
+  // baseM은 1-based (1=1월, 2=2월...)
+  // toDate: 기준월 말일 → new Date(year, month, 0) = 전달 말일이므로 baseM 그대로
+  const toDt = new Date(baseY, baseM, 0); // ex) new Date(2026,2,0) = 2026-02-28
+  // fromDate: 12개월 전 1일 → baseM-1(0-based) - period + 1
+  const frDt = new Date(baseY, baseM - 1 - period + 1, 1); // ex) new Date(2026,2-1-12+1,1) = new Date(2026,-10,1) = 2025-03-01
   const fromStr = `${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
   const toStr   = `${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
 
