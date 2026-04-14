@@ -760,23 +760,30 @@ async function runAnalysis(){
   _acDescs=[...new Set(stockAll.map(r=>r.description||'').filter(Boolean))].sort();
   _acCodes=[...new Set(stockAll.map(r=>r.item_code||'').filter(Boolean))].sort();
 
-  // 2. 판매기간 계산 — sales_data 최신 날짜 기준 최근 6개월
+  // 2. 판매기간 계산 — sales_data 최신 trade_date 기준 최근 6개월
   showLoading('매출 데이터 집계 중...');
 
-  // sales_data 최신 trade_date 조회
+  // sales_data 최신 trade_date 조회 (문자열로 받아서 파싱)
   const {data:latestData}=await sb.from('sales_data').select('trade_date')
     .order('trade_date',{ascending:false}).limit(1);
-  const latestDate=latestData&&latestData.length?new Date(latestData[0].trade_date):new Date();
-
-  // toDate: 최신 데이터 월 말일
-  const toDt=new Date(latestDate.getFullYear(), latestDate.getMonth()+1, 0);
-  // fromDate: 최신 데이터 기준 6개월 전 1일
-  const frDt=new Date(latestDate.getFullYear(), latestDate.getMonth()-period+1, 1);
+  // trade_date는 'YYYY-MM-DD' 문자열 → 직접 파싱
+  let latestYM = latestData&&latestData.length ? latestData[0].trade_date.slice(0,7) : '';
+  if(!latestYM){
+    // fallback: 현재 날짜 기준
+    const now=new Date();
+    latestYM=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [latestY, latestM] = latestYM.split('-').map(Number);
+  // toDate: 최신 월 말일
+  const toDt=new Date(latestY, latestM, 0); // latestM은 0-indexed+1이므로 그대로
+  // fromDate: 최신 월 기준 6개월 전 1일
+  const frDt=new Date(latestY, latestM-period, 1);
   const fromStr=`${frDt.getFullYear()}-${String(frDt.getMonth()+1).padStart(2,'0')}-01`;
   const toStr=`${toDt.getFullYear()}-${String(toDt.getMonth()+1).padStart(2,'0')}-${String(toDt.getDate()).padStart(2,'0')}`;
 
-  // 상태바에 실제 판매기간 표시
-  document.getElementById('salesPeriodLabel').textContent=`판매기준: ${fromStr} ~ ${toStr}`;
+  // 판매기간 표시
+  const periodEl=document.getElementById('salesPeriodLabel');
+  if(periodEl) periodEl.textContent=`판매기준: ${fromStr} ~ ${toStr}`;
 
   // 3. sales_data 집계
   const codes=[...new Set(stockAll.map(r=>r.item_code))];
@@ -788,6 +795,10 @@ async function runAnalysis(){
       .in('item_code',chunk).gte('trade_date',fromStr).lte('trade_date',toStr);
     if(data)data.forEach(r=>{salesMap[r.item_code]=(salesMap[r.item_code]||0)+(Number(r.qty)||0);});
   }
+  // 매칭 결과 확인
+  const matchedCnt=Object.keys(salesMap).length;
+  console.log(`[stock] 판매기간: ${fromStr}~${toStr} / stock품목: ${codes.length}개 / 매칭: ${matchedCnt}개`);
+  if(matchedCnt===0) console.warn('[stock] ⚠ 매칭 0건 — item_code 불일치 가능성. stock 샘플:', codes.slice(0,5));
 
   // 4. 결과 생성 (6개월 고정 평균 / 재고개월수 기준 상태)
   _allResult=stockAll.map(r=>{
