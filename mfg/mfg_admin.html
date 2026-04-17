@@ -415,6 +415,7 @@ input[type=file] { display: none; }
             <th>라인</th>
             <th>작업지시 바코드값</th>
             <th>면</th>
+            <th>설비프로그램명</th>
             <th>담당자</th>
             <th>사용여부</th>
             <th>등록일</th>
@@ -423,7 +424,7 @@ input[type=file] { display: none; }
           </tr>
         </thead>
         <tbody id="lm_tbody">
-          <tr><td colspan="9" style="text-align:center;padding:28px;color:#bbb">로딩 중...</td></tr>
+          <tr><td colspan="10" style="text-align:center;padding:28px;color:#bbb">로딩 중...</td></tr>
         </tbody>
       </table>
     </div>
@@ -722,6 +723,12 @@ input[type=file] { display: none; }
       </div>
 
       <div class="fg">
+        <label>설비프로그램명 &nbsp;<span style="font-weight:400;color:var(--text-s)">(설비에 저장된 실제 프로그램명)</span></label>
+        <input type="text" id="inp_program" placeholder="예: EBR370406_131417_TOP"
+          style="font-family:var(--mono); font-size:12px;">
+      </div>
+
+      <div class="fg">
         <label>사용여부</label>
         <select id="inp_active">
           <option value="Y">Y — 사용중</option>
@@ -927,6 +934,7 @@ function renderLM() {
       <td>${lineBadge(r.line)}</td>
       <td style="font-family:var(--mono);font-weight:600;font-size:12px">${r.barcode_val || '-'}</td>
       <td>${faceBadge(face)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:#1565c0;font-weight:600">${r.machine_program || '-'}</td>
       <td style="font-size:12px">${r.manager || '-'}</td>
       <td>${r.active === 'Y'
         ? '<span class="badge b-y">Y</span>'
@@ -1024,6 +1032,7 @@ function openAddModal() {
   document.getElementById('lm_editId').value = '';
   document.getElementById('inp_line').value    = '';
   document.getElementById('inp_barcode').value = '';
+  document.getElementById('inp_program').value = '';
   document.getElementById('inp_active').value  = 'Y';
   document.getElementById('inp_manager').value = '';
   document.getElementById('inp_note').value    = '';
@@ -1047,6 +1056,7 @@ function openEditModal(id) {
   document.getElementById('lm_editId').value   = id;
   document.getElementById('inp_line').value    = r.line || '';
   document.getElementById('inp_barcode').value = r.barcode_val || '';
+  document.getElementById('inp_program').value = r.machine_program || '';
   document.getElementById('inp_active').value  = r.active || 'Y';
   document.getElementById('inp_manager').value = r.manager || '';
   document.getElementById('inp_date').value    = r.reg_date || '';
@@ -1065,6 +1075,7 @@ function closeLMModal() {
 async function saveLM() {
   const line    = document.getElementById('inp_line').value.trim();
   const barcode = document.getElementById('inp_barcode').value.trim().toUpperCase();
+  const program = document.getElementById('inp_program').value.trim();
   const active  = document.getElementById('inp_active').value;
   const manager = document.getElementById('inp_manager').value.trim();
   const date    = document.getElementById('inp_date').value;
@@ -1082,6 +1093,7 @@ async function saveLM() {
 
   const payload = {
     line, barcode_val: barcode, model_code: modelCode, face,
+    machine_program: program || null,
     active, manager: manager || null, reg_date: date || null, note: note || null,
   };
 
@@ -1144,14 +1156,15 @@ async function confirmDel() {
 // ══════════════════════════════════
 function downloadLM() {
   if (!_lm.length) { showToast('⚠️ 다운로드할 데이터가 없습니다'); return; }
-  const rows = [['NO','라인','모델명(바코드동일코드)','모델코드','면구분','사용여부','담당자','등록일','비고']];
+  const rows = [['NO','라인','모델명(바코드동일코드)','설비프로그램명','모델코드','면구분','사용여부','담당자','등록일','비고']];
   _lm.forEach((r, i) => rows.push([
-    i+1, r.line||'', r.barcode_val||'', r.model_code||'', r.face||'',
-    r.active||'Y', r.manager||'', r.reg_date||'', r.note||''
+    i+1, r.line||'', r.barcode_val||'', r.machine_program||'',
+    r.model_code||'', r.face||'', r.active||'Y',
+    r.manager||'', r.reg_date||'', r.note||''
   ]));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [4,8,22,16,8,8,10,12,16].map(w=>({wch:w}));
+  ws['!cols'] = [4,8,22,20,16,8,8,10,12,16].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, '라인별적용모델');
   const d = new Date();
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
@@ -1184,6 +1197,7 @@ async function uploadLM(input) {
       const ci    = k => H.findIndex(x => x.includes(k));
       const iLine    = ci('라인');
       const iBarcode = H.findIndex(x => x.includes('바코드') || x.includes('모델명'));
+      const iProgram = H.findIndex(x => x.includes('설비프로그램') || x.includes('프로그램명'));
       const iActive  = ci('사용여부');
       const iManager = ci('담당자');
       const iDate    = ci('등록일');
@@ -1206,6 +1220,7 @@ async function uploadLM(input) {
 
         records.push({
           line, barcode_val: barcode, model_code: modelCode, face,
+          machine_program: iProgram >= 0 ? String(r[iProgram] || '').trim() || null : null,
           active:   iActive  >= 0 ? String(r[iActive]  || 'Y').trim() : 'Y',
           manager:  iManager >= 0 ? String(r[iManager] || '').trim() || null : null,
           reg_date: iDate    >= 0 ? String(r[iDate]    || '').trim() || null : null,
@@ -1857,6 +1872,9 @@ function loadPrintModels() {
       <span class="badge ${lineBadge}" style="font-size:10px">${r.line}</span>
       ${faceBadge}
       <span style="font-weight:700">${r.barcode_val}</span>
+      ${r.machine_program
+        ? `<span style="color:#1565c0;font-size:10px;font-family:var(--mono)">▶ ${r.machine_program}</span>`
+        : ''}
       ${r.note ? `<span style="color:#aaa;font-size:10px">— ${r.note}</span>` : ''}
     </label>`;
   }).join('');
@@ -2022,9 +2040,28 @@ function renderPrintPreview(selectedModels) {
     return `<tr>${cells.join('')}</tr>`;
   }).join('');
 
+  // 선택 모델의 설비프로그램명 수집
+  const progMap = {};
+  selectedModels.forEach(m => {
+    const lmRow = _lm.find(r => r.barcode_val === m);
+    if (lmRow?.machine_program) progMap[m] = lmRow.machine_program;
+  });
+  const progStr = Object.entries(progMap)
+    .map(([m, p]) => `${m} → ${p}`).join(' / ');
+
   // 제목
-  document.getElementById('pr_previewTitle').textContent =
-    `[ ${selectedModels.join(' / ')} ] 부품배치도 — ${_printData.length}개 피더`;
+  document.getElementById('pr_previewTitle').innerHTML = `
+    <div style="background:var(--primary-l);border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:6px">
+        📋 부품배치도
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
+        <span><b>모델명:</b> ${selectedModels.join(' / ')}</span>
+        ${progStr ? `<span><b>설비프로그램:</b> <span style="font-family:var(--mono);color:#1565c0">${progStr}</span></span>` : ''}
+        <span><b>작성일:</b> ${new Date().toLocaleDateString('ko-KR')}</span>
+        <span><b>피더 수:</b> ${_printData.length}개</span>
+      </div>
+    </div>`;
   document.getElementById('pr_count').textContent =
     `총 ${_printData.length}개 피더 (소요량 있는 피더만 표시)`;
 }
@@ -2076,41 +2113,59 @@ async function exportPrint() {
   // SheetJS로 Sheet1(배치도) 생성
   const wb = XLSX.utils.book_new();
 
+  // 설비프로그램명 수집
+  const progMap2 = {};
+  selectedModels.forEach(m => {
+    const lmRow = _lm.find(r => r.barcode_val === m);
+    if (lmRow?.machine_program) progMap2[m] = lmRow.machine_program;
+  });
+
+  const d   = new Date();
+  const ds  = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
   // ── Sheet1: 부품배치도 ──
-  const ws1Data = [headers.map(h => h.label), ...dataRows];
-  const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+  // 상단 헤더 정보 행 추가
+  const totalCols = headers.length;
+  const infoRows = [
+    ['부품배치도'],
+    ['모델명', selectedModels.join(' / ')],
+    ['설비프로그램명', Object.entries(progMap2).map(([m,p])=>`${m} → ${p}`).join(' / ') || '-'],
+    ['작성일자', dateStr],
+    ['피더 수', `${_printData.length}개`],
+    [],  // 빈 행
+    headers.map(h => h.label),  // 컬럼 헤더
+    ...dataRows
+  ];
+
+  const ws1 = XLSX.utils.aoa_to_sheet(infoRows);
   ws1['!cols'] = headers.map(h => ({ wch: h.width }));
 
-  // 헤더 행 스타일 (SheetJS 제한으로 배경색은 미지원, 폰트만)
+  // 첫 컬럼 너비 넉넉하게
+  if (ws1['!cols'][0]) ws1['!cols'][0].wch = 16;
+
   XLSX.utils.book_append_sheet(wb, ws1, '부품배치도');
 
-  // ── Sheet2: 바코드 (Code128 폰트) ──
+  // ── Sheet2: 바코드 ──
   const ws2Data = [
     ['ST No', '바코드 (Code128 폰트 적용)'],
     ...stNos.map(s => [s, s])
   ];
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2['!cols'] = [{ wch: 16 }, { wch: 30 }];
-
-  // 바코드 폰트 적용 안내
-  ws2['A1'] = { v: 'ST No', t: 's' };
   ws2['B1'] = { v: '바코드 (Free 3 of 9 폰트 설치 후 B열 선택 → 폰트 변경)', t: 's' };
-
   XLSX.utils.book_append_sheet(wb, ws2, '바코드');
 
-  // ── Sheet3: QR코드 안내 ──
+  // ── Sheet3: QR코드 ──
   const ws3Data = [
-    ['ST No', 'QR코드 URL'],
+    ['ST No', 'QR코드 URL (브라우저에서 열면 QR 이미지 확인)'],
     ...stNos.map(s => [s, `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(s)}`])
   ];
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
   ws3['!cols'] = [{ wch: 16 }, { wch: 60 }];
-  ws3['B1'] = { v: 'QR코드 URL (브라우저에서 열면 QR 이미지 확인 가능)', t: 's' };
   XLSX.utils.book_append_sheet(wb, ws3, 'QR코드');
 
-  // 파일명: SME_부품배치도_모델명들_날짜.xlsx
-  const d  = new Date();
-  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  // 파일명
   const modelStr = selectedModels.slice(0, 3).join('_') + (selectedModels.length > 3 ? `_외${selectedModels.length-3}개` : '');
   const fname = `SME_부품배치도_${modelStr}_${ds}.xlsx`;
 
