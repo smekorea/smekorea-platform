@@ -486,7 +486,7 @@ input[type=file] { display: none; }
       </div>
 
       <div class="fg">
-        <label>작업지시 바코드값 * &nbsp;<span style="font-weight:400;color:var(--text-s)">(예: EBR85064958-TOP)</span></label>
+        <label>작업지시 바코드값 * &nbsp;<span style="font-weight:400;color:var(--text-s)">(예: EBR85064958-TOP / EBR850649_57_TOP / EBR85064958TOP)</span></label>
         <input type="text" id="inp_barcode" placeholder="EBR85064958-TOP"
           style="font-family:var(--mono); letter-spacing:.5px; text-transform:uppercase"
           oninput="this.value=this.value.toUpperCase(); previewParse()">
@@ -736,10 +736,10 @@ function checkAlerts() {
   if (noLine.length)
     alerts.push(`라인 미입력: ${noLine.length}건 — ${noLine.slice(0,3).map(r=>r.barcode_val).join(', ')}${noLine.length>3?'...':''}`);
 
-  // 바코드 형식 오류
-  const badFmt = _lm.filter(r => r.barcode_val && !/-(?:TOP|BOT)$/i.test(r.barcode_val));
+  // 바코드 형식 오류 (TOP/BOT로 끝나지 않는 것)
+  const badFmt = _lm.filter(r => r.barcode_val && !parseBarcodeVal(r.barcode_val));
   if (badFmt.length)
-    alerts.push(`바코드값 형식 오류 (모델코드-TOP/BOT 아님): ${badFmt.length}건 — ${badFmt.slice(0,2).map(r=>r.barcode_val).join(', ')}`);
+    alerts.push(`바코드값 형식 오류 (TOP 또는 BOT로 끝나야 함): ${badFmt.length}건 — ${badFmt.slice(0,2).map(r=>r.barcode_val).join(', ')}`);
 
   // 중복
   const seen = {};
@@ -757,6 +757,22 @@ function checkAlerts() {
 }
 
 // ══════════════════════════════════
+// ══════════════════════════════════
+// 바코드 파싱 공통 함수
+// EBR12345678-TOP / EBR12345678_TOP / EBR12345678TOP
+// EBR850649_57_TOP / EBR850649_57TOP 모두 허용
+// ══════════════════════════════════
+function parseBarcodeVal(val) {
+  if (!val) return null;
+  // 마지막에 오는 TOP/BOT 추출 (앞에 구분자 _- 있어도 없어도 허용)
+  const m = val.match(/^(.+?)[-_]?(TOP|BOT)$/i);
+  if (!m) return null;
+  return {
+    modelCode: m[1].replace(/[-_]$/, ''), // 모델코드 끝 구분자 제거
+    face:      m[2].toUpperCase(),
+  };
+}
+
 // 바코드값 파싱 프리뷰
 // ══════════════════════════════════
 function previewParse() {
@@ -764,15 +780,15 @@ function previewParse() {
   const preview = document.getElementById('parsePreview');
   if (!val) { preview.style.display = 'none'; return; }
 
-  const m = val.match(/^(.+)-(TOP|BOT)$/i);
-  if (m) {
-    document.getElementById('pv_model').textContent = m[1];
-    document.getElementById('pv_face').textContent  = m[2].toUpperCase();
+  const parsed = parseBarcodeVal(val);
+  if (parsed) {
+    document.getElementById('pv_model').textContent = parsed.modelCode;
+    document.getElementById('pv_face').textContent  = parsed.face;
     document.getElementById('pv_model').style.color = 'var(--primary)';
     document.getElementById('pv_face').style.color  = 'var(--warn)';
   } else {
     document.getElementById('pv_model').textContent = '형식 오류';
-    document.getElementById('pv_face').textContent  = 'TOP 또는 BOT';
+    document.getElementById('pv_face').textContent  = 'TOP 또는 BOT로 끝나야 함';
     document.getElementById('pv_model').style.color = 'var(--danger)';
     document.getElementById('pv_face').style.color  = 'var(--danger)';
   }
@@ -836,13 +852,12 @@ async function saveLM() {
 
   if (!line)    { showToast('⚠️ 라인을 선택하세요'); return; }
   if (!barcode) { showToast('⚠️ 바코드값을 입력하세요'); return; }
-  if (!/-(?:TOP|BOT)$/i.test(barcode)) {
-    showToast('⚠️ 형식: 모델코드-TOP 또는 모델코드-BOT'); return;
-  }
 
-  const parts     = barcode.split('-');
-  const face      = parts[parts.length - 1].toUpperCase();
-  const modelCode = parts.slice(0, -1).join('-');
+  const parsed = parseBarcodeVal(barcode);
+  if (!parsed) {
+    showToast('⚠️ 바코드값이 TOP 또는 BOT로 끝나야 합니다'); return;
+  }
+  const { modelCode, face } = parsed;
 
   const payload = {
     line, barcode_val: barcode, model_code: modelCode, face,
@@ -964,9 +979,9 @@ async function uploadLM(input) {
         const barcode = String(r[iBarcode] || '').trim().toUpperCase();
         if (!line || !barcode) continue;
 
-        const parts     = barcode.split('-');
-        const face      = parts[parts.length - 1].toUpperCase();
-        const modelCode = parts.slice(0, -1).join('-');
+        const parsed = parseBarcodeVal(barcode);
+        const face      = parsed ? parsed.face      : '';
+        const modelCode = parsed ? parsed.modelCode : barcode;
 
         records.push({
           line, barcode_val: barcode, model_code: modelCode, face,
