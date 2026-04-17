@@ -1387,30 +1387,48 @@ async function uploadBOM(input) {
       const prog = document.getElementById('bom_prog');
       prog.style.display = 'block';
 
-      // BOM upsert
+      // BOM upsert — 전체 한번에 처리 (CHUNK 단위)
       let ok = 0, fail = 0;
-      const CHUNK = 50;
+      const CHUNK = 30;
+      const total = bomRecords.length + modelRecords.length;
+
       for (let i = 0; i < bomRecords.length; i += CHUNK) {
         const chunk = bomRecords.slice(i, i + CHUNK);
         const { error } = await sb.from('mfg_bom').upsert(chunk, { onConflict: 'lg_pn' });
-        if (error) { fail += chunk.length; console.error(error); }
+        if (error) { fail += chunk.length; console.error('BOM upsert 오류:', error); }
         else ok += chunk.length;
-        const pct = Math.round(((i + chunk.length) / (bomRecords.length + modelRecords.length)) * 100);
+
+        const done = i + chunk.length;
+        const pct  = Math.round((done / total) * 100);
         document.getElementById('bom_progFill').style.width = pct + '%';
-        document.getElementById('bom_progText').textContent = `BOM ${Math.min(i+chunk.length, bomRecords.length)}/${bomRecords.length}`;
+        document.getElementById('bom_progText').textContent =
+          `BOM ${done}/${bomRecords.length}건 처리 중... (${pct}%)`;
+
+        // 너무 빠른 연속 요청 방지
+        await new Promise(r => setTimeout(r, 100));
       }
 
       // 모델 소요량 upsert
+      let okM = 0;
       for (let i = 0; i < modelRecords.length; i += CHUNK) {
         const chunk = modelRecords.slice(i, i + CHUNK);
-        await sb.from('mfg_bom_model').upsert(chunk, { onConflict: 'lg_pn,model_code' });
-        const pct = Math.round(((bomRecords.length + i + chunk.length) / (bomRecords.length + modelRecords.length)) * 100);
+        const { error } = await sb.from('mfg_bom_model').upsert(chunk, { onConflict: 'lg_pn,model_code' });
+        if (error) console.error('모델소요량 upsert 오류:', error);
+        else okM += chunk.length;
+
+        const done = bomRecords.length + i + chunk.length;
+        const pct  = Math.round((done / total) * 100);
         document.getElementById('bom_progFill').style.width = pct + '%';
-        document.getElementById('bom_progText').textContent = `소요량 ${Math.min(i+chunk.length, modelRecords.length)}/${modelRecords.length}`;
+        document.getElementById('bom_progText').textContent =
+          `소요량 ${i + chunk.length}/${modelRecords.length}건 처리 중... (${pct}%)`;
+
+        await new Promise(r => setTimeout(r, 100));
       }
 
+      document.getElementById('bom_progFill').style.width = '100%';
+      document.getElementById('bom_progText').textContent = '완료!';
       setTimeout(() => { prog.style.display = 'none'; }, 1500);
-      showToast(`✅ BOM 업로드 완료 — ${ok}건${fail ? ` / 실패 ${fail}건` : ''}`);
+      showToast(`✅ BOM 업로드 완료 — BOM ${ok}건 / 소요량 ${okM}건${fail ? ` / 실패 ${fail}건` : ''}`);
       await loadBOM();
     } catch(e) {
       showToast('❌ 업로드 실패: ' + (e.message || String(e)));
