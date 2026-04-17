@@ -1363,10 +1363,10 @@ async function uploadBOM(input) {
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-      // 헤더 탐색
+      // 헤더 탐색 — LG P/NO 포함 행
       let hRow = -1;
-      for (let i = 0; i < Math.min(rows.length, 5); i++) {
-        if (rows[i].some(c => String(c).includes('LG P/NO') || String(c).includes('LG P/No'))) { hRow = i; break; }
+      for (let i = 0; i < Math.min(rows.length, 6); i++) {
+        if (rows[i].some(c => /LG\s*P\s*\/\s*N/i.test(String(c)))) { hRow = i; break; }
       }
       if (hRow < 0) { showToast('⚠️ 헤더(LG P/NO)를 찾을 수 없습니다'); return; }
 
@@ -1374,14 +1374,14 @@ async function uploadBOM(input) {
       const ci = k => H.findIndex(x => x.toLowerCase().includes(k.toLowerCase()));
 
       const iProc  = ci('공정');
-      const iLgPn  = H.findIndex(x => x.includes('LG P/NO') || x.includes('LG P/No'));
-      const iDesc  = ci('Description');
-      const iSpec  = ci('Spec');
-      const iMaker = ci('Maker');
+      const iLgPn  = H.findIndex(x => /LG\s*P\s*\/\s*N/i.test(x));
+      const iDesc  = H.findIndex(x => /description|품명/i.test(x));
+      const iSpec  = H.findIndex(x => /^spec$/i.test(x));
+      const iMaker = H.findIndex(x => /^maker$/i.test(x) || x === '메이커');
       const iMkr1  = H.findIndex(x => x.includes('기준1') || x.includes('품번①') || x.includes('MAKER P/NO 기준1'));
       const iMkr2  = H.findIndex(x => x.includes('기준2') || x.includes('품번②'));
       const iMkr3  = H.findIndex(x => x.includes('기준3') || x.includes('품번③'));
-      const iMoq   = ci('MOQ');
+      const iMoq   = H.findIndex(x => /^릴?\s*MOQ$/i.test(x) || x.toUpperCase() === 'MOQ');
       const iTrade = ci('거래');
       const iSupp  = ci('구매처');
       const iLgP   = ci('LG 인증가');
@@ -1393,19 +1393,24 @@ async function uploadBOM(input) {
       // 모델코드 컬럼 탐색 (EBR로 시작하는 컬럼)
       const modelCols = [];
       H.forEach((h, idx) => {
-        if (/^EBR\d+/.test(h)) modelCols.push({ idx, code: h });
+        if (/^EBR\d+/.test(h.trim())) modelCols.push({ idx, code: h.trim() });
       });
 
       const bomRecords = [];
       const modelRecords = [];
+      const seenPns = new Set(); // 중복 LG품번 방지
 
       for (let i = hRow + 1; i < rows.length; i++) {
-        const r = rows[i];
+        const r    = rows[i];
         const lgPn = String(r[iLgPn] || '').trim();
-        if (!lgPn) continue;
+
+        // 빈칸 / 대시 / 이미 처리된 품번 스킵
+        if (!lgPn || lgPn === '-' || lgPn === '') continue;
+        if (seenPns.has(lgPn)) continue; // 중복 행(R행 등) 스킵
+        seenPns.add(lgPn);
 
         bomRecords.push({
-          process:        iProc  >= 0 ? String(r[iProc]  || '').trim() : null,
+          process:        iProc  >= 0 ? String(r[iProc]  || '').trim() || null : null,
           lg_pn:          lgPn,
           description:    iDesc  >= 0 ? String(r[iDesc]  || '').trim() || null : null,
           spec:           iSpec  >= 0 ? String(r[iSpec]  || '').trim() || null : null,
@@ -1428,30 +1433,38 @@ async function uploadBOM(input) {
         });
       }
 
+      console.log(`파싱 완료 — BOM: ${bomRecords.length}건 / 소요량: ${modelRecords.length}건 / 모델: ${modelCols.length}개`);
+
       if (!bomRecords.length) { showToast('⚠️ 유효한 데이터가 없습니다'); return; }
 
       const prog = document.getElementById('bom_prog');
       prog.style.display = 'block';
 
-      // BOM upsert — 전체 한번에 처리 (CHUNK 단위)
-      let ok = 0, fail = 0;
-      const CHUNK = 30;
+      let ok = 0, fail = 0, failList = [];
+      const CHUNK = 10; // 작은 단위로 처리
       const total = bomRecords.length + modelRecords.length;
 
       for (let i = 0; i < bomRecords.length; i += CHUNK) {
         const chunk = bomRecords.slice(i, i + CHUNK);
         const { error } = await sb.from('mfg_bom').upsert(chunk, { onConflict: 'lg_pn' });
-        if (error) { fail += chunk.length; console.error('BOM upsert 오류:', error); }
-        else ok += chunk.length;
+        if (error) {
+          // CHUNK 오류 시 1건씩 재시도
+          for (const rec of chunk) {
+            const { error: e2 } = await sb.from('mfg_bom').upsert([rec], { onConflict: 'lg_pn' });
+            if (e2) {
+              fail++;
+              failList.push(`${rec.lg_pn}: ${e2.message}`);
+              console.error('BOM 1건 실패:', rec.lg_pn, e2);
+            } else ok++;
+          }
+        } else ok += chunk.length;
 
         const done = i + chunk.length;
         const pct  = Math.round((done / total) * 100);
         document.getElementById('bom_progFill').style.width = pct + '%';
         document.getElementById('bom_progText').textContent =
-          `BOM ${done}/${bomRecords.length}건 처리 중... (${pct}%)`;
-
-        // 너무 빠른 연속 요청 방지
-        await new Promise(r => setTimeout(r, 100));
+          `BOM ${done}/${bomRecords.length}건 (${pct}%)`;
+        await new Promise(r => setTimeout(r, 50));
       }
 
       // 모델 소요량 upsert
@@ -1459,22 +1472,27 @@ async function uploadBOM(input) {
       for (let i = 0; i < modelRecords.length; i += CHUNK) {
         const chunk = modelRecords.slice(i, i + CHUNK);
         const { error } = await sb.from('mfg_bom_model').upsert(chunk, { onConflict: 'lg_pn,model_code' });
-        if (error) console.error('모델소요량 upsert 오류:', error);
+        if (error) console.error('모델소요량 오류:', error);
         else okM += chunk.length;
 
         const done = bomRecords.length + i + chunk.length;
         const pct  = Math.round((done / total) * 100);
         document.getElementById('bom_progFill').style.width = pct + '%';
         document.getElementById('bom_progText').textContent =
-          `소요량 ${i + chunk.length}/${modelRecords.length}건 처리 중... (${pct}%)`;
-
-        await new Promise(r => setTimeout(r, 100));
+          `소요량 ${i + chunk.length}/${modelRecords.length}건 (${pct}%)`;
+        await new Promise(r => setTimeout(r, 50));
       }
 
       document.getElementById('bom_progFill').style.width = '100%';
       document.getElementById('bom_progText').textContent = '완료!';
-      setTimeout(() => { prog.style.display = 'none'; }, 1500);
-      showToast(`✅ BOM 업로드 완료 — BOM ${ok}건 / 소요량 ${okM}건${fail ? ` / 실패 ${fail}건` : ''}`);
+      setTimeout(() => { prog.style.display = 'none'; }, 2000);
+
+      if (failList.length > 0) {
+        console.warn('실패 목록:', failList);
+        showToast(`⚠️ BOM ${ok}건 성공 / ${fail}건 실패 — 콘솔 확인`);
+      } else {
+        showToast(`✅ BOM 업로드 완료 — BOM ${ok}건 / 소요량 ${okM}건`);
+      }
       await loadBOM();
     } catch(e) {
       showToast('❌ 업로드 실패: ' + (e.message || String(e)));
