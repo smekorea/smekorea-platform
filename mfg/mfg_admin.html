@@ -1715,12 +1715,12 @@ async function uploadPlacement(input) {
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-      // 헤더 탐색 (NO 컬럼 기준)
+      // 헤더 탐색 — ST No 컬럼이 있는 행 (4행)
       let hRow = -1;
       for (let i = 0; i < Math.min(rows.length, 6); i++) {
-        if (rows[i].some(c => String(c).trim() === 'NO')) { hRow = i; break; }
+        if (rows[i].some(c => String(c).trim() === 'ST No')) { hRow = i; break; }
       }
-      if (hRow < 0) { showToast('⚠️ 헤더(NO)를 찾을 수 없습니다'); return; }
+      if (hRow < 0) { showToast('⚠️ 헤더(ST No)를 찾을 수 없습니다'); return; }
 
       const H  = rows[hRow].map(h => String(h).trim());
       const ci = k => H.findIndex(x => x.includes(k));
@@ -1728,16 +1728,33 @@ async function uploadPlacement(input) {
       const iLine  = ci('라인');
       const iMach  = ci('설비');
       const iSide  = H.findIndex(x => x.includes('전') && x.includes('후'));
-      const iStNo  = ci('ST No');
-      const iSingle= H.findIndex(x => x.includes('LG품번') && !x.includes('L') && !x.includes('R') && !x.includes('('));
-      const iLgL   = H.findIndex(x => x.includes('LG품번') && x.includes('L'));
-      const iLgR   = H.findIndex(x => x.includes('LG품번') && x.includes('R'));
-      const iNote  = ci('비고');
+      const iStNo  = H.findIndex(x => x === 'ST No');
+      const iNote  = H.findIndex(x => x === '비고' || x === 'Note');
 
-      // 싱글 컬럼 못찾으면 6번째 컬럼 시도
-      const iLgSingle = iSingle >= 0 ? iSingle : 5;
+      // 컬럼 구조 고정:
+      // col5: LG품번(싱글) / col6: 메이커품번①(싱글) 무시
+      // col7: LG품번(L)   / col8: 메이커품번①(L) 무시
+      // col9: LG품번(R)   / col10: 메이커품번①(R) 무시
+      const iLgSingle = H.findIndex(x => x === 'LG품번');
+      const iLgL      = H.findIndex(x => x === 'LG품번(L)');
+      const iLgR      = H.findIndex(x => x === 'LG품번(R)');
+
+      // 못찾으면 고정 인덱스 사용
+      const idxSingle = iLgSingle >= 0 ? iLgSingle : 5;
+      const idxL      = iLgL      >= 0 ? iLgL      : 7;
+      const idxR      = iLgR      >= 0 ? iLgR      : 9;
+      const idxNote   = iNote     >= 0 ? iNote      : 11;
 
       if (iLine < 0 || iStNo < 0) { showToast('⚠️ 라인 또는 ST No 컬럼을 찾을 수 없습니다'); return; }
+
+      // LG품번 정제 (메이커품번/SPEC 혼합 시 첫 토큰만 추출)
+      const cleanPn = (val) => {
+        const v = String(val || '').trim();
+        if (!v) return null;
+        const first = v.split(/\s+/)[0];
+        // LG품번 형식 검증 (영문+숫자 조합)
+        return first && first.length >= 5 ? first : null;
+      };
 
       const records = [];
       for (let i = hRow + 1; i < rows.length; i++) {
@@ -1746,29 +1763,26 @@ async function uploadPlacement(input) {
         const stNo = String(r[iStNo] || '').trim();
         if (!line || !stNo) continue;
 
-        // 섹션 헤더 행 스킵 (라인 정보만 있고 ST No 없는 경우)
-        if (!/M[12]-[FR]-/.test(stNo)) continue;
+        // ST No 형식 검증 (M1-F-01 등)
+        if (!/^M[12]-[FR]-/.test(stNo)) continue;
 
-        // LG품번에서 메이커품번 분리 (공백 기준 첫번째만)
-        const cleanPn = (val) => {
-          const v = String(val || '').trim();
-          if (!v) return null;
-          // 첫 번째 토큰이 LG품번 형식이면 그것만 사용
-          const first = v.split(/\s+/)[0];
-          return first || null;
-        };
+        const lgPn  = cleanPn(r[idxSingle]);
+        const lgPnL = cleanPn(r[idxL]);
+        const lgPnR = cleanPn(r[idxR]);
 
         records.push({
           line,
           machine: iMach >= 0 ? String(r[iMach] || '').trim() || null : null,
           side:    iSide >= 0 ? String(r[iSide] || '').trim() || null : null,
           st_no:   stNo,
-          lg_pn:   cleanPn(r[iLgSingle]),
-          lg_pn_l: iLgL >= 0 ? cleanPn(r[iLgL]) : null,
-          lg_pn_r: iLgR >= 0 ? cleanPn(r[iLgR]) : null,
-          note:    iNote >= 0 ? String(r[iNote] || '').trim() || null : null,
+          lg_pn:   lgPn,
+          lg_pn_l: lgPnL,
+          lg_pn_r: lgPnR,
+          note:    String(r[idxNote] || '').trim() || null,
         });
       }
+
+      console.log(`배치도 파싱 완료 — ${records.length}행 / 싱글:${records.filter(r=>r.lg_pn).length} / L:${records.filter(r=>r.lg_pn_l).length} / R:${records.filter(r=>r.lg_pn_r).length}`);
 
       if (!records.length) { showToast('⚠️ 유효한 데이터가 없습니다'); return; }
 
@@ -1867,11 +1881,26 @@ async function previewPrint() {
 
   showToast('🔍 데이터 조회 중...');
 
+  // 언더바 제거 정규화 함수
+  // EBR370406_3 → EBR3704063 / EBR37040603 → EBR37040603
+  const normCode = c => (c || '').replace(/_/g, '');
+
+  // 선택 모델의 정규화 코드 목록
+  const selectedNorm = selectedModels.map(m => normCode(parseBarcodeVal(m)?.modelCode || m));
+
   try {
-    // mfg_bom_model에서 선택 모델의 소요량 조회
-    const { data: modelQty, error: e1 } = await sb.from('mfg_bom_model')
-      .select('*').in('model_code', selectedModels);
-    if (e1) throw e1;
+    // mfg_bom_model 전체 조회 (정규화 매칭용)
+    let modelQty = [];
+    const PAGE = 1000; let pg = 0;
+    while (true) {
+      const { data, error } = await sb.from('mfg_bom_model')
+        .select('*').range(pg * PAGE, (pg+1) * PAGE - 1);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      modelQty = [...modelQty, ...data];
+      if (data.length < PAGE) break;
+      pg++;
+    }
 
     // mfg_placement 조회
     const { data: placement, error: e2 } = await sb.from('mfg_placement')
@@ -1882,41 +1911,45 @@ async function previewPrint() {
     const bomMap = {};
     _bom.forEach(r => { bomMap[r.lg_pn] = r; });
 
-    // 모델별 소요량 맵: { lg_pn: { model_code: qty } }
+    // 모델별 소요량 맵 (정규화 코드 기준)
+    // { lg_pn: { normModelCode: qty } }
     const qtyMap = {};
     modelQty.forEach(r => {
       if (!qtyMap[r.lg_pn]) qtyMap[r.lg_pn] = {};
-      qtyMap[r.lg_pn][r.model_code] = r.qty;
+      qtyMap[r.lg_pn][normCode(r.model_code)] = r.qty;
     });
 
     // 배치도 × BOM JOIN
     const rows = [];
     placement.forEach(pl => {
-      // 싱글 / 더블L / 더블R 각각 처리
       const pnList = [];
       if (pl.lg_pn)   pnList.push({ pn: pl.lg_pn,   type: '싱글',   stno: pl.st_no });
       if (pl.lg_pn_l) pnList.push({ pn: pl.lg_pn_l, type: '더블-L', stno: pl.st_no + 'L' });
       if (pl.lg_pn_r) pnList.push({ pn: pl.lg_pn_r, type: '더블-R', stno: pl.st_no + 'R' });
 
       pnList.forEach(({ pn, type, stno }) => {
-        const bom    = bomMap[pn] || {};
-        const qtys   = qtyMap[pn] || {};
-        const active = selectedModels.some(m => (qtys[m] || 0) > 0);
+        const bom  = bomMap[pn] || {};
+        const pnQtyMap = qtyMap[pn] || {};
+
+        // 선택 모델과 정규화 매칭
+        const active = selectedNorm.some(nm => (pnQtyMap[nm] || 0) > 0);
+
+        // 모델별 소요량 (선택 모델 기준, 정규화 매칭)
+        const qtys = {};
+        selectedModels.forEach((m, idx) => {
+          qtys[m] = pnQtyMap[selectedNorm[idx]] || 0;
+        });
 
         rows.push({
-          line:    pl.line,
-          machine: pl.machine,
-          side:    pl.side,
-          st_no:   stno,
-          type,
-          lg_pn:   pn,
-          maker:   bom.maker     || '-',
-          maker_pn1: bom.maker_pn1 || '-',
-          spec:    bom.spec      || '-',
-          moq:     bom.moq       || '-',
-          trade:   bom.trade_type || '-',
-          qtys,
-          active,
+          line: pl.line, machine: pl.machine, side: pl.side,
+          st_no: stno, type,
+          lg_pn:     pn,
+          maker:     bom.maker      || '-',
+          maker_pn1: bom.maker_pn1  || '-',
+          spec:      bom.spec       || '-',
+          moq:       bom.moq        || '-',
+          trade:     bom.trade_type || '-',
+          qtys, active,
         });
       });
     });
