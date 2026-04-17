@@ -599,18 +599,87 @@ input[type=file] { display: none; }
 
 
 <!-- ══════════════════════
-     탭4: 배치도 출력 (준비중)
+     탭4: 배치도 출력
 ══════════════════════ -->
 <div class="pnl" id="pnl_print">
+
   <div class="card">
     <div class="card-tit">🖨️ 부품배치도 출력</div>
-    <div class="empty">
-      <div class="ei">🚧</div>
-      <div class="et">준비 중</div>
-      <div class="es">BOM + 부품배치도 마스터 완성 후 개발 예정</div>
+
+    <!-- 모델 선택 -->
+    <div class="fg">
+      <label>라인 선택</label>
+      <select id="pr_line" onchange="loadPrintModels()">
+        <option value="">전체 라인</option>
+        <option>1라인</option><option>2라인</option><option>3라인</option>
+      </select>
+    </div>
+
+    <div class="fg">
+      <label>모델 선택 (다중 선택 가능)</label>
+      <div id="pr_modelList" style="
+        border:1.5px solid var(--border); border-radius:8px; padding:10px;
+        max-height:200px; overflow-y:auto; background:#fafafa;
+        font-size:12px; font-family:var(--mono);">
+        <div style="color:#bbb; text-align:center; padding:20px;">
+          라인별 적용모델 탭에서 데이터를 먼저 업로드하세요
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button class="btn btn-gray btn-sm" onclick="selectAllModels()">전체 선택</button>
+        <button class="btn btn-gray btn-sm" onclick="clearAllModels()">전체 해제</button>
+      </div>
+    </div>
+
+    <!-- 출력 컬럼 선택 -->
+    <div class="fg">
+      <label>출력 컬럼 선택</label>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; padding:10px; background:#fafafa; border-radius:8px; border:1.5px solid var(--border);">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_stno"    checked> ST No</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_lgpn"    checked> LG품번</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_mkrpn"   checked> 메이커품번</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_spec"    checked> SPEC</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_moq"     checked> MOQ</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_maker"   checked> Maker</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_trade"        > 거래유형</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_qty"     checked> 모델별소요량</label>
+      </div>
+    </div>
+
+    <!-- 미리보기 -->
+    <div class="status-bar" id="pr_statusBar" style="display:none">
+      <span class="sdot ok" id="pr_sdot"></span>
+      <span id="pr_stext"></span>
+    </div>
+
+    <!-- 버튼 -->
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="previewPrint()">🔍 미리보기</button>
+      <button class="btn btn-green"   onclick="exportPrint()" id="pr_exportBtn" style="display:none">📥 엑셀 다운로드</button>
+    </div>
+
+    <!-- 미리보기 테이블 -->
+    <div id="pr_preview" style="display:none; margin-top:12px;">
+      <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:8px" id="pr_previewTitle"></div>
+      <div class="tbl-wrap">
+        <table id="pr_table">
+          <thead id="pr_thead"></thead>
+          <tbody id="pr_tbody"></tbody>
+        </table>
+      </div>
+      <div class="tbl-count" id="pr_count"></div>
     </div>
   </div>
 </div>
+
 
 <!-- ══ 추가/수정 모달 ══ -->
 <div class="modal-overlay" id="lmModal">
@@ -756,7 +825,7 @@ function init() {
   const today = new Date();
   document.getElementById('inp_date').value =
     `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  loadLM();
+  loadLM().then(() => loadPrintModels());
   loadBOM();
   loadPlacement();
 }
@@ -1731,6 +1800,289 @@ async function uploadPlacement(input) {
     input.value = '';
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ══════════════════════════════════
+// 배치도 출력
+// ══════════════════════════════════
+let _printData = []; // 미리보기 데이터 캐시
+
+// 모델 목록 로드
+function loadPrintModels() {
+  const line    = document.getElementById('pr_line').value;
+  const listEl  = document.getElementById('pr_modelList');
+
+  // 라인별적용모델에서 필터
+  let models = _lm.filter(r => r.active === 'Y');
+  if (line) models = models.filter(r => r.line === line);
+
+  // 중복 제거 (바코드값 기준)
+  const seen = new Set();
+  models = models.filter(r => {
+    if (seen.has(r.barcode_val)) return false;
+    seen.add(r.barcode_val); return true;
+  });
+
+  if (!models.length) {
+    listEl.innerHTML = '<div style="color:#bbb;text-align:center;padding:20px">등록된 모델이 없습니다</div>';
+    return;
+  }
+
+  listEl.innerHTML = models.map(r => {
+    const parsed = parseBarcodeVal(r.barcode_val || '');
+    const face   = parsed ? parsed.face : '';
+    const faceBadge = face === 'TOP'
+      ? `<span class="badge b-top" style="font-size:10px">TOP</span>`
+      : `<span class="badge b-bot" style="font-size:10px">BOT</span>`;
+    const lineBadge = r.line === '1라인' ? 'b-l1' : r.line === '2라인' ? 'b-l2' : 'b-l3';
+
+    return `<label style="display:flex;align-items:center;gap:6px;padding:5px 6px;
+      border-radius:6px;cursor:pointer;margin-bottom:3px;
+      border:1px solid var(--border);background:#fff">
+      <input type="checkbox" class="pr_modelChk" value="${r.barcode_val}" style="width:14px;height:14px">
+      <span class="badge ${lineBadge}" style="font-size:10px">${r.line}</span>
+      ${faceBadge}
+      <span style="font-weight:700">${r.barcode_val}</span>
+      ${r.note ? `<span style="color:#aaa;font-size:10px">— ${r.note}</span>` : ''}
+    </label>`;
+  }).join('');
+}
+
+function selectAllModels() {
+  document.querySelectorAll('.pr_modelChk').forEach(c => c.checked = true);
+}
+function clearAllModels() {
+  document.querySelectorAll('.pr_modelChk').forEach(c => c.checked = false);
+}
+
+// 선택된 모델 목록
+function getSelectedModels() {
+  return [...document.querySelectorAll('.pr_modelChk:checked')].map(c => c.value);
+}
+
+// 미리보기
+async function previewPrint() {
+  const selectedModels = getSelectedModels();
+  if (!selectedModels.length) { showToast('⚠️ 모델을 선택하세요'); return; }
+
+  showToast('🔍 데이터 조회 중...');
+
+  try {
+    // mfg_bom_model에서 선택 모델의 소요량 조회
+    const { data: modelQty, error: e1 } = await sb.from('mfg_bom_model')
+      .select('*').in('model_code', selectedModels);
+    if (e1) throw e1;
+
+    // mfg_placement 조회
+    const { data: placement, error: e2 } = await sb.from('mfg_placement')
+      .select('*').order('line').order('machine').order('side').order('st_no');
+    if (e2) throw e2;
+
+    // LG품번 → BOM 정보 맵
+    const bomMap = {};
+    _bom.forEach(r => { bomMap[r.lg_pn] = r; });
+
+    // 모델별 소요량 맵: { lg_pn: { model_code: qty } }
+    const qtyMap = {};
+    modelQty.forEach(r => {
+      if (!qtyMap[r.lg_pn]) qtyMap[r.lg_pn] = {};
+      qtyMap[r.lg_pn][r.model_code] = r.qty;
+    });
+
+    // 배치도 × BOM JOIN
+    const rows = [];
+    placement.forEach(pl => {
+      // 싱글 / 더블L / 더블R 각각 처리
+      const pnList = [];
+      if (pl.lg_pn)   pnList.push({ pn: pl.lg_pn,   type: '싱글',   stno: pl.st_no });
+      if (pl.lg_pn_l) pnList.push({ pn: pl.lg_pn_l, type: '더블-L', stno: pl.st_no + 'L' });
+      if (pl.lg_pn_r) pnList.push({ pn: pl.lg_pn_r, type: '더블-R', stno: pl.st_no + 'R' });
+
+      pnList.forEach(({ pn, type, stno }) => {
+        const bom    = bomMap[pn] || {};
+        const qtys   = qtyMap[pn] || {};
+        const active = selectedModels.some(m => (qtys[m] || 0) > 0);
+
+        rows.push({
+          line:    pl.line,
+          machine: pl.machine,
+          side:    pl.side,
+          st_no:   stno,
+          type,
+          lg_pn:   pn,
+          maker:   bom.maker     || '-',
+          maker_pn1: bom.maker_pn1 || '-',
+          spec:    bom.spec      || '-',
+          moq:     bom.moq       || '-',
+          trade:   bom.trade_type || '-',
+          qtys,
+          active,
+        });
+      });
+    });
+
+    // 소요량 있는 피더만 표시
+    const filtered = rows.filter(r => r.active);
+
+    if (!filtered.length) {
+      showToast('⚠️ 선택한 모델에 해당하는 피더가 없습니다');
+      return;
+    }
+
+    _printData = filtered;
+    renderPrintPreview(selectedModels);
+    document.getElementById('pr_exportBtn').style.display = '';
+    document.getElementById('pr_preview').style.display = '';
+
+    const statusBar = document.getElementById('pr_statusBar');
+    statusBar.style.display = '';
+    document.getElementById('pr_stext').textContent =
+      `${filtered.length}개 피더 조회 완료 (선택 모델: ${selectedModels.length}개)`;
+
+  } catch(e) {
+    showToast('❌ 조회 실패: ' + (e.message || String(e)));
+    console.error(e);
+  }
+}
+
+// 미리보기 렌더링
+function renderPrintPreview(selectedModels) {
+  const showStno  = document.getElementById('col_stno').checked;
+  const showLgpn  = document.getElementById('col_lgpn').checked;
+  const showMkrpn = document.getElementById('col_mkrpn').checked;
+  const showSpec  = document.getElementById('col_spec').checked;
+  const showMoq   = document.getElementById('col_moq').checked;
+  const showMaker = document.getElementById('col_maker').checked;
+  const showTrade = document.getElementById('col_trade').checked;
+  const showQty   = document.getElementById('col_qty').checked;
+
+  // 헤더
+  const headers = [];
+  if (showStno)  headers.push('ST No');
+  if (showLgpn)  headers.push('LG품번');
+  if (showMkrpn) headers.push('메이커품번①');
+  if (showSpec)  headers.push('SPEC');
+  if (showMoq)   headers.push('MOQ');
+  if (showMaker) headers.push('Maker');
+  if (showTrade) headers.push('거래유형');
+  if (showQty)   selectedModels.forEach(m => headers.push(m));
+
+  const thead = document.getElementById('pr_thead');
+  const tbody = document.getElementById('pr_tbody');
+
+  thead.innerHTML = `<tr>${headers.map(h =>
+    `<th style="white-space:nowrap;font-size:11px">${h}</th>`).join('')}</tr>`;
+
+  tbody.innerHTML = _printData.map(r => {
+    const cells = [];
+    if (showStno)  cells.push(`<td style="font-family:var(--mono);font-weight:700;font-size:12px">${r.st_no}</td>`);
+    if (showLgpn)  cells.push(`<td style="font-family:var(--mono);font-size:11px;color:var(--primary)">${r.lg_pn}</td>`);
+    if (showMkrpn) cells.push(`<td style="font-family:var(--mono);font-size:11px">${r.maker_pn1}</td>`);
+    if (showSpec)  cells.push(`<td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.spec}</td>`);
+    if (showMoq)   cells.push(`<td style="font-family:var(--mono);text-align:right">${r.moq?.toLocaleString?.() || r.moq}</td>`);
+    if (showMaker) cells.push(`<td style="font-size:11px">${r.maker}</td>`);
+    if (showTrade) cells.push(`<td style="font-size:11px">${r.trade}</td>`);
+    if (showQty)   selectedModels.forEach(m => {
+      const q = r.qtys[m] || 0;
+      cells.push(`<td style="text-align:center;font-weight:${q>0?'700':'400'};color:${q>0?'var(--primary)':'#ccc'}">${q||'-'}</td>`);
+    });
+    return `<tr>${cells.join('')}</tr>`;
+  }).join('');
+
+  // 제목
+  document.getElementById('pr_previewTitle').textContent =
+    `[ ${selectedModels.join(' / ')} ] 부품배치도 — ${_printData.length}개 피더`;
+  document.getElementById('pr_count').textContent =
+    `총 ${_printData.length}개 피더 (소요량 있는 피더만 표시)`;
+}
+
+// 엑셀 다운로드 (ExcelJS 사용)
+async function exportPrint() {
+  const selectedModels = getSelectedModels();
+  if (!_printData.length) { showToast('⚠️ 먼저 미리보기를 실행하세요'); return; }
+
+  showToast('📥 엑셀 생성 중...');
+
+  const showStno  = document.getElementById('col_stno').checked;
+  const showLgpn  = document.getElementById('col_lgpn').checked;
+  const showMkrpn = document.getElementById('col_mkrpn').checked;
+  const showSpec  = document.getElementById('col_spec').checked;
+  const showMoq   = document.getElementById('col_moq').checked;
+  const showMaker = document.getElementById('col_maker').checked;
+  const showTrade = document.getElementById('col_trade').checked;
+  const showQty   = document.getElementById('col_qty').checked;
+
+  // 헤더
+  const headers = [];
+  if (showStno)  headers.push({ label: 'ST No',      width: 14 });
+  if (showLgpn)  headers.push({ label: 'LG품번',     width: 16 });
+  if (showMkrpn) headers.push({ label: '메이커품번①', width: 20 });
+  if (showSpec)  headers.push({ label: 'SPEC',        width: 24 });
+  if (showMoq)   headers.push({ label: 'MOQ',         width: 8  });
+  if (showMaker) headers.push({ label: 'Maker',       width: 12 });
+  if (showTrade) headers.push({ label: '거래유형',    width: 8  });
+  if (showQty)   selectedModels.forEach(m => headers.push({ label: m, width: 14 }));
+
+  // 데이터 행
+  const dataRows = _printData.map(r => {
+    const cells = [];
+    if (showStno)  cells.push(r.st_no);
+    if (showLgpn)  cells.push(r.lg_pn);
+    if (showMkrpn) cells.push(r.maker_pn1 === '-' ? '' : r.maker_pn1);
+    if (showSpec)  cells.push(r.spec === '-' ? '' : r.spec);
+    if (showMoq)   cells.push(r.moq === '-' ? '' : r.moq);
+    if (showMaker) cells.push(r.maker === '-' ? '' : r.maker);
+    if (showTrade) cells.push(r.trade === '-' ? '' : r.trade);
+    if (showQty)   selectedModels.forEach(m => cells.push(r.qtys[m] || 0));
+    return cells;
+  });
+
+  // QR코드 생성용 ST No 목록
+  const stNos = _printData.map(r => r.st_no);
+
+  // SheetJS로 Sheet1(배치도) 생성
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet1: 부품배치도 ──
+  const ws1Data = [headers.map(h => h.label), ...dataRows];
+  const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+  ws1['!cols'] = headers.map(h => ({ wch: h.width }));
+
+  // 헤더 행 스타일 (SheetJS 제한으로 배경색은 미지원, 폰트만)
+  XLSX.utils.book_append_sheet(wb, ws1, '부품배치도');
+
+  // ── Sheet2: 바코드 (Code128 폰트) ──
+  const ws2Data = [
+    ['ST No', '바코드 (Code128 폰트 적용)'],
+    ...stNos.map(s => [s, s])
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+  ws2['!cols'] = [{ wch: 16 }, { wch: 30 }];
+
+  // 바코드 폰트 적용 안내
+  ws2['A1'] = { v: 'ST No', t: 's' };
+  ws2['B1'] = { v: '바코드 (Free 3 of 9 폰트 설치 후 B열 선택 → 폰트 변경)', t: 's' };
+
+  XLSX.utils.book_append_sheet(wb, ws2, '바코드');
+
+  // ── Sheet3: QR코드 안내 ──
+  const ws3Data = [
+    ['ST No', 'QR코드 URL'],
+    ...stNos.map(s => [s, `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(s)}`])
+  ];
+  const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
+  ws3['!cols'] = [{ wch: 16 }, { wch: 60 }];
+  ws3['B1'] = { v: 'QR코드 URL (브라우저에서 열면 QR 이미지 확인 가능)', t: 's' };
+  XLSX.utils.book_append_sheet(wb, ws3, 'QR코드');
+
+  // 파일명: SME_부품배치도_모델명들_날짜.xlsx
+  const d  = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const modelStr = selectedModels.slice(0, 3).join('_') + (selectedModels.length > 3 ? `_외${selectedModels.length-3}개` : '');
+  const fname = `SME_부품배치도_${modelStr}_${ds}.xlsx`;
+
+  XLSX.writeFile(wb, fname);
+  showToast(`📥 ${fname} 다운로드 완료`);
 }
 
 // ══════════════════════════════════
