@@ -109,7 +109,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: va
 .tab:hover:not(.on) { background: #fafafa; }
 
 /* ── 패널 ── */
-.pnl { display: none; padding: 14px; }
+.pnl { display: none; padding: 14px; max-width: 1400px; margin: 0 auto; }
 .pnl.on { display: block; }
 
 /* ── 카드 ── */
@@ -137,7 +137,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: va
 .btn-red     { background: var(--danger-l); color: var(--danger); border: 1px solid #ffcdd2; }
 .btn-sm      { padding: 6px 11px; font-size: 12px; border-radius: 6px; }
 .btn-row     { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.btn-row .btn { flex: 1; min-width: 80px; }
+.btn-row .btn { flex: none; }
 
 /* ── 폼 ── */
 .fg { margin-bottom: 10px; }
@@ -185,15 +185,28 @@ body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: va
 
 /* ── 테이블 ── */
 .tbl-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 6px; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; table-layout: fixed; }
 thead th {
   background: var(--primary-l); color: var(--primary); padding: 10px 12px;
   font-size: 12px; font-weight: 700; white-space: nowrap; text-align: left;
+  overflow: hidden; text-overflow: ellipsis;
 }
-tbody td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+tbody td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: #fafafa; }
 tbody tr.inactive td { opacity: .5; }
+
+/* 라인별 적용모델 테이블 컬럼 너비 */
+#pnl_lineModel table th:nth-child(1) { width: 50px; }
+#pnl_lineModel table th:nth-child(2) { width: 80px; }
+#pnl_lineModel table th:nth-child(3) { width: 220px; }
+#pnl_lineModel table th:nth-child(4) { width: 70px; }
+#pnl_lineModel table th:nth-child(5) { width: 90px; }
+#pnl_lineModel table th:nth-child(6) { width: 80px; }
+#pnl_lineModel table th:nth-child(7) { width: 100px; }
+#pnl_lineModel table th:nth-child(8) { width: auto; }
+#pnl_lineModel table th:nth-child(9) { width: 110px; }
 
 /* ── 배지 ── */
 .badge {
@@ -826,10 +839,14 @@ function renderLM() {
     l === '2라인' ? `<span class="badge b-l2">${l}</span>` :
                    `<span class="badge b-l3">${l || '-'}</span>`;
 
-  const faceBadge = f =>
-    f === 'TOP' ? `<span class="badge b-top">TOP</span>` :
-    f === 'BOT' ? `<span class="badge b-bot">BOT</span>` :
-                  `<span class="badge" style="background:#eee;color:#555">${f||'-'}</span>`;
+  const faceBadge = f => {
+    // 바코드값에서 면구분만 추출
+    const parsed = parseBarcodeVal(f || '');
+    const face = parsed ? parsed.face : (f || '').toUpperCase();
+    return face === 'TOP' ? `<span class="badge b-top">TOP</span>` :
+           face === 'BOT' ? `<span class="badge b-bot">BOT</span>` :
+           `<span class="badge" style="background:#eee;color:#555">${face||'-'}</span>`;
+  };
 
   tbody.innerHTML = data.map((r, i) => {
     // face 자동 파싱
