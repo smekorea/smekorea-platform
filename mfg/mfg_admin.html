@@ -1902,11 +1902,24 @@ async function previewPrint() {
   showToast('🔍 데이터 조회 중...');
 
   // 언더바 제거 정규화 함수
-  // EBR370406_3 → EBR3704063 / EBR37040603 → EBR37040603
   const normCode = c => (c || '').replace(/_/g, '');
 
   // 선택 모델의 정규화 코드 목록
   const selectedNorm = selectedModels.map(m => normCode(parseBarcodeVal(m)?.modelCode || m));
+
+  // 선택 모델의 face 및 라인 파악
+  // 모델별 face → 해당 라인 목록 추출
+  const allowedLines = new Set();
+  selectedModels.forEach(m => {
+    const parsed = parseBarcodeVal(m);
+    const face   = parsed?.face || '';
+    // mfg_line_model에서 해당 바코드값의 라인 찾기
+    const lmRows = _lm.filter(r => r.barcode_val === m && r.active === 'Y');
+    lmRows.forEach(r => allowedLines.add(r.line));
+  });
+
+  // allowedLines가 비어있으면 전체 라인 허용
+  const filterByLine = allowedLines.size > 0;
 
   try {
     // mfg_bom_model 전체 조회 (정규화 매칭용)
@@ -1922,10 +1935,17 @@ async function previewPrint() {
       pg++;
     }
 
-    // mfg_placement 조회
-    const { data: placement, error: e2 } = await sb.from('mfg_placement')
+    // mfg_placement 조회 — face 기준 라인 필터링
+    let placementQuery = sb.from('mfg_placement')
       .select('*').order('line').order('machine').order('side').order('st_no');
+
+    const { data: placementAll, error: e2 } = await placementQuery;
     if (e2) throw e2;
+
+    // 허용된 라인만 필터링
+    const placement = filterByLine
+      ? placementAll.filter(r => allowedLines.has(r.line))
+      : placementAll;
 
     // LG품번 → BOM 정보 맵
     const bomMap = {};
@@ -2008,7 +2028,7 @@ async function previewPrint() {
     const statusBar = document.getElementById('pr_statusBar');
     statusBar.style.display = '';
     document.getElementById('pr_stext').textContent =
-      `${filtered.length}개 피더 조회 완료 (선택 모델: ${selectedModels.length}개)`;
+      `${filtered.length}개 피더 조회 완료 — 선택모델: ${selectedModels.length}개 / 적용라인: ${filterByLine ? [...allowedLines].join(', ') : '전체'}`;
 
   } catch(e) {
     showToast('❌ 조회 실패: ' + (e.message || String(e)));
