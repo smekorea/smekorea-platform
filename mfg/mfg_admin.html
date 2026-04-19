@@ -6,6 +6,7 @@
 <title>SMERP MFG — 관리자</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
 
@@ -2109,7 +2110,7 @@ function renderPrintPreview(selectedModels) {
     `총 ${_printData.length}개 피더 (소요량 있는 피더만 표시)`;
 }
 
-// 엑셀 다운로드 (ExcelJS 사용)
+// 엑셀 다운로드 (ExcelJS — 폰트/서식 자동 적용)
 async function exportPrint() {
   const selectedModels = getSelectedModels();
   if (!_printData.length) { showToast('⚠️ 먼저 미리보기를 실행하세요'); return; }
@@ -2126,37 +2127,22 @@ async function exportPrint() {
   const showQty     = document.getElementById('col_qty').checked;
   const showBarcode = document.getElementById('col_barcode').checked;
 
-  // 헤더
-  const headers = [];
-  if (showStno)    headers.push({ label: 'ST No',       width: 14 });
-  if (showLgpn)    headers.push({ label: 'LG품번',      width: 16 });
-  if (showMkrpn)   headers.push({ label: '메이커품번①', width: 20 });
-  if (showSpec)    headers.push({ label: 'SPEC',         width: 24 });
-  if (showMoq)     headers.push({ label: 'MOQ',          width: 8  });
-  if (showMaker)   headers.push({ label: 'Maker',        width: 12 });
-  if (showTrade)   headers.push({ label: '거래유형',     width: 8  });
-  if (showQty)     selectedModels.forEach(m => headers.push({ label: '점수', width: 8 }));
-  if (showBarcode) headers.push({ label: '바코드',       width: 30 });
+  // 폰트 기준
+  const F_KR   = 'LG PC체';       // 한글
+  const F_EN   = 'Arial Narrow';  // 영문/숫자
+  const F_BC   = 'Free 3 of 9';   // 바코드
 
-  // 데이터 행
-  const dataRows = _printData.map(r => {
-    const cells = [];
-    if (showStno)    cells.push(r.st_no);
-    if (showLgpn)    cells.push(r.lg_pn);
-    if (showMkrpn)   cells.push(r.maker_pn1 === '-' ? '' : r.maker_pn1);
-    if (showSpec)    cells.push(r.spec === '-' ? '' : r.spec);
-    if (showMoq)     cells.push(r.moq === '-' ? '' : r.moq);
-    if (showMaker)   cells.push(r.maker === '-' ? '' : r.maker);
-    if (showTrade)   cells.push(r.trade === '-' ? '' : r.trade);
-    if (showQty)     selectedModels.forEach(m => cells.push(r.qtys[m] || 0));
-    if (showBarcode) cells.push(`*${r.st_no}*`);
-    return cells;
-  });
-
-  // ST No 목록
-  const stNos = _printData.map(r => r.st_no);
-  // SheetJS로 Sheet1(배치도) 생성
-  const wb = XLSX.utils.book_new();
+  // 컬럼 정의
+  const cols = [];
+  if (showStno)    cols.push({ key:'st_no',     label:'ST No',       width:14, font:F_EN });
+  if (showLgpn)    cols.push({ key:'lg_pn',     label:'LG품번',      width:16, font:F_EN });
+  if (showMkrpn)   cols.push({ key:'maker_pn1', label:'메이커품번①', width:22, font:F_EN });
+  if (showSpec)    cols.push({ key:'spec',       label:'SPEC',        width:28, font:F_EN });
+  if (showMoq)     cols.push({ key:'moq',        label:'MOQ',         width:9,  font:F_EN, num:true });
+  if (showMaker)   cols.push({ key:'maker',      label:'Maker',       width:14, font:F_EN });
+  if (showTrade)   cols.push({ key:'trade',      label:'거래유형',    width:9,  font:F_KR });
+  if (showQty)     selectedModels.forEach((m,i) => cols.push({ key:`qty_${i}`, label:'점수', width:8, font:F_EN, num:true }));
+  if (showBarcode) cols.push({ key:'barcode',    label:'바코드',      width:32, font:F_BC });
 
   // 설비프로그램명 수집
   const progMap2 = {};
@@ -2165,56 +2151,157 @@ async function exportPrint() {
     if (lmRow?.machine_program) progMap2[m] = lmRow.machine_program;
   });
 
-  const d   = new Date();
-  const ds  = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const d      = new Date();
+  const ds     = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const dateStr= `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const progStr= Object.entries(progMap2).map(([m,p])=>`${m} → ${p}`).join(' / ') || '-';
+
+  // ══ ExcelJS 워크북 생성 ══
+  const wb = new ExcelJS.Workbook();
 
   // ── Sheet1: 부품배치도 ──
-  // 상단 헤더 정보 행 추가
-  const totalCols = headers.length;
-  const infoRows = [
-    ['부품배치도'],
-    ['모델명', selectedModels.join(' / ')],
-    ['설비프로그램명', Object.entries(progMap2).map(([m,p])=>`${m} → ${p}`).join(' / ') || '-'],
-    ['작성일자', dateStr],
-    ['피더 수', `${_printData.length}개`],
-    [],  // 빈 행
-    headers.map(h => h.label),  // 컬럼 헤더
-    ...dataRows
+  const ws = wb.addWorksheet('부품배치도');
+
+  // 컬럼 너비 설정
+  ws.columns = cols.map(c => ({ width: c.width }));
+
+  // 헬퍼: 셀 스타일 적용
+  const styleCell = (cell, opts = {}) => {
+    const { fontName=F_KR, size=9, bold=false, color='000000',
+            bg=null, align='left', valign='middle', numFmt=null, border=false } = opts;
+    cell.font = { name: fontName, size, bold, color: { argb: 'FF'+color } };
+    cell.alignment = { horizontal: align, vertical: valign, wrapText: false };
+    if (bg)     cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF'+bg } };
+    if (numFmt) cell.numFmt = numFmt;
+    if (border) {
+      const bs = { style:'thin', color:{ argb:'FFB0B0B0' } };
+      cell.border = { top:bs, bottom:bs, left:bs, right:bs };
+    }
+  };
+
+  // ── 상단 헤더 정보 ──
+  // 행1: 제목
+  const r1 = ws.addRow(['부품배치도']);
+  r1.height = 24;
+  styleCell(r1.getCell(1), { fontName:F_KR, size:14, bold:true, color:'1a237e' });
+
+  // 행2~5: 헤더 정보
+  const infoData = [
+    ['라인명',       [...new Set(_printData.map(r=>r.line))].join(', ')],
+    ['모델명',       selectedModels.join(' / ')],
+    ['설비프로그램명', progStr],
+    ['작성일자',     dateStr],
+    ['피더 수',      `${_printData.length}개`],
   ];
+  infoData.forEach(([label, value]) => {
+    const row = ws.addRow([label, value]);
+    row.height = 16;
+    styleCell(row.getCell(1), { fontName:F_KR, size:10, bold:true, color:'555555' });
+    styleCell(row.getCell(2), { fontName:F_EN, size:10, bold:false, color:'1a237e' });
+  });
 
-  const ws1 = XLSX.utils.aoa_to_sheet(infoRows);
-  ws1['!cols'] = headers.map(h => ({ wch: h.width }));
+  // 빈 행
+  ws.addRow([]);
 
-  // 첫 컬럼 너비 넉넉하게
-  if (ws1['!cols'][0]) ws1['!cols'][0].wch = 16;
+  // ── 컬럼 헤더 행 ──
+  const hRow = ws.addRow(cols.map(c => c.label));
+  hRow.height = 18;
+  hRow.eachCell((cell, ci) => {
+    styleCell(cell, {
+      fontName: cols[ci-1]?.font === F_KR ? F_KR : F_EN,
+      size: 10, bold: true, color: 'FFFFFF',
+      bg: '1a237e', align: 'center', border: true
+    });
+  });
 
-  XLSX.utils.book_append_sheet(wb, ws1, '부품배치도');
+  // ── 데이터 행 ──
+  _printData.forEach((r, idx) => {
+    const rowData = cols.map(c => {
+      if (c.key === 'st_no')     return r.st_no;
+      if (c.key === 'lg_pn')     return r.lg_pn;
+      if (c.key === 'maker_pn1') return r.maker_pn1 === '-' ? '' : r.maker_pn1;
+      if (c.key === 'spec')      return r.spec === '-' ? '' : r.spec;
+      if (c.key === 'moq')       return r.moq === '-' ? '' : (parseInt(r.moq) || '');
+      if (c.key === 'maker')     return r.maker === '-' ? '' : r.maker;
+      if (c.key === 'trade')     return r.trade === '-' ? '' : r.trade;
+      if (c.key === 'barcode')   return `*${r.st_no}*`;
+      if (c.key.startsWith('qty_')) {
+        const mi = parseInt(c.key.split('_')[1]);
+        return r.qtys[selectedModels[mi]] || 0;
+      }
+      return '';
+    });
 
-  // ── Sheet2: 바코드 ──
-  const ws2Data = [
-    ['ST No', '바코드 (Code128 폰트 적용)'],
-    ...stNos.map(s => [s, s])
-  ];
-  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
-  ws2['!cols'] = [{ wch: 16 }, { wch: 30 }];
-  ws2['B1'] = { v: '바코드 (Free 3 of 9 폰트 설치 후 B열 선택 → 폰트 변경)', t: 's' };
-  XLSX.utils.book_append_sheet(wb, ws2, '바코드');
+    const dataRow = ws.addRow(rowData);
+    dataRow.height = 15;
+    const rowBg = idx % 2 === 0 ? null : 'F5F5F5';
 
-  // ── Sheet3: QR코드 ──
-  const ws3Data = [
-    ['ST No', 'QR코드 URL (브라우저에서 열면 QR 이미지 확인)'],
-    ...stNos.map(s => [s, `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(s)}`])
-  ];
-  const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
-  ws3['!cols'] = [{ wch: 16 }, { wch: 60 }];
-  XLSX.utils.book_append_sheet(wb, ws3, 'QR코드');
+    dataRow.eachCell((cell, ci) => {
+      const col = cols[ci-1];
+      if (!col) return;
+      const isNum = col.num;
+      const isBarcode = col.key === 'barcode';
 
-  // 파일명
-  const modelStr = selectedModels.slice(0, 3).join('_') + (selectedModels.length > 3 ? `_외${selectedModels.length-3}개` : '');
-  const fname = `SME_부품배치도_${modelStr}_${ds}.xlsx`;
+      styleCell(cell, {
+        fontName: isBarcode ? F_BC : col.font,
+        size: isBarcode ? 28 : 9,
+        bold: false,
+        color: '212121',
+        bg: rowBg,
+        align: isNum ? 'right' : isBarcode ? 'center' : 'left',
+        numFmt: isNum ? '#,##0' : null,
+        border: true
+      });
+    });
+  });
 
-  XLSX.writeFile(wb, fname);
+  // 행 고정 (헤더 7행 고정)
+  ws.views = [{ state:'frozen', ySplit: 7 }];
+
+  // ── Sheet2: 바코드 전용 ──
+  const wsBC = wb.addWorksheet('바코드');
+  wsBC.columns = [{ width: 16 }, { width: 36 }];
+
+  const bcHdr = wsBC.addRow(['ST No', '바코드 (Free 3 of 9 폰트 필요)']);
+  bcHdr.height = 18;
+  styleCell(bcHdr.getCell(1), { fontName:F_EN, size:10, bold:true, color:'FFFFFF', bg:'1a237e', align:'center', border:true });
+  styleCell(bcHdr.getCell(2), { fontName:F_KR, size:10, bold:true, color:'FFFFFF', bg:'1a237e', align:'center', border:true });
+
+  _printData.forEach(r => {
+    const row = wsBC.addRow([r.st_no, `*${r.st_no}*`]);
+    row.height = 36;
+    styleCell(row.getCell(1), { fontName:F_EN, size:9,  bold:false, align:'center', border:true });
+    styleCell(row.getCell(2), { fontName:F_BC, size:30, bold:false, align:'center', border:true });
+  });
+
+  // ── Sheet3: QR코드 URL ──
+  const wsQR = wb.addWorksheet('QR코드');
+  wsQR.columns = [{ width: 16 }, { width: 60 }];
+
+  const qrHdr = wsQR.addRow(['ST No', 'QR코드 URL (브라우저에서 열면 QR 이미지 확인)']);
+  qrHdr.height = 18;
+  styleCell(qrHdr.getCell(1), { fontName:F_EN, size:10, bold:true, color:'FFFFFF', bg:'1a237e', align:'center', border:true });
+  styleCell(qrHdr.getCell(2), { fontName:F_KR, size:10, bold:true, color:'FFFFFF', bg:'1a237e', align:'center', border:true });
+
+  _printData.forEach(r => {
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(r.st_no)}`;
+    const row = wsQR.addRow([r.st_no, url]);
+    row.height = 15;
+    styleCell(row.getCell(1), { fontName:F_EN, size:9, align:'center', border:true });
+    styleCell(row.getCell(2), { fontName:F_EN, size:9, align:'left',   border:true });
+  });
+
+  // ── 파일 다운로드 ──
+  const modelStr = selectedModels.slice(0,3).join('_') + (selectedModels.length > 3 ? `_외${selectedModels.length-3}개` : '');
+  const fname    = `SME_부품배치도_${modelStr}_${ds}.xlsx`;
+
+  const buf  = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+
   showToast(`📥 ${fname} 다운로드 완료`);
 }
 
