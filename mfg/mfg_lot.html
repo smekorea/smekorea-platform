@@ -5,972 +5,660 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMERP MFG — LOT 추적</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg:        #f0f2f5;
-  --surface:   #ffffff;
-  --border:    #e2e8f0;
-  --primary:   #1e3a8a;
-  --primary-l: #eff6ff;
-  --primary-m: #2563eb;
-  --ok:        #059669;
-  --ok-l:      #ecfdf5;
-  --ok-d:      #047857;
-  --ng:        #dc2626;
-  --ng-l:      #fef2f2;
-  --ng-d:      #b91c1c;
-  --warn:      #d97706;
-  --warn-l:    #fffbeb;
-  --text:      #1e293b;
-  --text-s:    #64748b;
-  --text-xs:   #94a3b8;
-  --mono:      'IBM Plex Mono', monospace;
-  --radius:    12px;
-  --shadow:    0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,.12);
+  --bg:     #eef2f7;
+  --surf:   #ffffff;
+  --border: #dde3ec;
+  --pri:    #1e3a8a;
+  --pri-l:  #eff6ff;
+  --pri-m:  #2563eb;
+  --ok:     #059669;
+  --ok-l:   #ecfdf5;
+  --ok-d:   #047857;
+  --ng:     #dc2626;
+  --ng-l:   #fef2f2;
+  --ng-d:   #b91c1c;
+  --warn:   #d97706;
+  --warn-l: #fffbeb;
+  --text:   #1e293b;
+  --text-s: #64748b;
+  --text-x: #94a3b8;
+  --mono:   'IBM Plex Mono', monospace;
+  --r:      10px;
+  --sh:     0 2px 8px rgba(0,0,0,.08);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
 
-body {
-  font-family: 'Noto Sans KR', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  font-size: 14px;
-}
+/* 로그인 */
+#lo { position:fixed; inset:0; background:linear-gradient(135deg,#1e3a8a,#2563eb); display:flex; align-items:center; justify-content:center; z-index:9999; }
+.lbox { background:#fff; border-radius:20px; padding:40px 36px; width:340px; box-shadow:0 10px 40px rgba(0,0,0,.2); text-align:center; }
+.llogo { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:4px; color:var(--pri); margin-bottom:8px; }
+.ltit  { font-size:22px; font-weight:800; color:var(--pri); margin-bottom:4px; }
+.lsub  { font-size:12px; color:var(--text-s); margin-bottom:28px; }
+.lbox input { width:100%; padding:14px; border:2px solid var(--border); border-radius:12px; font-size:24px; text-align:center; letter-spacing:10px; font-family:var(--mono); outline:none; margin-bottom:14px; transition:border-color .2s; }
+.lbox input:focus { border-color:var(--pri-m); }
+.lbtn { width:100%; padding:14px; background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer; font-family:inherit; }
+.lerr { color:var(--ng); font-size:12px; margin-top:8px; min-height:18px; }
 
-/* ── 로그인 ── */
-#loginOverlay {
-  position: fixed; inset: 0;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #2563eb 100%);
-  display: flex; align-items: center; justify-content: center; z-index: 9999;
-}
-.login-box {
-  background: #fff; border-radius: 20px; padding: 40px 36px;
-  width: 340px; box-shadow: var(--shadow-lg); text-align: center;
-}
-.login-logo {
-  font-family: var(--mono); font-size: 11px; font-weight: 700;
-  letter-spacing: 4px; color: var(--primary); margin-bottom: 8px;
-}
-.login-title { font-size: 22px; font-weight: 800; color: var(--primary); margin-bottom: 4px; }
-.login-sub   { font-size: 12px; color: var(--text-s); margin-bottom: 28px; }
-.login-box input {
-  width: 100%; padding: 14px; border: 2px solid var(--border); border-radius: 12px;
-  font-size: 24px; text-align: center; letter-spacing: 10px;
-  font-family: var(--mono); outline: none; margin-bottom: 14px;
-  transition: border-color .2s;
-}
-.login-box input:focus { border-color: var(--primary-m); }
-.login-btn {
-  width: 100%; padding: 14px;
-  background: linear-gradient(135deg, #1e3a8a, #2563eb);
-  color: #fff; border: none; border-radius: 12px;
-  font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit;
-  transition: transform .15s;
-}
-.login-btn:active { transform: scale(.98); }
-.login-err { color: var(--ng); font-size: 12px; margin-top: 8px; min-height: 18px; }
+/* 헤더 */
+.hdr { background:linear-gradient(135deg,#1e3a8a,#1e40af); color:#fff; height:52px; padding:0 16px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,.2); }
+.hdr-l { display:flex; align-items:center; gap:10px; }
+.hbadge { font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:2px; background:rgba(255,255,255,.15); padding:3px 9px; border-radius:5px; border:1px solid rgba(255,255,255,.2); }
+.htit  { font-size:15px; font-weight:800; }
+.hsub  { font-size:10px; opacity:.65; margin-top:1px; }
+.hdr-r { display:flex; align-items:center; gap:8px; }
+.hop   { font-size:12px; font-weight:600; background:rgba(255,255,255,.15); padding:4px 10px; border-radius:7px; }
+.hbtn  { font-size:11px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25); color:#fff; padding:5px 11px; border-radius:7px; cursor:pointer; font-family:inherit; }
 
-/* ── 헤더 ── */
-.hdr {
-  background: linear-gradient(135deg, #1e3a8a, #1e40af);
-  color: #fff; padding: 0 16px;
-  height: 56px;
-  display: flex; align-items: center; justify-content: space-between;
-  position: sticky; top: 0; z-index: 100;
-  box-shadow: 0 2px 8px rgba(0,0,0,.2);
-}
-.hdr-left { display: flex; align-items: center; gap: 12px; }
-.hdr-badge {
-  font-family: var(--mono); font-size: 9px; font-weight: 700;
-  letter-spacing: 2px; background: rgba(255,255,255,.15);
-  padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2);
-}
-.hdr-title { font-size: 16px; font-weight: 800; }
-.hdr-sub   { font-size: 10px; opacity: .65; margin-top: 1px; }
-.hdr-right { display: flex; align-items: center; gap: 10px; }
-.hdr-operator {
-  font-size: 12px; font-weight: 600;
-  background: rgba(255,255,255,.15); padding: 4px 10px; border-radius: 8px;
-}
-.hdr-logout {
-  font-size: 11px; background: rgba(255,255,255,.1);
-  border: 1px solid rgba(255,255,255,.25); color: #fff;
-  padding: 5px 12px; border-radius: 8px; cursor: pointer; font-family: inherit;
-}
+/* 탭 */
+.tabs { display:flex; background:var(--surf); border-bottom:2px solid var(--border); position:sticky; top:52px; z-index:90; }
+.tab  { flex:1; padding:12px 8px; text-align:center; font-size:12px; font-weight:700; cursor:pointer; color:var(--text-s); border-bottom:3px solid transparent; display:flex; flex-direction:column; align-items:center; gap:2px; transition:all .15s; }
+.tab .ti { font-size:18px; }
+.tab.on  { color:var(--pri); border-bottom-color:var(--pri); background:var(--pri-l); }
+.tab:hover:not(.on) { background:#f8fafc; }
 
-/* ── 탭 ── */
-.tabs {
-  display: flex; background: var(--surface);
-  border-bottom: 2px solid var(--border);
-  position: sticky; top: 56px; z-index: 90;
-}
-.tab {
-  flex: 1; padding: 14px 8px; text-align: center;
-  font-size: 13px; font-weight: 700; cursor: pointer;
-  color: var(--text-s); border-bottom: 3px solid transparent;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  transition: all .15s;
-}
-.tab .ti { font-size: 20px; }
-.tab.on  { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-l); }
-.tab:hover:not(.on) { background: #f8fafc; }
+/* 패널 */
+.pnl { display:none; padding:12px; height:calc(100vh - 104px); overflow:hidden; }
+.pnl.on { display:flex; flex-direction:column; }
+.pnl.sc  { overflow-y:auto; display:none; }
+.pnl.sc.on { display:block; }
 
-/* ── 패널 ── */
-.pnl { display: none; padding: 16px; max-width: 900px; margin: 0 auto; }
-.pnl.on { display: block; }
+/* 가로 분할 */
+.split { display:grid; grid-template-columns:360px 1fr; gap:12px; flex:1; overflow:hidden; min-height:0; }
 
-/* ── 카드 ── */
-.card {
-  background: var(--surface); border-radius: var(--radius);
-  box-shadow: var(--shadow); margin-bottom: 14px; overflow: hidden;
-}
-.card-hdr {
-  padding: 14px 16px; display: flex; align-items: center; gap: 8px;
-  border-bottom: 2px solid var(--border);
-  font-size: 15px; font-weight: 800; color: var(--primary);
-}
-.card-body { padding: 16px; }
+/* 카드 패널 */
+.panel { background:var(--surf); border-radius:var(--r); box-shadow:var(--sh); display:flex; flex-direction:column; overflow:hidden; min-height:0; transition:background .3s, border .3s; }
+.panel.st-ok { background:#f0fdf4; border:3px solid var(--ok); }
+.panel.st-ng { background:#fff5f5; border:3px solid var(--ng); }
+.phdr { padding:11px 14px; border-bottom:2px solid var(--border); font-size:13px; font-weight:800; color:var(--pri); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.pbody { flex:1; overflow-y:auto; padding:12px 14px; min-height:0; }
 
-/* ── 작업자 선택 바 ── */
-.op-bar {
-  background: var(--primary-l); border: 2px solid #bfdbfe;
-  border-radius: var(--radius); padding: 12px 16px;
-  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
-}
-.op-bar label { font-size: 13px; font-weight: 700; color: var(--primary); white-space: nowrap; }
-.op-select {
-  flex: 1; padding: 10px 12px; border: 2px solid #bfdbfe;
-  border-radius: 10px; font-size: 14px; font-weight: 600;
-  font-family: inherit; background: #fff; color: var(--primary);
-  outline: none; cursor: pointer;
-}
-.op-select:focus { border-color: var(--primary-m); }
+/* 작업자 */
+.op-row { display:flex; align-items:center; gap:8px; background:var(--pri-l); border:1.5px solid #bfdbfe; border-radius:9px; padding:8px 12px; margin-bottom:10px; flex-shrink:0; }
+.op-row label { font-size:12px; font-weight:700; color:var(--pri); white-space:nowrap; }
+.op-sel { flex:1; padding:7px 10px; border:1.5px solid #bfdbfe; border-radius:8px; font-size:13px; font-weight:600; font-family:inherit; background:#fff; color:var(--pri); outline:none; }
 
-/* ── 스캔 입력 ── */
-.scan-wrap { position: relative; margin-bottom: 12px; }
-.scan-label {
-  font-size: 12px; font-weight: 700; color: var(--text-s);
-  margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
-}
-.scan-label .req { color: var(--ng); }
-.scan-input {
-  width: 100%; padding: 16px 48px 16px 16px;
-  border: 2.5px solid var(--border); border-radius: 12px;
-  font-size: 16px; font-family: var(--mono); font-weight: 600;
-  color: var(--text); background: #fff; outline: none;
-  transition: all .2s;
-}
-.scan-input:focus { border-color: var(--primary-m); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
-.scan-input.ok    { border-color: var(--ok); background: var(--ok-l); }
-.scan-input.ng    { border-color: var(--ng); background: var(--ng-l); }
-.scan-input.active { border-color: var(--warn); background: var(--warn-l); animation: pulse-border 1s infinite; }
-@keyframes pulse-border { 0%,100%{box-shadow:0 0 0 0 rgba(217,119,6,.4)} 50%{box-shadow:0 0 0 6px rgba(217,119,6,0)} }
-.scan-clear {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  width: 28px; height: 28px; border-radius: 50%; border: none;
-  background: #e2e8f0; color: #64748b; cursor: pointer; font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
-}
+/* 스캔 입력 */
+.sg { margin-bottom:10px; }
+.sl { font-size:11px; font-weight:700; color:var(--text-s); margin-bottom:4px; display:flex; align-items:center; gap:5px; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--text-x); display:inline-block; }
+.dot.act { background:var(--warn); animation:blink .7s infinite alternate; }
+.dot.ok  { background:var(--ok); animation:none; }
+@keyframes blink { from{opacity:.3} to{opacity:1} }
 
-/* ── 모델 정보 박스 ── */
-.model-box {
-  background: linear-gradient(135deg, var(--primary-l), #e0f2fe);
-  border: 2px solid #bfdbfe; border-radius: 12px; padding: 14px 16px;
-  margin-bottom: 14px;
-}
-.model-box-title { font-size: 11px; font-weight: 700; color: var(--text-s); margin-bottom: 10px; letter-spacing: 1px; }
-.model-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.model-info-item { }
-.model-info-label { font-size: 10px; color: var(--text-s); font-weight: 600; margin-bottom: 2px; }
-.model-info-value { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--primary); }
+.sinp { width:100%; padding:11px 14px; border:2.5px solid var(--border); border-radius:9px; font-size:15px; font-family:var(--mono); font-weight:600; color:var(--text); background:#fff; outline:none; transition:all .2s; }
+.sinp:focus  { border-color:var(--pri-m); box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.sinp.active { border-color:var(--warn); background:var(--warn-l); }
+.sinp.ok     { border-color:var(--ok);   background:var(--ok-l); }
+.sinp.ng     { border-color:var(--ng);   background:var(--ng-l); }
 
-/* ── 진행 현황 바 ── */
-.progress-section { margin-bottom: 14px; }
-.progress-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 8px;
-}
-.progress-title { font-size: 13px; font-weight: 700; color: var(--text); }
-.progress-count { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--primary); }
-.progress-bar { height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }
-.progress-fill {
-  height: 100%; border-radius: 5px;
-  background: linear-gradient(90deg, var(--ok), #34d399);
-  transition: width .4s ease;
-}
-.progress-stats {
-  display: flex; gap: 12px; margin-top: 8px;
-}
-.p-stat {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 600;
-}
-.p-dot { width: 8px; height: 8px; border-radius: 50%; }
+/* 결과 표시창 (흰배경) */
+.rdisp { background:#fff; border:2px solid var(--border); border-radius:9px; padding:9px 13px; margin-top:5px; min-height:40px; font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:8px; transition:all .25s; }
+.rdisp.empty { color:var(--text-x); font-weight:400; font-family:inherit; font-size:12px; }
+.rdisp.ok    { border-color:var(--ok);   color:var(--ok-d); }
+.rdisp.ng    { border-color:var(--ng);   color:var(--ng-d); }
+.rdisp.warn  { border-color:var(--warn); color:var(--warn); }
+.ri { font-size:15px; flex-shrink:0; }
+.rt { flex:1; line-height:1.4; }
+.rs { font-size:10px; color:var(--text-s); font-weight:400; font-family:inherit; margin-top:2px; }
 
-/* ── 피더 목록 ── */
-.feeder-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; max-height: 300px; overflow-y: auto; }
-.feeder-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px; border-radius: 10px;
-  border: 2px solid var(--border); background: #fff;
-  cursor: pointer; transition: all .15s;
-}
-.feeder-item:hover { border-color: var(--primary-m); background: var(--primary-l); }
-.feeder-item.current { border-color: var(--warn); background: var(--warn-l); }
-.feeder-item.done-ok { border-color: var(--ok); background: var(--ok-l); opacity: .7; }
-.feeder-item.done-ng { border-color: var(--ng); background: var(--ng-l); }
-.feeder-item.skip    { opacity: .4; cursor: default; }
+/* 스캔 4개 박스 */
+.scan4 { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:8px 0; }
+.s4box { background:#fff; border:2px solid var(--border); border-radius:8px; padding:8px 10px; min-height:52px; }
+.s4box.ok { border-color:var(--ok); background:var(--ok-l); }
+.s4box.ng { border-color:var(--ng); background:var(--ng-l); }
+.s4box.empty { border-style:dashed; }
+.s4lbl { font-size:10px; font-weight:700; color:var(--text-x); margin-bottom:3px; }
+.s4val { font-family:var(--mono); font-size:11px; font-weight:700; color:var(--text); word-break:break-all; }
+.s4val.ok { color:var(--ok-d); }
+.s4val.ng { color:var(--ng-d); }
+.s4val.empty { color:var(--text-x); font-weight:400; font-size:10px; }
 
-.fi-stno {
-  font-family: var(--mono); font-size: 14px; font-weight: 700;
-  color: var(--primary); min-width: 90px;
-}
-.fi-pn   { font-family: var(--mono); font-size: 11px; color: var(--text-s); flex: 1; }
-.fi-status { margin-left: auto; }
+/* 모델 정보 */
+.minfo { background:linear-gradient(135deg,var(--pri-l),#e0f2fe); border:1.5px solid #bfdbfe; border-radius:9px; padding:10px 14px; margin-bottom:10px; flex-shrink:0; }
+.mgrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.ml { font-size:10px; color:var(--text-s); font-weight:700; margin-bottom:2px; }
+.mv { font-family:var(--mono); font-size:12px; font-weight:700; color:var(--pri); }
 
-/* ── 현재 피더 체크 박스 ── */
-.check-box {
-  border: 3px solid var(--warn); border-radius: 14px;
-  background: var(--warn-l); padding: 16px; margin-bottom: 14px;
-}
-.check-box.ok { border-color: var(--ok); background: var(--ok-l); }
-.check-box.ng { border-color: var(--ng); background: var(--ng-l); }
-.check-box-title {
-  font-size: 12px; font-weight: 700; color: var(--warn); margin-bottom: 12px;
-  display: flex; align-items: center; gap: 6px;
-}
-.check-box.ok .check-box-title { color: var(--ok); }
-.check-box.ng .check-box-title { color: var(--ng); }
+/* 진행바 */
+.psec { margin-bottom:10px; flex-shrink:0; }
+.phd  { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
+.pt   { font-size:12px; font-weight:700; }
+.pc   { font-family:var(--mono); font-size:13px; font-weight:700; color:var(--pri); }
+.pbar { height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
+.pfil { height:100%; background:linear-gradient(90deg,var(--ok),#34d399); border-radius:4px; transition:width .4s; }
+.pst  { display:flex; gap:10px; margin-top:5px; }
+.psi  { display:flex; align-items:center; gap:4px; font-size:11px; font-weight:700; }
+.pd   { width:7px; height:7px; border-radius:50%; }
 
-.check-feeder-no {
-  font-family: var(--mono); font-size: 28px; font-weight: 800;
-  color: var(--primary); margin-bottom: 4px;
-}
-.check-pn {
-  font-family: var(--mono); font-size: 13px; color: var(--text-s);
-  margin-bottom: 14px;
-}
+/* 피더 목록 */
+.flist { display:flex; flex-direction:column; gap:4px; }
+.fi    { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border); background:#fff; cursor:pointer; transition:all .15s; }
+.fi:hover   { border-color:var(--pri-m); background:var(--pri-l); }
+.fi.cur     { border-color:var(--warn); background:var(--warn-l); box-shadow:0 0 0 2px rgba(217,119,6,.2); }
+.fi.done-ok { border-color:var(--ok); background:var(--ok-l); opacity:.8; }
+.fi.done-ng { border-color:var(--ng); background:var(--ng-l); }
+.fi.skip    { opacity:.35; cursor:default; }
+.fno  { font-family:var(--mono); font-size:13px; font-weight:700; color:var(--pri); min-width:85px; }
+.fpn  { flex:1; font-family:var(--mono); font-size:10px; color:var(--text-s); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fqty { font-family:var(--mono); font-size:11px; color:var(--text-s); }
+.fico { font-size:16px; }
 
-/* ── 판정 버튼 ── */
-.judge-row { display: flex; gap: 10px; margin-top: 12px; }
-.btn-ok {
-  flex: 1; padding: 18px; border: none; border-radius: 12px;
-  background: linear-gradient(135deg, #059669, #10b981);
-  color: #fff; font-size: 18px; font-weight: 800;
-  cursor: pointer; font-family: inherit; transition: all .15s;
-  box-shadow: 0 4px 12px rgba(5,150,105,.3);
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-}
-.btn-ok:active { transform: scale(.97); }
-.btn-ng {
-  flex: 1; padding: 18px; border: none; border-radius: 12px;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  color: #fff; font-size: 18px; font-weight: 800;
-  cursor: pointer; font-family: inherit; transition: all .15s;
-  box-shadow: 0 4px 12px rgba(220,38,38,.3);
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-}
-.btn-ng:active { transform: scale(.97); }
+/* 우측 체크 패널 */
+.cpanel { background:var(--surf); border-radius:var(--r); box-shadow:var(--sh); display:flex; flex-direction:column; overflow:hidden; transition:background .3s, border .3s; }
+.cpanel.st-ok { background:#f0fdf4; border:3px solid var(--ok); }
+.cpanel.st-ng { background:#fff5f5; border:3px solid var(--ng); }
+.cphdr { padding:12px 16px; border-bottom:2px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.cptit { font-size:13px; font-weight:800; color:var(--pri); display:flex; align-items:center; gap:6px; }
+.cpbody { flex:1; overflow-y:auto; padding:14px 16px; min-height:0; }
 
-/* ── 일반 버튼 ── */
-.btn {
-  padding: 11px 16px; border: none; border-radius: 10px;
-  font-size: 13px; font-weight: 700; cursor: pointer;
-  font-family: inherit; transition: all .15s;
-}
-.btn:active { transform: scale(.97); }
-.btn-primary { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; }
-.btn-gray    { background: #f1f5f9; color: #475569; border: 1.5px solid var(--border); }
-.btn-orange  { background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; }
-.btn-row     { display: flex; gap: 8px; flex-wrap: wrap; }
-.btn-sm      { padding: 7px 12px; font-size: 12px; border-radius: 8px; }
+/* 현재 피더 정보 */
+.cbox { background:var(--pri-l); border:2px solid #bfdbfe; border-radius:10px; padding:12px 16px; margin-bottom:14px; transition:all .3s; }
+.cbox.active { border-color:var(--warn); background:var(--warn-l); }
+.cbox.ok     { border-color:var(--ok);   background:#f0fdf4; }
+.cbox.ng     { border-color:var(--ng);   background:#fff5f5; }
+.cstno  { font-family:var(--mono); font-size:28px; font-weight:900; color:var(--pri); line-height:1; }
+.clgpn  { font-family:var(--mono); font-size:14px; color:var(--text); margin-top:6px; }
+.cmkrpn { font-family:var(--mono); font-size:11px; color:var(--text-s); margin-top:2px; }
+.cqty   { font-family:var(--mono); font-size:12px; color:var(--text-s); margin-top:4px; }
 
-/* ── 배지 ── */
-.badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 3px 9px; border-radius: 6px;
-  font-size: 11px; font-weight: 700; font-family: var(--mono);
+/* 결과 종합 박스 */
+.result-summary {
+  border-radius:10px; padding:14px; margin-top:12px; margin-bottom:12px;
+  display:none; transition:all .3s;
 }
-.b-ok   { background: var(--ok-l); color: var(--ok-d); border: 1px solid #a7f3d0; }
-.b-ng   { background: var(--ng-l); color: var(--ng-d); border: 1px solid #fca5a5; }
-.b-wait { background: var(--warn-l); color: var(--warn); border: 1px solid #fde68a; }
-.b-top  { background: #ede9fe; color: #5b21b6; }
-.b-bot  { background: #fff7ed; color: #c2410c; }
-.b-l1   { background: #eff6ff; color: #1d4ed8; }
-.b-l2   { background: #f0fdf4; color: #15803d; }
-.b-l3   { background: #fefce8; color: #a16207; }
+.result-summary.ok { background:#f0fdf4; border:2px solid var(--ok); display:block; }
+.result-summary.ng { background:#fff5f5; border:2px solid var(--ng); display:block; }
+.rs-title { font-size:20px; font-weight:900; margin-bottom:10px; }
+.rs-title.ok { color:var(--ok-d); }
+.rs-title.ng { color:var(--ng-d); }
+.rs-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.rs-item { background:#fff; border-radius:8px; padding:8px 10px; }
+.rs-lbl  { font-size:10px; font-weight:700; color:var(--text-s); margin-bottom:3px; }
+.rs-val  { font-family:var(--mono); font-size:12px; font-weight:700; color:var(--text); word-break:break-all; }
 
-/* ── 소리 설정 ── */
-.sound-setting {
-  background: #f8fafc; border: 1.5px solid var(--border);
-  border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+/* 판정 버튼 */
+.judge-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+.jbtn-ok {
+  padding:16px; border:none; border-radius:10px; font-size:17px; font-weight:800;
+  cursor:pointer; font-family:inherit; transition:all .2s;
+  display:flex; align-items:center; justify-content:center; gap:6px;
 }
-.sound-setting-title {
-  font-size: 13px; font-weight: 700; color: var(--text);
-  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
-}
-.sound-row {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
-}
-.sound-label { font-size: 12px; font-weight: 600; color: var(--text-s); width: 60px; }
-.sound-select {
-  flex: 1; padding: 8px 10px; border: 1.5px solid var(--border);
-  border-radius: 8px; font-size: 12px; font-family: inherit; outline: none;
-}
-.sound-preview {
-  padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px;
-  background: #fff; cursor: pointer; font-size: 16px;
-}
-.sound-preview:hover { background: #f1f5f9; }
+.jbtn-ok.inactive { background:#e2e8f0; color:#94a3b8; box-shadow:none; cursor:not-allowed; }
+.jbtn-ok.active   { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 4px 14px rgba(5,150,105,.35); }
+.jbtn-ok.active:active { transform:scale(.97); }
 
-/* ── 필터 ── */
-.filter-row {
-  display: flex; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 12px; align-items: center;
+.jbtn-ng {
+  padding:16px; border:none; border-radius:10px; font-size:17px; font-weight:800;
+  cursor:pointer; font-family:inherit; transition:all .2s;
+  display:flex; align-items:center; justify-content:center; gap:6px;
 }
-.filter-row select, .filter-row input {
-  padding: 9px 12px; border: 1.5px solid var(--border);
-  border-radius: 10px; font-size: 13px; font-family: inherit;
-  background: #fff; outline: none; transition: border-color .15s;
-}
-.filter-row select:focus, .filter-row input:focus { border-color: var(--primary-m); }
-.filter-search { flex: 1; min-width: 140px; }
+.jbtn-ng.inactive { background:#e2e8f0; color:#94a3b8; box-shadow:none; cursor:not-allowed; }
+.jbtn-ng.active   { background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; box-shadow:0 4px 14px rgba(220,38,38,.35); }
+.jbtn-ng.active:active { transform:scale(.97); }
 
-/* ── 테이블 ── */
-.tbl-wrap { overflow-x: auto; border-radius: 10px; border: 1.5px solid var(--border); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
-thead th {
-  background: var(--primary-l); color: var(--primary);
-  padding: 10px 12px; font-size: 11px; font-weight: 800;
-  white-space: nowrap; text-align: left;
-}
-tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: #f8fafc; }
+/* 일반 버튼 */
+.btn { padding:9px 14px; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .15s; }
+.btn:active { transform:scale(.97); }
+.btn-pri  { background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; }
+.btn-gray { background:#f1f5f9; color:#475569; border:1.5px solid var(--border); }
+.btn-sm   { padding:6px 10px; font-size:11px; border-radius:7px; }
+.btn-row  { display:flex; gap:7px; }
 
-/* ── NG 사유 모달 ── */
-.modal-overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,.6); z-index: 9000;
-  align-items: flex-end; justify-content: center;
+/* 교환 완료 버튼 */
+.confirm-btn {
+  width:100%; padding:16px; border:none; border-radius:10px; font-size:16px; font-weight:800;
+  cursor:pointer; font-family:inherit; background:linear-gradient(135deg,#059669,#10b981);
+  color:#fff; box-shadow:0 4px 14px rgba(5,150,105,.35); margin-top:12px;
+  display:none; transition:transform .15s;
 }
-.modal-overlay.show { display: flex; }
-.modal-box {
-  background: #fff; border-radius: 20px 20px 0 0; width: 100%;
-  max-width: 500px; animation: slideUp .25s ease-out;
-}
-@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-.m-handle { width: 40px; height: 4px; background: #e2e8f0; border-radius: 2px; margin: 12px auto 8px; }
-.m-hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 18px 14px; border-bottom: 1.5px solid var(--border);
-}
-.m-title { font-size: 16px; font-weight: 800; color: var(--ng); }
-.m-close {
-  width: 30px; height: 30px; border-radius: 50%; border: none;
-  background: #f1f5f9; color: #64748b; font-size: 16px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-.m-body { padding: 16px 18px 8px; }
-.m-footer { display: flex; gap: 8px; padding: 14px 18px; border-top: 1.5px solid var(--border); }
-.m-footer .btn { flex: 1; }
+.confirm-btn:active { transform:scale(.97); }
 
-.ng-reason-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px;
-}
-.ng-reason-btn {
-  padding: 14px 10px; border: 2px solid var(--border); border-radius: 10px;
-  background: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
-  font-family: inherit; text-align: center; transition: all .15s;
-}
-.ng-reason-btn:hover   { border-color: var(--ng); background: var(--ng-l); color: var(--ng-d); }
-.ng-reason-btn.selected { border-color: var(--ng); background: var(--ng-l); color: var(--ng-d); }
+/* 배지 */
+.badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:700; font-family:var(--mono); }
+.b-ok  { background:var(--ok-l); color:var(--ok-d); border:1px solid #a7f3d0; }
+.b-ng  { background:var(--ng-l); color:var(--ng-d); border:1px solid #fca5a5; }
+.b-top { background:#ede9fe; color:#5b21b6; }
+.b-bot { background:#fff7ed; color:#c2410c; }
+.b-l1  { background:#eff6ff; color:#1d4ed8; }
+.b-l2  { background:#f0fdf4; color:#15803d; }
+.b-l3  { background:#fefce8; color:#a16207; }
 
-/* ── 상태 표시 ── */
-.status-display {
-  padding: 20px; border-radius: 14px; text-align: center; margin-bottom: 14px;
-}
-.status-display.ok { background: var(--ok-l); border: 3px solid var(--ok); }
-.status-display.ng { background: var(--ng-l); border: 3px solid var(--ng); }
-.status-display.wait { background: var(--warn-l); border: 3px solid var(--warn); }
-.status-icon  { font-size: 48px; margin-bottom: 8px; }
-.status-text  { font-size: 24px; font-weight: 900; }
-.status-sub   { font-size: 13px; color: var(--text-s); margin-top: 4px; }
+/* 이력 테이블 */
+.tw { overflow-x:auto; border-radius:9px; border:1.5px solid var(--border); margin-bottom:14px; }
+table { width:100%; border-collapse:collapse; font-size:12px; min-width:480px; }
+thead th { background:var(--pri-l); color:var(--pri); padding:9px 11px; font-size:11px; font-weight:800; white-space:nowrap; text-align:left; }
+tbody td { padding:9px 11px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:hover td { background:#f8fafc; }
 
-/* ── 토스트 ── */
-.toast {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  background: rgba(15,23,42,.9); color: #fff; padding: 10px 22px;
-  border-radius: 24px; font-size: 13px; font-weight: 700;
-  z-index: 10001; opacity: 0; transition: opacity .25s; pointer-events: none;
-  white-space: nowrap; max-width: 90vw;
-}
-.toast.show { opacity: 1; }
+/* 필터 */
+.frow { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center; }
+.frow select, .frow input { padding:8px 10px; border:1.5px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; background:#fff; outline:none; }
+.fsrch { flex:1; min-width:120px; }
 
-/* ── 빈 상태 ── */
-.empty { text-align: center; padding: 40px 20px; color: var(--text-s); }
-.empty .ei { font-size: 40px; margin-bottom: 10px; }
-.empty .et { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-.empty .es { font-size: 12px; }
+/* 소리 설정 */
+.sc-card { background:#f8fafc; border:1.5px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+.sc-tit  { font-size:12px; font-weight:800; margin-bottom:10px; }
+.sc-row  { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.sc-lbl  { font-size:12px; font-weight:700; width:55px; }
+.sc-sel  { flex:1; padding:7px 9px; border:1.5px solid var(--border); border-radius:7px; font-size:12px; font-family:inherit; outline:none; }
+.sc-prev { padding:7px 10px; border:1.5px solid var(--border); border-radius:7px; background:#fff; cursor:pointer; font-size:14px; }
 
-/* ── fg ── */
-.fg { margin-bottom: 12px; }
-.fg label { display: block; font-size: 12px; font-weight: 700; color: var(--text-s); margin-bottom: 5px; }
-.fg select, .fg input[type=text], .fg input[type=date], .fg textarea {
-  width: 100%; padding: 10px 12px; border: 2px solid var(--border);
-  border-radius: 10px; font-size: 14px; font-family: inherit; outline: none;
-  transition: border-color .2s;
-}
-.fg select:focus, .fg input:focus, .fg textarea:focus { border-color: var(--primary-m); }
-.fg textarea { resize: vertical; min-height: 80px; }
+/* 모달 */
+.mover { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9000; align-items:flex-end; justify-content:center; }
+.mover.show { display:flex; }
+.mbox { background:#fff; border-radius:20px 20px 0 0; width:100%; max-width:480px; animation:su .22s ease-out; }
+@keyframes su { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.mh { display:flex; align-items:center; justify-content:space-between; padding:8px 16px 12px; border-bottom:1.5px solid var(--border); }
+.mht { font-size:15px; font-weight:800; color:var(--ng); }
+.mcl { width:28px; height:28px; border-radius:50%; border:none; background:#f1f5f9; color:#64748b; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.mb  { padding:14px 16px 8px; }
+.mftr { display:flex; gap:8px; padding:12px 16px; border-bottom:1.5px solid var(--border); }
+.mftr .btn { flex:1; }
+.mhand { width:36px; height:4px; background:#e2e8f0; border-radius:2px; margin:10px auto 6px; }
 
-/* ── 반응형 ── */
-@media (max-width: 480px) {
-  .model-info-grid { grid-template-columns: 1fr; }
-  .judge-row .btn-ok, .judge-row .btn-ng { font-size: 15px; padding: 15px; }
-  .ng-reason-grid { grid-template-columns: 1fr; }
-}
+.nggrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.ngbtn  { padding:13px 10px; border:2px solid var(--border); border-radius:9px; background:#fff; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; text-align:center; transition:all .15s; }
+.ngbtn:hover { border-color:var(--ng); background:var(--ng-l); color:var(--ng-d); }
+.ngbtn.sel   { border-color:var(--ng); background:var(--ng-l); color:var(--ng-d); }
+
+.fg { margin-bottom:10px; }
+.fg label { display:block; font-size:11px; font-weight:700; color:var(--text-s); margin-bottom:4px; }
+.fg select, .fg input, .fg textarea { width:100%; padding:9px 11px; border:2px solid var(--border); border-radius:9px; font-size:13px; font-family:inherit; outline:none; transition:border-color .2s; }
+.fg select:focus, .fg input:focus, .fg textarea:focus { border-color:var(--pri-m); }
+.fg textarea { resize:vertical; min-height:72px; }
+
+/* 토스트 */
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,.9); color:#fff; padding:9px 20px; border-radius:22px; font-size:12px; font-weight:700; z-index:10001; opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap; max-width:90vw; }
+.toast.show { opacity:1; }
 </style>
 </head>
 <body>
 
-<!-- ══ 로그인 ══ -->
-<div id="loginOverlay">
-  <div class="login-box">
-    <div class="login-logo">SMERP · MFG</div>
-    <div class="login-title">LOT 추적</div>
-    <div class="login-sub">피더 세팅 체크 · 부품 교환 체크</div>
-    <input type="password" id="pwInput" placeholder="••••" maxlength="6"
-      onkeydown="if(event.key==='Enter') doLogin()">
-    <button class="login-btn" onclick="doLogin()">로그인</button>
-    <div class="login-err" id="loginErr"></div>
+<!-- 로그인 -->
+<div id="lo">
+  <div class="lbox">
+    <div class="llogo">SMERP · MFG</div>
+    <div class="ltit">LOT 추적</div>
+    <div class="lsub">피더 세팅 체크 · 부품 교환 체크</div>
+    <input type="password" id="pwInput" placeholder="••••" maxlength="6" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="lbtn" onclick="doLogin()">로그인</button>
+    <div class="lerr" id="loginErr"></div>
   </div>
 </div>
 
-<!-- ══ 헤더 ══ -->
+<!-- 헤더 -->
 <div class="hdr">
-  <div class="hdr-left">
-    <span class="hdr-badge">MFG · LOT</span>
-    <div>
-      <div class="hdr-title">LOT 추적 프로세스</div>
-      <div class="hdr-sub">피더 세팅 체크 · 부품 교환 체크</div>
-    </div>
+  <div class="hdr-l">
+    <span class="hbadge">MFG · LOT</span>
+    <div><div class="htit">LOT 추적 프로세스</div><div class="hsub">피더 세팅 체크 · 부품 교환 체크</div></div>
   </div>
-  <div class="hdr-right">
-    <span class="hdr-operator" id="hdrOperator" style="display:none"></span>
-    <button class="hdr-logout" onclick="location.href='../index.html'">🏠 홈</button>
-    <button class="hdr-logout" onclick="doLogout()">로그아웃</button>
+  <div class="hdr-r">
+    <span class="hop" id="hdrOp" style="display:none"></span>
+    <button class="hbtn" onclick="location.href='../index.html'">🏠 홈</button>
+    <button class="hbtn" onclick="doLogout()">로그아웃</button>
   </div>
 </div>
 
-<!-- ══ 탭 ══ -->
+<!-- 탭 -->
 <div class="tabs">
-  <div class="tab on" onclick="showTab('feeder')" id="tab_feeder">
-    <span class="ti">🔍</span>피더 세팅<br>체크
-  </div>
-  <div class="tab" onclick="showTab('reel')" id="tab_reel">
-    <span class="ti">🔄</span>부품 교환<br>체크
-  </div>
-  <div class="tab" onclick="showTab('history')" id="tab_history">
-    <span class="ti">📋</span>체크 이력
-  </div>
-  <div class="tab" onclick="showTab('sound')" id="tab_sound">
-    <span class="ti">🔊</span>소리<br>설정
-  </div>
+  <div class="tab on" onclick="showTab('fc')" id="tab_fc"><span class="ti">🔍</span>피더 세팅 체크</div>
+  <div class="tab"    onclick="showTab('rc')" id="tab_rc"><span class="ti">🔄</span>부품 교환 체크</div>
+  <div class="tab"    onclick="showTab('hi')" id="tab_hi"><span class="ti">📋</span>체크 이력</div>
+  <div class="tab"    onclick="showTab('sn')" id="tab_sn"><span class="ti">🔊</span>소리 설정</div>
 </div>
 
-<!-- ══════════════════════════════
+<!-- ════════════════════════════════
      탭1: 피더 세팅 체크
-══════════════════════════════ -->
-<div class="pnl on" id="pnl_feeder">
+════════════════════════════════ -->
+<div class="pnl on" id="pnl_fc">
+  <div class="split">
 
-  <!-- 작업자 선택 -->
-  <div class="op-bar">
-    <label>👤 작업자</label>
-    <select class="op-select" id="fc_operator">
-      <option value="">선택하세요</option>
-    </select>
-  </div>
-
-  <!-- STEP 1: 작업지시 스캔 -->
-  <div class="card">
-    <div class="card-hdr">
-      <span style="background:var(--primary);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">1</span>
-      작업지시 스캔
-    </div>
-    <div class="card-body">
-      <div class="scan-wrap">
-        <div class="scan-label">
-          <span>작업지시 바코드</span>
-          <span class="req">*</span>
-          <span style="color:var(--text-xs);font-size:11px">예: EBR370406_04_TOP</span>
-        </div>
-        <input type="text" class="scan-input" id="fc_barcode"
-          placeholder="바코드 스캔 또는 직접 입력"
-          style="font-size:18px; text-transform:uppercase"
-          onkeydown="if(event.key==='Enter') confirmBarcode()"
-          oninput="this.value=this.value.toUpperCase()">
-      </div>
-
-      <!-- 모델 드롭다운 선택 -->
-      <div style="text-align:center; color:var(--text-s); font-size:12px; margin: 8px 0">— 또는 모델 선택 —</div>
-      <div style="display:flex; gap:8px; margin-bottom:12px;">
-        <select id="fc_lineSelect" onchange="loadModelDropdown()" style="flex:1; padding:10px; border:2px solid var(--border); border-radius:10px; font-size:13px; font-family:inherit; outline:none;">
-          <option value="">라인 선택</option>
-          <option>1라인</option><option>2라인</option><option>3라인</option>
-        </select>
-        <select id="fc_modelSelect" style="flex:2; padding:10px; border:2px solid var(--border); border-radius:10px; font-size:13px; font-family:inherit; outline:none;" onchange="selectModelFromDropdown()">
-          <option value="">모델 선택</option>
-        </select>
-      </div>
-
-      <button class="btn btn-primary" onclick="confirmBarcode()" style="width:100%; padding:14px; font-size:15px;">
-        🔍 모델 확인
-      </button>
-    </div>
-  </div>
-
-  <!-- STEP 2: 모델 정보 + 피더 목록 -->
-  <div id="fc_step2" style="display:none">
-
-    <!-- 모델 정보 -->
-    <div class="model-box">
-      <div class="model-box-title">📌 작업 모델 정보</div>
-      <div class="model-info-grid">
-        <div class="model-info-item">
-          <div class="model-info-label">작업지시 바코드</div>
-          <div class="model-info-value" id="fc_info_barcode">-</div>
-        </div>
-        <div class="model-info-item">
-          <div class="model-info-label">면구분</div>
-          <div class="model-info-value" id="fc_info_face">-</div>
-        </div>
-        <div class="model-info-item">
-          <div class="model-info-label">라인</div>
-          <div class="model-info-value" id="fc_info_line">-</div>
-        </div>
-        <div class="model-info-item">
-          <div class="model-info-label">설비프로그램명</div>
-          <div class="model-info-value" id="fc_info_program">-</div>
+    <!-- 좌측: 스캔 입력 + 피더 목록 -->
+    <div class="panel">
+      <div class="phdr">
+        📥 스캔 입력
+        <div class="btn-row">
+          <button class="btn btn-gray btn-sm" onclick="skipFc()">⏭ 스킵</button>
+          <button class="btn btn-gray btn-sm" onclick="resetFc()">🔄 초기화</button>
         </div>
       </div>
-    </div>
+      <div class="pbody">
 
-    <!-- 진행 현황 -->
-    <div class="progress-section">
-      <div class="progress-header">
-        <span class="progress-title">피더 체크 진행현황</span>
-        <span class="progress-count" id="fc_progressCount">0 / 0</span>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" id="fc_progressFill" style="width:0%"></div>
-      </div>
-      <div class="progress-stats">
-        <div class="p-stat"><div class="p-dot" style="background:var(--ok)"></div><span id="fc_okCount" style="color:var(--ok)">OK 0</span></div>
-        <div class="p-stat"><div class="p-dot" style="background:var(--ng)"></div><span id="fc_ngCount" style="color:var(--ng)">NG 0</span></div>
-        <div class="p-stat"><div class="p-dot" style="background:#e2e8f0"></div><span style="color:var(--text-s)" id="fc_remainCount">대기 0</span></div>
+        <!-- 작업자 -->
+        <div class="op-row">
+          <label>👤 작업자</label>
+          <select class="op-sel" id="fc_op"></select>
+        </div>
+
+        <!-- ① 작업지시 스캔 -->
+        <div class="sg">
+          <div class="sl"><span class="dot act" id="fd1"></span>① 작업지시 바코드 스캔</div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <select id="fc_ldrop" onchange="loadFcModels()" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;outline:none;">
+              <option value="">라인</option><option>1라인</option><option>2라인</option><option>3라인</option>
+            </select>
+            <select id="fc_mdrop" onchange="selectFcModel()" style="flex:2;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;outline:none;">
+              <option value="">모델 선택</option>
+            </select>
+          </div>
+          <input type="text" class="sinp active" id="fc_bc" placeholder="EBR370406_04_TOP" style="text-transform:uppercase;font-size:15px;" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmFcBc()">
+          <div class="rdisp empty" id="fc_r1">스캔 대기 중...</div>
+          <button class="btn btn-pri" onclick="confirmFcBc()" style="width:100%;padding:10px;font-size:13px;margin-top:6px;">🔍 모델 확인</button>
+        </div>
+
+        <!-- 모델 정보 -->
+        <div class="minfo" id="fc_minfo" style="display:none">
+          <div class="mgrid">
+            <div><div class="ml">모델</div><div class="mv" id="fc_mi_bc">-</div></div>
+            <div><div class="ml">면구분</div><div class="mv" id="fc_mi_face">-</div></div>
+            <div><div class="ml">라인</div><div class="mv" id="fc_mi_line">-</div></div>
+            <div><div class="ml">설비프로그램</div><div class="mv" id="fc_mi_prog">-</div></div>
+          </div>
+        </div>
+
+        <!-- ② ST No 스캔 -->
+        <div class="sg" id="fc_stGrp" style="display:none">
+          <div class="sl"><span class="dot" id="fd2"></span>② ST No 바코드 스캔</div>
+          <input type="text" class="sinp" id="fc_st" placeholder="M1-F-12L" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmFcSt()">
+          <div class="rdisp empty" id="fc_r2">ST No 대기 중...</div>
+        </div>
+
+        <!-- 진행현황 -->
+        <div class="psec" id="fc_psec" style="display:none">
+          <div class="phd"><span class="pt">진행현황</span><span class="pc" id="fc_pc">0/0</span></div>
+          <div class="pbar"><div class="pfil" id="fc_pf" style="width:0%"></div></div>
+          <div class="pst">
+            <div class="psi"><div class="pd" style="background:var(--ok)"></div><span id="fc_ok" style="color:var(--ok)">OK 0</span></div>
+            <div class="psi"><div class="pd" style="background:var(--ng)"></div><span id="fc_ng" style="color:var(--ng)">NG 0</span></div>
+            <div class="psi"><div class="pd" style="background:#e2e8f0"></div><span id="fc_wt" style="color:var(--text-s)">대기 0</span></div>
+          </div>
+        </div>
+
+        <!-- 피더 목록 -->
+        <div id="fc_fSec" style="display:none">
+          <div style="font-size:11px;font-weight:800;color:var(--text-s);margin-bottom:6px;">피더 목록</div>
+          <div class="flist" id="fc_flist"></div>
+        </div>
+
       </div>
     </div>
 
-    <!-- 현재 체크 피더 -->
-    <div class="check-box" id="fc_checkBox">
-      <div class="check-box-title">⚡ 현재 체크 피더</div>
-      <div class="check-feeder-no" id="fc_curFeeder">-</div>
-      <div class="check-pn" id="fc_curPn">LG품번: -</div>
-      <div class="check-pn" id="fc_curMkrPn" style="color:var(--text-xs)">메이커품번: -</div>
-
-      <!-- 릴 바코드 스캔 -->
-      <div class="scan-wrap" style="margin-top:14px">
-        <div class="scan-label">🏷️ 릴 바코드 스캔</div>
-        <input type="text" class="scan-input active" id="fc_relScan"
-          placeholder="릴 바코드 스캔..."
-          style="font-size:16px"
-          onkeydown="if(event.key==='Enter') checkReel()">
+    <!-- 우측: 릴 체크 -->
+    <div class="cpanel" id="fc_cpanel">
+      <div class="cphdr">
+        <span class="cptit">⚡ 릴 바코드 체크</span>
+        <span id="fc_judgeStatus" style="font-size:12px;font-weight:700;color:var(--text-s)">대기중</span>
       </div>
+      <div class="cpbody">
 
-      <!-- LOT / 수량 자동 표시 -->
-      <div id="fc_relInfo" style="display:none; margin-top:8px; padding:10px 12px; background:#fff; border-radius:10px; border:1.5px solid var(--border);">
-        <div style="font-size:11px; color:var(--text-s); font-weight:700; margin-bottom:4px">스캔 정보</div>
-        <div style="font-family:var(--mono); font-size:12px; color:var(--primary)" id="fc_relLot"></div>
-      </div>
-
-      <!-- 판정 버튼 -->
-      <div class="judge-row">
-        <button class="btn-ok" onclick="judgeOK()">✅ OK</button>
-        <button class="btn-ng" onclick="openNGModal()">❌ NG</button>
-      </div>
-
-      <!-- 스킵 / 초기화 -->
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        <button class="btn btn-gray btn-sm" onclick="skipFeeder()" style="flex:1">⏭ 스킵</button>
-        <button class="btn btn-gray btn-sm" onclick="resetCheck()" style="flex:1">🔄 처음부터</button>
-      </div>
-    </div>
-
-    <!-- 피더 목록 -->
-    <div class="card">
-      <div class="card-hdr">🗺️ 피더 목록</div>
-      <div class="card-body" style="padding:10px">
-        <div class="feeder-list" id="fc_feederList">
-          <div class="empty"><div class="es">피더 데이터 로딩 중...</div></div>
+        <!-- 현재 피더 정보 -->
+        <div class="cbox" id="fc_cbox">
+          <div class="cstno" id="fc_cst">대기 중</div>
+          <div class="clgpn" id="fc_clg">모델을 먼저 선택하세요</div>
+          <div class="cmkrpn" id="fc_cmk"></div>
+          <div class="cqty" id="fc_cqt"></div>
         </div>
+
+        <!-- ③ 릴 바코드 4개 스캔 -->
+        <div class="sg" id="fc_relGrp" style="display:none">
+          <div class="sl"><span class="dot" id="fd3"></span>③ 릴 바코드 스캔 (최대 4개)</div>
+          <input type="text" class="sinp" id="fc_rel" placeholder="릴 바코드 스캔..." onkeydown="if(event.key==='Enter')addRelScan()">
+
+          <!-- 4개 스캔 결과 박스 -->
+          <div class="scan4" style="margin-top:8px;">
+            <div class="s4box empty" id="fc_s4_0"><div class="s4lbl">스캔 1</div><div class="s4val empty" id="fc_sv_0">대기 중...</div></div>
+            <div class="s4box empty" id="fc_s4_1"><div class="s4lbl">스캔 2</div><div class="s4val empty" id="fc_sv_1">-</div></div>
+            <div class="s4box empty" id="fc_s4_2"><div class="s4lbl">스캔 3</div><div class="s4val empty" id="fc_sv_2">-</div></div>
+            <div class="s4box empty" id="fc_s4_3"><div class="s4lbl">스캔 4</div><div class="s4val empty" id="fc_sv_3">-</div></div>
+          </div>
+        </div>
+
+        <!-- 결과 종합 -->
+        <div class="result-summary" id="fc_summary">
+          <div class="rs-title" id="fc_sum_title"></div>
+          <div class="rs-grid">
+            <div class="rs-item"><div class="rs-lbl">품번</div><div class="rs-val" id="fc_sum_pn">-</div></div>
+            <div class="rs-item"><div class="rs-lbl">LOT</div><div class="rs-val" id="fc_sum_lot">-</div></div>
+            <div class="rs-item"><div class="rs-lbl">소요량</div><div class="rs-val" id="fc_sum_qty">-</div></div>
+          </div>
+        </div>
+
+        <!-- 판정 버튼 -->
+        <div class="judge-row">
+          <button class="jbtn-ok inactive" id="fc_btnOK" onclick="judgeOK()">✅ &nbsp; OK</button>
+          <button class="jbtn-ng inactive" id="fc_btnNG" onclick="openNGModal()">❌ &nbsp; NG</button>
+        </div>
+
       </div>
     </div>
+
   </div>
 </div>
 
-<!-- ══════════════════════════════
+<!-- ════════════════════════════════
      탭2: 부품 교환 체크
-══════════════════════════════ -->
-<div class="pnl" id="pnl_reel">
+════════════════════════════════ -->
+<div class="pnl" id="pnl_rc">
+  <div class="split">
 
-  <!-- 작업자 선택 -->
-  <div class="op-bar">
-    <label>👤 작업자</label>
-    <select class="op-select" id="rc_operator">
-      <option value="">선택하세요</option>
-    </select>
-  </div>
+    <!-- 좌측: 스캔 입력 -->
+    <div class="panel">
+      <div class="phdr">📥 스캔 입력</div>
+      <div class="pbody">
 
-  <div class="card">
-    <div class="card-hdr">🔄 부품 교환 체크</div>
-    <div class="card-body">
-
-      <!-- 라인 + 피더 선택 -->
-      <div class="fg">
-        <label>라인 선택 *</label>
-        <select id="rc_line" onchange="loadReelFeeders()">
-          <option value="">선택하세요</option>
-          <option>1라인</option><option>2라인</option><option>3라인</option>
-        </select>
-      </div>
-
-      <div class="fg">
-        <label>피더 번호 선택 *</label>
-        <select id="rc_feeder" onchange="selectReelFeeder()">
-          <option value="">라인 먼저 선택하세요</option>
-        </select>
-      </div>
-
-      <!-- 선택된 피더 정보 -->
-      <div id="rc_feederInfo" style="display:none; margin-bottom:14px;">
-        <div style="background:var(--primary-l); border:1.5px solid #bfdbfe; border-radius:10px; padding:12px 14px;">
-          <div style="font-size:11px; color:var(--text-s); font-weight:700; margin-bottom:6px">피더 기준 정보</div>
-          <div style="font-family:var(--mono); font-size:14px; font-weight:700; color:var(--primary)" id="rc_feederPn">-</div>
-          <div style="font-family:var(--mono); font-size:11px; color:var(--text-s); margin-top:3px" id="rc_feederMkrPn">-</div>
+        <!-- 작업자 -->
+        <div class="op-row">
+          <label>👤 작업자</label>
+          <select class="op-sel" id="rc_op"></select>
         </div>
-      </div>
 
-      <!-- STEP 1: 기존 릴 스캔 -->
-      <div class="scan-wrap">
-        <div class="scan-label">
-          <span style="background:var(--text-s);color:#fff;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">1</span>
-          기존 릴 바코드 스캔
+        <!-- 라인 선택 -->
+        <div class="fg">
+          <label>라인 선택 *</label>
+          <select id="rc_line" onchange="loadRcFeeders()">
+            <option value="">선택하세요</option>
+            <option>1라인</option><option>2라인</option><option>3라인</option>
+          </select>
         </div>
-        <input type="text" class="scan-input" id="rc_oldScan"
-          placeholder="기존 릴 바코드 스캔..."
-          onkeydown="if(event.key==='Enter') scanOldReel()">
-        <button class="scan-clear" onclick="document.getElementById('rc_oldScan').value=''; document.getElementById('rc_oldScan').className='scan-input'">✕</button>
-      </div>
 
-      <!-- STEP 2: 신규 릴 스캔 -->
-      <div class="scan-wrap">
-        <div class="scan-label">
-          <span style="background:var(--text-s);color:#fff;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">2</span>
-          신규 릴 바코드 스캔
+        <!-- ① ST No 스캔 -->
+        <div class="sg">
+          <div class="sl"><span class="dot act" id="rd1"></span>① ST No 바코드 스캔</div>
+          <div style="margin-bottom:6px;">
+            <select id="rc_fdrop" onchange="selectRcFeeder()" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;outline:none;">
+              <option value="">— 드롭다운 선택 —</option>
+            </select>
+          </div>
+          <input type="text" class="sinp active" id="rc_st" placeholder="M1-F-12L" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmRcSt()">
+          <div class="rdisp empty" id="rc_r1">ST No 대기 중...</div>
         </div>
-        <input type="text" class="scan-input" id="rc_newScan"
-          placeholder="신규 릴 바코드 스캔..."
-          onkeydown="if(event.key==='Enter') scanNewReel()">
-        <button class="scan-clear" onclick="document.getElementById('rc_newScan').value=''; document.getElementById('rc_newScan').className='scan-input'">✕</button>
-      </div>
 
-      <!-- 판정 결과 -->
-      <div id="rc_result" style="display:none">
-        <div class="status-display" id="rc_statusDisplay">
-          <div class="status-icon" id="rc_statusIcon">-</div>
-          <div class="status-text" id="rc_statusText">-</div>
-          <div class="status-sub" id="rc_statusSub">-</div>
+        <!-- ② 기존 릴 (최대 4개) -->
+        <div class="sg">
+          <div class="sl"><span class="dot" id="rd2"></span>② 기존 릴 바코드 스캔 (최대 4개)</div>
+          <input type="text" class="sinp" id="rc_old" placeholder="기존 릴 바코드..." onkeydown="if(event.key==='Enter')addOldScan()">
+          <div class="scan4" style="margin-top:6px;">
+            <div class="s4box empty" id="rc_os4_0"><div class="s4lbl">스캔 1</div><div class="s4val empty" id="rc_osv_0">대기...</div></div>
+            <div class="s4box empty" id="rc_os4_1"><div class="s4lbl">스캔 2</div><div class="s4val empty" id="rc_osv_1">-</div></div>
+            <div class="s4box empty" id="rc_os4_2"><div class="s4lbl">스캔 3</div><div class="s4val empty" id="rc_osv_2">-</div></div>
+            <div class="s4box empty" id="rc_os4_3"><div class="s4lbl">스캔 4</div><div class="s4val empty" id="rc_osv_3">-</div></div>
+          </div>
+          <div class="rdisp empty" id="rc_r2" style="margin-top:6px;">기존 릴 스캔 대기 중...</div>
         </div>
-      </div>
 
-      <!-- 교환 실행 버튼 -->
-      <div class="judge-row">
-        <button class="btn-ok" onclick="doReelChange()" id="rc_confirmBtn" style="display:none">
-          ✅ 교환 완료 등록
-        </button>
-      </div>
+        <!-- ③ 신규 릴 (최대 4개) -->
+        <div class="sg">
+          <div class="sl"><span class="dot" id="rd3"></span>③ 신규 릴 바코드 스캔 (최대 4개)</div>
+          <input type="text" class="sinp" id="rc_new" placeholder="신규 릴 바코드..." onkeydown="if(event.key==='Enter')addNewScan()">
+          <div class="scan4" style="margin-top:6px;">
+            <div class="s4box empty" id="rc_ns4_0"><div class="s4lbl">스캔 1</div><div class="s4val empty" id="rc_nsv_0">대기...</div></div>
+            <div class="s4box empty" id="rc_ns4_1"><div class="s4lbl">스캔 2</div><div class="s4val empty" id="rc_nsv_1">-</div></div>
+            <div class="s4box empty" id="rc_ns4_2"><div class="s4lbl">스캔 3</div><div class="s4val empty" id="rc_nsv_2">-</div></div>
+            <div class="s4box empty" id="rc_ns4_3"><div class="s4lbl">스캔 4</div><div class="s4val empty" id="rc_nsv_3">-</div></div>
+          </div>
+          <div class="rdisp empty" id="rc_r3" style="margin-top:6px;">신규 릴 스캔 대기 중...</div>
+        </div>
 
-      <button class="btn btn-gray" onclick="resetReelCheck()" style="width:100%; margin-top:10px;">
-        🔄 초기화
-      </button>
+        <button class="btn btn-gray" onclick="resetRc()" style="width:100%;margin-top:6px;">🔄 초기화</button>
+      </div>
     </div>
+
+    <!-- 우측: 피더 정보 + 결과 -->
+    <div class="cpanel" id="rc_cpanel">
+      <div class="cphdr">
+        <span class="cptit">🔄 부품 교환 정보</span>
+        <span id="rc_judgeStatus" style="font-size:12px;font-weight:700;color:var(--text-s)">대기중</span>
+      </div>
+      <div class="cpbody">
+
+        <!-- 피더 기준 정보 -->
+        <div class="cbox" id="rc_cbox">
+          <div class="cstno" id="rc_cst">대기 중</div>
+          <div class="clgpn" id="rc_clg">ST No를 먼저 스캔하세요</div>
+          <div class="cmkrpn" id="rc_cmk"></div>
+        </div>
+
+        <!-- 기존 릴 결과 -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:800;color:var(--text-s);margin-bottom:6px;">📦 기존 릴 확인</div>
+          <div class="result-summary" id="rc_old_summary" style="display:none;">
+            <div class="rs-title" id="rc_old_title"></div>
+            <div class="rs-grid">
+              <div class="rs-item" style="grid-column:1/-1"><div class="rs-lbl">품번 일치 여부</div><div class="rs-val" id="rc_old_pn">-</div></div>
+            </div>
+          </div>
+          <div class="rdisp empty" id="rc_old_placeholder">기존 릴 스캔 후 결과 표시</div>
+        </div>
+
+        <!-- 신규 릴 결과 -->
+        <div>
+          <div style="font-size:11px;font-weight:800;color:var(--text-s);margin-bottom:6px;">🆕 신규 릴 확인</div>
+          <div class="result-summary" id="rc_new_summary" style="display:none;">
+            <div class="rs-title" id="rc_new_title"></div>
+            <div class="rs-grid">
+              <div class="rs-item"><div class="rs-lbl">품번</div><div class="rs-val" id="rc_new_pn">-</div></div>
+              <div class="rs-item"><div class="rs-lbl">LOT</div><div class="rs-val" id="rc_new_lot">-</div></div>
+              <div class="rs-item"><div class="rs-lbl">소요량(BOM)</div><div class="rs-val" id="rc_new_qty">-</div></div>
+            </div>
+          </div>
+          <div class="rdisp empty" id="rc_new_placeholder">신규 릴 스캔 후 결과 표시</div>
+        </div>
+
+        <!-- 교환 완료 버튼 -->
+        <button class="confirm-btn" id="rc_confirmBtn" onclick="doReelChange()">✅ &nbsp; 교환 완료 등록</button>
+
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- ══════════════════════════════
-     탭3: 체크 이력
-══════════════════════════════ -->
-<div class="pnl" id="pnl_history">
-
-  <div class="card">
-    <div class="card-hdr">📋 체크 이력 조회</div>
-    <div class="card-body">
-
-      <div class="filter-row">
-        <input type="date" id="hist_date" onchange="loadHistory()">
-        <select id="hist_line" onchange="loadHistory()">
-          <option value="">전체 라인</option>
-          <option>1라인</option><option>2라인</option><option>3라인</option>
-        </select>
-        <select id="hist_type" onchange="loadHistory()">
-          <option value="">전체</option>
-          <option value="feeder">피더 체크</option>
-          <option value="reel">부품 교환</option>
-        </select>
-        <select id="hist_result" onchange="loadHistory()">
-          <option value="">전체</option>
-          <option value="OK">OK</option>
-          <option value="NG">NG</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="exportHistory()">📥 엑셀</button>
-      </div>
-
-      <!-- 피더 체크 이력 -->
-      <div id="hist_feederSection">
-        <div style="font-size:13px; font-weight:800; color:var(--primary); margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--border)">
-          🔍 피더 세팅 체크 이력
-        </div>
-        <div class="tbl-wrap" style="margin-bottom:16px;">
-          <table>
-            <thead>
-              <tr>
-                <th>일시</th>
-                <th>라인</th>
-                <th>작업지시</th>
-                <th>피더No</th>
-                <th>LG품번</th>
-                <th>LOT</th>
-                <th>결과</th>
-                <th>NG사유</th>
-                <th>작업자</th>
-              </tr>
-            </thead>
-            <tbody id="hist_feederTbody">
-              <tr><td colspan="9" style="text-align:center;padding:24px;color:#bbb">조회하세요</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 부품 교환 이력 -->
-      <div id="hist_reelSection">
-        <div style="font-size:13px; font-weight:800; color:var(--primary); margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--border)">
-          🔄 부품 교환 체크 이력
-        </div>
-        <div class="tbl-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>일시</th>
-                <th>라인</th>
-                <th>피더No</th>
-                <th>LG품번</th>
-                <th>기존LOT</th>
-                <th>신규LOT</th>
-                <th>결과</th>
-                <th>작업자</th>
-              </tr>
-            </thead>
-            <tbody id="hist_reelTbody">
-              <tr><td colspan="8" style="text-align:center;padding:24px;color:#bbb">조회하세요</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+<!-- ════════════════════════════════
+     탭3: 이력 / 탭4: 소리
+════════════════════════════════ -->
+<div class="pnl sc" id="pnl_hi" style="padding:12px;height:calc(100vh - 104px);">
+  <div style="background:var(--surf);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px;">
+    <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--border);">📋 체크 이력</div>
+    <div class="frow">
+      <input type="date" id="hi_date" onchange="loadHist()">
+      <select id="hi_line" onchange="loadHist()"><option value="">전체 라인</option><option>1라인</option><option>2라인</option><option>3라인</option></select>
+      <select id="hi_type" onchange="loadHist()"><option value="">전체</option><option value="f">피더체크</option><option value="r">부품교환</option></select>
+      <select id="hi_res" onchange="loadHist()"><option value="">전체</option><option value="OK">OK</option><option value="NG">NG</option></select>
+      <button class="btn btn-pri btn-sm" onclick="exportHist()">📥 엑셀</button>
     </div>
+    <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:8px;">🔍 피더 세팅 체크</div>
+    <div class="tw"><table><thead><tr><th>일시</th><th>라인</th><th>작업지시</th><th>피더No</th><th>LG품번</th><th>LOT</th><th>결과</th><th>NG사유</th><th>작업자</th></tr></thead><tbody id="hi_f"></tbody></table></div>
+    <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:8px;margin-top:14px;">🔄 부품 교환</div>
+    <div class="tw"><table><thead><tr><th>일시</th><th>라인</th><th>피더No</th><th>LG품번</th><th>기존LOT</th><th>신규LOT</th><th>결과</th><th>작업자</th></tr></thead><tbody id="hi_r"></tbody></table></div>
   </div>
 </div>
 
-<!-- ══════════════════════════════
-     탭4: 소리 설정
-══════════════════════════════ -->
-<div class="pnl" id="pnl_sound">
-  <div class="card">
-    <div class="card-hdr">🔊 소리 설정</div>
-    <div class="card-body">
-
-      <div class="sound-setting">
-        <div class="sound-setting-title">🎵 판정 소리 선택</div>
-
-        <div class="sound-row">
-          <span class="sound-label" style="color:var(--ok)">✅ OK</span>
-          <select class="sound-select" id="snd_ok">
-            <option value="ok1">삐삐 — 높은음 2번 (기본)</option>
-            <option value="ok2">삐~ — 높은음 1번 길게</option>
-            <option value="ok3">삐삐삐 — 높은음 3번</option>
-            <option value="ok4">딩동 — 2음계 상승</option>
-          </select>
-          <button class="sound-preview" onclick="playSound('ok')">▶</button>
-        </div>
-
-        <div class="sound-row">
-          <span class="sound-label" style="color:var(--ng)">❌ NG</span>
-          <select class="sound-select" id="snd_ng">
-            <option value="ng1">부~~ — 낮은음 길게 (기본)</option>
-            <option value="ng2">부부부부 — 낮은음 4번</option>
-            <option value="ng3">부부 — 낮은음 2번</option>
-            <option value="ng4">경보음 — 낮은음 떨림</option>
-          </select>
-          <button class="sound-preview" onclick="playSound('ng')">▶</button>
-        </div>
-
-        <div class="sound-row">
-          <span class="sound-label" style="color:var(--primary)">🔔 등록</span>
-          <select class="sound-select" id="snd_done">
-            <option value="done1">딩 — 중간음 짧게 (기본)</option>
-            <option value="done2">삐 — 높은음 짧게</option>
-            <option value="done3">딩동 — 2음계</option>
-          </select>
-          <button class="sound-preview" onclick="playSound('done')">▶</button>
-        </div>
-      </div>
-
-      <!-- 볼륨 -->
-      <div class="sound-setting">
-        <div class="sound-setting-title">🔈 볼륨</div>
-        <div style="display:flex; align-items:center; gap:12px;">
-          <span style="font-size:16px">🔈</span>
-          <input type="range" id="snd_vol" min="0" max="1" step="0.1" value="0.8"
-            style="flex:1; accent-color:var(--primary)">
-          <span style="font-size:16px">🔊</span>
-          <span id="snd_volPct" style="font-family:var(--mono); font-size:13px; font-weight:700; color:var(--primary); min-width:36px">80%</span>
-        </div>
-      </div>
-
-      <!-- 테스트 -->
-      <div class="sound-setting">
-        <div class="sound-setting-title">🧪 소리 테스트</div>
-        <div style="display:flex; gap:10px;">
-          <button class="btn btn-ok" onclick="playSound('ok')" style="flex:1; padding:14px; font-size:14px;">✅ OK 테스트</button>
-          <button class="btn btn-ng" onclick="playSound('ng')" style="flex:1; padding:14px; font-size:14px;">❌ NG 테스트</button>
-          <button class="btn btn-primary" onclick="playSound('done')" style="flex:1; padding:14px; font-size:14px;">🔔 등록 테스트</button>
-        </div>
-      </div>
-
-      <button class="btn btn-primary" onclick="saveSoundSettings()" style="width:100%; padding:14px; font-size:15px; margin-top:4px;">
-        💾 설정 저장
-      </button>
+<div class="pnl sc" id="pnl_sn" style="padding:12px;height:calc(100vh - 104px);">
+  <div style="background:var(--surf);border-radius:var(--r);box-shadow:var(--sh);padding:16px;max-width:480px;">
+    <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--border);">🔊 소리 설정</div>
+    <div class="sc-card"><div class="sc-tit">🎵 판정 소리</div>
+      <div class="sc-row"><span class="sc-lbl" style="color:var(--ok)">✅ OK</span><select class="sc-sel" id="snd_ok"><option value="ok1">삐삐 — 높은음 2번</option><option value="ok2">삐~ — 길게</option><option value="ok3">삐삐삐 — 3번</option><option value="ok4">딩동 — 상승</option></select><button class="sc-prev" onclick="playSound('ok')">▶</button></div>
+      <div class="sc-row"><span class="sc-lbl" style="color:var(--ng)">❌ NG</span><select class="sc-sel" id="snd_ng"><option value="ng1">부~~ — 낮게 길게</option><option value="ng2">부부부부 — 4번</option><option value="ng3">부부 — 2번</option><option value="ng4">경보음</option></select><button class="sc-prev" onclick="playSound('ng')">▶</button></div>
+      <div class="sc-row"><span class="sc-lbl" style="color:var(--pri)">🔔 등록</span><select class="sc-sel" id="snd_done"><option value="d1">딩 — 짧게</option><option value="d2">삐 — 짧게</option><option value="d3">딩동</option></select><button class="sc-prev" onclick="playSound('done')">▶</button></div>
     </div>
+    <div class="sc-card"><div class="sc-tit">🔈 볼륨</div>
+      <div style="display:flex;align-items:center;gap:10px;"><span>🔈</span><input type="range" id="snd_vol" min="0" max="1" step="0.1" value="0.8" style="flex:1;accent-color:var(--pri)" oninput="document.getElementById('svp').textContent=Math.round(this.value*100)+'%'"><span>🔊</span><span id="svp" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--pri);min-width:36px">80%</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+      <button style="padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:13px;font-weight:800;cursor:pointer;" onclick="playSound('ok')">✅ OK</button>
+      <button style="padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-size:13px;font-weight:800;cursor:pointer;" onclick="playSound('ng')">❌ NG</button>
+      <button class="btn btn-pri" style="padding:12px;font-size:13px;" onclick="playSound('done')">🔔 등록</button>
+    </div>
+    <button class="btn btn-pri" onclick="saveSnd()" style="width:100%;padding:13px;font-size:14px;">💾 저장</button>
   </div>
 </div>
 
-<!-- ══ NG 사유 모달 ══ -->
-<div class="modal-overlay" id="ngModal">
-  <div class="modal-box">
-    <div class="m-handle"></div>
-    <div class="m-hdr">
-      <span class="m-title">❌ NG 사유 입력</span>
-      <button class="m-close" onclick="closeNGModal()">✕</button>
+<!-- NG 사유 모달 -->
+<div class="mover" id="ngModal">
+  <div class="mbox">
+    <div class="mhand"></div>
+    <div class="mh"><span class="mht">❌ NG 사유 선택</span><button class="mcl" onclick="closeNGModal()">✕</button></div>
+    <div class="mb">
+      <div style="font-size:12px;color:var(--text-s);margin-bottom:10px;font-weight:600">피더: <span id="ng_st" style="color:var(--pri);font-family:var(--mono);font-weight:700"></span></div>
+      <div class="nggrid">
+        <button class="ngbtn" onclick="selNG('품번 불일치')">품번 불일치</button>
+        <button class="ngbtn" onclick="selNG('릴 수량 부족')">릴 수량 부족</button>
+        <button class="ngbtn" onclick="selNG('바코드 불량')">바코드 불량</button>
+        <button class="ngbtn" onclick="selNG('부품 파손')">부품 파손</button>
+        <button class="ngbtn" onclick="selNG('미등록 부품')">미등록 부품</button>
+        <button class="ngbtn" onclick="selNG('기타')">기타</button>
+      </div>
+      <div class="fg"><label>상세 사유 (선택)</label><textarea id="ng_det" placeholder="상세 내용..." rows="2"></textarea></div>
     </div>
-    <div class="m-body">
-      <div style="font-size:12px; color:var(--text-s); margin-bottom:10px; font-weight:600">
-        피더: <span id="ng_feederNo" style="color:var(--primary); font-family:var(--mono)"></span>
-      </div>
-
-      <div class="ng-reason-grid">
-        <button class="ng-reason-btn" onclick="selectNGReason('품번 불일치')">품번 불일치</button>
-        <button class="ng-reason-btn" onclick="selectNGReason('릴 수량 부족')">릴 수량 부족</button>
-        <button class="ng-reason-btn" onclick="selectNGReason('바코드 불량')">바코드 불량</button>
-        <button class="ng-reason-btn" onclick="selectNGReason('부품 파손')">부품 파손</button>
-        <button class="ng-reason-btn" onclick="selectNGReason('미등록 부품')">미등록 부품</button>
-        <button class="ng-reason-btn" onclick="selectNGReason('기타')">기타</button>
-      </div>
-
-      <div class="fg">
-        <label>상세 사유 (선택)</label>
-        <textarea id="ng_detail" placeholder="상세 내용을 입력하세요..." rows="3"></textarea>
-      </div>
-    </div>
-    <div class="m-footer">
+    <div class="mftr">
       <button class="btn btn-gray" onclick="closeNGModal()">취소</button>
-      <button class="btn btn-ng" onclick="judgeNG()" style="background:var(--ng);color:#fff;flex:1">NG 확정</button>
+      <button class="btn" onclick="judgeNG()" style="flex:1;background:var(--ng);color:#fff;padding:11px;">NG 확정</button>
     </div>
   </div>
 </div>
 
-<!-- 토스트 -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ══════════════════════════════════
-// Supabase
-// ══════════════════════════════════
+// ── Supabase ──
 const sb = supabase.createClient(
   'https://muxuhrbsbrstmrrvlupw.supabase.co',
   'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb'
 );
 
-// ══════════════════════════════════
-// 전역 상태
-// ══════════════════════════════════
-let _lm   = []; // 라인별 적용모델
-let _pl   = []; // 부품배치도
-let _bom  = []; // BOM
-let _bmModel = []; // BOM 모델별 소요량
+// ── 전역 ──
+let _lm=[], _pl=[], _bom=[], _bm=[];
 
 // 피더 체크 상태
 let _fc = {
-  barcode:  '',
-  face:     '',
-  line:     '',
-  program:  '',
-  feeders:  [], // { st_no, lg_pn, maker_pn1, spec, moq, qty, status:'wait'|'ok'|'ng'|'skip' }
-  curIdx:   0,
-  relScan:  '',
+  barcode:'', face:'', line:'', program:'',
+  feeders:[], curIdx:0,
+  scans:[], // 현재 피더 스캔값 배열 (최대4)
+  matched:false, matchedPn:'', matchedLot:'', matchedQty:0,
 };
 
 // 부품 교환 상태
 let _rc = {
-  line:     '',
-  feeder:   '',
-  lg_pn:    '',
-  maker_pn1:'',
-  oldLot:   '',
-  newLot:   '',
-  oldMkrPn: '',
-  newMkrPn: '',
+  line:'', stno:'', lgPn:'', mkrPn1:'', moq:0,
+  oldScans:[], newScans:[],
+  oldMatched:false, newMatched:false,
+  newLot:'', newPn:'',
 };
 
-// 작업자 목록
-// 작업자 목록 Supabase에서 로드
-async function loadOperatorList() {
-  try {
-    const { data, error } = await sb.from('mfg_operators')
-      .select('name').eq('active','Y').order('name');
-    if (error || !data) return [];
-    return data.map(r => r.name);
-  } catch(e) {
-    console.error('작업자 로드 실패', e);
-    return [];
-  }
-}
-
-// ══════════════════════════════════
-// 로그인
-// ══════════════════════════════════
+// ── 로그인 ──
 function doLogin() {
   const pw = document.getElementById('pwInput').value;
   if (pw === '1120') {
-    localStorage.setItem('sme_auth', '1');
-    document.getElementById('loginOverlay').style.display = 'none';
+    localStorage.setItem('sme_auth','1');
+    document.getElementById('lo').style.display = 'none';
     init();
   } else {
     document.getElementById('loginErr').textContent = '비밀번호가 올바르지 않습니다.';
@@ -980,889 +668,758 @@ function doLogin() {
 }
 function doLogout() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
-  localStorage.removeItem('sme_auth');
-  location.reload();
+  localStorage.removeItem('sme_auth'); location.reload();
 }
 
-// ══════════════════════════════════
-// 탭
-// ══════════════════════════════════
+// ── 탭 ──
 function showTab(name) {
-  document.querySelectorAll('.pnl').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.pnl').forEach(p => { p.classList.remove('on'); p.style.display = 'none'; });
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-  document.getElementById('pnl_' + name).classList.add('on');
+  const p = document.getElementById('pnl_' + name);
+  if (name === 'hi' || name === 'sn') { p.style.display = 'block'; p.classList.add('on'); }
+  else { p.style.display = 'flex'; p.classList.add('on'); }
   document.getElementById('tab_' + name).classList.add('on');
-  if (name === 'history') {
-    const today = new Date();
-    const ds = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-    if (!document.getElementById('hist_date').value)
-      document.getElementById('hist_date').value = ds;
-    loadHistory();
-  }
+  if (name === 'hi') { if (!document.getElementById('hi_date').value) document.getElementById('hi_date').value = today(); loadHist(); }
 }
 
-// ══════════════════════════════════
-// 초기화
-// ══════════════════════════════════
+// ── 초기화 ──
 async function init() {
-  // 작업자 목록 Supabase에서 로드
-  const operators = await loadOperatorList();
-  operators.forEach(op => {
-    ['fc_operator','rc_operator'].forEach(id => {
-      const opt = document.createElement('option');
-      opt.value = opt.textContent = op;
-      document.getElementById(id).appendChild(opt);
+  loadSnd();
+  document.getElementById('snd_vol').addEventListener('input', function() { document.getElementById('svp').textContent = Math.round(this.value*100)+'%'; });
+  document.getElementById('hi_date').value = today();
+  await Promise.all([loadMaster(), loadOps()]);
+  loadFcModels();
+}
+
+async function loadOps() {
+  try {
+    const { data } = await sb.from('mfg_operators').select('name').eq('active','Y').order('name');
+    const ops = data || [];
+    ['fc_op','rc_op'].forEach(id => {
+      const sel = document.getElementById(id);
+      sel.innerHTML = '<option value="">작업자 선택</option>';
+      ops.forEach(r => { const o=document.createElement('option'); o.value=o.textContent=r.name; sel.appendChild(o); });
     });
-  });
-
-  // 저장된 작업자 복원
-  const savedOp = localStorage.getItem('mfg_operator') || '';
-  if (savedOp) {
-    document.getElementById('fc_operator').value = savedOp;
-    document.getElementById('rc_operator').value = savedOp;
-    document.getElementById('hdrOperator').textContent = '👤 ' + savedOp;
-    document.getElementById('hdrOperator').style.display = '';
-  }
-
-  // 작업자 변경 시 저장
-  ['fc_operator','rc_operator'].forEach(id => {
-    document.getElementById(id).addEventListener('change', function() {
-      localStorage.setItem('mfg_operator', this.value);
-      document.getElementById('fc_operator').value = this.value;
-      document.getElementById('rc_operator').value = this.value;
-      document.getElementById('hdrOperator').textContent = this.value ? '👤 ' + this.value : '';
-      document.getElementById('hdrOperator').style.display = this.value ? '' : 'none';
-    });
-  });
-
-  // 소리 설정 복원
-  loadSoundSettings();
-
-  // 볼륨 슬라이더
-  document.getElementById('snd_vol').addEventListener('input', function() {
-    document.getElementById('snd_volPct').textContent = Math.round(this.value * 100) + '%';
-  });
-
-  // 오늘 날짜
-  const today = new Date();
-  const ds = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  document.getElementById('hist_date').value = ds;
-
-  // 마스터 데이터 로드
-  await Promise.all([loadLM(), loadPlacement(), loadBOM()]);
-  loadModelDropdown();
-}
-
-// ══════════════════════════════════
-// 마스터 데이터 로드
-// ══════════════════════════════════
-async function loadLM() {
-  try {
-    const PAGE = 1000; let all = [], pg = 0;
-    while(true) {
-      const {data,error} = await sb.from('mfg_line_model')
-        .select('*').eq('active','Y').order('line').order('barcode_val')
-        .range(pg*PAGE,(pg+1)*PAGE-1);
-      if(error||!data||!data.length) break;
-      all=[...all,...data]; if(data.length<PAGE) break; pg++;
+    const saved = localStorage.getItem('mfg_operator') || '';
+    if (saved) {
+      ['fc_op','rc_op'].forEach(id => document.getElementById(id).value = saved);
+      document.getElementById('hdrOp').textContent = '👤 '+saved;
+      document.getElementById('hdrOp').style.display = '';
     }
-    _lm = all;
-  } catch(e) { console.error('LM 로드 실패', e); }
-}
-
-async function loadPlacement() {
-  try {
-    const PAGE = 1000; let all = [], pg = 0;
-    while(true) {
-      const {data,error} = await sb.from('mfg_placement')
-        .select('*').order('line').order('machine').order('side').order('st_no')
-        .range(pg*PAGE,(pg+1)*PAGE-1);
-      if(error||!data||!data.length) break;
-      all=[...all,...data]; if(data.length<PAGE) break; pg++;
-    }
-    _pl = all;
-  } catch(e) { console.error('Placement 로드 실패', e); }
-}
-
-async function loadBOM() {
-  try {
-    // BOM 기본
-    const PAGE = 1000; let all = [], pg = 0;
-    while(true) {
-      const {data,error} = await sb.from('mfg_bom')
-        .select('*').range(pg*PAGE,(pg+1)*PAGE-1);
-      if(error||!data||!data.length) break;
-      all=[...all,...data]; if(data.length<PAGE) break; pg++;
-    }
-    _bom = all;
-
-    // BOM 모델별 소요량
-    let allM = [], pgM = 0;
-    while(true) {
-      const {data,error} = await sb.from('mfg_bom_model')
-        .select('*').range(pgM*PAGE,(pgM+1)*PAGE-1);
-      if(error||!data||!data.length) break;
-      allM=[...allM,...data]; if(data.length<PAGE) break; pgM++;
-    }
-    _bmModel = allM;
-  } catch(e) { console.error('BOM 로드 실패', e); }
-}
-
-// ══════════════════════════════════
-// 바코드 파싱
-// ══════════════════════════════════
-function parseBarcodeVal(val) {
-  if (!val) return null;
-  const m = val.match(/^(.+?)[-_]?(TOP|BOT)$/i);
-  if (!m) return null;
-  return { modelCode: m[1].replace(/[-_]$/, ''), face: m[2].toUpperCase() };
-}
-
-const normCode = c => (c || '').replace(/_/g, '');
-
-// ══════════════════════════════════
-// 모델 드롭다운 로드
-// ══════════════════════════════════
-function loadModelDropdown() {
-  const line = document.getElementById('fc_lineSelect').value;
-  const sel  = document.getElementById('fc_modelSelect');
-  sel.innerHTML = '<option value="">모델 선택</option>';
-
-  let models = _lm.filter(r => r.active === 'Y');
-  if (line) models = models.filter(r => r.line === line);
-
-  models.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r.barcode_val;
-    opt.textContent = r.barcode_val + (r.machine_program ? ` (${r.machine_program})` : '');
-    sel.appendChild(opt);
-  });
-}
-
-function selectModelFromDropdown() {
-  const val = document.getElementById('fc_modelSelect').value;
-  if (val) {
-    document.getElementById('fc_barcode').value = val;
-    confirmBarcode();
-  }
-}
-
-// ══════════════════════════════════
-// 작업지시 확인
-// ══════════════════════════════════
-async function confirmBarcode() {
-  const barcode = document.getElementById('fc_barcode').value.trim().toUpperCase();
-  if (!barcode) { showToast('⚠️ 바코드값을 입력하세요'); return; }
-
-  const parsed = parseBarcodeVal(barcode);
-  if (!parsed) { showToast('⚠️ TOP 또는 BOT로 끝나는 바코드값을 입력하세요'); return; }
-
-  // 라인별 적용모델에서 조회
-  const lmRow = _lm.find(r => r.barcode_val === barcode);
-  if (!lmRow) { showToast('⚠️ 등록되지 않은 모델입니다 — 마스터 관리에서 확인하세요'); return; }
-
-  _fc.barcode = barcode;
-  _fc.face    = parsed.face;
-  _fc.line    = lmRow.line;
-  _fc.program = lmRow.machine_program || '-';
-
-  // 모델 정보 표시
-  document.getElementById('fc_info_barcode').textContent = barcode;
-  document.getElementById('fc_info_face').innerHTML = parsed.face === 'TOP'
-    ? '<span class="badge b-top">TOP</span>'
-    : '<span class="badge b-bot">BOT</span>';
-  document.getElementById('fc_info_line').innerHTML =
-    lmRow.line === '1라인' ? '<span class="badge b-l1">1라인</span>'
-    : lmRow.line === '2라인' ? '<span class="badge b-l2">2라인</span>'
-    : `<span class="badge b-l3">${lmRow.line}</span>`;
-  document.getElementById('fc_info_program').textContent = lmRow.machine_program || '-';
-
-  // 피더 목록 구성
-  await buildFeederList(lmRow.line, barcode);
-
-  document.getElementById('fc_step2').style.display = '';
-  playSound('done');
-  showToast(`✅ ${barcode} — ${lmRow.line} 피더 체크 시작`);
-
-  // 첫 피더로 이동
-  _fc.curIdx = 0;
-  moveToFeeder(0);
-}
-
-// ══════════════════════════════════
-// 피더 목록 구성 (배치도 × BOM JOIN)
-// ══════════════════════════════════
-async function buildFeederList(line, barcode) {
-  const parsed = parseBarcodeVal(barcode);
-  const modelNorm = normCode(parsed?.modelCode || '');
-
-  // 해당 라인 피더
-  const linePl = _pl.filter(r => r.line === line);
-
-  // BOM 맵
-  const bomMap = {};
-  _bom.forEach(r => { bomMap[r.lg_pn] = r; });
-
-  // 소요량 맵 (정규화)
-  const qtyMap = {};
-  _bmModel.forEach(r => {
-    if (!qtyMap[r.lg_pn]) qtyMap[r.lg_pn] = {};
-    qtyMap[r.lg_pn][normCode(r.model_code)] = r.qty;
-  });
-
-  // ST No 숫자 정렬
-  const parseStNo = s => {
-    const m = s.match(/^(M\d+)-([FR])-(\d+)([LR]?)$/i);
-    if (!m) return { machine:'', side:'', num:0, lr:'' };
-    return { machine:m[1], side:m[2], num:parseInt(m[3]), lr:m[4] };
-  };
-
-  const feeders = [];
-  linePl.forEach(pl => {
-    const pnList = [];
-    if (pl.lg_pn)   pnList.push({ pn: pl.lg_pn,   stno: pl.st_no });
-    if (pl.lg_pn_l) pnList.push({ pn: pl.lg_pn_l, stno: pl.st_no + 'L' });
-    if (pl.lg_pn_r) pnList.push({ pn: pl.lg_pn_r, stno: pl.st_no + 'R' });
-
-    pnList.forEach(({ pn, stno }) => {
-      const pnQty = qtyMap[pn] || {};
-      const qty   = pnQty[modelNorm] || 0;
-      if (qty <= 0) return;
-
-      const bom = bomMap[pn] || {};
-      feeders.push({
-        st_no:    stno,
-        lg_pn:    pn,
-        maker_pn1: bom.maker_pn1 || '-',
-        spec:     bom.spec || '-',
-        moq:      bom.moq || 0,
-        qty,
-        status:   'wait', // wait | ok | ng | skip
-        ng_reason: '',
-        lot_no:   '',
+    ['fc_op','rc_op'].forEach(id => {
+      document.getElementById(id).addEventListener('change', function() {
+        localStorage.setItem('mfg_operator', this.value);
+        ['fc_op','rc_op'].forEach(i2 => document.getElementById(i2).value = this.value);
+        document.getElementById('hdrOp').textContent = this.value ? '👤 '+this.value : '';
+        document.getElementById('hdrOp').style.display = this.value ? '' : 'none';
       });
     });
-  });
-
-  // 정렬
-  feeders.sort((a, b) => {
-    const pa = parseStNo(a.st_no), pb = parseStNo(b.st_no);
-    if (pa.machine !== pb.machine) return pa.machine.localeCompare(pb.machine);
-    if (pa.side    !== pb.side)    return pa.side.localeCompare(pb.side);
-    if (pa.num     !== pb.num)     return pa.num - pb.num;
-    return pa.lr.localeCompare(pb.lr);
-  });
-
-  _fc.feeders = feeders;
-  _fc.curIdx  = 0;
-  renderFeederList();
-  updateProgress();
+  } catch(e) { console.error(e); }
 }
 
-// ══════════════════════════════════
-// 피더 목록 렌더링
-// ══════════════════════════════════
-function renderFeederList() {
-  const list = document.getElementById('fc_feederList');
-  if (!_fc.feeders.length) {
-    list.innerHTML = '<div class="empty"><div class="ei">📭</div><div class="et">해당 모델의 피더가 없습니다</div><div class="es">BOM + 배치도 마스터를 확인하세요</div></div>';
-    return;
-  }
+async function loadMaster() {
+  const load = async (t, ords=[]) => {
+    const PAGE=1000; let all=[], pg=0;
+    while(true) {
+      let q = sb.from(t).select('*').range(pg*PAGE,(pg+1)*PAGE-1);
+      ords.forEach(o => q=q.order(o));
+      const {data,error} = await q;
+      if(error||!data||!data.length) break;
+      all=[...all,...data]; if(data.length<PAGE) break; pg++;
+    }
+    return all;
+  };
+  [_lm,_pl,_bom,_bm] = await Promise.all([
+    load('mfg_line_model',['line','barcode_val']),
+    load('mfg_placement', ['line','machine','side','st_no']),
+    load('mfg_bom',       ['process','lg_pn']),
+    load('mfg_bom_model', ['lg_pn']),
+  ]);
+}
 
-  list.innerHTML = _fc.feeders.map((f, i) => {
-    const isCur = i === _fc.curIdx;
-    const cls = isCur ? 'feeder-item current'
-      : f.status === 'ok'   ? 'feeder-item done-ok'
-      : f.status === 'ng'   ? 'feeder-item done-ng'
-      : f.status === 'skip' ? 'feeder-item skip'
-      : 'feeder-item';
+// ── 파싱 ──
+const parseBC = val => {
+  if(!val) return null;
+  const m = val.match(/^(.+?)[-_]?(TOP|BOT)$/i);
+  if(!m) return null;
+  return { modelCode: m[1].replace(/[-_]$/, ''), face: m[2].toUpperCase() };
+};
+const norm = c => (c||'').replace(/_/g,'');
 
-    const icon = f.status === 'ok'   ? '✅'
-               : f.status === 'ng'   ? '❌'
-               : f.status === 'skip' ? '⏭'
-               : isCur ? '⚡' : '○';
+// ── 결과 표시 헬퍼 ──
+function setR(id, type, icon, text, sub='') {
+  const el = document.getElementById(id);
+  el.className = 'rdisp ' + (type||'empty');
+  el.innerHTML = `<span class="ri">${icon}</span><div class="rt">${text}${sub?`<div class="rs">${sub}</div>`:''}</div>`;
+}
+function setDot(id, type) {
+  const el = document.getElementById(id);
+  if(el) el.className = 'dot' + (type?' '+type:'');
+}
+function setJudgeBtn(okActive, ngActive) {
+  const ok = document.getElementById('fc_btnOK');
+  const ng = document.getElementById('fc_btnNG');
+  ok.className = okActive ? 'jbtn-ok active' : 'jbtn-ok inactive';
+  ng.className = ngActive ? 'jbtn-ng active' : 'jbtn-ng inactive';
+}
 
-    return `<div class="${cls}" onclick="moveToFeeder(${i})">
-      <span class="fi-stno">${f.st_no}</span>
-      <div class="fi-pn">
-        <div style="font-size:12px">${f.lg_pn}</div>
-        <div style="font-size:10px;color:var(--text-xs)">${f.maker_pn1 !== '-' ? f.maker_pn1 : ''}</div>
-      </div>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--text-s)">×${f.qty}</span>
-      <span class="fi-status" style="font-size:18px">${icon}</span>
-    </div>`;
+// ── 피더 체크: 모델 드롭다운 ──
+function loadFcModels() {
+  const line = document.getElementById('fc_ldrop').value;
+  const sel  = document.getElementById('fc_mdrop');
+  sel.innerHTML = '<option value="">모델 선택</option>';
+  let mods = _lm.filter(r => r.active==='Y');
+  if(line) mods = mods.filter(r => r.line===line);
+  mods.forEach(r => { const o=document.createElement('option'); o.value=r.barcode_val; o.textContent=r.barcode_val+(r.machine_program?` (${r.machine_program})`:''); sel.appendChild(o); });
+}
+function selectFcModel() {
+  const v = document.getElementById('fc_mdrop').value;
+  if(v) document.getElementById('fc_bc').value = v;
+}
+
+// ── 피더 체크: 작업지시 확인 ──
+async function confirmFcBc() {
+  const bc = document.getElementById('fc_bc').value.trim().toUpperCase();
+  if(!bc) { showToast('⚠️ 바코드값을 입력하세요'); return; }
+  const parsed = parseBC(bc);
+  if(!parsed) { setR('fc_r1','ng','❌','형식 오류','TOP 또는 BOT로 끝나야 합니다'); return; }
+  const lm = _lm.find(r => r.barcode_val===bc);
+  if(!lm) { setR('fc_r1','ng','❌','미등록 모델','라인별 적용모델 마스터 확인 필요'); return; }
+
+  _fc.barcode=bc; _fc.face=parsed.face; _fc.line=lm.line; _fc.program=lm.machine_program||'-';
+  setR('fc_r1','ok','✅',bc,`${lm.line} · ${parsed.face} · ${lm.machine_program||'프로그램 미입력'}`);
+  setDot('fd1','ok'); setDot('fd2','act');
+
+  document.getElementById('fc_mi_bc').textContent  = bc;
+  document.getElementById('fc_mi_face').innerHTML  = parsed.face==='TOP'?'<span class="badge b-top">TOP</span>':'<span class="badge b-bot">BOT</span>';
+  document.getElementById('fc_mi_line').innerHTML  = lm.line==='1라인'?'<span class="badge b-l1">1라인</span>':lm.line==='2라인'?'<span class="badge b-l2">2라인</span>':`<span class="badge b-l3">${lm.line}</span>`;
+  document.getElementById('fc_mi_prog').textContent= lm.machine_program||'-';
+  document.getElementById('fc_minfo').style.display = '';
+
+  await buildFcFeeders(lm.line, bc);
+  document.getElementById('fc_stGrp').style.display='';
+  document.getElementById('fc_psec').style.display='';
+  document.getElementById('fc_fSec').style.display='';
+  setJudgeBtn(false, false);
+  playSound('done');
+  document.getElementById('fc_st').focus();
+}
+
+// ── 피더 체크: ST No 확인 ──
+function confirmFcSt() {
+  const val = document.getElementById('fc_st').value.trim().toUpperCase();
+  if(!val) return;
+  const idx = _fc.feeders.findIndex(f => f.st_no===val);
+  if(idx<0) { setR('fc_r2','ng','❌',val,'피더 목록에 없습니다'); return; }
+  setR('fc_r2','ok','✅',val,_fc.feeders[idx].lg_pn);
+  setDot('fd2','ok'); setDot('fd3','act');
+  moveToFc(idx);
+  document.getElementById('fc_st').value='';
+  document.getElementById('fc_rel').focus();
+}
+
+// ── 피더 목록 구성 ──
+async function buildFcFeeders(line, bc) {
+  const parsed = parseBC(bc);
+  const mn = norm(parsed?.modelCode||'');
+  const bomMap={}, qtyMap={};
+  _bom.forEach(r => bomMap[r.lg_pn]=r);
+  _bm.forEach(r => { if(!qtyMap[r.lg_pn]) qtyMap[r.lg_pn]={}; qtyMap[r.lg_pn][norm(r.model_code)]=r.qty; });
+
+  const parseStNo = s => { const m=s.match(/^(M\d+)-([FR])-(\d+)([LR]?)$/i); if(!m) return {machine:'',side:'',num:0,lr:''}; return {machine:m[1],side:m[2],num:parseInt(m[3]),lr:m[4]}; };
+
+  const feeders=[];
+  _pl.filter(r=>r.line===line).forEach(pl => {
+    const pnList=[];
+    if(pl.lg_pn)   pnList.push({pn:pl.lg_pn,   stno:pl.st_no});
+    if(pl.lg_pn_l) pnList.push({pn:pl.lg_pn_l, stno:pl.st_no+'L'});
+    if(pl.lg_pn_r) pnList.push({pn:pl.lg_pn_r, stno:pl.st_no+'R'});
+    pnList.forEach(({pn,stno}) => {
+      const qty=(qtyMap[pn]||{})[mn]||0; if(qty<=0) return;
+      const b=bomMap[pn]||{};
+      feeders.push({st_no:stno,lg_pn:pn,maker_pn1:b.maker_pn1||'',spec:b.spec||'',moq:b.moq||0,qty,status:'wait',ng_reason:'',lot_no:''});
+    });
+  });
+
+  feeders.sort((a,b)=>{const pa=parseStNo(a.st_no),pb=parseStNo(b.st_no); if(pa.machine!==pb.machine) return pa.machine.localeCompare(pb.machine); if(pa.side!==pb.side) return pa.side.localeCompare(pb.side); if(pa.num!==pb.num) return pa.num-pb.num; return pa.lr.localeCompare(pb.lr);});
+  _fc.feeders=feeders; _fc.curIdx=0;
+  renderFcList(); updateFcProg();
+  if(feeders.length>0) moveToFc(0);
+}
+
+function renderFcList() {
+  const list=document.getElementById('fc_flist');
+  if(!_fc.feeders.length){list.innerHTML='<div style="text-align:center;padding:16px;color:#bbb;font-size:12px">피더 없음</div>';return;}
+  list.innerHTML=_fc.feeders.map((f,i)=>{
+    const c=i===_fc.curIdx?'fi cur':f.status==='ok'?'fi done-ok':f.status==='ng'?'fi done-ng':f.status==='skip'?'fi skip':'fi';
+    const ic=f.status==='ok'?'✅':f.status==='ng'?'❌':f.status==='skip'?'⏭':i===_fc.curIdx?'⚡':'○';
+    return `<div class="${c}" onclick="moveToFc(${i})"><span class="fno">${f.st_no}</span><span class="fpn">${f.lg_pn}</span><span class="fqty">×${f.qty}</span><span class="fico">${ic}</span></div>`;
   }).join('');
+  const items=document.querySelectorAll('.fi');
+  if(items[_fc.curIdx]) items[_fc.curIdx].scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-// ══════════════════════════════════
-// 피더 이동
-// ══════════════════════════════════
-function moveToFeeder(idx) {
-  if (idx < 0 || idx >= _fc.feeders.length) return;
-  _fc.curIdx = idx;
-  const f = _fc.feeders[idx];
+function moveToFc(idx) {
+  if(idx<0||idx>=_fc.feeders.length) return;
+  _fc.curIdx=idx; _fc.scans=[]; _fc.matched=false; _fc.matchedPn=''; _fc.matchedLot=''; _fc.matchedQty=0;
+  const f=_fc.feeders[idx];
 
-  document.getElementById('fc_curFeeder').textContent = f.st_no;
-  document.getElementById('fc_curPn').textContent     = `LG품번: ${f.lg_pn}`;
-  document.getElementById('fc_curMkrPn').textContent  = `메이커품번: ${f.maker_pn1 !== '-' ? f.maker_pn1 : '미등록'}`;
-
-  // 체크박스 상태
-  const box = document.getElementById('fc_checkBox');
-  box.className = 'check-box';
-  document.querySelector('.check-box-title').textContent = '⚡ 현재 체크 피더';
+  document.getElementById('fc_cst').textContent = f.st_no;
+  document.getElementById('fc_clg').textContent = `LG품번: ${f.lg_pn}`;
+  document.getElementById('fc_cmk').textContent = `메이커품번: ${f.maker_pn1||'미등록'}`;
+  document.getElementById('fc_cqt').textContent = `소요량: ${f.qty}`;
+  document.getElementById('fc_cbox').className = 'cbox active';
+  document.getElementById('fc_cpanel').className = 'cpanel';
+  document.getElementById('fc_judgeStatus').textContent = '체크 중';
+  document.getElementById('fc_judgeStatus').style.color = 'var(--warn)';
 
   // 릴 스캔 초기화
-  const relScan = document.getElementById('fc_relScan');
-  relScan.value = '';
-  relScan.className = 'scan-input active';
-  document.getElementById('fc_relInfo').style.display = 'none';
-  relScan.focus();
+  document.getElementById('fc_rel').value='';
+  document.getElementById('fc_rel').className='sinp';
+  document.getElementById('fc_relGrp').style.display='';
+  resetS4('fc');
+  document.getElementById('fc_summary').className='result-summary';
+  setJudgeBtn(false, false);
+  setDot('fd3','act');
 
-  renderFeederList();
-
-  // 스크롤
-  const items = document.querySelectorAll('.feeder-item');
-  if (items[idx]) items[idx].scrollIntoView({ behavior:'smooth', block:'nearest' });
+  renderFcList();
 }
 
-// ══════════════════════════════════
-// 릴 바코드 체크
-// ══════════════════════════════════
-function checkReel() {
-  const scan = document.getElementById('fc_relScan').value.trim();
-  if (!scan) return;
-
-  _fc.relScan = scan;
-  const f = _fc.feeders[_fc.curIdx];
-  const mkrPn = f.maker_pn1 !== '-' ? f.maker_pn1 : '';
-
-  // LOT 정보 표시
-  const relInfo = document.getElementById('fc_relInfo');
-  document.getElementById('fc_relLot').textContent = `스캔값: ${scan}`;
-  relInfo.style.display = '';
-
-  // 메이커품번 매칭
-  if (mkrPn && scan.includes(mkrPn)) {
-    document.getElementById('fc_relScan').className = 'scan-input ok';
-    showToast('✅ 품번 일치 — OK 버튼을 눌러 확정하세요');
-  } else if (!mkrPn) {
-    document.getElementById('fc_relScan').className = 'scan-input ok';
-    showToast('⚠️ 메이커품번 미등록 — LOT만 기록됩니다');
-  } else {
-    document.getElementById('fc_relScan').className = 'scan-input ng';
-    showToast('❌ 품번 불일치 — NG 처리하거나 재스캔하세요');
+// ── 릴 스캔 4개 추가 ──
+function resetS4(prefix) {
+  for(let i=0;i<4;i++){
+    document.getElementById(`${prefix}_s4_${i}`).className='s4box empty';
+    const vEl=document.getElementById(`${prefix}_sv_${i}`);
+    vEl.className='s4val empty'; vEl.textContent=i===0?'대기 중...':'-';
   }
 }
 
-// ══════════════════════════════════
-// OK 판정
-// ══════════════════════════════════
-async function judgeOK() {
-  const operator = document.getElementById('fc_operator').value;
-  if (!operator) { showToast('⚠️ 작업자를 선택하세요'); return; }
+function updateS4(prefix, scans, mkrPn) {
+  for(let i=0;i<4;i++){
+    const box=document.getElementById(`${prefix}_s4_${i}`);
+    const val=document.getElementById(`${prefix}_sv_${i}`);
+    if(i<scans.length){
+      const s=scans[i];
+      const match=!mkrPn||s.includes(mkrPn);
+      box.className=match?'s4box ok':'s4box ng';
+      val.className=match?'s4val ok':'s4val ng';
+      val.textContent=s;
+    } else {
+      box.className='s4box empty';
+      val.className='s4val empty'; val.textContent=i===0&&scans.length===0?'대기 중...':'-';
+    }
+  }
+}
+
+function addRelScan() {
+  const scan = document.getElementById('fc_rel').value.trim();
+  if(!scan) return;
+  if(_fc.scans.length>=4){showToast('⚠️ 최대 4개까지 스캔 가능합니다');return;}
+
+  _fc.scans.push(scan);
+  document.getElementById('fc_rel').value='';
 
   const f = _fc.feeders[_fc.curIdx];
-  f.status  = 'ok';
-  f.lot_no  = _fc.relScan || '';
+  const mkrPn = f.maker_pn1||'';
+  updateS4('fc', _fc.scans, mkrPn);
 
-  // DB 저장
+  // 품번 매칭 확인
+  const matchedScan = _fc.scans.find(s => !mkrPn || s.includes(mkrPn));
+  if(matchedScan || !mkrPn) {
+    _fc.matched = true;
+    _fc.matchedPn  = mkrPn || scan;
+    _fc.matchedLot = extractLot(scan, mkrPn);
+    _fc.matchedQty = f.qty;
+
+    // 결과 종합 표시
+    const sum = document.getElementById('fc_summary');
+    sum.className = 'result-summary ok';
+    document.getElementById('fc_sum_title').className='rs-title ok';
+    document.getElementById('fc_sum_title').textContent='✅ 품번 일치 — OK 가능';
+    document.getElementById('fc_sum_pn').textContent  = _fc.matchedPn  || scan;
+    document.getElementById('fc_sum_lot').textContent = _fc.matchedLot || scan;
+    document.getElementById('fc_sum_qty').textContent = _fc.matchedQty + '개';
+
+    // 판정 버튼 활성화
+    setJudgeBtn(true, true);
+    document.getElementById('fc_cbox').className='cbox ok';
+    document.getElementById('fc_cpanel').className='cpanel st-ok';
+    document.getElementById('fc_judgeStatus').textContent='✅ OK 가능';
+    document.getElementById('fc_judgeStatus').style.color='var(--ok)';
+    playSound('ok');
+  } else {
+    // 품번 불일치 — 아직 스캔 여지 있음
+    if(_fc.scans.length>=4) {
+      // 4개 모두 불일치
+      _fc.matched=false;
+      const sum = document.getElementById('fc_summary');
+      sum.className='result-summary ng';
+      document.getElementById('fc_sum_title').className='rs-title ng';
+      document.getElementById('fc_sum_title').textContent='❌ 품번 불일치 — NG 처리 필요';
+      document.getElementById('fc_sum_pn').textContent  = mkrPn||'-';
+      document.getElementById('fc_sum_lot').textContent = scan;
+      document.getElementById('fc_sum_qty').textContent = f.qty+'개';
+      setJudgeBtn(false, true);
+      document.getElementById('fc_cbox').className='cbox ng';
+      document.getElementById('fc_cpanel').className='cpanel st-ng';
+      document.getElementById('fc_judgeStatus').textContent='❌ NG';
+      document.getElementById('fc_judgeStatus').style.color='var(--ng)';
+      playSound('ng');
+    } else {
+      showToast(`⚠️ 불일치 — ${4-_fc.scans.length}개 더 스캔 가능`);
+    }
+  }
+}
+
+function extractLot(scan, mkrPn) {
+  // 메이커품번 제외한 나머지를 LOT로 추정
+  if(mkrPn && scan.includes(mkrPn)) {
+    return scan.replace(mkrPn,'').trim() || scan;
+  }
+  return scan;
+}
+
+// ── OK/NG 판정 ──
+async function judgeOK() {
+  if(!_fc.matched && _fc.feeders[_fc.curIdx]?.maker_pn1) return;
+  const op = document.getElementById('fc_op').value;
+  if(!op) { showToast('⚠️ 작업자를 선택하세요'); return; }
+  if(!_fc.feeders.length) { showToast('⚠️ 모델을 먼저 선택하세요'); return; }
+
+  const f=_fc.feeders[_fc.curIdx];
+  f.status='ok'; f.lot_no=_fc.matchedLot||_fc.scans.join('/');
+
+  setJudgeBtn(false,false);
+  document.getElementById('fc_cbox').className='cbox ok';
+  document.getElementById('fc_cpanel').className='cpanel st-ok';
+
   try {
     await sb.from('mfg_feeder_check').insert({
-      check_date:  today(),
-      line:        _fc.line,
-      barcode_val: _fc.barcode,
-      feeder_no:   f.st_no,
-      lg_pn:       f.lg_pn,
-      maker_pn:    f.maker_pn1 !== '-' ? f.maker_pn1 : null,
-      lot_no:      f.lot_no || null,
-      qty:         f.qty || null,
-      result:      'OK',
-      operator,
+      check_date:today(), line:_fc.line, barcode_val:_fc.barcode,
+      feeder_no:f.st_no, lg_pn:f.lg_pn,
+      maker_pn:f.maker_pn1||null, lot_no:f.lot_no||null,
+      qty:f.qty||null, result:'OK', operator:op,
     });
-  } catch(e) { console.error(e); }
+  } catch(e){console.error(e);}
 
   playSound('ok');
-  updateProgress();
-  renderFeederList();
+  updateFcProg(); renderFcList();
 
-  // 다음 피더로 이동
-  const nextIdx = _fc.feeders.findIndex((ff, i) => i > _fc.curIdx && ff.status === 'wait');
-  if (nextIdx >= 0) {
-    setTimeout(() => moveToFeeder(nextIdx), 300);
+  const ni=_fc.feeders.findIndex((ff,i)=>i>_fc.curIdx&&ff.status==='wait');
+  if(ni>=0) {
+    setTimeout(()=>{ moveToFc(ni); setDot('fd2','act'); document.getElementById('fc_st').focus(); },400);
   } else {
-    // 전체 완료
-    document.getElementById('fc_checkBox').className = 'check-box ok';
-    document.querySelector('.check-box-title').textContent = '🎉 전체 피더 체크 완료!';
-    playSound('done');
-    showToast('🎉 모든 피더 체크 완료!');
+    document.getElementById('fc_cst').textContent='🎉 완료!';
+    document.getElementById('fc_clg').textContent='모든 피더 체크 완료';
+    document.getElementById('fc_cmk').textContent='';
+    document.getElementById('fc_cqt').textContent='';
+    playSound('done'); showToast('🎉 모든 피더 체크 완료!');
   }
 }
 
-// ══════════════════════════════════
-// NG 판정
-// ══════════════════════════════════
 function openNGModal() {
-  const f = _fc.feeders[_fc.curIdx];
-  document.getElementById('ng_feederNo').textContent = f.st_no;
-  document.getElementById('ng_detail').value = '';
-  document.querySelectorAll('.ng-reason-btn').forEach(b => b.classList.remove('selected'));
+  if(!_fc.feeders.length) { showToast('⚠️ 모델을 먼저 선택하세요'); return; }
+  document.getElementById('ng_st').textContent=_fc.feeders[_fc.curIdx].st_no;
+  document.getElementById('ng_det').value='';
+  document.querySelectorAll('.ngbtn').forEach(b=>b.classList.remove('sel'));
+  _ngR='';
   document.getElementById('ngModal').classList.add('show');
 }
-
-function closeNGModal() {
-  document.getElementById('ngModal').classList.remove('show');
-}
-
-let _ngReason = '';
-function selectNGReason(reason) {
-  _ngReason = reason;
-  document.querySelectorAll('.ng-reason-btn').forEach(b => {
-    b.classList.toggle('selected', b.textContent === reason);
-  });
-}
+function closeNGModal(){ document.getElementById('ngModal').classList.remove('show'); }
+let _ngR='';
+function selNG(r){ _ngR=r; document.querySelectorAll('.ngbtn').forEach(b=>b.classList.toggle('sel',b.textContent===r)); }
 
 async function judgeNG() {
-  if (!_ngReason) { showToast('⚠️ NG 사유를 선택하세요'); return; }
-  const operator = document.getElementById('fc_operator').value;
-  if (!operator)  { showToast('⚠️ 작업자를 선택하세요'); return; }
+  if(!_ngR){showToast('⚠️ NG 사유를 선택하세요');return;}
+  const op=document.getElementById('fc_op').value;
+  if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
+  const det=document.getElementById('ng_det').value.trim();
+  const reason=det?`${_ngR} — ${det}`:_ngR;
+  const f=_fc.feeders[_fc.curIdx];
+  f.status='ng'; f.ng_reason=reason;
 
-  const detail  = document.getElementById('ng_detail').value.trim();
-  const reason  = detail ? `${_ngReason} — ${detail}` : _ngReason;
-  const f       = _fc.feeders[_fc.curIdx];
-  f.status      = 'ng';
-  f.ng_reason   = reason;
+  document.getElementById('fc_cbox').className='cbox ng';
+  document.getElementById('fc_cpanel').className='cpanel st-ng';
+  setJudgeBtn(false,false);
 
-  // DB 저장
   try {
     await sb.from('mfg_feeder_check').insert({
-      check_date:  today(),
-      line:        _fc.line,
-      barcode_val: _fc.barcode,
-      feeder_no:   f.st_no,
-      lg_pn:       f.lg_pn,
-      maker_pn:    f.maker_pn1 !== '-' ? f.maker_pn1 : null,
-      lot_no:      _fc.relScan || null,
-      qty:         f.qty || null,
-      result:      'NG',
-      ng_reason:   reason,
-      operator,
+      check_date:today(), line:_fc.line, barcode_val:_fc.barcode,
+      feeder_no:f.st_no, lg_pn:f.lg_pn,
+      maker_pn:f.maker_pn1||null, lot_no:_fc.scans.join('/')||null,
+      qty:f.qty||null, result:'NG', ng_reason:reason, operator:op,
     });
-  } catch(e) { console.error(e); }
+  } catch(e){console.error(e);}
 
   playSound('ng');
   closeNGModal();
-  updateProgress();
-  renderFeederList();
-
-  // 다음 피더로
-  const nextIdx = _fc.feeders.findIndex((ff, i) => i > _fc.curIdx && ff.status === 'wait');
-  if (nextIdx >= 0) setTimeout(() => moveToFeeder(nextIdx), 300);
+  updateFcProg(); renderFcList();
+  const ni=_fc.feeders.findIndex((ff,i)=>i>_fc.curIdx&&ff.status==='wait');
+  if(ni>=0) setTimeout(()=>{moveToFc(ni);document.getElementById('fc_st').focus();},400);
 }
 
-// ══════════════════════════════════
-// 스킵 / 초기화
-// ══════════════════════════════════
-function skipFeeder() {
-  _fc.feeders[_fc.curIdx].status = 'skip';
-  renderFeederList();
-  updateProgress();
-  const nextIdx = _fc.feeders.findIndex((f, i) => i > _fc.curIdx && f.status === 'wait');
-  if (nextIdx >= 0) moveToFeeder(nextIdx);
+function skipFc() {
+  if(!_fc.feeders.length) return;
+  _fc.feeders[_fc.curIdx].status='skip';
+  renderFcList(); updateFcProg();
+  const ni=_fc.feeders.findIndex((f,i)=>i>_fc.curIdx&&f.status==='wait');
+  if(ni>=0) moveToFc(ni);
 }
 
-function resetCheck() {
-  if (!confirm('피더 체크를 처음부터 다시 시작할까요?')) return;
-  _fc.feeders.forEach(f => { f.status = 'wait'; f.lot_no = ''; f.ng_reason = ''; });
-  _fc.curIdx = 0;
-  renderFeederList();
-  updateProgress();
-  moveToFeeder(0);
+function resetFc() {
+  if(!confirm('처음부터 다시 시작할까요?')) return;
+  _fc.feeders.forEach(f=>{f.status='wait';f.lot_no='';f.ng_reason='';});
+  _fc.curIdx=0; _fc.scans=[]; _fc.matched=false;
+  renderFcList(); updateFcProg();
+  if(_fc.feeders.length>0) moveToFc(0);
 }
 
-// ══════════════════════════════════
-// 진행현황 업데이트
-// ══════════════════════════════════
-function updateProgress() {
-  const total  = _fc.feeders.length;
-  const okCnt  = _fc.feeders.filter(f => f.status === 'ok').length;
-  const ngCnt  = _fc.feeders.filter(f => f.status === 'ng').length;
-  const done   = okCnt + ngCnt;
-  const pct    = total ? Math.round(done / total * 100) : 0;
-
-  document.getElementById('fc_progressCount').textContent = `${done} / ${total}`;
-  document.getElementById('fc_progressFill').style.width  = pct + '%';
-  document.getElementById('fc_okCount').textContent  = `OK ${okCnt}`;
-  document.getElementById('fc_ngCount').textContent  = `NG ${ngCnt}`;
-  document.getElementById('fc_remainCount').textContent = `대기 ${total - done}`;
+function updateFcProg() {
+  const total=_fc.feeders.length, ok=_fc.feeders.filter(f=>f.status==='ok').length, ng=_fc.feeders.filter(f=>f.status==='ng').length;
+  const done=ok+ng, pct=total?Math.round(done/total*100):0;
+  document.getElementById('fc_pc').textContent=`${done}/${total}`;
+  document.getElementById('fc_pf').style.width=pct+'%';
+  document.getElementById('fc_ok').textContent=`OK ${ok}`;
+  document.getElementById('fc_ng').textContent=`NG ${ng}`;
+  document.getElementById('fc_wt').textContent=`대기 ${total-done}`;
 }
 
-// ══════════════════════════════════
+// ════════════════════════════════
 // 부품 교환 체크
-// ══════════════════════════════════
-function loadReelFeeders() {
-  const line = document.getElementById('rc_line').value;
-  const sel  = document.getElementById('rc_feeder');
-  sel.innerHTML = '<option value="">피더 선택</option>';
-  if (!line) return;
-
-  const linePl = _pl.filter(r => r.line === line && (r.lg_pn || r.lg_pn_l || r.lg_pn_r));
-  const feeders = [];
-  linePl.forEach(pl => {
-    if (pl.lg_pn)   feeders.push({ stno: pl.st_no,       pn: pl.lg_pn   });
-    if (pl.lg_pn_l) feeders.push({ stno: pl.st_no + 'L', pn: pl.lg_pn_l });
-    if (pl.lg_pn_r) feeders.push({ stno: pl.st_no + 'R', pn: pl.lg_pn_r });
+// ════════════════════════════════
+function loadRcFeeders() {
+  const line=document.getElementById('rc_line').value;
+  const sel=document.getElementById('rc_fdrop');
+  sel.innerHTML='<option value="">— 드롭다운 선택 —</option>';
+  if(!line) return;
+  const fds=[];
+  _pl.filter(r=>r.line===line&&(r.lg_pn||r.lg_pn_l||r.lg_pn_r)).forEach(pl=>{
+    if(pl.lg_pn)   fds.push({stno:pl.st_no,      pn:pl.lg_pn});
+    if(pl.lg_pn_l) fds.push({stno:pl.st_no+'L',  pn:pl.lg_pn_l});
+    if(pl.lg_pn_r) fds.push({stno:pl.st_no+'R',  pn:pl.lg_pn_r});
   });
-
-  feeders.forEach(f => {
-    const opt = document.createElement('option');
-    opt.value = JSON.stringify(f);
-    opt.textContent = `${f.stno} — ${f.pn}`;
-    sel.appendChild(opt);
-  });
+  fds.forEach(f=>{const o=document.createElement('option');o.value=JSON.stringify(f);o.textContent=`${f.stno} — ${f.pn}`;sel.appendChild(o);});
 }
 
-function selectReelFeeder() {
-  const val = document.getElementById('rc_feeder').value;
-  if (!val) { document.getElementById('rc_feederInfo').style.display = 'none'; return; }
-
-  const f   = JSON.parse(val);
-  const bom = _bom.find(b => b.lg_pn === f.pn) || {};
-  _rc.feeder    = f.stno;
-  _rc.lg_pn     = f.pn;
-  _rc.maker_pn1 = bom.maker_pn1 || '';
-
-  document.getElementById('rc_feederPn').textContent    = f.pn;
-  document.getElementById('rc_feederMkrPn').textContent = bom.maker_pn1 || '메이커품번 미등록';
-  document.getElementById('rc_feederInfo').style.display = '';
-  document.getElementById('rc_oldScan').focus();
+function selectRcFeeder() {
+  const v=document.getElementById('rc_fdrop').value;
+  if(!v) return;
+  const f=JSON.parse(v);
+  document.getElementById('rc_st').value=f.stno;
+  confirmRcSt();
 }
 
-function scanOldReel() {
-  const scan = document.getElementById('rc_oldScan').value.trim();
-  if (!scan) return;
-  _rc.oldLot    = scan;
-  _rc.oldMkrPn  = extractMkrPn(scan);
-  document.getElementById('rc_oldScan').className = 'scan-input ok';
-  document.getElementById('rc_newScan').focus();
-  showToast('기존 릴 확인 완료 — 신규 릴을 스캔하세요');
+function confirmRcSt() {
+  const val=document.getElementById('rc_st').value.trim().toUpperCase();
+  const line=document.getElementById('rc_line').value;
+  if(!val){showToast('⚠️ ST No를 스캔하세요');return;}
+  if(!line){showToast('⚠️ 라인을 먼저 선택하세요');return;}
+
+  const pl=_pl.find(r=>r.line===line&&(r.st_no===val||r.st_no+'L'===val||r.st_no+'R'===val));
+  let lgPn='';
+  if(pl){
+    if(val===pl.st_no) lgPn=pl.lg_pn||'';
+    else if(val===pl.st_no+'L') lgPn=pl.lg_pn_l||'';
+    else if(val===pl.st_no+'R') lgPn=pl.lg_pn_r||'';
+  }
+  if(!lgPn){setR('rc_r1','ng','❌',val,'배치도에 없는 ST No');return;}
+
+  const b=_bom.find(x=>x.lg_pn===lgPn)||{};
+  _rc.line=line; _rc.stno=val; _rc.lgPn=lgPn; _rc.mkrPn1=b.maker_pn1||''; _rc.moq=b.moq||0;
+  _rc.oldScans=[]; _rc.newScans=[]; _rc.oldMatched=false; _rc.newMatched=false;
+
+  setR('rc_r1','ok','✅',val,lgPn);
+  setDot('rd1','ok'); setDot('rd2','act');
+
+  document.getElementById('rc_cst').textContent=val;
+  document.getElementById('rc_clg').textContent=`LG품번: ${lgPn}`;
+  document.getElementById('rc_cmk').textContent=`메이커품번: ${b.maker_pn1||'미등록'}`;
+  document.getElementById('rc_cbox').className='cbox active';
+  document.getElementById('rc_cpanel').className='cpanel';
+  document.getElementById('rc_judgeStatus').textContent='체크 중';
+  document.getElementById('rc_judgeStatus').style.color='var(--warn)';
+
+  resetS4('rc_o'); resetS4('rc_n');
+  document.getElementById('rc_r2').className='rdisp empty';
+  document.getElementById('rc_r2').textContent='기존 릴 스캔 대기 중...';
+  document.getElementById('rc_r3').className='rdisp empty';
+  document.getElementById('rc_r3').textContent='신규 릴 스캔 대기 중...';
+  document.getElementById('rc_old_summary').style.display='none';
+  document.getElementById('rc_new_summary').style.display='none';
+  document.getElementById('rc_old_placeholder').style.display='';
+  document.getElementById('rc_new_placeholder').style.display='';
+  document.getElementById('rc_confirmBtn').style.display='none';
+
+  // 드롭다운 동기화
+  const sel=document.getElementById('rc_fdrop');
+  for(let i=0;i<sel.options.length;i++){try{const f=JSON.parse(sel.options[i].value);if(f.stno===val){sel.selectedIndex=i;break;}}catch{}}
+
+  document.getElementById('rc_st').value='';
+  document.getElementById('rc_old').focus();
 }
 
-function scanNewReel() {
-  const scan = document.getElementById('rc_newScan').value.trim();
-  if (!scan) return;
-  if (!_rc.oldLot) { showToast('⚠️ 기존 릴을 먼저 스캔하세요'); return; }
+// 기존 릴 스캔
+function addOldScan() {
+  const scan=document.getElementById('rc_old').value.trim();
+  if(!scan) return;
+  if(_rc.oldScans.length>=4){showToast('⚠️ 최대 4개까지');return;}
+  _rc.oldScans.push(scan);
+  document.getElementById('rc_old').value='';
 
-  _rc.newLot   = scan;
-  _rc.newMkrPn = extractMkrPn(scan);
+  updateS4('rc_o', _rc.oldScans, _rc.mkrPn1);
 
-  // 품번 대조
-  const result = document.getElementById('rc_result');
-  const display = document.getElementById('rc_statusDisplay');
-  const confirmBtn = document.getElementById('rc_confirmBtn');
-  result.style.display = '';
-
-  // 메이커품번 일치 여부
-  const refPn = _rc.maker_pn1;
-  const newOk = !refPn || scan.includes(refPn) || _rc.newMkrPn === _rc.oldMkrPn;
-
-  if (newOk) {
-    display.className = 'status-display ok';
-    document.getElementById('rc_statusIcon').textContent = '✅';
-    document.getElementById('rc_statusText').textContent = 'OK — 교환 가능';
-    document.getElementById('rc_statusSub').textContent  = `${_rc.oldLot} → ${_rc.newLot}`;
-    document.getElementById('rc_newScan').className = 'scan-input ok';
-    confirmBtn.style.display = '';
-    playSound('ok');
+  const match=_rc.oldScans.some(s=>!_rc.mkrPn1||s.includes(_rc.mkrPn1));
+  if(match||(!_rc.mkrPn1)) {
+    _rc.oldMatched=true;
+    setR('rc_r2','ok','✅',scan,'품번 일치 확인');
+    setDot('rd2','ok'); setDot('rd3','act');
+    document.getElementById('rc_old_summary').className='result-summary ok';
+    document.getElementById('rc_old_title').className='rs-title ok';
+    document.getElementById('rc_old_title').textContent='✅ 기존 릴 품번 일치';
+    document.getElementById('rc_old_pn').textContent=_rc.mkrPn1||scan;
+    document.getElementById('rc_old_summary').style.display='block';
+    document.getElementById('rc_old_placeholder').style.display='none';
+    document.getElementById('rc_cbox').className='cbox ok';
+    document.getElementById('rc_new').focus();
+  } else if(_rc.oldScans.length>=4) {
+    setR('rc_r2','ng','❌',scan,'품번 불일치');
+    document.getElementById('rc_old_summary').className='result-summary ng';
+    document.getElementById('rc_old_title').className='rs-title ng';
+    document.getElementById('rc_old_title').textContent='❌ 기존 릴 품번 불일치';
+    document.getElementById('rc_old_pn').textContent=_rc.mkrPn1||'-';
+    document.getElementById('rc_old_summary').style.display='block';
+    document.getElementById('rc_old_placeholder').style.display='none';
+    document.getElementById('rc_cbox').className='cbox ng';
   } else {
-    display.className = 'status-display ng';
-    document.getElementById('rc_statusIcon').textContent = '❌';
-    document.getElementById('rc_statusText').textContent = 'NG — 품번 불일치';
-    document.getElementById('rc_statusSub').textContent  = `기준: ${refPn} | 스캔: ${_rc.newMkrPn}`;
-    document.getElementById('rc_newScan').className = 'scan-input ng';
-    confirmBtn.style.display = 'none';
-    playSound('ng');
+    showToast(`⚠️ 불일치 — ${4-_rc.oldScans.length}개 더 스캔 가능`);
   }
 }
 
-function extractMkrPn(scan) {
-  // 바코드에서 메이커품번 추출 (첫 토큰)
-  return scan.split(/[\s,]/)[0] || scan;
+// 신규 릴 스캔
+function addNewScan() {
+  const scan=document.getElementById('rc_new').value.trim();
+  if(!scan) return;
+  if(_rc.newScans.length>=4){showToast('⚠️ 최대 4개까지');return;}
+  _rc.newScans.push(scan);
+  document.getElementById('rc_new').value='';
+
+  updateS4('rc_n', _rc.newScans, _rc.mkrPn1);
+
+  const match=_rc.newScans.some(s=>!_rc.mkrPn1||s.includes(_rc.mkrPn1));
+  const matchedScan=_rc.newScans.find(s=>!_rc.mkrPn1||s.includes(_rc.mkrPn1))||scan;
+
+  if(match||!_rc.mkrPn1) {
+    _rc.newMatched=true;
+    _rc.newPn=_rc.mkrPn1||scan;
+    _rc.newLot=extractLot(matchedScan,_rc.mkrPn1);
+
+    setR('rc_r3','ok','✅',scan,'품번 일치');
+    setDot('rd3','ok');
+
+    document.getElementById('rc_new_summary').className='result-summary ok';
+    document.getElementById('rc_new_title').className='rs-title ok';
+    document.getElementById('rc_new_title').textContent='✅ 신규 릴 확인 완료';
+    document.getElementById('rc_new_pn').textContent=_rc.newPn;
+    document.getElementById('rc_new_lot').textContent=_rc.newLot;
+    document.getElementById('rc_new_qty').textContent=_rc.moq?`${_rc.moq.toLocaleString()}개`:`${_rc.feeders?.[_rc.curIdx]?.qty||'-'}개`;
+    document.getElementById('rc_new_summary').style.display='block';
+    document.getElementById('rc_new_placeholder').style.display='none';
+    document.getElementById('rc_cpanel').className='cpanel st-ok';
+    document.getElementById('rc_judgeStatus').textContent='✅ 교환 가능';
+    document.getElementById('rc_judgeStatus').style.color='var(--ok)';
+    document.getElementById('rc_confirmBtn').style.display='block';
+    playSound('ok');
+  } else if(_rc.newScans.length>=4) {
+    _rc.newMatched=false;
+    setR('rc_r3','ng','❌',scan,'품번 불일치');
+    document.getElementById('rc_new_summary').className='result-summary ng';
+    document.getElementById('rc_new_title').className='rs-title ng';
+    document.getElementById('rc_new_title').textContent='❌ 품번 불일치';
+    document.getElementById('rc_new_pn').textContent=_rc.mkrPn1||'-';
+    document.getElementById('rc_new_lot').textContent=scan;
+    document.getElementById('rc_new_qty').textContent='-';
+    document.getElementById('rc_new_summary').style.display='block';
+    document.getElementById('rc_new_placeholder').style.display='none';
+    document.getElementById('rc_cpanel').className='cpanel st-ng';
+    document.getElementById('rc_judgeStatus').textContent='❌ 품번 불일치';
+    document.getElementById('rc_judgeStatus').style.color='var(--ng)';
+    document.getElementById('rc_confirmBtn').style.display='none';
+    playSound('ng');
+  } else {
+    showToast(`⚠️ 불일치 — ${4-_rc.newScans.length}개 더 스캔 가능`);
+  }
 }
 
 async function doReelChange() {
-  const operator = document.getElementById('rc_operator').value;
-  if (!operator) { showToast('⚠️ 작업자를 선택하세요'); return; }
-  const line = document.getElementById('rc_line').value;
-  if (!line)     { showToast('⚠️ 라인을 선택하세요'); return; }
-
+  const op=document.getElementById('rc_op').value;
+  if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
   try {
     await sb.from('mfg_reel_change').insert({
-      change_date: today(),
-      line,
-      feeder_no:   _rc.feeder,
-      lg_pn:       _rc.lg_pn  || null,
-      old_lot:     _rc.oldLot || null,
-      new_lot:     _rc.newLot || null,
-      result:      'OK',
-      operator,
+      change_date:today(), line:_rc.line, feeder_no:_rc.stno,
+      lg_pn:_rc.lgPn||null, old_lot:_rc.oldScans.join('/')||null,
+      new_lot:_rc.newLot||_rc.newScans.join('/')||null, result:'OK', operator:op,
     });
-    playSound('done');
-    showToast('✅ 부품 교환 이력 등록 완료');
-    resetReelCheck();
-  } catch(e) {
-    showToast('❌ 등록 실패: ' + (e.message || String(e)));
-    console.error(e);
+    playSound('done'); showToast('✅ 부품 교환 이력 등록 완료');
+    resetRc();
+  } catch(e){showToast('❌ 등록 실패: '+(e.message||String(e)));console.error(e);}
+}
+
+function resetRc() {
+  _rc={line:'',stno:'',lgPn:'',mkrPn1:'',moq:0,oldScans:[],newScans:[],oldMatched:false,newMatched:false,newLot:'',newPn:''};
+  ['rc_st','rc_old','rc_new'].forEach(id=>{const el=document.getElementById(id);el.value='';el.className='sinp';});
+  document.getElementById('rc_line').value='';
+  document.getElementById('rc_fdrop').innerHTML='<option value="">— 드롭다운 선택 —</option>';
+  ['rc_r1','rc_r2','rc_r3'].forEach(id=>{const el=document.getElementById(id);el.className='rdisp empty';el.textContent='대기 중...';});
+  ['rd1','rd2','rd3'].forEach((id,i)=>setDot(id,i===0?'act':''));
+  document.getElementById('rc_cbox').className='cbox';
+  document.getElementById('rc_cst').textContent='대기 중';
+  document.getElementById('rc_clg').textContent='ST No를 먼저 스캔하세요';
+  document.getElementById('rc_cmk').textContent='';
+  document.getElementById('rc_cpanel').className='cpanel';
+  document.getElementById('rc_judgeStatus').textContent='대기중';
+  document.getElementById('rc_judgeStatus').style.color='var(--text-s)';
+  document.getElementById('rc_old_summary').style.display='none';
+  document.getElementById('rc_new_summary').style.display='none';
+  document.getElementById('rc_old_placeholder').style.display='';
+  document.getElementById('rc_new_placeholder').style.display='';
+  document.getElementById('rc_confirmBtn').style.display='none';
+  resetS4('rc_o'); resetS4('rc_n');
+}
+
+// resetS4 함수 (prefix 형식 맞춤)
+function resetS4(prefix) {
+  for(let i=0;i<4;i++){
+    const box=document.getElementById(`${prefix}4_${i}`)||document.getElementById(`${prefix}_s4_${i}`);
+    const val=document.getElementById(`${prefix}v_${i}`)||document.getElementById(`${prefix}_sv_${i}`);
+    if(box) box.className='s4box empty';
+    if(val){val.className='s4val empty';val.textContent=i===0?'대기 중...':'-';}
+  }
+}
+function updateS4(prefix, scans, mkrPn) {
+  for(let i=0;i<4;i++){
+    const box=document.getElementById(`${prefix}4_${i}`)||document.getElementById(`${prefix}_s4_${i}`);
+    const val=document.getElementById(`${prefix}v_${i}`)||document.getElementById(`${prefix}_sv_${i}`);
+    if(!box||!val) continue;
+    if(i<scans.length){
+      const s=scans[i], match=!mkrPn||s.includes(mkrPn);
+      box.className=match?'s4box ok':'s4box ng';
+      val.className=match?'s4val ok':'s4val ng'; val.textContent=s;
+    } else {
+      box.className='s4box empty'; val.className='s4val empty'; val.textContent=i===0&&scans.length===0?'대기 중...':'-';
+    }
   }
 }
 
-function resetReelCheck() {
-  _rc = { line:'', feeder:'', lg_pn:'', maker_pn1:'', oldLot:'', newLot:'', oldMkrPn:'', newMkrPn:'' };
-  document.getElementById('rc_oldScan').value = '';
-  document.getElementById('rc_newScan').value = '';
-  document.getElementById('rc_oldScan').className = 'scan-input';
-  document.getElementById('rc_newScan').className = 'scan-input';
-  document.getElementById('rc_result').style.display = 'none';
-  document.getElementById('rc_confirmBtn').style.display = 'none';
-  document.getElementById('rc_feederInfo').style.display = 'none';
-  document.getElementById('rc_feeder').value = '';
-  document.getElementById('rc_line').value = '';
-}
-
-// ══════════════════════════════════
+// ════════════════════════════════
 // 이력 조회
-// ══════════════════════════════════
-async function loadHistory() {
-  const date   = document.getElementById('hist_date').value;
-  const line   = document.getElementById('hist_line').value;
-  const type   = document.getElementById('hist_type').value;
-  const result = document.getElementById('hist_result').value;
+// ════════════════════════════════
+async function loadHist() {
+  const date=document.getElementById('hi_date').value, line=document.getElementById('hi_line').value;
+  const type=document.getElementById('hi_type').value, res=document.getElementById('hi_res').value;
 
-  // 피더 체크 이력
-  if (!type || type === 'feeder') {
+  if(!type||type==='f') {
     try {
-      let q = sb.from('mfg_feeder_check').select('*').order('created_at', { ascending:false });
-      if (date)   q = q.eq('check_date', date);
-      if (line)   q = q.eq('line', line);
-      if (result) q = q.eq('result', result);
-      const { data } = await q.limit(200);
-      renderFeederHistory(data || []);
-    } catch(e) { console.error(e); }
+      let q=sb.from('mfg_feeder_check').select('*').order('created_at',{ascending:false});
+      if(date) q=q.eq('check_date',date); if(line) q=q.eq('line',line); if(res) q=q.eq('result',res);
+      const{data}=await q.limit(200);
+      const tbody=document.getElementById('hi_f');
+      if(!data||!data.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:#bbb">이력 없음</td></tr>';return;}
+      tbody.innerHTML=data.map(r=>`<tr>
+        <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
+        <td><span class="badge ${r.line==='1라인'?'b-l1':r.line==='2라인'?'b-l2':'b-l3'}">${r.line}</span></td>
+        <td style="font-family:var(--mono);font-size:11px">${r.barcode_val||'-'}</td>
+        <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--text-s)">${r.lot_no||'-'}</td>
+        <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
+        <td style="font-size:11px;color:var(--ng)">${r.ng_reason||'-'}</td>
+        <td style="font-size:12px">${r.operator||'-'}</td>
+      </tr>`).join('');
+    } catch(e){console.error(e);}
   }
 
-  // 부품 교환 이력
-  if (!type || type === 'reel') {
+  if(!type||type==='r') {
     try {
-      let q = sb.from('mfg_reel_change').select('*').order('created_at', { ascending:false });
-      if (date)   q = q.eq('change_date', date);
-      if (line)   q = q.eq('line', line);
-      if (result) q = q.eq('result', result);
-      const { data } = await q.limit(200);
-      renderReelHistory(data || []);
-    } catch(e) { console.error(e); }
+      let q=sb.from('mfg_reel_change').select('*').order('created_at',{ascending:false});
+      if(date) q=q.eq('change_date',date); if(line) q=q.eq('line',line); if(res) q=q.eq('result',res);
+      const{data}=await q.limit(200);
+      const tbody=document.getElementById('hi_r');
+      if(!data||!data.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#bbb">이력 없음</td></tr>';return;}
+      tbody.innerHTML=data.map(r=>`<tr>
+        <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
+        <td><span class="badge ${r.line==='1라인'?'b-l1':r.line==='2라인'?'b-l2':'b-l3'}">${r.line}</span></td>
+        <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--text-s)">${r.old_lot||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--pri)">${r.new_lot||'-'}</td>
+        <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
+        <td style="font-size:12px">${r.operator||'-'}</td>
+      </tr>`).join('');
+    } catch(e){console.error(e);}
   }
-
-  // 섹션 표시/숨김
-  document.getElementById('hist_feederSection').style.display = (!type || type === 'feeder') ? '' : 'none';
-  document.getElementById('hist_reelSection').style.display   = (!type || type === 'reel')   ? '' : 'none';
 }
 
-function renderFeederHistory(data) {
-  const tbody = document.getElementById('hist_feederTbody');
-  if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:#bbb">이력 없음</td></tr>';
-    return;
-  }
-  tbody.innerHTML = data.map(r => `
-    <tr>
-      <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
-      <td><span class="badge ${r.line==='1라인'?'b-l1':r.line==='2라인'?'b-l2':'b-l3'}">${r.line}</span></td>
-      <td style="font-family:var(--mono);font-size:11px">${r.barcode_val||'-'}</td>
-      <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
-      <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--text-s)">${r.lot_no||'-'}</td>
-      <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
-      <td style="font-size:11px;color:var(--ng)">${r.ng_reason||'-'}</td>
-      <td style="font-size:12px">${r.operator||'-'}</td>
-    </tr>`).join('');
-}
-
-function renderReelHistory(data) {
-  const tbody = document.getElementById('hist_reelTbody');
-  if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:#bbb">이력 없음</td></tr>';
-    return;
-  }
-  tbody.innerHTML = data.map(r => `
-    <tr>
-      <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
-      <td><span class="badge ${r.line==='1라인'?'b-l1':r.line==='2라인'?'b-l2':'b-l3'}">${r.line}</span></td>
-      <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
-      <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--text-s)">${r.old_lot||'-'}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--primary)">${r.new_lot||'-'}</td>
-      <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
-      <td style="font-size:12px">${r.operator||'-'}</td>
-    </tr>`).join('');
-}
-
-function fmtDt(dt) {
-  if (!dt) return '-';
-  return dt.replace('T',' ').substring(5,16);
-}
-
-// ══════════════════════════════════
-// 엑셀 이력 다운로드
-// ══════════════════════════════════
-async function exportHistory() {
+async function exportHist() {
   showToast('📥 엑셀 생성 중...');
-  const wb   = new ExcelJS.Workbook();
-  const F_KR = 'LG PC', F_EN = 'Arial Narrow';
-
-  const stl = (cell, opts={}) => {
-    const { fn=F_EN, sz=9, bold=false, col='000000', bg=null, align='left' } = opts;
-    cell.font = { name:fn, size:sz, bold, color:{ argb:'FF'+col } };
-    cell.alignment = { horizontal:align, vertical:'middle' };
-    if (bg) cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF'+bg } };
-    const bs = { style:'thin', color:{ argb:'FFD0D0D0' } };
-    cell.border = { top:bs, bottom:bs, left:bs, right:bs };
-  };
-
-  // 피더 체크 시트
-  const ws1 = wb.addWorksheet('피더체크이력');
-  ws1.columns = [16,12,20,14,16,16,6,20,10].map(w=>({width:w}));
-  const h1 = ws1.addRow(['일시','라인','작업지시','피더No','LG품번','LOT','결과','NG사유','작업자']);
-  h1.height = 18;
-  h1.eachCell(c => stl(c, { sz:10, bold:true, col:'FFFFFF', bg:'1e3a8a', align:'center' }));
-
-  const rows1 = document.querySelectorAll('#hist_feederTbody tr td:first-child');
-  // 현재 화면 데이터 그대로 수집
-  document.querySelectorAll('#hist_feederTbody tr').forEach(tr => {
-    const tds = tr.querySelectorAll('td');
-    if (!tds.length) return;
-    const row = ws1.addRow([...tds].map(td => td.textContent.trim()));
-    row.height = 15;
-    row.eachCell(c => stl(c));
-  });
-
-  // 부품교환 시트
-  const ws2 = wb.addWorksheet('부품교환이력');
-  ws2.columns = [16,12,14,16,16,16,6,10].map(w=>({width:w}));
-  const h2 = ws2.addRow(['일시','라인','피더No','LG품번','기존LOT','신규LOT','결과','작업자']);
-  h2.height = 18;
-  h2.eachCell(c => stl(c, { sz:10, bold:true, col:'FFFFFF', bg:'1e3a8a', align:'center' }));
-
-  document.querySelectorAll('#hist_reelTbody tr').forEach(tr => {
-    const tds = tr.querySelectorAll('td');
-    if (!tds.length) return;
-    const row = ws2.addRow([...tds].map(td => td.textContent.trim()));
-    row.height = 15;
-    row.eachCell(c => stl(c));
-  });
-
-  const d   = new Date();
-  const ds  = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const buf = await wb.xlsx.writeBuffer();
-  const blob= new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href = url; a.download = `SME_LOT추적이력_${ds}.xlsx`; a.click();
+  const wb=new ExcelJS.Workbook();
+  const stl=(cell,opts={})=>{const{fn='Arial Narrow',sz=9,bold=false,col='000000',bg=null,align='left'}=opts;cell.font={name:fn,size:sz,bold,color:{argb:'FF'+col}};cell.alignment={horizontal:align,vertical:'middle'};if(bg)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};const bs={style:'thin',color:{argb:'FFD0D0D0'}};cell.border={top:bs,bottom:bs,left:bs,right:bs};};
+  const ws1=wb.addWorksheet('피더체크이력');
+  ws1.columns=[16,10,20,13,15,15,6,18,10].map(w=>({width:w}));
+  const h1=ws1.addRow(['일시','라인','작업지시','피더No','LG품번','LOT','결과','NG사유','작업자']);
+  h1.height=18;h1.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  document.querySelectorAll('#hi_f tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(!tds.length)return;const row=ws1.addRow([...tds].map(td=>td.textContent.trim()));row.height=15;row.eachCell(c=>stl(c));});
+  const ws2=wb.addWorksheet('부품교환이력');
+  ws2.columns=[16,10,13,15,16,16,6,10].map(w=>({width:w}));
+  const h2=ws2.addRow(['일시','라인','피더No','LG품번','기존LOT','신규LOT','결과','작업자']);
+  h2.height=18;h2.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  document.querySelectorAll('#hi_r tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(!tds.length)return;const row=ws2.addRow([...tds].map(td=>td.textContent.trim()));row.height=15;row.eachCell(c=>stl(c));});
+  const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`SME_LOT추적이력_${ds}.xlsx`;a.click();
   URL.revokeObjectURL(url);
-  showToast('📥 엑셀 다운로드 완료');
+  showToast('📥 다운로드 완료');
 }
 
-// ══════════════════════════════════
-// 소리 시스템 (Web Audio API)
-// ══════════════════════════════════
-function playSound(type) {
+// ════════════════════════════════
+// 소리
+// ════════════════════════════════
+function playSound(t) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const vol = parseFloat(document.getElementById('snd_vol').value) || 0.8;
-    const gain = ctx.createGain();
-    gain.gain.value = vol;
-    gain.connect(ctx.destination);
-
-    const sndOk   = document.getElementById('snd_ok').value;
-    const sndNg   = document.getElementById('snd_ng').value;
-    const sndDone = document.getElementById('snd_done').value;
-
-    if (type === 'ok') {
-      if (sndOk === 'ok1') { beep(ctx, gain, 880, 0,    0.12); beep(ctx, gain, 880, 0.16, 0.12); }
-      if (sndOk === 'ok2') { beep(ctx, gain, 880, 0,    0.4); }
-      if (sndOk === 'ok3') { beep(ctx, gain, 880, 0,    0.1); beep(ctx, gain, 880, 0.14, 0.1); beep(ctx, gain, 880, 0.28, 0.1); }
-      if (sndOk === 'ok4') { beep(ctx, gain, 660, 0,    0.15); beep(ctx, gain, 880, 0.18, 0.2); }
-    }
-    if (type === 'ng') {
-      if (sndNg === 'ng1') { beep(ctx, gain, 280, 0,    0.8, 'sawtooth'); }
-      if (sndNg === 'ng2') { [0,.15,.3,.45].forEach(t => beep(ctx, gain, 280, t, 0.1, 'sawtooth')); }
-      if (sndNg === 'ng3') { beep(ctx, gain, 280, 0,    0.25,'sawtooth'); beep(ctx, gain, 280, 0.3, 0.25,'sawtooth'); }
-      if (sndNg === 'ng4') {
-        for (let i=0; i<8; i++) beep(ctx, gain, 300+i*20, i*0.08, 0.06, 'sawtooth');
-      }
-    }
-    if (type === 'done') {
-      if (sndDone === 'done1') { beep(ctx, gain, 600, 0,    0.15); }
-      if (sndDone === 'done2') { beep(ctx, gain, 880, 0,    0.1); }
-      if (sndDone === 'done3') { beep(ctx, gain, 600, 0,    0.12); beep(ctx, gain, 800, 0.15, 0.15); }
-    }
-  } catch(e) { console.warn('소리 재생 실패:', e); }
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const vol=parseFloat(document.getElementById('snd_vol').value)||0.8;
+    const g=ctx.createGain();g.gain.value=vol;g.connect(ctx.destination);
+    const ok=document.getElementById('snd_ok').value,ng=document.getElementById('snd_ng').value,done=document.getElementById('snd_done').value;
+    const b=(f,s,d,tp='sine')=>{const o=ctx.createOscillator();o.type=tp;o.frequency.value=f;o.connect(g);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d);};
+    if(t==='ok'){if(ok==='ok1'){b(880,0,.12);b(880,.16,.12);}if(ok==='ok2')b(880,0,.4);if(ok==='ok3'){b(880,0,.1);b(880,.14,.1);b(880,.28,.1);}if(ok==='ok4'){b(660,0,.15);b(880,.18,.2);}}
+    if(t==='ng'){if(ng==='ng1')b(280,0,.8,'sawtooth');if(ng==='ng2')[0,.15,.3,.45].forEach(s=>b(280,s,.1,'sawtooth'));if(ng==='ng3'){b(280,0,.25,'sawtooth');b(280,.3,.25,'sawtooth');}if(ng==='ng4')for(let i=0;i<8;i++)b(300+i*20,i*.08,.06,'sawtooth');}
+    if(t==='done'){if(done==='d1')b(600,0,.15);if(done==='d2')b(880,0,.1);if(done==='d3'){b(600,0,.12);b(800,.15,.15);}}
+  } catch(e){console.warn(e);}
+}
+function saveSnd() {
+  ['ok','ng','done','vol'].forEach(k=>localStorage.setItem('mfg_snd_'+k,document.getElementById(k==='vol'?'snd_vol':'snd_'+k).value));
+  showToast('💾 저장 완료'); playSound('done');
+}
+function loadSnd() {
+  const ok=localStorage.getItem('mfg_snd_ok'),ng=localStorage.getItem('mfg_snd_ng'),done=localStorage.getItem('mfg_snd_done'),vol=localStorage.getItem('mfg_snd_vol');
+  if(ok)  document.getElementById('snd_ok').value=ok;
+  if(ng)  document.getElementById('snd_ng').value=ng;
+  if(done)document.getElementById('snd_done').value=done;
+  if(vol) {document.getElementById('snd_vol').value=vol;document.getElementById('svp').textContent=Math.round(vol*100)+'%';}
 }
 
-function beep(ctx, dest, freq, startTime, duration, type='sine') {
-  const osc = ctx.createOscillator();
-  osc.type = type;
-  osc.frequency.value = freq;
-  osc.connect(dest);
-  osc.start(ctx.currentTime + startTime);
-  osc.stop(ctx.currentTime + startTime + duration);
-}
-
-function saveSoundSettings() {
-  localStorage.setItem('mfg_snd_ok',   document.getElementById('snd_ok').value);
-  localStorage.setItem('mfg_snd_ng',   document.getElementById('snd_ng').value);
-  localStorage.setItem('mfg_snd_done', document.getElementById('snd_done').value);
-  localStorage.setItem('mfg_snd_vol',  document.getElementById('snd_vol').value);
-  showToast('💾 소리 설정 저장 완료');
-  playSound('done');
-}
-
-function loadSoundSettings() {
-  const ok   = localStorage.getItem('mfg_snd_ok');
-  const ng   = localStorage.getItem('mfg_snd_ng');
-  const done = localStorage.getItem('mfg_snd_done');
-  const vol  = localStorage.getItem('mfg_snd_vol');
-  if (ok)   document.getElementById('snd_ok').value   = ok;
-  if (ng)   document.getElementById('snd_ng').value   = ng;
-  if (done) document.getElementById('snd_done').value = done;
-  if (vol)  {
-    document.getElementById('snd_vol').value = vol;
-    document.getElementById('snd_volPct').textContent = Math.round(vol * 100) + '%';
-  }
-}
-
-// ══════════════════════════════════
-// 유틸
-// ══════════════════════════════════
-function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
+// ── 유틸 ──
+function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function fmtDt(dt){if(!dt)return'-';return dt.replace('T',' ').substring(5,16);}
+function extractLot(scan,mkrPn){if(mkrPn&&scan.includes(mkrPn))return scan.replace(mkrPn,'').trim()||scan;return scan;}
 
 let _tt;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(_tt);
-  _tt = setTimeout(() => t.classList.remove('show'), 2800);
-}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
 
-// ══════════════════════════════════
 // 시작
-// ══════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
-  if (localStorage.getItem('sme_auth') === '1') {
-    document.getElementById('loginOverlay').style.display = 'none';
-    init();
-  }
+window.addEventListener('DOMContentLoaded',()=>{
+  if(localStorage.getItem('sme_auth')==='1'){document.getElementById('lo').style.display='none';init();}
 });
 </script>
 </body>
