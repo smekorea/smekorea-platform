@@ -645,13 +645,15 @@ input[type=file] { display: none; }
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
           <input type="checkbox" id="col_spec"    checked> SPEC</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
-          <input type="checkbox" id="col_moq"     checked> MOQ</label>
+          <input type="checkbox" id="col_moq"          > MOQ</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
-          <input type="checkbox" id="col_maker"   checked> Maker</label>
+          <input type="checkbox" id="col_maker"        > Maker</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
           <input type="checkbox" id="col_trade"        > 거래유형</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
-          <input type="checkbox" id="col_qty"     checked> 모델별소요량</label>
+          <input type="checkbox" id="col_qty"     checked> 점수(소요량)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_barcode" checked> 바코드</label>
       </div>
     </div>
 
@@ -1980,6 +1982,24 @@ async function previewPrint() {
       return;
     }
 
+    // ST No 숫자 정렬
+    // M1-F-01, M1-F-02 ... M1-F-30, M2-F-01 ...
+    const parseStNo = stno => {
+      // M1-F-12L → { machine:'M1', side:'F', num:12, lr:'L' }
+      const m = stno.match(/^(M\d+)-([FR])-(\d+)([LR]?)$/i);
+      if (!m) return { machine:'', side:'', num:0, lr:'' };
+      return { machine: m[1], side: m[2], num: parseInt(m[3]), lr: m[4] };
+    };
+
+    filtered.sort((a, b) => {
+      const pa = parseStNo(a.st_no);
+      const pb = parseStNo(b.st_no);
+      if (pa.machine !== pb.machine) return pa.machine.localeCompare(pb.machine);
+      if (pa.side    !== pb.side)    return pa.side.localeCompare(pb.side);
+      if (pa.num     !== pb.num)     return pa.num - pb.num;
+      return pa.lr.localeCompare(pb.lr);
+    });
+
     _printData = filtered;
     renderPrintPreview(selectedModels);
     document.getElementById('pr_exportBtn').style.display = '';
@@ -2000,23 +2020,25 @@ async function previewPrint() {
 function renderPrintPreview(selectedModels) {
   const showStno  = document.getElementById('col_stno').checked;
   const showLgpn  = document.getElementById('col_lgpn').checked;
-  const showMkrpn = document.getElementById('col_mkrpn').checked;
-  const showSpec  = document.getElementById('col_spec').checked;
-  const showMoq   = document.getElementById('col_moq').checked;
-  const showMaker = document.getElementById('col_maker').checked;
-  const showTrade = document.getElementById('col_trade').checked;
-  const showQty   = document.getElementById('col_qty').checked;
+  const showMkrpn   = document.getElementById('col_mkrpn').checked;
+  const showSpec    = document.getElementById('col_spec').checked;
+  const showMoq     = document.getElementById('col_moq').checked;
+  const showMaker   = document.getElementById('col_maker').checked;
+  const showTrade   = document.getElementById('col_trade').checked;
+  const showQty     = document.getElementById('col_qty').checked;
+  const showBarcode = document.getElementById('col_barcode').checked;
 
   // 헤더
   const headers = [];
-  if (showStno)  headers.push('ST No');
-  if (showLgpn)  headers.push('LG품번');
-  if (showMkrpn) headers.push('메이커품번①');
-  if (showSpec)  headers.push('SPEC');
-  if (showMoq)   headers.push('MOQ');
-  if (showMaker) headers.push('Maker');
-  if (showTrade) headers.push('거래유형');
-  if (showQty)   selectedModels.forEach(m => headers.push(m));
+  if (showStno)    headers.push('ST No');
+  if (showLgpn)    headers.push('LG품번');
+  if (showMkrpn)   headers.push('메이커품번①');
+  if (showSpec)    headers.push('SPEC');
+  if (showMoq)     headers.push('MOQ');
+  if (showMaker)   headers.push('Maker');
+  if (showTrade)   headers.push('거래유형');
+  if (showQty)     selectedModels.forEach(m => headers.push(`점수`));
+  if (showBarcode) headers.push('바코드');
 
   const thead = document.getElementById('pr_thead');
   const tbody = document.getElementById('pr_tbody');
@@ -2026,17 +2048,18 @@ function renderPrintPreview(selectedModels) {
 
   tbody.innerHTML = _printData.map(r => {
     const cells = [];
-    if (showStno)  cells.push(`<td style="font-family:var(--mono);font-weight:700;font-size:12px">${r.st_no}</td>`);
-    if (showLgpn)  cells.push(`<td style="font-family:var(--mono);font-size:11px;color:var(--primary)">${r.lg_pn}</td>`);
-    if (showMkrpn) cells.push(`<td style="font-family:var(--mono);font-size:11px">${r.maker_pn1}</td>`);
-    if (showSpec)  cells.push(`<td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.spec}</td>`);
-    if (showMoq)   cells.push(`<td style="font-family:var(--mono);text-align:right">${r.moq?.toLocaleString?.() || r.moq}</td>`);
-    if (showMaker) cells.push(`<td style="font-size:11px">${r.maker}</td>`);
-    if (showTrade) cells.push(`<td style="font-size:11px">${r.trade}</td>`);
-    if (showQty)   selectedModels.forEach(m => {
+    if (showStno)    cells.push(`<td style="font-family:var(--mono);font-weight:700;font-size:12px">${r.st_no}</td>`);
+    if (showLgpn)    cells.push(`<td style="font-family:var(--mono);font-size:11px;color:var(--primary)">${r.lg_pn}</td>`);
+    if (showMkrpn)   cells.push(`<td style="font-family:var(--mono);font-size:11px">${r.maker_pn1}</td>`);
+    if (showSpec)    cells.push(`<td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.spec}</td>`);
+    if (showMoq)     cells.push(`<td style="font-family:var(--mono);text-align:right">${r.moq?.toLocaleString?.() || r.moq}</td>`);
+    if (showMaker)   cells.push(`<td style="font-size:11px">${r.maker}</td>`);
+    if (showTrade)   cells.push(`<td style="font-size:11px">${r.trade}</td>`);
+    if (showQty)     selectedModels.forEach(m => {
       const q = r.qtys[m] || 0;
       cells.push(`<td style="text-align:center;font-weight:${q>0?'700':'400'};color:${q>0?'var(--primary)':'#ccc'}">${q||'-'}</td>`);
     });
+    if (showBarcode) cells.push(`<td style="font-family:'Free 3 of 9',monospace;font-size:28px;letter-spacing:2px">*${r.st_no}*</td>`);
     return `<tr>${cells.join('')}</tr>`;
   }).join('');
 
@@ -2073,43 +2096,45 @@ async function exportPrint() {
 
   showToast('📥 엑셀 생성 중...');
 
-  const showStno  = document.getElementById('col_stno').checked;
-  const showLgpn  = document.getElementById('col_lgpn').checked;
-  const showMkrpn = document.getElementById('col_mkrpn').checked;
-  const showSpec  = document.getElementById('col_spec').checked;
-  const showMoq   = document.getElementById('col_moq').checked;
-  const showMaker = document.getElementById('col_maker').checked;
-  const showTrade = document.getElementById('col_trade').checked;
-  const showQty   = document.getElementById('col_qty').checked;
+  const showStno    = document.getElementById('col_stno').checked;
+  const showLgpn    = document.getElementById('col_lgpn').checked;
+  const showMkrpn   = document.getElementById('col_mkrpn').checked;
+  const showSpec    = document.getElementById('col_spec').checked;
+  const showMoq     = document.getElementById('col_moq').checked;
+  const showMaker   = document.getElementById('col_maker').checked;
+  const showTrade   = document.getElementById('col_trade').checked;
+  const showQty     = document.getElementById('col_qty').checked;
+  const showBarcode = document.getElementById('col_barcode').checked;
 
   // 헤더
   const headers = [];
-  if (showStno)  headers.push({ label: 'ST No',      width: 14 });
-  if (showLgpn)  headers.push({ label: 'LG품번',     width: 16 });
-  if (showMkrpn) headers.push({ label: '메이커품번①', width: 20 });
-  if (showSpec)  headers.push({ label: 'SPEC',        width: 24 });
-  if (showMoq)   headers.push({ label: 'MOQ',         width: 8  });
-  if (showMaker) headers.push({ label: 'Maker',       width: 12 });
-  if (showTrade) headers.push({ label: '거래유형',    width: 8  });
-  if (showQty)   selectedModels.forEach(m => headers.push({ label: m, width: 14 }));
+  if (showStno)    headers.push({ label: 'ST No',       width: 14 });
+  if (showLgpn)    headers.push({ label: 'LG품번',      width: 16 });
+  if (showMkrpn)   headers.push({ label: '메이커품번①', width: 20 });
+  if (showSpec)    headers.push({ label: 'SPEC',         width: 24 });
+  if (showMoq)     headers.push({ label: 'MOQ',          width: 8  });
+  if (showMaker)   headers.push({ label: 'Maker',        width: 12 });
+  if (showTrade)   headers.push({ label: '거래유형',     width: 8  });
+  if (showQty)     selectedModels.forEach(m => headers.push({ label: '점수', width: 8 }));
+  if (showBarcode) headers.push({ label: '바코드',       width: 30 });
 
   // 데이터 행
   const dataRows = _printData.map(r => {
     const cells = [];
-    if (showStno)  cells.push(r.st_no);
-    if (showLgpn)  cells.push(r.lg_pn);
-    if (showMkrpn) cells.push(r.maker_pn1 === '-' ? '' : r.maker_pn1);
-    if (showSpec)  cells.push(r.spec === '-' ? '' : r.spec);
-    if (showMoq)   cells.push(r.moq === '-' ? '' : r.moq);
-    if (showMaker) cells.push(r.maker === '-' ? '' : r.maker);
-    if (showTrade) cells.push(r.trade === '-' ? '' : r.trade);
-    if (showQty)   selectedModels.forEach(m => cells.push(r.qtys[m] || 0));
+    if (showStno)    cells.push(r.st_no);
+    if (showLgpn)    cells.push(r.lg_pn);
+    if (showMkrpn)   cells.push(r.maker_pn1 === '-' ? '' : r.maker_pn1);
+    if (showSpec)    cells.push(r.spec === '-' ? '' : r.spec);
+    if (showMoq)     cells.push(r.moq === '-' ? '' : r.moq);
+    if (showMaker)   cells.push(r.maker === '-' ? '' : r.maker);
+    if (showTrade)   cells.push(r.trade === '-' ? '' : r.trade);
+    if (showQty)     selectedModels.forEach(m => cells.push(r.qtys[m] || 0));
+    if (showBarcode) cells.push(`*${r.st_no}*`);
     return cells;
   });
 
-  // QR코드 생성용 ST No 목록
+  // ST No 목록
   const stNos = _printData.map(r => r.st_no);
-
   // SheetJS로 Sheet1(배치도) 생성
   const wb = XLSX.utils.book_new();
 
