@@ -356,6 +356,12 @@ input[type=file] { display: none; }
       <span class="ti">🖨️</span>배치도 출력
     </div>
   </div>
+  <div class="tab-group">
+    <span class="tab-group-label">운영관리</span>
+    <div class="tab" onclick="showTab('operator')" id="tab_operator">
+      <span class="ti">👤</span>작업자<br>관리
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════
@@ -686,6 +692,72 @@ input[type=file] { display: none; }
 </div>
 
 
+<!-- ══════════════════════
+     탭5: 작업자 관리
+══════════════════════ -->
+<div class="pnl" id="pnl_operator">
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-val" id="op_kpi_total">-</div><div class="kpi-lbl">전체</div></div>
+    <div class="kpi ok"><div class="kpi-val" id="op_kpi_active">-</div><div class="kpi-lbl">재직중 Y</div></div>
+    <div class="kpi off"><div class="kpi-val" id="op_kpi_inactive">-</div><div class="kpi-lbl">퇴직/미사용 N</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-tit">👤 작업자 관리</div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="openOpAddModal()">➕ 신규 등록</button>
+      <button class="btn btn-green"   onclick="downloadOperators()">📥 엑셀 다운</button>
+    </div>
+
+    <!-- 필터 -->
+    <div class="filter-row">
+      <select id="op_fDept" onchange="renderOperators()">
+        <option value="">전체 소속</option>
+        <option>제조팀</option><option>자재팀</option><option>품질팀</option><option>기타</option>
+      </select>
+      <select id="op_fActive" onchange="renderOperators()">
+        <option value="">전체</option>
+        <option value="Y">재직중 Y</option>
+        <option value="N">퇴직/미사용 N</option>
+      </select>
+      <input type="text" class="filter-search" id="op_fKw"
+        placeholder="🔍 이름 검색..." oninput="renderOperators()">
+    </div>
+
+    <!-- 상태바 -->
+    <div class="status-bar">
+      <span class="sdot load" id="op_sdot"></span>
+      <span id="op_stext">데이터 로딩 중...</span>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>이름</th>
+            <th>직급/직책</th>
+            <th>소속</th>
+            <th>입사일자</th>
+            <th>연락처</th>
+            <th>Telegram ID</th>
+            <th>사용여부</th>
+            <th>비고</th>
+            <th>관리</th>
+          </tr>
+        </thead>
+        <tbody id="op_tbody">
+          <tr><td colspan="10" style="text-align:center;padding:28px;color:#bbb">로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl-count" id="op_count"></div>
+  </div>
+</div>
+
 <!-- ══ 추가/수정 모달 ══ -->
 <div class="modal-overlay" id="lmModal">
   <div class="modal-box">
@@ -758,6 +830,69 @@ input[type=file] { display: none; }
     <div class="m-footer">
       <button class="btn btn-gray" onclick="closeLMModal()">취소</button>
       <button class="btn btn-primary" id="lmSaveBtn" onclick="saveLM()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 작업자 추가/수정 모달 ══ -->
+<div class="modal-overlay" id="opModal">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <span class="m-title" id="opModalTitle">작업자 신규 등록</span>
+      <button class="m-close" onclick="closeOpModal()">✕</button>
+    </div>
+    <div class="m-body">
+      <input type="hidden" id="op_editId">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="fg">
+          <label>이름 *</label>
+          <input type="text" id="op_inp_name" placeholder="이름 입력">
+        </div>
+        <div class="fg">
+          <label>직급/직책</label>
+          <input type="text" id="op_inp_position" placeholder="예: 반장, 작업자">
+        </div>
+        <div class="fg">
+          <label>소속</label>
+          <select id="op_inp_dept">
+            <option value="제조팀">제조팀</option>
+            <option value="자재팀">자재팀</option>
+            <option value="품질팀">품질팀</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>사용여부</label>
+          <select id="op_inp_active">
+            <option value="Y">Y — 재직중</option>
+            <option value="N">N — 퇴직/미사용</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>입사일자</label>
+          <input type="date" id="op_inp_join">
+        </div>
+        <div class="fg">
+          <label>연락처</label>
+          <input type="text" id="op_inp_phone" placeholder="010-0000-0000">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>Telegram ID &nbsp;<span style="font-weight:400;color:var(--text-s)">(알림 연동용 — @없이 입력)</span></label>
+        <input type="text" id="op_inp_telegram" placeholder="예: username123">
+      </div>
+
+      <div class="fg">
+        <label>비고</label>
+        <input type="text" id="op_inp_note" placeholder="비고">
+      </div>
+    </div>
+    <div class="m-footer">
+      <button class="btn btn-gray" onclick="closeOpModal()">취소</button>
+      <button class="btn btn-primary" id="opSaveBtn" onclick="saveOperator()">저장</button>
     </div>
   </div>
 </div>
@@ -839,6 +974,7 @@ function init() {
   loadLM().then(() => loadPrintModels());
   loadBOM();
   loadPlacement();
+  loadOperators();
 }
 
 // ══════════════════════════════════
@@ -1142,6 +1278,25 @@ function closeDelModal() {
   document.getElementById('delModal').classList.remove('show');
 }
 async function confirmDel() {
+  const mode = document.getElementById('deleteModal').dataset.mode;
+  if (mode === 'operator') {
+    // 작업자 삭제
+    if (!_opDelId) return;
+    try {
+      const { error } = await sb.from('mfg_operators').delete().eq('id', _opDelId);
+      if (error) throw error;
+      showToast('🗑️ 삭제 완료');
+      document.getElementById('deleteModal').classList.remove('show');
+      document.getElementById('deleteModal').dataset.mode = '';
+      _opDelId = null;
+      await loadOperators();
+    } catch(e) {
+      showToast('❌ 삭제 실패: ' + (e.message || String(e)));
+      console.error(e);
+    }
+    return;
+  }
+  // 라인별 적용모델 삭제
   if (!_delId) return;
   try {
     const { error } = await sb.from('mfg_line_model').delete().eq('id', _delId);
@@ -2310,6 +2465,200 @@ async function exportPrint() {
 // 토스트
 // ══════════════════════════════════
 let _tt;
+// ══════════════════════════════════
+// 작업자 관리
+// ══════════════════════════════════
+let _operators = [];
+
+async function loadOperators() {
+  setOpStatus('load', '데이터 로딩 중...');
+  try {
+    const { data, error } = await sb.from('mfg_operators')
+      .select('*').order('department').order('name');
+    if (error) throw error;
+    _operators = data || [];
+    updateOpKPI();
+    renderOperators();
+    setOpStatus('ok', `${_operators.length}건 로드 완료`);
+  } catch(e) {
+    _operators = [];
+    renderOperators();
+    setOpStatus('warn', 'DB 연결 오류');
+    console.error(e);
+  }
+}
+
+function setOpStatus(type, text) {
+  document.getElementById('op_sdot').className = 'sdot ' + type;
+  document.getElementById('op_stext').textContent = text;
+}
+
+function updateOpKPI() {
+  document.getElementById('op_kpi_total').textContent   = _operators.length;
+  document.getElementById('op_kpi_active').textContent  = _operators.filter(r => r.active === 'Y').length;
+  document.getElementById('op_kpi_inactive').textContent= _operators.filter(r => r.active !== 'Y').length;
+}
+
+function renderOperators() {
+  const fDept   = document.getElementById('op_fDept').value;
+  const fActive = document.getElementById('op_fActive').value;
+  const fKw     = (document.getElementById('op_fKw').value || '').toLowerCase();
+
+  const data = _operators.filter(r => {
+    if (fDept   && r.department !== fDept)   return false;
+    if (fActive && r.active     !== fActive) return false;
+    if (fKw && !(r.name || '').toLowerCase().includes(fKw)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('op_tbody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty">
+      <div class="ei">📭</div><div class="et">데이터가 없습니다</div>
+      <div class="es">신규 등록 버튼을 이용하세요</div>
+    </div></td></tr>`;
+    document.getElementById('op_count').textContent = '';
+    return;
+  }
+
+  tbody.innerHTML = data.map((r, i) => `
+    <tr class="${r.active !== 'Y' ? 'inactive' : ''}">
+      <td style="color:var(--text-s);font-size:11px;font-family:var(--mono)">${i+1}</td>
+      <td style="font-weight:700;font-size:14px">${r.name || '-'}</td>
+      <td style="font-size:12px">${r.position || '-'}</td>
+      <td><span class="badge" style="background:#e8eaf6;color:#1a237e">${r.department || '-'}</span></td>
+      <td style="font-size:11px;color:var(--text-s)">${r.join_date || '-'}</td>
+      <td style="font-family:var(--mono);font-size:12px">${r.phone || '-'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.telegram_id ? '@'+r.telegram_id : '-'}</td>
+      <td>${r.active === 'Y'
+        ? '<span class="badge b-y">Y</span>'
+        : '<span class="badge b-n">N</span>'}</td>
+      <td style="font-size:11px;color:var(--text-s)">${r.note || ''}</td>
+      <td>
+        <div style="display:flex;gap:4px;white-space:nowrap">
+          <button class="btn btn-gray btn-sm" onclick="openOpEditModal(${r.id})">수정</button>
+          <button class="btn btn-red  btn-sm" onclick="openOpDelModal(${r.id},'${(r.name||'').replace(/'/g,"\\'")}')">삭제</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('op_count').textContent =
+    `표시 ${data.length}건 / 전체 ${_operators.length}건`;
+}
+
+// 추가 모달
+function openOpAddModal() {
+  document.getElementById('opModalTitle').textContent = '작업자 신규 등록';
+  document.getElementById('op_editId').value = '';
+  document.getElementById('op_inp_name').value     = '';
+  document.getElementById('op_inp_position').value = '';
+  document.getElementById('op_inp_dept').value     = '제조팀';
+  document.getElementById('op_inp_active').value   = 'Y';
+  document.getElementById('op_inp_join').value     = '';
+  document.getElementById('op_inp_phone').value    = '';
+  document.getElementById('op_inp_telegram').value = '';
+  document.getElementById('op_inp_note').value     = '';
+  document.getElementById('opModal').classList.add('show');
+  setTimeout(() => document.getElementById('op_inp_name').focus(), 300);
+}
+
+// 수정 모달
+function openOpEditModal(id) {
+  const r = _operators.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('opModalTitle').textContent = '작업자 정보 수정';
+  document.getElementById('op_editId').value           = id;
+  document.getElementById('op_inp_name').value         = r.name       || '';
+  document.getElementById('op_inp_position').value     = r.position   || '';
+  document.getElementById('op_inp_dept').value         = r.department || '제조팀';
+  document.getElementById('op_inp_active').value       = r.active     || 'Y';
+  document.getElementById('op_inp_join').value         = r.join_date  || '';
+  document.getElementById('op_inp_phone').value        = r.phone      || '';
+  document.getElementById('op_inp_telegram').value     = r.telegram_id|| '';
+  document.getElementById('op_inp_note').value         = r.note       || '';
+  document.getElementById('opModal').classList.add('show');
+}
+
+function closeOpModal() {
+  document.getElementById('opModal').classList.remove('show');
+}
+
+// 저장
+async function saveOperator() {
+  const name     = document.getElementById('op_inp_name').value.trim();
+  const position = document.getElementById('op_inp_position').value.trim();
+  const dept     = document.getElementById('op_inp_dept').value;
+  const active   = document.getElementById('op_inp_active').value;
+  const join     = document.getElementById('op_inp_join').value;
+  const phone    = document.getElementById('op_inp_phone').value.trim();
+  const telegram = document.getElementById('op_inp_telegram').value.trim();
+  const note     = document.getElementById('op_inp_note').value.trim();
+  const editId   = document.getElementById('op_editId').value;
+
+  if (!name) { showToast('⚠️ 이름을 입력하세요'); return; }
+
+  const payload = {
+    name, position: position || null, department: dept,
+    active, join_date: join || null, phone: phone || null,
+    telegram_id: telegram || null, note: note || null,
+  };
+
+  const btn = document.getElementById('opSaveBtn');
+  btn.disabled = true; btn.textContent = '저장 중...';
+
+  try {
+    if (editId) {
+      const { error } = await sb.from('mfg_operators').update(payload).eq('id', editId);
+      if (error) throw error;
+      showToast('✅ 수정 완료');
+    } else {
+      if (_operators.find(r => r.name === name)) {
+        showToast('⚠️ 동일한 이름이 이미 존재합니다'); return;
+      }
+      const { error } = await sb.from('mfg_operators').insert(payload);
+      if (error) throw error;
+      showToast('✅ 등록 완료');
+    }
+    closeOpModal();
+    await loadOperators();
+  } catch(e) {
+    showToast('❌ 저장 실패: ' + (e.message || String(e)));
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = '저장';
+  }
+}
+
+// 삭제
+let _opDelId = null;
+function openOpDelModal(id, name) {
+  _opDelId = id;
+  // 기존 삭제 모달 재활용
+  document.getElementById('delTarget').textContent = name;
+  document.getElementById('deleteModal').classList.add('show');
+  // 확인 버튼 동작 변경
+  document.getElementById('deleteModal').dataset.mode = 'operator';
+}
+
+// 다운로드
+function downloadOperators() {
+  if (!_operators.length) { showToast('⚠️ 다운로드할 데이터가 없습니다'); return; }
+  const rows = [['NO','이름','직급/직책','소속','입사일자','연락처','Telegram ID','사용여부','비고']];
+  _operators.forEach((r, i) => rows.push([
+    i+1, r.name||'', r.position||'', r.department||'',
+    r.join_date||'', r.phone||'', r.telegram_id||'',
+    r.active||'Y', r.note||''
+  ]));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [4,10,10,10,12,14,16,8,16].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, '작업자목록');
+  const d = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `SME_작업자목록_${ds}.xlsx`);
+  showToast('📥 엑셀 다운로드 완료');
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');

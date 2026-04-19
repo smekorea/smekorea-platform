@@ -950,7 +950,18 @@ let _rc = {
 };
 
 // 작업자 목록
-const OPERATORS = ['문상호', '장우승', '김기훈', '김아현', '윤선정', '공수지'];
+// 작업자 목록 Supabase에서 로드
+async function loadOperatorList() {
+  try {
+    const { data, error } = await sb.from('mfg_operators')
+      .select('name').eq('active','Y').order('name');
+    if (error || !data) return [];
+    return data.map(r => r.name);
+  } catch(e) {
+    console.error('작업자 로드 실패', e);
+    return [];
+  }
+}
 
 // ══════════════════════════════════
 // 로그인
@@ -994,8 +1005,9 @@ function showTab(name) {
 // 초기화
 // ══════════════════════════════════
 async function init() {
-  // 작업자 목록 초기화
-  OPERATORS.forEach(op => {
+  // 작업자 목록 Supabase에서 로드
+  const operators = await loadOperatorList();
+  operators.forEach(op => {
     ['fc_operator','rc_operator'].forEach(id => {
       const opt = document.createElement('option');
       opt.value = opt.textContent = op;
