@@ -505,6 +505,24 @@ input[type=file] { display: none; }
       </select>
       <input type="text" class="filter-search" id="bom_fKw"
         placeholder="🔍 LG품번 / 메이커명 검색..." oninput="renderBOM()">
+      <button class="btn btn-primary btn-sm" onclick="exportBOM()">📥 엑셀 출력</button>
+    </div>
+
+    <!-- 컬럼 선택 -->
+    <div style="background:#f8fafc;border:1.5px solid var(--border);border-radius:9px;padding:10px 14px;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:800;color:var(--text-s);margin-bottom:8px;">📋 표시 컬럼 선택</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_no"     checked onchange="renderBOM()"> #</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_proc"   checked onchange="renderBOM()"> 공정</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_lgpn"   checked onchange="renderBOM()"> LG품번</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_desc"   checked onchange="renderBOM()"> 품명</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_maker"        onchange="renderBOM()"> Maker</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_mkrpn1" checked onchange="renderBOM()"> 메이커품번①</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_mkrpn2"        onchange="renderBOM()"> 메이커품번②</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_mkrpn3"        onchange="renderBOM()"> 메이커품번③</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_moq"    checked onchange="renderBOM()"> MOQ</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="bc_trade"        onchange="renderBOM()"> 거래유형</label>
+      </div>
     </div>
 
     <div class="status-bar">
@@ -1591,19 +1609,39 @@ function renderBOM() {
   const tbody = document.getElementById('bom_tbody');
   const thead = document.getElementById('bom_thead_row');
 
-  // 헤더 업데이트 (모델 소요량 컬럼 추가)
-  const baseColCnt = 10;
-  const modelCols = _bomSelModels.length;
-  const totalCols = baseColCnt + modelCols;
+  // 컬럼 선택 여부
+  const showNo     = document.getElementById('bc_no').checked;
+  const showProc   = document.getElementById('bc_proc').checked;
+  const showLgpn   = document.getElementById('bc_lgpn').checked;
+  const showDesc   = document.getElementById('bc_desc').checked;
+  const showMaker  = document.getElementById('bc_maker').checked;
+  const showMkrpn1 = document.getElementById('bc_mkrpn1').checked;
+  const showMkrpn2 = document.getElementById('bc_mkrpn2').checked;
+  const showMkrpn3 = document.getElementById('bc_mkrpn3').checked;
+  const showMoq    = document.getElementById('bc_moq').checked;
+  const showTrade  = document.getElementById('bc_trade').checked;
 
-  thead.innerHTML = `
-    <th>#</th><th>공정</th><th>LG P/NO</th><th>품명</th><th>Maker</th>
-    <th>메이커품번①</th><th>메이커품번②</th><th>메이커품번③</th>
-    <th>MOQ</th><th>거래유형</th>
-    ${_bomSelModels.map(m => `<th style="background:#e8eaf6;color:#1a237e;font-size:10px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="${m}">${m}</th>`).join('')}`;
+  const baseCols = [
+    { show: showNo,     label: '#' },
+    { show: showProc,   label: '공정' },
+    { show: showLgpn,   label: 'LG P/NO' },
+    { show: showDesc,   label: '품명' },
+    { show: showMaker,  label: 'Maker' },
+    { show: showMkrpn1, label: '메이커품번①' },
+    { show: showMkrpn2, label: '메이커품번②' },
+    { show: showMkrpn3, label: '메이커품번③' },
+    { show: showMoq,    label: 'MOQ' },
+    { show: showTrade,  label: '거래유형' },
+  ];
+  const totalCols = baseCols.filter(c=>c.show).length + _bomSelModels.length;
+
+  // 헤더 업데이트
+  thead.innerHTML =
+    baseCols.filter(c=>c.show).map(c=>`<th>${c.label}</th>`).join('') +
+    _bomSelModels.map(m=>`<th style="background:#e8eaf6;color:#1a237e;font-size:10px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="${m}">${m}</th>`).join('');
 
   // 모델별 소요량 맵 구성
-  const qtyMap = {}; // { lg_pn: { model_code: qty } }
+  const qtyMap = {};
   _bmModel.forEach(r => {
     if (!qtyMap[r.lg_pn]) qtyMap[r.lg_pn] = {};
     qtyMap[r.lg_pn][r.model_code] = r.qty;
@@ -1626,33 +1664,153 @@ function renderBOM() {
   };
 
   tbody.innerHTML = data.map((r, i) => {
-    // 선택 모델 소요량
     const qtyCells = _bomSelModels.map(m => {
       const qty = (qtyMap[r.lg_pn] || {})[m] || 0;
       return `<td style="font-family:var(--mono);font-size:12px;text-align:center;
-        font-weight:${qty>0?'700':'400'};
-        color:${qty>0?'var(--primary)':'#ccc'}">
-        ${qty > 0 ? qty.toLocaleString() : '-'}
-      </td>`;
+        font-weight:${qty>0?'700':'400'};color:${qty>0?'var(--primary)':'#ccc'}">
+        ${qty > 0 ? qty.toLocaleString() : '-'}</td>`;
     }).join('');
 
     return `<tr>
-      <td style="color:var(--text-s);font-family:var(--mono);font-size:11px">${i+1}</td>
-      <td>${procBadge(r.process)}</td>
-      <td style="font-family:var(--mono);font-weight:700;font-size:12px;color:var(--primary)">${r.lg_pn||'-'}</td>
-      <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description||''}">${r.description||'-'}</td>
-      <td style="font-size:12px">${r.maker||'-'}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:${r.maker_pn1?'var(--text)':'#bbb'}">${r.maker_pn1||'미입력'}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn2||'-'}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn3||'-'}</td>
-      <td style="font-family:var(--mono);font-size:12px;text-align:right">${r.moq ? r.moq.toLocaleString() : '-'}</td>
-      <td style="font-size:11px">${r.trade_type||'-'}</td>
+      ${showNo     ? `<td style="color:var(--text-s);font-family:var(--mono);font-size:11px">${i+1}</td>` : ''}
+      ${showProc   ? `<td>${procBadge(r.process)}</td>` : ''}
+      ${showLgpn   ? `<td style="font-family:var(--mono);font-weight:700;font-size:12px;color:var(--primary)">${r.lg_pn||'-'}</td>` : ''}
+      ${showDesc   ? `<td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description||''}">${r.description||'-'}</td>` : ''}
+      ${showMaker  ? `<td style="font-size:12px">${r.maker||'-'}</td>` : ''}
+      ${showMkrpn1 ? `<td style="font-family:var(--mono);font-size:11px;color:${r.maker_pn1?'var(--text)':'#bbb'}">${r.maker_pn1||'미입력'}</td>` : ''}
+      ${showMkrpn2 ? `<td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn2||'-'}</td>` : ''}
+      ${showMkrpn3 ? `<td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn3||'-'}</td>` : ''}
+      ${showMoq    ? `<td style="font-family:var(--mono);font-size:12px;text-align:right">${r.moq ? r.moq.toLocaleString() : '-'}</td>` : ''}
+      ${showTrade  ? `<td style="font-size:11px">${r.trade_type||'-'}</td>` : ''}
       ${qtyCells}
     </tr>`;
   }).join('');
 
   document.getElementById('bom_count').textContent =
     `표시 ${data.length}건 / 전체 ${_bom.length}건`;
+}
+
+// BOM 엑셀 출력
+async function exportBOM() {
+  if (!_bom.length) { showToast('⚠️ 데이터가 없습니다'); return; }
+  showToast('📥 엑셀 생성 중...');
+
+  const F_KR = 'LG PC', F_EN = 'Arial Narrow';
+
+  // 현재 표시 컬럼 확인
+  const showNo     = document.getElementById('bc_no').checked;
+  const showProc   = document.getElementById('bc_proc').checked;
+  const showLgpn   = document.getElementById('bc_lgpn').checked;
+  const showDesc   = document.getElementById('bc_desc').checked;
+  const showMaker  = document.getElementById('bc_maker').checked;
+  const showMkrpn1 = document.getElementById('bc_mkrpn1').checked;
+  const showMkrpn2 = document.getElementById('bc_mkrpn2').checked;
+  const showMkrpn3 = document.getElementById('bc_mkrpn3').checked;
+  const showMoq    = document.getElementById('bc_moq').checked;
+  const showTrade  = document.getElementById('bc_trade').checked;
+  const fProc = document.getElementById('bom_fProcess').value;
+  const fKw   = (document.getElementById('bom_fKw').value || '').toLowerCase();
+
+  // 현재 필터된 데이터
+  const data = _bom.filter(r => {
+    if (fProc && r.process !== fProc) return false;
+    if (fKw && !(
+      (r.lg_pn||'').toLowerCase().includes(fKw) ||
+      (r.maker||'').toLowerCase().includes(fKw) ||
+      (r.maker_pn1||'').toLowerCase().includes(fKw)
+    )) return false;
+    return true;
+  });
+
+  // 소요량 맵
+  const qtyMap = {};
+  _bmModel.forEach(r => {
+    if (!qtyMap[r.lg_pn]) qtyMap[r.lg_pn] = {};
+    qtyMap[r.lg_pn][r.model_code] = r.qty;
+  });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('BOM');
+
+  // 컬럼 정의
+  const cols = [];
+  if (showNo)     cols.push({ label:'#',         width:5,  fn:F_EN });
+  if (showProc)   cols.push({ label:'공정',       width:10, fn:F_KR });
+  if (showLgpn)   cols.push({ label:'LG P/NO',   width:16, fn:F_EN });
+  if (showDesc)   cols.push({ label:'품명',       width:24, fn:F_KR });
+  if (showMaker)  cols.push({ label:'Maker',      width:14, fn:F_KR });
+  if (showMkrpn1) cols.push({ label:'메이커품번①', width:22, fn:F_EN });
+  if (showMkrpn2) cols.push({ label:'메이커품번②', width:22, fn:F_EN });
+  if (showMkrpn3) cols.push({ label:'메이커품번③', width:22, fn:F_EN });
+  if (showMoq)    cols.push({ label:'MOQ',        width:9,  fn:F_EN, num:true });
+  if (showTrade)  cols.push({ label:'거래유형',   width:9,  fn:F_KR });
+  _bomSelModels.forEach(m => cols.push({ label:m, width:14, fn:F_EN, num:true }));
+
+  ws.columns = cols.map(c => ({ width: c.width }));
+
+  const stl = (cell, opts={}) => {
+    const { fn=F_EN, sz=9, bold=false, col='000000', bg=null, align='left', numFmt=null } = opts;
+    cell.font = { name:fn, size:sz, bold, color:{ argb:'FF'+col } };
+    cell.alignment = { horizontal:align, vertical:'middle' };
+    if (bg) cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF'+bg } };
+    if (numFmt) cell.numFmt = numFmt;
+    const bs = { style:'thin', color:{ argb:'FFD0D0D0' } };
+    cell.border = { top:bs, bottom:bs, left:bs, right:bs };
+  };
+
+  // 헤더
+  const hRow = ws.addRow(cols.map(c => c.label));
+  hRow.height = 18;
+  hRow.eachCell((cell, ci) => {
+    const isModel = ci > (cols.length - _bomSelModels.length);
+    stl(cell, {
+      fn: isModel ? F_EN : cols[ci-1]?.fn,
+      sz: 10, bold: true, col: 'FFFFFF',
+      bg: isModel ? '3949ab' : '1e3a8a', align: 'center'
+    });
+  });
+
+  // 데이터
+  data.forEach((r, i) => {
+    const rowData = [];
+    if (showNo)     rowData.push(i+1);
+    if (showProc)   rowData.push(r.process||'');
+    if (showLgpn)   rowData.push(r.lg_pn||'');
+    if (showDesc)   rowData.push(r.description||'');
+    if (showMaker)  rowData.push(r.maker||'');
+    if (showMkrpn1) rowData.push(r.maker_pn1||'');
+    if (showMkrpn2) rowData.push(r.maker_pn2||'');
+    if (showMkrpn3) rowData.push(r.maker_pn3||'');
+    if (showMoq)    rowData.push(r.moq||'');
+    if (showTrade)  rowData.push(r.trade_type||'');
+    _bomSelModels.forEach(m => rowData.push((qtyMap[r.lg_pn]||{})[m]||0));
+
+    const dataRow = ws.addRow(rowData);
+    dataRow.height = 15;
+    dataRow.eachCell((cell, ci) => {
+      const col = cols[ci-1];
+      stl(cell, {
+        fn: col?.fn || F_EN, sz: 9,
+        align: col?.num ? 'right' : 'left',
+        numFmt: col?.num ? '#,##0' : null,
+        bg: i%2===0 ? null : 'F5F5F5'
+      });
+    });
+  });
+
+  // 파일 다운로드
+  const d = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const modelStr = _bomSelModels.length ? '_'+_bomSelModels.slice(0,2).join('_') : '';
+  const fname = `SME_BOM${modelStr}_${ds}.xlsx`;
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=fname; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`📥 ${fname} 다운로드 완료`);
 }
 
 function checkBOMAlerts() {
