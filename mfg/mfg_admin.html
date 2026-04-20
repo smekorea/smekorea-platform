@@ -473,6 +473,26 @@ input[type=file] { display: none; }
       <div class="prog-text" id="bom_progText">0%</div>
     </div>
 
+    <!-- 모델 검색/선택 -->
+    <div style="background:#f0f4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:800;color:var(--primary);margin-bottom:8px;">🔍 모델별 소요량 조회 (최대 5개)</div>
+
+      <!-- 자동완성 검색 -->
+      <div style="position:relative;margin-bottom:10px;">
+        <input type="text" id="bom_modelSearch"
+          placeholder="모델명 입력 (예: EBR421)"
+          style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:9px;font-size:13px;font-family:var(--mono);outline:none;"
+          oninput="bomModelAC()"
+          onkeydown="if(event.key==='Escape') document.getElementById('bom_acList').style.display='none'">
+        <div id="bom_acList" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;max-height:200px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- 선택된 모델 태그 -->
+      <div id="bom_selectedModels" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;">
+        <span style="font-size:11px;color:var(--text-s);align-self:center;">모델을 검색하여 선택하세요</span>
+      </div>
+    </div>
+
     <!-- 필터 -->
     <div class="filter-row">
       <select id="bom_fProcess" onchange="renderBOM()">
@@ -500,7 +520,7 @@ input[type=file] { display: none; }
     <div class="tbl-wrap">
       <table>
         <thead>
-          <tr>
+          <tr id="bom_thead_row">
             <th>#</th>
             <th>공정</th>
             <th>LG P/NO</th>
@@ -1436,6 +1456,7 @@ async function uploadLM(input) {
 // BOM 관리
 // ══════════════════════════════════
 let _bom = [];
+let _bmModel = []; // mfg_bom_model (모델별 소요량)
 
 async function loadBOM() {
   setBomStatus('load', '데이터 로딩 중...');
@@ -1452,6 +1473,20 @@ async function loadBOM() {
       pg++;
     }
     _bom = all;
+
+    // mfg_bom_model 함께 로드
+    let allM = [], pgM = 0;
+    while (true) {
+      const { data, error } = await sb.from('mfg_bom_model')
+        .select('*').range(pgM * PAGE, (pgM + 1) * PAGE - 1);
+      if (error) break;
+      if (!data || !data.length) break;
+      allM = [...allM, ...data];
+      if (data.length < PAGE) break;
+      pgM++;
+    }
+    _bmModel = allM;
+
     updateBOMKPI();
     renderBOM();
     checkBOMAlerts();
@@ -1477,6 +1512,68 @@ function updateBOMKPI() {
   document.getElementById('bom_kpi_nomkr').textContent  = noMkr.length;
 }
 
+// ── BOM 모델 선택 ──
+let _bomSelModels = []; // 선택된 모델 목록 (최대 5개)
+let _bomModelData = {}; // { model_code: { lg_pn: qty } }
+
+function bomModelAC() {
+  const kw = document.getElementById('bom_modelSearch').value.trim().toLowerCase();
+  const list = document.getElementById('bom_acList');
+  if (!kw) { list.style.display='none'; return; }
+
+  // mfg_bom_model에서 모델코드 목록
+  const allModels = [...new Set(_bmModel.map(r => r.model_code))].sort();
+  const matched = allModels.filter(m => m.toLowerCase().includes(kw)).slice(0, 20);
+
+  if (!matched.length) { list.style.display='none'; return; }
+
+  list.innerHTML = matched.map(m => `
+    <div onclick="addBomModel('${m}')"
+      style="padding:9px 14px;cursor:pointer;font-family:var(--mono);font-size:13px;
+             border-bottom:1px solid #f1f5f9;transition:background .1s;"
+      onmouseover="this.style.background='#eff6ff'"
+      onmouseout="this.style.background='#fff'">
+      ${m}
+    </div>`).join('');
+  list.style.display = 'block';
+}
+
+function addBomModel(model) {
+  document.getElementById('bom_acList').style.display = 'none';
+  document.getElementById('bom_modelSearch').value = '';
+
+  if (_bomSelModels.includes(model)) { showToast('이미 선택된 모델입니다'); return; }
+  if (_bomSelModels.length >= 5) { showToast('⚠️ 최대 5개까지 선택 가능합니다'); return; }
+
+  _bomSelModels.push(model);
+  renderBomModelTags();
+  renderBOM();
+}
+
+function removeBomModel(model) {
+  _bomSelModels = _bomSelModels.filter(m => m !== model);
+  renderBomModelTags();
+  renderBOM();
+}
+
+function renderBomModelTags() {
+  const el = document.getElementById('bom_selectedModels');
+  if (!_bomSelModels.length) {
+    el.innerHTML = '<span style="font-size:11px;color:var(--text-s);align-self:center;">모델을 검색하여 선택하세요</span>';
+    return;
+  }
+  el.innerHTML = _bomSelModels.map(m => `
+    <span style="display:inline-flex;align-items:center;gap:5px;
+      background:var(--primary-l);border:1.5px solid #bfdbfe;
+      border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;
+      color:var(--primary);font-family:var(--mono);">
+      ${m}
+      <button onclick="removeBomModel('${m}')"
+        style="background:none;border:none;cursor:pointer;color:#94a3b8;
+               font-size:14px;line-height:1;padding:0;margin-left:2px;">×</button>
+    </span>`).join('');
+}
+
 function renderBOM() {
   const fProc = document.getElementById('bom_fProcess').value;
   const fKw   = (document.getElementById('bom_fKw').value || '').toLowerCase();
@@ -1492,8 +1589,28 @@ function renderBOM() {
   });
 
   const tbody = document.getElementById('bom_tbody');
+  const thead = document.getElementById('bom_thead_row');
+
+  // 헤더 업데이트 (모델 소요량 컬럼 추가)
+  const baseColCnt = 10;
+  const modelCols = _bomSelModels.length;
+  const totalCols = baseColCnt + modelCols;
+
+  thead.innerHTML = `
+    <th>#</th><th>공정</th><th>LG P/NO</th><th>품명</th><th>Maker</th>
+    <th>메이커품번①</th><th>메이커품번②</th><th>메이커품번③</th>
+    <th>MOQ</th><th>거래유형</th>
+    ${_bomSelModels.map(m => `<th style="background:#e8eaf6;color:#1a237e;font-size:10px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="${m}">${m}</th>`).join('')}`;
+
+  // 모델별 소요량 맵 구성
+  const qtyMap = {}; // { lg_pn: { model_code: qty } }
+  _bmModel.forEach(r => {
+    if (!qtyMap[r.lg_pn]) qtyMap[r.lg_pn] = {};
+    qtyMap[r.lg_pn][r.model_code] = r.qty;
+  });
+
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="10"><div class="empty">
+    tbody.innerHTML = `<tr><td colspan="${totalCols}"><div class="empty">
       <div class="ei">📭</div><div class="et">데이터가 없습니다</div>
       <div class="es">엑셀 업로드 버튼을 이용하세요</div>
     </div></td></tr>`;
@@ -1508,8 +1625,18 @@ function renderBOM() {
     return `<span class="badge" style="background:${bg};color:${ft}">${p||'-'}</span>`;
   };
 
-  tbody.innerHTML = data.map((r, i) => `
-    <tr>
+  tbody.innerHTML = data.map((r, i) => {
+    // 선택 모델 소요량
+    const qtyCells = _bomSelModels.map(m => {
+      const qty = (qtyMap[r.lg_pn] || {})[m] || 0;
+      return `<td style="font-family:var(--mono);font-size:12px;text-align:center;
+        font-weight:${qty>0?'700':'400'};
+        color:${qty>0?'var(--primary)':'#ccc'}">
+        ${qty > 0 ? qty.toLocaleString() : '-'}
+      </td>`;
+    }).join('');
+
+    return `<tr>
       <td style="color:var(--text-s);font-family:var(--mono);font-size:11px">${i+1}</td>
       <td>${procBadge(r.process)}</td>
       <td style="font-family:var(--mono);font-weight:700;font-size:12px;color:var(--primary)">${r.lg_pn||'-'}</td>
@@ -1520,7 +1647,9 @@ function renderBOM() {
       <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn3||'-'}</td>
       <td style="font-family:var(--mono);font-size:12px;text-align:right">${r.moq ? r.moq.toLocaleString() : '-'}</td>
       <td style="font-size:11px">${r.trade_type||'-'}</td>
-    </tr>`).join('');
+      ${qtyCells}
+    </tr>`;
+  }).join('');
 
   document.getElementById('bom_count').textContent =
     `표시 ${data.length}건 / 전체 ${_bom.length}건`;
