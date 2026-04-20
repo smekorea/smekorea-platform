@@ -635,8 +635,7 @@ input[type=file] { display: none; }
         </div>
       </div>
       <div style="display:flex; gap:8px; margin-top:6px;">
-        <button class="btn btn-gray btn-sm" onclick="selectAllModels()">전체 선택</button>
-        <button class="btn btn-gray btn-sm" onclick="clearAllModels()">전체 해제</button>
+        <span style="font-size:11px;color:var(--text-s);font-weight:600">※ 모델 1개 선택</span>
       </div>
     </div>
 
@@ -1133,12 +1132,12 @@ function checkAlerts() {
 // ══════════════════════════════════
 function parseBarcodeVal(val) {
   if (!val) return null;
-  // 마지막에 오는 TOP/BOT 추출 (앞에 구분자 _- 있어도 없어도 허용)
-  const m = val.match(/^(.+?)[-_]?(TOP|BOT)$/i);
+  // TOP / BOT / 단면 허용
+  const m = val.match(/^(.+?)[-_]?(TOP|BOT|단면)$/i);
   if (!m) return null;
   return {
-    modelCode: m[1].replace(/[-_]$/, ''), // 모델코드 끝 구분자 제거
-    face:      m[2].toUpperCase(),
+    modelCode: m[1].replace(/[-_]$/, ''),
+    face:      m[2].toUpperCase() === '단면' ? '단면' : m[2].toUpperCase(),
   };
 }
 
@@ -1389,17 +1388,28 @@ async function uploadLM(input) {
 
       if (!records.length) { showToast('⚠️ 유효한 데이터가 없습니다'); return; }
 
+      // 전체 교체 확인 팝업
+      const { data: existing } = await sb.from('mfg_line_model').select('id', { count: 'exact' });
+      const existCnt = existing ? existing.length : 0;
+      if (!confirm(`기존 데이터 ${existCnt}건을 전부 삭제하고\n새 파일 ${records.length}건으로 교체하시겠습니까?\n\n※ 삭제 후 되돌릴 수 없습니다`)) {
+        input.value = ''; return;
+      }
+
       // 진행바 표시
       const prog = document.getElementById('lm_prog');
       prog.style.display = 'block';
+      document.getElementById('lm_progFill').style.width = '0%';
+      document.getElementById('lm_progText').textContent = '기존 데이터 삭제 중...';
+
+      // 전체 삭제
+      const { error: delErr } = await sb.from('mfg_line_model').delete().neq('id', 0);
+      if (delErr) { showToast('❌ 삭제 실패: ' + delErr.message); prog.style.display='none'; return; }
 
       let ok = 0, fail = 0;
       const CHUNK = 50;
       for (let i = 0; i < records.length; i += CHUNK) {
         const chunk = records.slice(i, i + CHUNK);
-        const { error } = await sb.from('mfg_line_model').upsert(chunk, {
-          onConflict: 'line,barcode_val'
-        });
+        const { error } = await sb.from('mfg_line_model').insert(chunk);
         if (error) { fail += chunk.length; console.error(error); }
         else ok += chunk.length;
 
@@ -1410,7 +1420,7 @@ async function uploadLM(input) {
       }
 
       setTimeout(() => { prog.style.display = 'none'; }, 1500);
-      showToast(`✅ 업로드 완료 — 성공 ${ok}건${fail ? ` / 실패 ${fail}건` : ''}`);
+      showToast(`✅ 교체 완료 — ${ok}건 등록${fail ? ` / 실패 ${fail}건` : ''}`);
       await loadLM();
 
     } catch (e) {
@@ -1680,18 +1690,39 @@ async function uploadBOM(input) {
 
       if (!bomRecords.length) { showToast('⚠️ 유효한 데이터가 없습니다'); return; }
 
+      // 전체 교체 확인 팝업
+      const { data: existBom } = await sb.from('mfg_bom').select('id', { count: 'exact' });
+      const existCnt = existBom ? existBom.length : 0;
+      if (!confirm(`기존 BOM ${existCnt}건을 전부 삭제하고\n새 파일 ${bomRecords.length}건으로 교체하시겠습니까?\n\n※ 소요량 데이터도 함께 삭제됩니다\n※ 삭제 후 되돌릴 수 없습니다`)) {
+        input.value = ''; return;
+      }
+
       const prog = document.getElementById('bom_prog');
       prog.style.display = 'block';
+      document.getElementById('bom_progFill').style.width = '0%';
+      document.getElementById('bom_progText').textContent = '기존 데이터 삭제 중...';
+
+      // mfg_bom_model 먼저 삭제 (FK 순서)
+      const { error: delM } = await sb.from('mfg_bom_model').delete().neq('id', 0);
+      if (delM) { showToast('❌ 소요량 삭제 실패: ' + delM.message); prog.style.display='none'; return; }
+      // mfg_bom 삭제
+      const { error: delB } = await sb.from('mfg_bom').delete().neq('id', 0);
+      if (delB) { showToast('❌ BOM 삭제 실패: ' + delB.message); prog.style.display='none'; return; }
 
       let ok = 0, fail = 0, failList = [];
-      const CHUNK = 10; // 작은 단위로 처리
+      const CHUNK = 10;
       const total = bomRecords.length + modelRecords.length;
 
       for (let i = 0; i < bomRecords.length; i += CHUNK) {
         const chunk = bomRecords.slice(i, i + CHUNK);
-        const { error } = await sb.from('mfg_bom').upsert(chunk, { onConflict: 'lg_pn' });
+        const { error } = await sb.from('mfg_bom').insert(chunk);
         if (error) {
-          // CHUNK 오류 시 1건씩 재시도
+          for (const rec of chunk) {
+            const { error: e2 } = await sb.from('mfg_bom').insert([rec]);
+            if (e2) { fail++; failList.push(`${rec.lg_pn}: ${e2.message}`); console.error(e2); }
+            else ok++;
+          }
+        } else ok += chunk.length;
           for (const rec of chunk) {
             const { error: e2 } = await sb.from('mfg_bom').upsert([rec], { onConflict: 'lg_pn' });
             if (e2) {
@@ -1710,11 +1741,11 @@ async function uploadBOM(input) {
         await new Promise(r => setTimeout(r, 50));
       }
 
-      // 모델 소요량 upsert
+      // 모델 소요량 insert
       let okM = 0;
       for (let i = 0; i < modelRecords.length; i += CHUNK) {
         const chunk = modelRecords.slice(i, i + CHUNK);
-        const { error } = await sb.from('mfg_bom_model').upsert(chunk, { onConflict: 'lg_pn,model_code' });
+        const { error } = await sb.from('mfg_bom_model').insert(chunk);
         if (error) console.error('모델소요량 오류:', error);
         else okM += chunk.length;
 
@@ -1960,16 +1991,27 @@ async function uploadPlacement(input) {
 
       if (!records.length) { showToast('⚠️ 유효한 데이터가 없습니다'); return; }
 
+      // 전체 교체 확인 팝업
+      const { data: existPl } = await sb.from('mfg_placement').select('id', { count: 'exact' });
+      const existCnt = existPl ? existPl.length : 0;
+      if (!confirm(`기존 배치도 ${existCnt}건을 전부 삭제하고\n새 파일 ${records.length}건으로 교체하시겠습니까?\n\n※ 삭제 후 되돌릴 수 없습니다`)) {
+        input.value = ''; return;
+      }
+
       const prog = document.getElementById('pl_prog');
       prog.style.display = 'block';
+      document.getElementById('pl_progFill').style.width = '0%';
+      document.getElementById('pl_progText').textContent = '기존 데이터 삭제 중...';
+
+      // 전체 삭제
+      const { error: delErr } = await sb.from('mfg_placement').delete().neq('id', 0);
+      if (delErr) { showToast('❌ 삭제 실패: ' + delErr.message); prog.style.display='none'; return; }
 
       let ok = 0, fail = 0;
       const CHUNK = 50;
       for (let i = 0; i < records.length; i += CHUNK) {
         const chunk = records.slice(i, i + CHUNK);
-        const { error } = await sb.from('mfg_placement').upsert(chunk, {
-          onConflict: 'line,machine,side,st_no'
-        });
+        const { error } = await sb.from('mfg_placement').insert(chunk);
         if (error) { fail += chunk.length; console.error(error); }
         else ok += chunk.length;
         const pct = Math.round(((i + chunk.length) / records.length) * 100);
@@ -1979,7 +2021,7 @@ async function uploadPlacement(input) {
       }
 
       setTimeout(() => { prog.style.display = 'none'; }, 1500);
-      showToast(`✅ 배치도 업로드 완료 — ${ok}건${fail ? ` / 실패 ${fail}건` : ''}`);
+      showToast(`✅ 배치도 교체 완료 — ${ok}건${fail ? ` / 실패 ${fail}건` : ''}`);
       await loadPlacement();
     } catch(e) {
       showToast('❌ 업로드 실패: ' + (e.message || String(e)));
@@ -2021,16 +2063,19 @@ function loadPrintModels() {
     const face   = parsed ? parsed.face : '';
     const faceBadge = face === 'TOP'
       ? `<span class="badge b-top" style="font-size:10px">TOP</span>`
-      : `<span class="badge b-bot" style="font-size:10px">BOT</span>`;
+      : face === 'BOT'
+      ? `<span class="badge b-bot" style="font-size:10px">BOT</span>`
+      : `<span class="badge" style="font-size:10px;background:#f0fdf4;color:#15803d">단면</span>`;
     const lineBadge = r.line === '1라인' ? 'b-l1' : r.line === '2라인' ? 'b-l2' : 'b-l3';
 
-    return `<label style="display:flex;align-items:center;gap:6px;padding:5px 6px;
-      border-radius:6px;cursor:pointer;margin-bottom:3px;
-      border:1px solid var(--border);background:#fff">
-      <input type="checkbox" class="pr_modelChk" value="${r.barcode_val}" style="width:14px;height:14px">
+    return `<label style="display:flex;align-items:center;gap:6px;padding:7px 8px;
+      border-radius:8px;cursor:pointer;margin-bottom:4px;
+      border:2px solid var(--border);background:#fff;transition:all .15s"
+      onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor=''">
+      <input type="radio" name="pr_modelRadio" class="pr_modelChk" value="${r.barcode_val}" style="width:15px;height:15px;accent-color:var(--primary)">
       <span class="badge ${lineBadge}" style="font-size:10px">${r.line}</span>
       ${faceBadge}
-      <span style="font-weight:700">${r.barcode_val}</span>
+      <span style="font-weight:700;font-size:13px">${r.barcode_val}</span>
       ${r.machine_program
         ? `<span style="color:#1565c0;font-size:10px;font-family:var(--mono)">▶ ${r.machine_program}</span>`
         : ''}
