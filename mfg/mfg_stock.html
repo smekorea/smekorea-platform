@@ -446,6 +446,7 @@ tbody tr:hover td{background:#f8fafc;}
             <th>위치</th>
             <th>LG품번</th>
             <th>Maker</th>
+            <th>메이커품번</th>
             <th>LOT번호</th>
             <th>수량(PCS)</th>
             <th>최근 업데이트</th>
@@ -686,8 +687,11 @@ function selectMoveType(type){
 
 // ── 릴 바코드 스캔 (4개, LOT 전체 저장) ──
 let _reelScans = []; // 스캔값 배열
+let _matchedBom = null; // 매칭된 BOM
+let _saveTimer = null;  // 3초 대기 타이머
+const SAVE_DELAY = 3000; // 3초
 
-async function addReelScan(){
+function addReelScan(){
   const scan=document.getElementById('mv_reel').value.trim();
   if(!scan)return;
   if(_reelScans.length>=4){showToast('⚠️ 최대 4개까지 스캔 가능합니다');return;}
@@ -701,7 +705,6 @@ async function addReelScan(){
     const val=document.getElementById(`mv_sv_${i}`);
     if(i<_reelScans.length){
       const s=_reelScans[i];
-      // BOM 메이커품번 포함 여부 확인
       const isMatchPn=_bom.some(b=>(b.maker_pn1&&s.includes(b.maker_pn1))||(b.maker_pn2&&s.includes(b.maker_pn2))||(b.maker_pn3&&s.includes(b.maker_pn3)));
       box.style.borderColor=isMatchPn?'#2563eb':'var(--border)';
       box.style.background=isMatchPn?'#eff6ff':'#fff';
@@ -716,7 +719,7 @@ async function addReelScan(){
   // LOT: 전체 스캔값 / 구분 저장
   document.getElementById('mv_lot').value=_reelScans.join(' / ');
 
-  // BOM 메이커품번 매칭 (첫번째 매칭 우선)
+  // BOM 메이커품번 매칭
   let matched=null;
   for(const s of _reelScans){
     matched=_bom.find(b=>(b.maker_pn1&&s.includes(b.maker_pn1))||(b.maker_pn2&&s.includes(b.maker_pn2))||(b.maker_pn3&&s.includes(b.maker_pn3)));
@@ -724,8 +727,8 @@ async function addReelScan(){
   }
 
   if(matched){
+    _matchedBom=matched;
     const mkrPn=matched.maker_pn1||'';
-    // 폼 자동입력
     document.getElementById('mv_lgpn').value=matched.lg_pn;
     document.getElementById('mv_mkrpn').value=mkrPn;
     document.getElementById('mv_moq').value=matched.moq||'';
@@ -734,15 +737,33 @@ async function addReelScan(){
     setR('mv_reelResult','ok','✅',`${matched.lg_pn}`,`메이커품번: ${mkrPn} | ${matched.description||''}`);
     setR('mv_lgpnResult','ok','✅',matched.lg_pn,matched.description||'');
     setDot('mv_dot1','ok');setDot('mv_dot2','ok');
-    // 매칭 즉시 자동저장
-    await autoSaveMoveStock(matched, mkrPn);
+
+    // 3초 타이머 시작 (추가 스캔 있으면 리셋)
+    clearTimeout(_saveTimer);
+    // 카운트다운 표시
+    let cnt=3;
+    setR('mv_reelResult','ok','✅',`${matched.lg_pn} — ${cnt}초 후 자동저장`,`메이커품번: ${mkrPn} | LOT: ${_reelScans.join(' / ')}`);
+    const countEl=setInterval(()=>{
+      cnt--;
+      if(cnt>0){
+        setR('mv_reelResult','ok','✅',`${matched.lg_pn} — ${cnt}초 후 자동저장`,`스캔 ${_reelScans.length}개 | LOT: ${_reelScans.join(' / ')}`);
+      } else {
+        clearInterval(countEl);
+      }
+    },1000);
+
+    _saveTimer=setTimeout(async()=>{
+      clearInterval(countEl);
+      await autoSaveMoveStock(_matchedBom, _matchedBom.maker_pn1||'');
+    }, SAVE_DELAY);
+
   } else {
     setR('mv_reelResult','warn','⚠️',`${_reelScans.length}개 스캔됨`,'BOM 미매칭 — LG품번 직접 입력');
     setDot('mv_dot1','act');
     if(!document.getElementById('mv_lgpn').value)
       document.getElementById('mv_lgpn').focus();
-    document.getElementById('mv_reel').focus();
   }
+  document.getElementById('mv_reel').focus();
 }
 
 // ── 자동 저장 (바코드 매칭 시) ──
@@ -940,6 +961,17 @@ async function updateStockCurrent(lgPn, lotNo, fromLoc, toLoc, qty){
 }
 
 function resetMoveForm(){
+  // 타이머 클리어
+  clearTimeout(_saveTimer);
+  _matchedBom=null;
+  _reelScans=[];
+  // 스캔박스 초기화
+  for(let i=0;i<4;i++){
+    const box=document.getElementById(`mv_s4_${i}`);
+    const val=document.getElementById(`mv_sv_${i}`);
+    if(box){box.style.borderColor='var(--border)';box.style.background='#fff';}
+    if(val){val.style.color='var(--text-x)';val.textContent=i===0?'대기...':'-';}
+  }
   ['mv_reel','mv_lgpn','mv_mkrpn','mv_lot','mv_moq','mv_qty','mv_note'].forEach(id=>{
     const el=document.getElementById(id);
     if(el){el.value='';el.className=el.className.replace('ok','').replace('ng','').trim();}
@@ -981,7 +1013,7 @@ function renderStock(){
   const kw=(document.getElementById('st_kw').value||'').toLowerCase();
   const data=_stock.filter(r=>!kw||(r.lg_pn||'').toLowerCase().includes(kw)||(r.lot_no||'').toLowerCase().includes(kw));
   const tbody=document.getElementById('st_tbody');
-  if(!data.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#bbb">데이터 없음</td></tr>';return;}
+  if(!data.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:#bbb">데이터 없음</td></tr>';return;}
 
   // BOM에서 Maker 맵
   const makerMap={};
@@ -990,11 +1022,16 @@ function renderStock(){
   const locBg=loc=>loc==='자재실'?'#eff6ff':loc==='1라인'?'#f0fdf4':loc==='2라인'?'#fefce8':loc==='3라인'?'#fff7ed':'#f5f3ff';
   const locFt=loc=>loc==='자재실'?'#1d4ed8':loc==='1라인'?'#15803d':loc==='2라인'?'#a16207':loc==='3라인'?'#c2410c':'#5b21b6';
 
+  // BOM에서 메이커품번 맵
+  const mkrPnMap={};
+  _bom.forEach(r=>{ if(r.lg_pn) mkrPnMap[r.lg_pn]=r.maker_pn1||''; });
+
   tbody.innerHTML=data.map((r,i)=>`<tr>
     <td style="font-size:11px;color:var(--text-s)">${i+1}</td>
     <td><span class="bdg" style="background:${locBg(r.location)};color:${locFt(r.location)}">${r.location}</span></td>
     <td style="font-family:var(--mono);font-weight:700;font-size:12px;color:var(--pri)">${r.lg_pn||'-'}</td>
     <td style="font-size:12px;color:var(--text-s)">${makerMap[r.lg_pn]||'-'}</td>
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${mkrPnMap[r.lg_pn]||'-'}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.lot_no||'-'}</td>
     <td style="font-family:var(--mono);font-size:13px;font-weight:700;text-align:right;color:${r.qty>0?'var(--text)':'var(--ng)'}">${r.qty.toLocaleString()}</td>
     <td style="font-size:11px;color:var(--text-s)">${r.updated_at?r.updated_at.substring(5,16):'-'}</td>
