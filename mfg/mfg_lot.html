@@ -256,6 +256,7 @@ tbody tr:hover td{background:#f8fafc;}
 .alert-msg{font-size:13px;color:var(--text-s);line-height:1.6;margin-bottom:20px;}
 .alert-btns{display:flex;gap:8px;}
 .alert-btns .btn{flex:1;padding:12px;}
+@keyframes okPop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 </style>
 </head>
 <body>
@@ -412,10 +413,8 @@ tbody tr:hover td{background:#f8fafc;}
         <!-- 결과 종합 -->
         <div class="rsum" id="fc_rsum">
           <div class="rsum-title" id="fc_rtit"></div>
-          <div class="rsum-grid">
-            <div class="rsum-item"><div class="rsum-lbl">품번</div><div class="rsum-val" id="fc_rpn">-</div></div>
-            <div class="rsum-item"><div class="rsum-lbl">LOT</div><div class="rsum-val" id="fc_rlot">-</div></div>
-            <div class="rsum-item"><div class="rsum-lbl">소요량</div><div class="rsum-val" id="fc_rqty">-</div></div>
+          <div class="rsum-grid" style="grid-template-columns:1fr">
+            <div class="rsum-item"><div class="rsum-lbl">매칭 메이커품번</div><div class="rsum-val" id="fc_rpn">-</div></div>
           </div>
         </div>
 
@@ -567,7 +566,7 @@ tbody tr:hover td{background:#f8fafc;}
     <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:8px;">🔍 피더 세팅 체크 이력</div>
     <div class="tw">
       <table>
-        <thead><tr><th>일시</th><th>라인</th><th>작업지시</th><th>피더No</th><th>LG품번</th><th>LOT</th><th>결과</th><th>NG사유</th><th>작업자</th></tr></thead>
+        <thead><tr><th>일시</th><th>라인</th><th>모델(작업지시)</th><th>피더No</th><th>LG품번</th><th>메이커품번</th><th>결과</th><th>작업자</th></tr></thead>
         <tbody id="hi_f"></tbody>
       </table>
     </div>
@@ -575,7 +574,22 @@ tbody tr:hover td{background:#f8fafc;}
     <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:8px;margin-top:14px;">🔄 부품 교환 이력</div>
     <div class="tw">
       <table>
-        <thead><tr><th>일시</th><th>라인</th><th>피더No</th><th>LG품번</th><th>기존LOT</th><th>신규LOT</th><th>결과</th><th>작업자</th></tr></thead>
+        <thead><tr>
+          <th>일시</th><th>라인</th><th>피더No</th>
+          <th colspan="2" style="background:#fef9c3;color:#854d0e;">구 릴</th>
+          <th colspan="4" style="background:#dcfce7;color:#166534;">신규 릴</th>
+          <th>결과</th><th>작업자</th>
+        </tr>
+        <tr style="font-size:10px;">
+          <th></th><th></th><th></th>
+          <th style="background:#fef9c3;color:#92400e;">LG품번</th>
+          <th style="background:#fef9c3;color:#92400e;">메이커품번</th>
+          <th style="background:#dcfce7;color:#166534;">LG품번</th>
+          <th style="background:#dcfce7;color:#166534;">메이커품번</th>
+          <th style="background:#dcfce7;color:#166534;">LOT</th>
+          <th style="background:#dcfce7;color:#166534;">수량</th>
+          <th></th><th></th>
+        </tr></thead>
         <tbody id="hi_r"></tbody>
       </table>
     </div>
@@ -602,6 +616,17 @@ tbody tr:hover td{background:#f8fafc;}
       <button class="btn btn-pri" style="padding:12px;font-size:13px;" onclick="playSound('done')">등록 테스트</button>
     </div>
     <button class="btn btn-pri" onclick="saveSnd()" style="width:100%;padding:13px;font-size:14px;">💾 저장</button>
+  </div>
+</div>
+
+<!-- OK 판정 팝업 -->
+<div id="okPopup" style="display:none;position:fixed;inset:0;background:rgba(5,150,105,0.18);z-index:8000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:20px;padding:32px 36px;text-align:center;box-shadow:0 12px 48px rgba(5,150,105,0.25);border:3px solid var(--ok);min-width:260px;animation:okPop .2s ease-out;">
+    <div style="font-size:56px;line-height:1;margin-bottom:10px;">✅</div>
+    <div style="font-size:22px;font-weight:900;color:var(--ok-d);margin-bottom:6px;">OK</div>
+    <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;" id="okPopSt">-</div>
+    <div style="font-size:12px;color:var(--text-s);" id="okPopPn">-</div>
+    <div style="margin-top:14px;font-size:11px;color:var(--ok);font-weight:700;">다음 피더로 이동 중...</div>
   </div>
 </div>
 
@@ -936,19 +961,17 @@ function addFcScan() {
   const mkrPn=f.maker_pn1||'';
   s4Update('fc_',_fc.scans,mkrPn);
 
+  // 품번 매칭 여부만 체크 (LOT/수량 불필요)
   const matched=_fc.scans.find(s=>!mkrPn||s.includes(mkrPn));
   if(matched||!mkrPn) {
     _fc.matched=true;
     _fc.matchedPn=mkrPn||scan;
-    _fc.matchedLot=mkrPn&&matched?matched.replace(mkrPn,'').trim()||matched:scan;
-    // 결과 종합
+    // 결과 종합 - 품번만 표시
     const rs=document.getElementById('fc_rsum');
     rs.className='rsum ok';
     document.getElementById('fc_rtit').className='rsum-title ok';
-    document.getElementById('fc_rtit').textContent='품번 일치 — OK 가능';
+    document.getElementById('fc_rtit').textContent='✅ 품번 일치 — OK 판정 가능';
     document.getElementById('fc_rpn').textContent=_fc.matchedPn||scan;
-    document.getElementById('fc_rlot').textContent=_fc.matchedLot||scan;
-    document.getElementById('fc_rqty').textContent=f.qty+'개';
     setJBtn(true,true);
     document.getElementById('fc_cbox').className='cbox ok';
     document.getElementById('fc_rpanel').className='panel ok';
@@ -960,10 +983,8 @@ function addFcScan() {
     const rs=document.getElementById('fc_rsum');
     rs.className='rsum ng';
     document.getElementById('fc_rtit').className='rsum-title ng';
-    document.getElementById('fc_rtit').textContent='품번 불일치 — NG 처리 필요';
+    document.getElementById('fc_rtit').textContent='❌ 품번 불일치 — NG 처리 필요';
     document.getElementById('fc_rpn').textContent=mkrPn||'-';
-    document.getElementById('fc_rlot').textContent=scan;
-    document.getElementById('fc_rqty').textContent=f.qty+'개';
     setJBtn(false,true);
     document.getElementById('fc_cbox').className='cbox ng';
     document.getElementById('fc_rpanel').className='panel ng';
@@ -981,21 +1002,40 @@ async function judgeOK() {
   if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
   if(!_fc.feeders.length){showToast('⚠️ 모델을 먼저 선택하세요');return;}
   const f=_fc.feeders[_fc.curIdx];
-  f.status='ok';f.lot_no=_fc.matchedLot||_fc.scans.join('/');
+  f.status='ok';
   setJBtn(false,false);
   document.getElementById('fc_cbox').className='cbox ok';
+
+  // OK 팝업 표시
+  const popup=document.getElementById('okPopup');
+  document.getElementById('okPopSt').textContent=f.st_no;
+  document.getElementById('okPopPn').textContent=`LG: ${f.lg_pn}  /  MKR: ${f.maker_pn1||'—'}`;
+  popup.style.display='flex';
+
   try {
     await sb.from('mfg_feeder_check').insert({
-      check_date:today(),line:_fc.line,barcode_val:_fc.barcode,
-      feeder_no:f.st_no,lg_pn:f.lg_pn,maker_pn:f.maker_pn1||null,
-      lot_no:f.lot_no||null,qty:f.qty||null,result:'OK',operator:op,
+      check_date:today(), line:_fc.line, barcode_val:_fc.barcode,
+      feeder_no:f.st_no, lg_pn:f.lg_pn, maker_pn:f.maker_pn1||null,
+      lot_no:null, qty:null, result:'OK', operator:op,
     });
   } catch(e){console.error(e);}
+
   playSound('ok');
-  updateFcProg();renderFcList();
+  updateFcProg(); renderFcList();
   await checkFcComplete(op);
-  const ni=_fc.feeders.findIndex((ff,i)=>i>_fc.curIdx&&ff.status==='wait');
-  if(ni>=0){setTimeout(()=>{moveFc(ni);setDot('fd2','act');const r2=document.getElementById('fc_r2');r2.className='rd empty';r2.textContent='ST No 대기 중...';document.getElementById('fc_st').focus();},400);}
+
+  // 1.0초 후 팝업 닫고 다음 피더로 자동 이동
+  setTimeout(()=>{
+    popup.style.display='none';
+    const ni=_fc.feeders.findIndex((ff,i)=>i>_fc.curIdx&&ff.status==='wait');
+    if(ni>=0){
+      moveFc(ni);
+      setDot('fd2','act');
+      const r2=document.getElementById('fc_r2');
+      r2.className='rd empty'; r2.textContent='ST No 대기 중...';
+      document.getElementById('fc_st').focus();
+    }
+  }, 1000);
 }
 
 // ── FC: NG 판정 ──
@@ -1189,7 +1229,19 @@ async function doReelChange(){
   const op=document.getElementById('rc_op').value;
   if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
   try{
-    await sb.from('mfg_reel_change').insert({change_date:today(),line:_rc.line,feeder_no:_rc.stno,lg_pn:_rc.lgPn||null,old_lot:_rc.oldScans.join('/')||null,new_lot:_rc.newLot||_rc.newScans.join('/')||null,result:'OK',operator:op});
+    await sb.from('mfg_reel_change').insert({
+      change_date:today(), line:_rc.line, feeder_no:_rc.stno,
+      // 구 릴
+      lg_pn:_rc.lgPn||null,
+      old_maker_pn:_rc.mkrPn1||null,
+      old_lot:_rc.oldScans.join('/')||null,
+      // 신규 릴
+      new_lg_pn:_rc.lgPn||null,
+      new_maker_pn:_rc.newPn||null,
+      new_lot:_rc.newLot||_rc.newScans.join('/')||null,
+      new_qty:_rc.moq||null,
+      result:'OK', operator:op
+    });
     playSound('done');showToast('✅ 부품 교환 이력 등록 완료');resetRc();
   }catch(e){showToast('❌ 등록 실패: '+(e.message||String(e)));console.error(e);}
 }
@@ -1238,16 +1290,15 @@ async function loadHist(){
       if(date)q=q.eq('check_date',date);if(line)q=q.eq('line',line);if(res)q=q.eq('result',res);
       const{data}=await q.limit(200);
       const tbody=document.getElementById('hi_f');
-      if(!data||!data.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:16px;color:#bbb">없음</td></tr>';return;}
+      if(!data||!data.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px;color:#bbb">없음</td></tr>';return;}
       tbody.innerHTML=data.map(r=>`<tr>
         <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
         <td><span class="badge ${r.line==='1라인'?'b-l1':r.line==='2라인'?'b-l2':'b-l3'}">${r.line}</span></td>
         <td style="font-family:var(--mono);font-size:11px">${r.barcode_val||'-'}</td>
         <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
         <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:10px;color:var(--text-s)">${r.lot_no||'-'}</td>
-        <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
-        <td style="font-size:11px;color:var(--ng)">${r.ng_reason||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn||'-'}</td>
+        <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}${r.result==='NG'&&r.ng_reason?` — ${r.ng_reason}`:''}</span></td>
         <td style="font-size:12px">${r.operator||'-'}</td>
       </tr>`).join('');
     }catch(e){console.error(e);}
@@ -1259,14 +1310,17 @@ async function loadHist(){
       if(date)q=q.eq('change_date',date);if(line)q=q.eq('line',line);if(res)q=q.eq('result',res);
       const{data}=await q.limit(200);
       const tbody=document.getElementById('hi_r');
-      if(!data||!data.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px;color:#bbb">없음</td></tr>';return;}
+      if(!data||!data.length){tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:16px;color:#bbb">없음</td></tr>';return;}
       tbody.innerHTML=data.map(r=>`<tr>
         <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
         <td><span class="badge ${r.line==='1라인'?'b-l1':r.line==='2라인'?'b-l2':'b-l3'}">${r.line}</span></td>
         <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:10px;color:var(--text-s)">${r.old_lot||'-'}</td>
-        <td style="font-family:var(--mono);font-size:10px;color:var(--pri)">${r.new_lot||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;background:#fefce8">${r.lg_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:#92400e;background:#fefce8">${r.old_maker_pn||r.old_lot||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;background:#f0fdf4">${r.new_lg_pn||r.lg_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:#166534;background:#f0fdf4">${r.new_maker_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--pri);background:#f0fdf4">${r.new_lot||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;text-align:right;background:#f0fdf4">${r.new_qty||'-'}</td>
         <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
         <td style="font-size:12px">${r.operator||'-'}</td>
       </tr>`).join('');
@@ -1278,12 +1332,12 @@ async function exportHist(){
   showToast('📥 엑셀 생성 중...');
   const wb=new ExcelJS.Workbook();
   const stl=(cell,opts={})=>{const{fn='Arial Narrow',sz=9,bold=false,col='000000',bg=null,align='left'}=opts;cell.font={name:fn,size:sz,bold,color:{argb:'FF'+col}};cell.alignment={horizontal:align,vertical:'middle'};if(bg)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};const bs={style:'thin',color:{argb:'FFD0D0D0'}};cell.border={top:bs,bottom:bs,left:bs,right:bs};};
-  const ws1=wb.addWorksheet('피더체크이력');ws1.columns=[16,10,20,13,15,15,6,18,10].map(w=>({width:w}));
-  const h1=ws1.addRow(['일시','라인','작업지시','피더No','LG품번','LOT','결과','NG사유','작업자']);h1.height=18;h1.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  const ws1=wb.addWorksheet('피더체크이력');ws1.columns=[16,10,20,13,16,16,10,12].map(w=>({width:w}));
+  const h1=ws1.addRow(['일시','라인','모델(작업지시)','피더No','LG품번','메이커품번','결과','작업자']);h1.height=18;h1.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
   document.querySelectorAll('#hi_f tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(!tds.length)return;const row=ws1.addRow([...tds].map(td=>td.textContent.trim()));row.height=15;row.eachCell(c=>stl(c));});
-  const ws2=wb.addWorksheet('부품교환이력');ws2.columns=[16,10,13,15,16,16,6,10].map(w=>({width:w}));
-  const h2=ws2.addRow(['일시','라인','피더No','LG품번','기존LOT','신규LOT','결과','작업자']);h2.height=18;h2.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
-  document.querySelectorAll('#hi_r tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(!tds.length)return;const row=ws2.addRow([...tds].map(td=>td.textContent.trim()));row.height=15;row.eachCell(c=>stl(c));});
+  const ws2=wb.addWorksheet('부품교환이력');ws2.columns=[16,10,13,15,15,15,15,16,8,8,10].map(w=>({width:w}));
+  const h2=ws2.addRow(['일시','라인','피더No','구릴_LG품번','구릴_메이커품번','신규릴_LG품번','신규릴_메이커품번','신규릴_LOT','신규릴_수량','결과','작업자']);h2.height=18;h2.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  document.querySelectorAll('#hi_r tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(!tds.length||tds.length<5)return;const row=ws2.addRow([...tds].map(td=>td.textContent.trim()));row.height=15;row.eachCell(c=>stl(c));});
   const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
