@@ -16,7 +16,7 @@
   body{
     background:var(--bg);color:var(--text);
     font-family:'Noto Sans KR',sans-serif;
-    min-height:100vh;
+    height:100vh;overflow:hidden;
     background-image:
       radial-gradient(ellipse at 0% 0%,rgba(200,0,30,0.05) 0%,transparent 50%),
       radial-gradient(ellipse at 100% 100%,rgba(26,86,219,0.04) 0%,transparent 50%);
@@ -104,8 +104,15 @@
   }
   .btn-reset:hover{border-color:var(--muted);}
 
+  /* ── 레이아웃: 상단고정 + 하단패널 ── */
+  .main-layout{
+    display:flex;flex-direction:column;
+    height:calc(100vh - 180px); /* topbar+kpi+탭+검색 높이 제외 */
+    padding:0;
+  }
+
   /* ── 메인 테이블 ── */
-  .table-section{padding:16px 28px;}
+  .table-section{padding:12px 28px 0;flex:1;min-height:0;display:flex;flex-direction:column;}
   .table-header{
     display:flex;align-items:center;justify-content:space-between;
     margin-bottom:10px;
@@ -123,7 +130,7 @@
 
   .table-wrap{
     border:1px solid var(--border);border-radius:12px;
-    overflow:hidden;overflow-x:auto;
+    overflow:auto;flex:1;
   }
   table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap;}
   thead th{
@@ -169,16 +176,16 @@
   .remain-zero{color:var(--accent3);font-weight:700;}
   .remain-pos {color:var(--amber);font-weight:700;}
 
-  /* ── 상세 패널 (슬라이드) ── */
+  /* ── 상세 패널 (하단 고정) ── */
   .detail-panel{
     display:none;
-    background:var(--surface);border:1.5px solid var(--accent2);
-    border-radius:12px;margin:0 28px 20px;
-    box-shadow:0 6px 24px rgba(26,86,219,0.12);
-    overflow:hidden;animation:slideDown 0.25s ease;
+    background:var(--surface);border-top:2px solid var(--accent2);
+    box-shadow:0 -4px 24px rgba(26,86,219,0.12);
+    overflow:hidden;
+    max-height:0;transition:max-height 0.3s ease;
+    flex-shrink:0;
   }
-  .detail-panel.show{display:block;}
-  @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+  .detail-panel.show{display:block;max-height:420px;overflow-y:auto;}
 
   .panel-head{
     display:flex;align-items:center;justify-content:space-between;
@@ -194,19 +201,16 @@
   }
   .panel-close:hover{color:var(--accent);}
 
-  .panel-body{padding:20px;}
-
-  /* 패널 섹션 */
-  .panel-sec{margin-bottom:20px;}
+  .panel-body{padding:14px 20px;}
+  .panel-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .panel-grid-3{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .panel-sec{margin-bottom:12px;}
   .panel-sec-title{
     font-size:10px;font-family:'Share Tech Mono',monospace;
     color:var(--muted);letter-spacing:2px;text-transform:uppercase;
-    margin-bottom:12px;display:flex;align-items:center;gap:8px;
+    margin-bottom:8px;display:flex;align-items:center;gap:8px;
   }
   .panel-sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
-
-  .panel-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-  .panel-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
   .panel-field label{
     display:block;font-size:10px;font-weight:700;
     color:var(--muted);letter-spacing:0.5px;margin-bottom:5px;
@@ -442,7 +446,7 @@
       <div class="s-label">운송 / MODE</div>
       <select id="s-mode">
         <option value="">전체</option>
-        <option value="VSSL">VSSL</option>
+        <option value="VSL">VSL</option>
         <option value="AIR">AIR</option>
       </select>
     </div>
@@ -463,8 +467,11 @@
   </div>
 </div>
 
+<!-- 메인 레이아웃: 테이블(스크롤) + 패널(하단고정) -->
+<div id="mainLayout" style="display:flex;flex-direction:column;height:calc(100vh - 182px);">
+
 <!-- 테이블 -->
-<div class="table-section">
+<div class="table-section" style="flex:1;min-height:0;display:flex;flex-direction:column;padding:12px 28px 0;">
   <div class="table-header">
     <div>
       <div class="table-title">PO 목록 <span class="table-count" id="tableCount"></span></div>
@@ -472,7 +479,7 @@
     <button class="btn-excel" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
   </div>
 
-  <div class="table-wrap">
+  <div class="table-wrap" style="flex:1;min-height:0;overflow:auto;">
     <table>
       <thead>
         <tr>
@@ -501,7 +508,7 @@
   </div>
 </div>
 
-<!-- 상세 패널 -->
+<!-- 상세 패널 (하단 고정) -->
 <div class="detail-panel" id="detailPanel">
   <div class="panel-head">
     <div>
@@ -513,7 +520,7 @@
 
   <div class="panel-body">
 
-    <!-- PO 기본정보 (읽기전용) -->
+    <!-- PO 기본정보 (편집 가능) -->
     <div class="panel-sec">
       <div class="panel-sec-title">PO 기본정보 / PO Information</div>
       <div class="panel-grid">
@@ -523,15 +530,19 @@
         </div>
         <div class="panel-field">
           <label>LG P/N</label>
-          <div class="readonly-val" id="p-lgpn">—</div>
+          <input type="text" id="p-lgpn" placeholder="LG품번">
         </div>
         <div class="panel-field">
           <label>Maker P/N</label>
-          <div class="readonly-val" id="p-mkpn">—</div>
+          <input type="text" id="p-mkpn" placeholder="메이커품번">
         </div>
         <div class="panel-field">
           <label>Maker</label>
-          <div class="readonly-val" id="p-maker">—</div>
+          <input type="text" id="p-maker" placeholder="메이커명">
+        </div>
+        <div class="panel-field">
+          <label>ETD 요청일</label>
+          <input type="date" id="p-etd">
         </div>
         <div class="panel-field">
           <label>주문수량 <span class="eng">Order Qty</span></label>
@@ -546,88 +557,81 @@
           <div class="readonly-val" id="p-remain" style="font-weight:700;">—</div>
         </div>
         <div class="panel-field">
-          <label>ETD 요청일</label>
-          <div class="readonly-val" id="p-etd">—</div>
+          <label>판매단가 <span class="eng">Sales Price(KRW)</span></label>
+          <input type="number" id="p-salesprice" placeholder="0" min="0">
+        </div>
+        <div class="panel-field">
+          <label>출하현황</label>
+          <div class="resp-display" id="respDisplay">
+            <span id="respIcon">—</span>
+            <span id="respText" style="font-size:12px;">—</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 본사 발주 정보 -->
-    <div class="panel-sec">
-      <div class="panel-sec-title">본사 발주 정보 / HQ Order to Maker</div>
-      <div class="panel-grid-3">
-        <div class="panel-field">
-          <label>본사발주일 <span class="eng">PO to Maker Date</span></label>
-          <input type="date" id="p-hqdate">
-        </div>
-        <div class="panel-field">
-          <label>메이커 약속납기 <span class="eng">Maker Commit Date</span></label>
-          <input type="date" id="p-mkcommit">
-        </div>
-        <div class="panel-field">
-          <label>메이커 실입고일 <span class="eng">Maker Actual Date</span></label>
-          <input type="date" id="p-mkactual">
-        </div>
-      </div>
-    </div>
-
-    <!-- 출하 입력 -->
+    <!-- 출하 입력 + 이력 -->
     <div class="panel-sec">
       <div class="panel-sec-title">출하 입력 / Shipment Entry</div>
-      <div class="panel-grid">
-        <div class="panel-field">
-          <label>인보이스 No. <span class="eng">Invoice No.</span></label>
-          <input type="text" id="p-invoice" placeholder="INV-260410-001">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <!-- 입력 폼 -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start;">
+          <div class="panel-field">
+            <label>인보이스 No.</label>
+            <input type="text" id="p-invoice" placeholder="INV-260410-001">
+          </div>
+          <div class="panel-field">
+            <label>출하일</label>
+            <input type="date" id="p-shipdate">
+          </div>
+          <div class="panel-field">
+            <label>출하수량</label>
+            <input type="number" id="p-shipqty" placeholder="0" min="1" oninput="calcRemain()">
+          </div>
+          <div class="panel-field">
+            <label>운송방법</label>
+            <select id="p-shipmode">
+              <option value="">선택</option>
+              <option value="VSL">🚢 VSL</option>
+              <option value="AIR">✈ AIR</option>
+            </select>
+          </div>
+          <div class="panel-field">
+            <label>본사발주일</label>
+            <input type="date" id="p-hqdate">
+          </div>
+          <div class="panel-field">
+            <label>메이커약속납기</label>
+            <input type="date" id="p-mkcommit">
+          </div>
+          <div class="panel-field">
+            <label>메이커실입고일</label>
+            <input type="date" id="p-mkactual">
+          </div>
+          <div class="panel-field" style="grid-column:span 2;">
+            <label>출하 후 예상잔량</label>
+            <div class="readonly-val" id="p-afterremain" style="font-weight:700;color:var(--amber);">—</div>
+          </div>
         </div>
-        <div class="panel-field">
-          <label>출하일 <span class="eng">Shipment Date</span></label>
-          <input type="date" id="p-shipdate">
-        </div>
-        <div class="panel-field">
-          <label>출하수량 <span class="eng">Shipment Qty</span></label>
-          <input type="number" id="p-shipqty" placeholder="0" min="1" oninput="calcRemain()">
-        </div>
-        <div class="panel-field">
-          <label>운송방법 <span class="eng">Mode</span></label>
-          <select id="p-shipmode">
-            <option value="">선택</option>
-            <option value="VSSL">🚢 VSSL</option>
-            <option value="AIR">✈ AIR</option>
-          </select>
+        <!-- 출하이력 -->
+        <div>
+          <div style="font-size:10px;font-family:'Share Tech Mono',monospace;color:var(--muted);letter-spacing:1px;margin-bottom:6px;">SHIPMENT HISTORY</div>
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>인보이스 No.</th>
+                <th>출하일</th>
+                <th>수량</th>
+                <th>운송</th>
+                <th>잔량</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="5" class="history-empty">출하이력 없음</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
-      <div class="panel-field" style="margin-top:10px;">
-        <label>출하 후 잔량 예상 <span class="eng">Expected Balance after Shipment</span></label>
-        <div class="readonly-val" id="p-afterremain" style="font-weight:700;color:var(--amber);">—</div>
-      </div>
-    </div>
-
-    <!-- 출하현황 -->
-    <div class="panel-sec">
-      <div class="panel-sec-title">출하현황 / Ship Status</div>
-      <div class="resp-display" id="respDisplay">
-        <span id="respIcon">—</span>
-        <span id="respText" style="font-size:14px;">조회 후 자동 판단됩니다</span>
-      </div>
-    </div>
-
-    <!-- 출하이력 -->
-    <div class="panel-sec">
-      <div class="panel-sec-title">출하 이력 / Shipment History</div>
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th>인보이스 No.</th>
-            <th>출하일</th>
-            <th>출하수량</th>
-            <th>운송</th>
-            <th>누적잔량</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody">
-          <tr><td colspan="5" class="history-empty">출하이력 없음</td></tr>
-        </tbody>
-      </table>
     </div>
 
     <div class="panel-btns">
@@ -636,7 +640,8 @@
     </div>
 
   </div>
-</div>
+</div><!-- /detail-panel -->
+</div><!-- /mainLayout -->
 
 <div class="toast" id="toast"></div>
 
@@ -666,6 +671,7 @@
     return d.toISOString().slice(0,10);
   }
   let allData = [];
+  let filteredData = []; // ① 버그수정: filtered 별도 관리
   let selectedRow = null;
 
   // ── 토스트 ──
@@ -811,6 +817,7 @@
 
   // ── 테이블 렌더 ──
   function renderTable(data) {
+    filteredData = data; // ① 버그수정
     const body = document.getElementById('poTableBody');
     document.getElementById('tableCount').textContent = `— ${data.length.toLocaleString()}건`;
 
@@ -894,11 +901,9 @@
 
   // ── 행 선택 → 패널 열기 ──
   function selectRow(idx) {
-    // 이전 선택 해제
     document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
     document.getElementById(`row-${idx}`)?.classList.add('selected');
-
-    selectedRow = allData[idx];
+    selectedRow = filteredData[idx]; // ① 버그수정: filteredData 기준
     openPanel(selectedRow);
   }
 
@@ -907,14 +912,18 @@
 
     document.getElementById('panelPono').textContent  = `${r.pono} · ${r.mkpn}`;
     document.getElementById('p-entity').textContent   = r.entity;
-    document.getElementById('p-lgpn').textContent     = r.lgpn || '—';
-    document.getElementById('p-mkpn').textContent     = r.mkpn || '—';
-    document.getElementById('p-maker').textContent    = r.maker || '—';
+    // 편집 가능 필드
+    document.getElementById('p-lgpn').value           = r.lgpn || '';
+    document.getElementById('p-mkpn').value           = r.mkpn || '';
+    document.getElementById('p-maker').value          = r.maker || '';
+    document.getElementById('p-etd').value            = r.etd || '';
+    document.getElementById('p-salesprice').value     = r.sales_price_krw || '';
+    // 읽기전용
     document.getElementById('p-qty').textContent      = (r.qty||0).toLocaleString();
     document.getElementById('p-shipped').textContent  = (r.shipped||0).toLocaleString();
     document.getElementById('p-remain').textContent   = remain.toLocaleString();
     document.getElementById('p-remain').style.color   = remain <= 0 ? 'var(--accent3)' : 'var(--amber)';
-    document.getElementById('p-etd').textContent      = r.etd || '—';
+    // 출하입력 초기화
     document.getElementById('p-hqdate').value         = r.hqdate || '';
     document.getElementById('p-mkcommit').value       = r.mkcommit || '';
     document.getElementById('p-mkactual').value       = r.mkactual || '';
@@ -924,14 +933,30 @@
     document.getElementById('p-shipmode').value       = '';
     document.getElementById('p-afterremain').textContent = '—';
 
-    // 출하현황
     updateRespDisplay(r.resp);
-
-    // 출하이력
-    renderHistory(r.history || [], r.qty);
+    loadHistory(r); // 출하이력 조회
 
     document.getElementById('detailPanel').classList.add('show');
-    document.getElementById('detailPanel').scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  // 출하이력 Supabase 조회
+  async function loadHistory(r) {
+    document.getElementById('historyBody').innerHTML =
+      '<tr><td colspan="5" class="history-empty">조회 중...</td></tr>';
+    try {
+      // 동일 mkpn + pono 그룹의 모든 po_data id 수집
+      const groupIds = allData
+        .filter(d => d.mkpn === r.mkpn && d.pono === r.pono)
+        .map(d => d.id);
+      const {data: ships} = await sb.from('shipment_po')
+        .select('invoice_no, ship_date, ship_qty, transport')
+        .in('po_id', groupIds)
+        .order('ship_date', {ascending:true});
+      renderHistory(ships||[], r.qty);
+    } catch(e) {
+      document.getElementById('historyBody').innerHTML =
+        '<tr><td colspan="5" class="history-empty">이력 조회 실패</td></tr>';
+    }
   }
 
   function closePanel() {
@@ -977,15 +1002,16 @@
     }
     let cumShipped = 0;
     tbody.innerHTML = history.map(h => {
-      cumShipped += (h.qty || 0);
+      const qty = h.ship_qty || h.qty || 0;
+      cumShipped += qty;
       const balance = totalQty - cumShipped;
-      const modeBadge = h.mode === 'AIR'
+      const modeBadge = (h.transport||h.mode||'') === 'AIR'
         ? `<span class="badge b-air">✈ AIR</span>`
-        : `<span class="badge b-vssl">🚢 VSSL</span>`;
+        : `<span class="badge b-vssl">🚢 VSL</span>`;
       return `<tr>
-        <td class="td-mono">${h.invoice||'—'}</td>
-        <td class="td-mono">${h.date||'—'}</td>
-        <td class="td-right td-mono">${(h.qty||0).toLocaleString()}</td>
+        <td class="td-mono">${h.invoice_no||h.invoice||'—'}</td>
+        <td class="td-mono">${h.ship_date||h.date||'—'}</td>
+        <td class="td-right td-mono">${qty.toLocaleString()}</td>
         <td>${modeBadge}</td>
         <td class="td-right td-mono" style="color:${balance<=0?'var(--accent3)':'var(--amber)'}">
           ${balance.toLocaleString()}
@@ -994,58 +1020,91 @@
     }).join('');
   }
 
-  // ── 출하 등록 ──
+  // ── 출하 등록 (초과출하 자동분산) ──
   async function saveShipment() {
     if (!selectedRow) return;
-    const invoice  = document.getElementById('p-invoice').value.trim();
-    const shipdate = document.getElementById('p-shipdate').value;
-    const shipqty  = Number(document.getElementById('p-shipqty').value);
-    const shipmode = document.getElementById('p-shipmode').value;
-    const hqdate   = document.getElementById('p-hqdate').value;
-    const mkcommit = document.getElementById('p-mkcommit').value;
-    const mkactual = document.getElementById('p-mkactual').value;
+    const invoice    = document.getElementById('p-invoice').value.trim();
+    const shipdate   = document.getElementById('p-shipdate').value;
+    const shipqty    = Number(document.getElementById('p-shipqty').value);
+    const shipmode   = document.getElementById('p-shipmode').value;
+    const hqdate     = document.getElementById('p-hqdate').value;
+    const mkcommit   = document.getElementById('p-mkcommit').value;
+    const mkactual   = document.getElementById('p-mkactual').value;
+    const salesprice = Number(document.getElementById('p-salesprice').value) || null;
 
     if (!invoice)  { showToast('⚠ 인보이스 No.를 입력해주세요', 'error'); return; }
     if (!shipdate) { showToast('⚠ 출하일을 입력해주세요', 'error'); return; }
     if (!shipqty || shipqty <= 0) { showToast('⚠ 출하수량을 입력해주세요', 'error'); return; }
     if (!shipmode) { showToast('⚠ 운송방법을 선택해주세요', 'error'); return; }
 
-    const remain = (selectedRow.qty||0) - (selectedRow.shipped||0);
-    if (shipqty > remain) {
-      showToast(`⚠ 출하수량(${shipqty.toLocaleString()})이 잔량(${remain.toLocaleString()})을 초과합니다`, 'warn');
-      return;
-    }
-
     const btn = document.getElementById('saveBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
 
-    const payload = {
-      action: 'po_shipment',
-      entity:    selectedRow.entity,
-      pono:      selectedRow.pono,
-      mkpn:      selectedRow.mkpn,
-      maker:     selectedRow.maker,
-      invoice, shipdate, shipqty, shipmode,
-      hqdate, mkcommit, mkactual,
-    };
-
     try {
-      const {error} = await sb.from('shipment_po').insert([{
-        po_id:      selectedRow.id,
-        po_no:      selectedRow.pono,
-        entity:     selectedRow.entity,
-        item_code:  selectedRow.erp || null,
-        ship_date:  shipdate,
-        ship_qty:   shipqty,
-        transport:  shipmode,
-        invoice_no: invoice,
-        etd:        mkcommit || null,
-        eta:        mkactual || null,
-        status:     '출하완료',
-        created_by: 'HQ'
-      }]);
+      // ── 초과출하 자동분산 로직 ──
+      // 동일 mkpn + pono 그룹에서 ETD 오름차순으로 정렬 → 잔량 순서대로 차감
+      const sameGroup = allData
+        .filter(d => d.mkpn === selectedRow.mkpn && d.pono === selectedRow.pono)
+        .sort((a, b) => (a.etd||'') < (b.etd||'') ? -1 : 1);
+
+      // 각 PO의 현재 잔량 계산
+      const {data: existingShips} = await sb.from('shipment_po')
+        .select('po_id, ship_qty')
+        .in('po_id', sameGroup.map(d => d.id));
+      const shipedMap = {};
+      (existingShips||[]).forEach(s => {
+        shipedMap[s.po_id] = (shipedMap[s.po_id]||0) + (s.ship_qty||0);
+      });
+
+      let remaining = shipqty;
+      const insertRows = [];
+
+      for (const po of sameGroup) {
+        if (remaining <= 0) break;
+        const poRemain = (po.qty||0) - (shipedMap[po.id]||0);
+        if (poRemain <= 0) continue;
+        const allocQty = Math.min(remaining, poRemain);
+        insertRows.push({
+          po_id:           po.id,
+          po_no:           po.pono,
+          entity:          po.entity,
+          item_code:       po.erp || null,
+          ship_date:       shipdate,
+          ship_qty:        allocQty,
+          transport:       shipmode,
+          invoice_no:      invoice,
+          sales_price_krw: salesprice,
+          status:          '출하완료',
+          created_by:      'HQ'
+        });
+        remaining -= allocQty;
+      }
+
+      // 잔량 초과 시 마지막 PO에 초과분 추가 (불가피한 초과 출하)
+      if (remaining > 0) {
+        const lastPo = sameGroup[sameGroup.length - 1];
+        insertRows.push({
+          po_id:           lastPo.id,
+          po_no:           lastPo.pono,
+          entity:          lastPo.entity,
+          item_code:       lastPo.erp || null,
+          ship_date:       shipdate,
+          ship_qty:        remaining,
+          transport:       shipmode,
+          invoice_no:      invoice,
+          sales_price_krw: salesprice,
+          status:          '초과출하',
+          created_by:      'HQ'
+        });
+      }
+
+      const {error} = await sb.from('shipment_po').insert(insertRows);
       if (error) throw error;
-      showToast('✓ 출하 등록 완료');
+
+      const msg = insertRows.length > 1
+        ? `✓ 출하 등록 완료 (${insertRows.length}개 PO에 분산)`
+        : '✓ 출하 등록 완료';
+      showToast(msg);
       closePanel();
       await loadPO();
     } catch(e) {
@@ -1284,8 +1343,22 @@
     btn.disabled = false; btn.textContent = '✓ 등록';
   }
 
+  // ── mainLayout 높이 동적 계산 ──
+  function adjustLayout() {
+    const topbar    = document.querySelector('.topbar');
+    const kpiBar    = document.querySelector('.kpi-bar');
+    const tabBar    = document.querySelector('[id="tab-query-btn"]')?.closest('div');
+    const searchSec = document.querySelector('.search-section');
+    const layout    = document.getElementById('mainLayout');
+    if (!layout) return;
+    const used = (topbar?.offsetHeight||0) + (kpiBar?.offsetHeight||0)
+               + (tabBar?.offsetHeight||0) + (searchSec?.offsetHeight||0);
+    layout.style.height = (window.innerHeight - used) + 'px';
+  }
+  window.addEventListener('resize', adjustLayout);
+
   // 초기 로드
-  loadPO();
+  loadPO().then(adjustLayout);
 </script>
 </body>
 </html>
