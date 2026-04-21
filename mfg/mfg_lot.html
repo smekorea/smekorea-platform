@@ -20,6 +20,9 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
 
+.ac-item{padding:8px 12px;cursor:pointer;font-family:var(--mono);font-size:12px;border-bottom:1px solid #f1f5f9;}
+.ac-item:hover{background:var(--pri-l);color:var(--pri);font-weight:700;}
+
 /* 로그인 */
 #lo{position:fixed;inset:0;background:linear-gradient(135deg,#1e3a8a,#2563eb);display:none;align-items:center;justify-content:center;z-index:9999;}
 .lbox{background:#fff;border-radius:20px;padding:40px 36px;width:340px;box-shadow:0 10px 40px rgba(0,0,0,.2);text-align:center;}
@@ -333,7 +336,10 @@ tbody tr:hover td{background:#f8fafc;}
               <option value="">모델 선택</option>
             </select>
           </div>
-          <input type="text" class="sinp active" id="fc_bc" placeholder="EBR370406-01-TOP" style="text-transform:uppercase;font-size:14px;" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmFcBc()">
+          <div style="position:relative;">
+            <input type="text" class="sinp active" id="fc_bc" placeholder="EBR 입력 또는 스캔..." style="text-transform:uppercase;font-size:14px;" oninput="this.value=this.value.toUpperCase();fcBcAC()" onkeydown="if(event.key==='Enter'){document.getElementById('fc_bc_ac').style.display='none';confirmFcBc();}">
+            <div id="fc_bc_ac" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:200;max-height:200px;overflow-y:auto;"></div>
+          </div>
           <div class="rd empty" id="fc_r1">스캔 대기 중...</div>
           <button class="btn btn-pri" onclick="confirmFcBc()" style="width:100%;padding:10px;font-size:13px;margin-top:7px;">🔍 모델 확인</button>
         </div>
@@ -767,6 +773,7 @@ function showOp(name){document.getElementById('hdrOp').textContent=name?'👤 '+
 async function loadMaster() {
   const load=async(t,ords=[])=>{const PAGE=1000;let all=[],pg=0;while(true){let q=sb.from(t).select('*').range(pg*PAGE,(pg+1)*PAGE-1);ords.forEach(o=>q=q.order(o));const{data,error}=await q;if(error||!data||!data.length)break;all=[...all,...data];if(data.length<PAGE)break;pg++;}return all;};
   [_lm,_pl,_bom,_bm]=await Promise.all([load('mfg_line_model',['line','barcode_val']),load('mfg_placement',['line','machine','side','st_no']),load('mfg_bom',['process','lg_pn']),load('mfg_bom_model',['lg_pn'])]);
+  _fcModelList = _lm.filter(r=>r.active==='Y').map(r=>r.barcode_val);
 }
 
 // ── 파싱 ──
@@ -780,7 +787,38 @@ function setJBtn(okOn,ngOn){document.getElementById('fc_bok').className='jok '+(
 function s4Update(pfx,scans,mkrPn){for(let i=0;i<4;i++){const b=document.getElementById(pfx+'b'+i),v=document.getElementById(pfx+'v'+i);if(!b||!v)continue;if(i<scans.length){const s=scans[i],ok=!mkrPn||s.includes(mkrPn);b.className='s4b '+(ok?'ok':'ng');v.className='s4v '+(ok?'ok':'ng');v.textContent=s;}else{b.className='s4b empty';v.className='s4v empty';v.textContent=i===0&&scans.length===0?'대기...':'-';}}}
 
 // ── FC: 모델 드롭다운 ──
-function loadFcModels(){const line=document.getElementById('fc_ldrop').value,sel=document.getElementById('fc_mdrop');sel.innerHTML='<option value="">모델 선택</option>';let mods=_lm.filter(r=>r.active==='Y');if(line)mods=mods.filter(r=>r.line===line);mods.forEach(r=>{const o=document.createElement('option');o.value=r.barcode_val;o.textContent=r.barcode_val+(r.machine_program?` (${r.machine_program})`:'');sel.appendChild(o);});}
+function loadFcModels(){
+  const line=document.getElementById('fc_ldrop').value;
+  const sel=document.getElementById('fc_mdrop');
+  sel.innerHTML='<option value="">모델 선택</option>';
+  let mods=_lm.filter(r=>r.active==='Y');
+  if(line)mods=mods.filter(r=>r.line===line);
+  mods.forEach(r=>{
+    const o=document.createElement('option');
+    o.value=r.barcode_val;
+    o.textContent=r.barcode_val+(r.machine_program?` (${r.machine_program})`:'');
+    sel.appendChild(o);
+  });
+  // 자동완성 데이터도 갱신
+  _fcModelList = mods.map(r=>r.barcode_val);
+}
+
+// 모델명 자동완성
+let _fcModelList = [];
+function fcBcAC(){
+  const kw = document.getElementById('fc_bc').value.trim().toUpperCase();
+  const list = document.getElementById('fc_bc_ac');
+  if(!kw||kw.length<2){list.style.display='none';return;}
+  const matches = _fcModelList.filter(v=>v.toUpperCase().includes(kw)).slice(0,10);
+  if(!matches.length){list.style.display='none';return;}
+  list.innerHTML = matches.map(v=>`<div class="ac-item" onclick="fcBcSelect('${v}')">${v}</div>`).join('');
+  list.style.display='block';
+}
+function fcBcSelect(val){
+  document.getElementById('fc_bc').value=val;
+  document.getElementById('fc_bc_ac').style.display='none';
+  confirmFcBc();
+}
 function selectFcModel(){const v=document.getElementById('fc_mdrop').value;if(v)document.getElementById('fc_bc').value=v;}
 
 // ── FC: 작업지시 확인 ──
@@ -829,7 +867,7 @@ function confirmFcSt() {
 
 // ── FC: 피더 목록 구성 ──
 async function buildFcFeeders(line,bc) {
-  const mn=norm(parseBC(bc)?.modelCode||'');
+  const mn=norm(bc); // 전체 바코드값 정규화 (mfg_admin 배치도 출력과 동일)
   const bMap={},qMap={};
   _bom.forEach(r=>bMap[r.lg_pn]=r);
   _bm.forEach(r=>{if(!qMap[r.lg_pn])qMap[r.lg_pn]={};qMap[r.lg_pn][norm(r.model_code)]=r.qty;});
@@ -1275,5 +1313,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
 });
 </script>
+<script src="../smerp-tweaks.js"></script>
 </body>
 </html>
