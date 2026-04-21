@@ -152,6 +152,26 @@ tbody tr:hover td{background:#f8fafc;}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.9);color:#fff;padding:9px 20px;border-radius:22px;font-size:12px;font-weight:700;z-index:10001;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;max-width:90vw;}
 .toast.show{opacity:1;}
 
+/* ── OK 배너 ── */
+#ok-banner{
+  display:none;position:fixed;inset:0;z-index:9000;
+  align-items:center;justify-content:center;
+  background:rgba(5,150,105,.18);
+  animation:ok-fade-in .15s ease;
+}
+@keyframes ok-fade-in{from{opacity:0}to{opacity:1}}
+.ok-banner-box{
+  background:linear-gradient(135deg,#059669,#10b981);
+  color:#fff;border-radius:24px;
+  padding:36px 52px;text-align:center;
+  box-shadow:0 20px 60px rgba(5,150,105,.45);
+  animation:ok-pop .2s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes ok-pop{from{transform:scale(.7)}to{transform:scale(1)}}
+.ok-banner-icon{font-size:72px;line-height:1;margin-bottom:12px;}
+.ok-banner-title{font-size:32px;font-weight:900;letter-spacing:-0.5px;margin-bottom:6px;}
+.ok-banner-sub{font-size:15px;opacity:.88;font-family:var(--mono);font-weight:600;}
+
 /* 자동완성 */
 .ac-wrap{position:relative;}
 .ac-list{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;max-height:180px;overflow-y:auto;}
@@ -563,6 +583,15 @@ tbody tr:hover td{background:#f8fafc;}
 
 <div class="toast" id="toast"></div>
 
+<!-- OK 배너 -->
+<div id="ok-banner">
+  <div class="ok-banner-box">
+    <div class="ok-banner-icon">✅</div>
+    <div class="ok-banner-title" id="ok-banner-title">등록 완료</div>
+    <div class="ok-banner-sub"  id="ok-banner-sub"></div>
+  </div>
+</div>
+
 <script>
 const sb = supabase.createClient(
   'https://muxuhrbsbrstmrrvlupw.supabase.co',
@@ -651,7 +680,7 @@ function selectMoveType(type){
 // ── 릴 바코드 스캔 (4개, LOT 전체 저장) ──
 let _reelScans = []; // 스캔값 배열
 
-function addReelScan(){
+async function addReelScan(){
   const scan=document.getElementById('mv_reel').value.trim();
   if(!scan)return;
   if(_reelScans.length>=4){showToast('⚠️ 최대 4개까지 스캔 가능합니다');return;}
@@ -689,23 +718,83 @@ function addReelScan(){
 
   if(matched){
     const mkrPn=matched.maker_pn1||'';
-    setR('mv_reelResult','ok','✅',`${matched.lg_pn}`,`메이커품번: ${mkrPn} | ${matched.description||''}`);
+    // 폼 자동입력
     document.getElementById('mv_lgpn').value=matched.lg_pn;
     document.getElementById('mv_mkrpn').value=mkrPn;
     document.getElementById('mv_moq').value=matched.moq||'';
     if(!document.getElementById('mv_qty').value||document.getElementById('mv_qty').value==='0')
       document.getElementById('mv_qty').value=matched.moq||'';
+    setR('mv_reelResult','ok','✅',`${matched.lg_pn}`,`메이커품번: ${mkrPn} | ${matched.description||''}`);
     setR('mv_lgpnResult','ok','✅',matched.lg_pn,matched.description||'');
     setDot('mv_dot1','ok');setDot('mv_dot2','ok');
-    showToast(`✅ 매칭: ${matched.lg_pn} — ${_reelScans.length}개 스캔됨`);
+    // 매칭 즉시 자동저장
+    await autoSaveMoveStock(matched, mkrPn);
   } else {
     setR('mv_reelResult','warn','⚠️',`${_reelScans.length}개 스캔됨`,'BOM 미매칭 — LG품번 직접 입력');
     setDot('mv_dot1','act');
     if(!document.getElementById('mv_lgpn').value)
       document.getElementById('mv_lgpn').focus();
+    document.getElementById('mv_reel').focus();
+  }
+}
+
+// ── 자동 저장 (바코드 매칭 시) ──
+async function autoSaveMoveStock(matched, mkrPn){
+  const op   = document.getElementById('mv_op').value;
+  const qty  = parseInt(document.getElementById('mv_qty').value)||0;
+  const date = document.getElementById('mv_date').value;
+  const lgpn = matched.lg_pn;
+
+  if(!op)  { showToast('⚠️ 작업자를 먼저 선택하세요'); document.getElementById('mv_reel').focus(); return; }
+  if(!qty) { showToast('⚠️ 수량을 먼저 입력하세요');   document.getElementById('mv_reel').focus(); return; }
+  if(!date){ showToast('⚠️ 날짜를 확인하세요');         document.getElementById('mv_reel').focus(); return; }
+
+  const route  = MOVE_ROUTES[_curMoveType];
+  let fromLoc  = route.from, toLoc = route.to;
+  if(_curMoveType==='라인이동'){
+    fromLoc = document.getElementById('mv_fromLine').value;
+    toLoc   = document.getElementById('mv_toLine').value;
+  } else if(_curMoveType==='불출'){
+    toLoc = document.getElementById('mv_outLine').value;
+  } else if(_curMoveType==='반납'){
+    fromLoc = document.getElementById('mv_retLine').value;
   }
 
-  document.getElementById('mv_reel').focus();
+  const payload = {
+    move_date: date,
+    move_type: _curMoveType,
+    from_loc:  fromLoc,
+    to_loc:    toLoc,
+    lg_pn:     lgpn,
+    maker_pn:  mkrPn || null,
+    lot_no:    document.getElementById('mv_lot').value.trim() || null,
+    qty,
+    reel_scan: _reelScans.join(' / ') || null,
+    operator:  op,
+    note:      document.getElementById('mv_note').value.trim() || null,
+  };
+
+  try {
+    const { error } = await sb.from('mfg_stock_move').insert(payload);
+    if(error) throw error;
+    await updateStockCurrent(lgpn, payload.lot_no, fromLoc, toLoc, qty);
+    playDone();
+    showOkBanner(lgpn, qty, _curMoveType);
+    setTimeout(() => { hideOkBanner(); resetMoveForm(); }, 1800);
+  } catch(e) {
+    showToast('❌ 등록 실패: ' + (e.message || String(e)));
+    console.error(e);
+    document.getElementById('mv_reel').focus();
+  }
+}
+
+function showOkBanner(lgpn, qty, type){
+  document.getElementById('ok-banner-title').textContent = `${type} 등록 완료`;
+  document.getElementById('ok-banner-sub').textContent   = `${lgpn}  ·  ${qty.toLocaleString()} PCS`;
+  document.getElementById('ok-banner').style.display     = 'flex';
+}
+function hideOkBanner(){
+  document.getElementById('ok-banner').style.display = 'none';
 }
 
 function clearReelScans(){
