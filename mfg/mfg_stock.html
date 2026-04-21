@@ -47,7 +47,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .tab:hover:not(.on){background:#f8fafc;}
 
 /* 패널 */
-.pnl{display:none;padding:14px;max-width:1000px;margin:0 auto;}
+.pnl{display:none;padding:14px;max-width:1000px;margin:0 auto;} #pnl_hist{max-width:1600px;}
 .pnl.on{display:block;}
 
 /* 카드 */
@@ -87,13 +87,13 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 @keyframes blink{from{opacity:.3}to{opacity:1}}
 .sinp{width:100%;padding:10px 13px;border:2.5px solid var(--border);border-radius:9px;font-size:14px;font-family:var(--mono);font-weight:600;outline:none;transition:all .2s;}
 .sinp:focus{border-color:var(--pri-m);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-.sinp.ok{border-color:var(--ok);background:var(--ok-l);}
+.sinp.ok{border-color:#2563eb;background:#eff6ff;}
 .sinp.ng{border-color:var(--ng);background:var(--ng-l);}
 
 /* 결과 표시 */
 .rd{background:#fff;border:2px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:5px;min-height:36px;font-family:var(--mono);font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;transition:all .2s;}
 .rd.empty{color:var(--text-x);font-weight:400;font-family:inherit;font-size:11px;}
-.rd.ok{border-color:var(--ok);color:var(--ok-d);}
+.rd.ok{border-color:#2563eb;background:#eff6ff;color:#1e3a8a;}
 .rd.ng{border-color:var(--ng);color:var(--ng-d);}
 
 /* 수량 입력 */
@@ -114,7 +114,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .btn:active{transform:scale(.97);}
 .btn-pri{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;}
 .btn-gray{background:#f1f5f9;color:#475569;border:1.5px solid var(--border);}
-.btn-ok{background:linear-gradient(135deg,#059669,#10b981);color:#fff;}
+.btn-ok{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;}
 .btn-sm{padding:6px 10px;font-size:11px;border-radius:7px;}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
 
@@ -161,10 +161,10 @@ tbody tr:hover td{background:#f8fafc;}
 }
 @keyframes ok-fade-in{from{opacity:0}to{opacity:1}}
 .ok-banner-box{
-  background:linear-gradient(135deg,#059669,#10b981);
+  background:linear-gradient(135deg,#1e3a8a,#2563eb);
   color:#fff;border-radius:24px;
   padding:36px 52px;text-align:center;
-  box-shadow:0 20px 60px rgba(5,150,105,.45);
+  box-shadow:0 20px 60px rgba(30,58,138,.45);
   animation:ok-pop .2s cubic-bezier(.34,1.56,.64,1);
 }
 @keyframes ok-pop{from{transform:scale(.7)}to{transform:scale(1)}}
@@ -392,10 +392,15 @@ tbody tr:hover td{background:#f8fafc;}
       <input type="text" id="mv_note" placeholder="비고 입력 (선택)">
     </div>
 
-    <!-- 이동 날짜 -->
+    <!-- 이동 날짜/시간 -->
     <div class="fg">
-      <label>이동 날짜</label>
-      <input type="date" id="mv_date">
+      <label>이동 날짜 / 시간</label>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
+        <input type="date" id="mv_date">
+        <input type="text" id="mv_time" readonly
+          style="width:90px;text-align:center;font-family:var(--mono);font-size:15px;font-weight:700;
+          background:#eff6ff;border:2px solid #bfdbfe;border-radius:9px;padding:9px 10px;color:var(--pri);">
+      </div>
     </div>
 
     <button class="save-btn" onclick="saveMoveStock()" id="mv_saveBtn">📦 이동 등록</button>
@@ -632,6 +637,8 @@ function showTab(name){
 // ── 초기화 ──
 async function init(){
   document.getElementById('mv_date').value=today();
+  tickTime();
+  setInterval(tickTime, 1000);
   await Promise.all([loadOps(),loadBOM(),loadStock()]);
 }
 
@@ -696,9 +703,9 @@ async function addReelScan(){
       const s=_reelScans[i];
       // BOM 메이커품번 포함 여부 확인
       const isMatchPn=_bom.some(b=>(b.maker_pn1&&s.includes(b.maker_pn1))||(b.maker_pn2&&s.includes(b.maker_pn2))||(b.maker_pn3&&s.includes(b.maker_pn3)));
-      box.style.borderColor=isMatchPn?'var(--ok)':'var(--border)';
-      box.style.background=isMatchPn?'var(--ok-l)':'#fff';
-      val.style.color=isMatchPn?'var(--ok-d)':'var(--text)';
+      box.style.borderColor=isMatchPn?'#2563eb':'var(--border)';
+      box.style.background=isMatchPn?'#eff6ff':'#fff';
+      val.style.color=isMatchPn?'#1e3a8a':'var(--text)';
       val.textContent=s;
     } else {
       box.style.borderColor='var(--border)';box.style.background='#fff';
@@ -762,6 +769,7 @@ async function autoSaveMoveStock(matched, mkrPn){
 
   const payload = {
     move_date: date,
+    move_time: document.getElementById('mv_time')?.value || null,
     move_type: _curMoveType,
     from_loc:  fromLoc,
     to_loc:    toLoc,
@@ -1209,6 +1217,13 @@ function setR(id,type,icon,text,sub=''){
 }
 function setDot(id,type){const el=document.getElementById(id);if(el)el.className='dot'+(type?' '+type:'');}
 function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function tickTime(){
+  const d=new Date();
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  const ss=String(d.getSeconds()).padStart(2,'0');
+  const el=document.getElementById('mv_time');
+  if(el) el.value=mm+':'+ss;
+}
 function playDone(){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const g=ctx.createGain();g.gain.value=0.5;g.connect(ctx.destination);const o=ctx.createOscillator();o.frequency.value=600;o.connect(g);o.start();o.stop(ctx.currentTime+.15);}catch(e){}}
 let _tt;
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
@@ -1218,5 +1233,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   else document.getElementById('lo').style.display='flex';
 });
 </script>
+<script src="../smerp-tweaks.js"></script>
 </body>
 </html>
