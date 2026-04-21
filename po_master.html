@@ -624,10 +624,11 @@
                 <th>수량</th>
                 <th>운송</th>
                 <th>잔량</th>
+                <th style="width:64px;text-align:center;">관리</th>
               </tr>
             </thead>
             <tbody id="historyBody">
-              <tr><td colspan="5" class="history-empty">출하이력 없음</td></tr>
+              <tr><td colspan="6" class="history-empty">출하이력 없음</td></tr>
             </tbody>
           </table>
         </div>
@@ -642,6 +643,31 @@
   </div>
 </div><!-- /detail-panel -->
 </div><!-- /mainLayout -->
+
+<!-- 출하이력 수정 모달 -->
+<div id="editShipModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:16px;">✏️ 출하이력 수정</div>
+    <input type="hidden" id="edit_ship_id">
+    <div style="display:grid;gap:10px;">
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">인보이스 No.</label>
+        <input type="text" id="edit_invoice" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:'Noto Sans KR',sans-serif;outline:none;"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">출하일</label>
+        <input type="date" id="edit_shipdate" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none;"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">출하수량</label>
+        <input type="number" id="edit_shipqty" min="1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none;"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">운송방법</label>
+        <select id="edit_shipmode" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:'Noto Sans KR',sans-serif;outline:none;">
+          <option value="VSL">🚢 VSL</option>
+          <option value="AIR">✈ AIR</option>
+        </select></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;">
+      <button onclick="closeEditModal()" style="padding:9px 16px;border-radius:8px;border:1.5px solid var(--border);background:#fff;color:var(--muted);font-size:13px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">취소</button>
+      <button onclick="saveEditShip()" style="padding:9px 20px;border-radius:8px;border:none;background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">저장</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -942,20 +968,19 @@
   // 출하이력 Supabase 조회
   async function loadHistory(r) {
     document.getElementById('historyBody').innerHTML =
-      '<tr><td colspan="5" class="history-empty">조회 중...</td></tr>';
+      '<tr><td colspan="6" class="history-empty">조회 중...</td></tr>';
     try {
-      // 동일 mkpn + pono 그룹의 모든 po_data id 수집
       const groupIds = allData
         .filter(d => d.mkpn === r.mkpn && d.pono === r.pono)
         .map(d => d.id);
       const {data: ships} = await sb.from('shipment_po')
-        .select('invoice_no, ship_date, ship_qty, transport')
+        .select('id, invoice_no, ship_date, ship_qty, transport')
         .in('po_id', groupIds)
         .order('ship_date', {ascending:true});
       renderHistory(ships||[], r.qty);
     } catch(e) {
       document.getElementById('historyBody').innerHTML =
-        '<tr><td colspan="5" class="history-empty">이력 조회 실패</td></tr>';
+        '<tr><td colspan="6" class="history-empty">이력 조회 실패</td></tr>';
     }
   }
 
@@ -997,7 +1022,7 @@
   function renderHistory(history, totalQty) {
     const tbody = document.getElementById('historyBody');
     if (!history.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="history-empty">출하이력 없음</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="history-empty">출하이력 없음</td></tr>';
       return;
     }
     let cumShipped = 0;
@@ -1015,6 +1040,12 @@
         <td>${modeBadge}</td>
         <td class="td-right td-mono" style="color:${balance<=0?'var(--accent3)':'var(--amber)'}">
           ${balance.toLocaleString()}
+        </td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button onclick="openEditModal('${h.id}','${h.invoice_no||''}','${h.ship_date||''}',${qty},'${h.transport||''}')"
+            style="padding:2px 7px;border-radius:5px;border:1.5px solid var(--accent2);background:#fff;color:var(--accent2);font-size:10px;font-weight:700;cursor:pointer;margin-right:3px;">수정</button>
+          <button onclick="deleteShip('${h.id}')"
+            style="padding:2px 7px;border-radius:5px;border:1.5px solid var(--accent);background:#fff;color:var(--accent);font-size:10px;font-weight:700;cursor:pointer;">삭제</button>
         </td>
       </tr>`;
     }).join('');
@@ -1069,6 +1100,9 @@
           po_no:           po.pono,
           entity:          po.entity,
           item_code:       po.erp || null,
+          lg_pn:           po.lgpn || null,
+          maker_pn:        po.mkpn || null,
+          maker:           po.maker || null,
           ship_date:       shipdate,
           ship_qty:        allocQty,
           transport:       shipmode,
@@ -1088,6 +1122,9 @@
           po_no:           lastPo.pono,
           entity:          lastPo.entity,
           item_code:       lastPo.erp || null,
+          lg_pn:           lastPo.lgpn || null,
+          maker_pn:        lastPo.mkpn || null,
+          maker:           lastPo.maker || null,
           ship_date:       shipdate,
           ship_qty:        remaining,
           transport:       shipmode,
@@ -1301,41 +1338,130 @@
     }
   }
 
+  // ── 출하이력 수정 ──
+  function openEditModal(id, invoice, shipdate, qty, mode) {
+    document.getElementById('edit_ship_id').value   = id;
+    document.getElementById('edit_invoice').value   = invoice;
+    document.getElementById('edit_shipdate').value  = shipdate;
+    document.getElementById('edit_shipqty').value   = qty;
+    document.getElementById('edit_shipmode').value  = mode;
+    document.getElementById('editShipModal').style.display = 'flex';
+  }
+  function closeEditModal() {
+    document.getElementById('editShipModal').style.display = 'none';
+  }
+  async function saveEditShip() {
+    const id       = document.getElementById('edit_ship_id').value;
+    const invoice  = document.getElementById('edit_invoice').value.trim();
+    const shipdate = document.getElementById('edit_shipdate').value;
+    const shipqty  = Number(document.getElementById('edit_shipqty').value);
+    const shipmode = document.getElementById('edit_shipmode').value;
+    if (!invoice||!shipdate||!shipqty||!shipmode) { showToast('⚠ 모든 항목을 입력하세요', 'warn'); return; }
+    try {
+      const {error} = await sb.from('shipment_po').update({
+        invoice_no: invoice, ship_date: shipdate,
+        ship_qty: shipqty, transport: shipmode
+      }).eq('id', id);
+      if (error) throw error;
+      showToast('✓ 수정 완료');
+      closeEditModal();
+      loadHistory(selectedRow);
+      await loadPO();
+    } catch(e) { showToast('⚠ 수정 실패: ' + e.message, 'error'); }
+  }
+
+  // ── 출하이력 삭제 ──
+  async function deleteShip(id) {
+    if (!confirm('이 출하이력을 삭제하시겠습니까?')) return;
+    try {
+      const {error} = await sb.from('shipment_po').delete().eq('id', id);
+      if (error) throw error;
+      showToast('✓ 삭제 완료');
+      loadHistory(selectedRow);
+      await loadPO();
+    } catch(e) { showToast('⚠ 삭제 실패: ' + e.message, 'error'); }
+  }
+
+  // ── 엑셀 업로드 출하등록 (초과출하 자동분산) ──
   async function submitHQShipment() {
     if (!hqData.length) return;
     const btn = document.getElementById('hqSubmitBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
     try {
-      // po_no + mkpn 기준으로 po_data id 조회
-      const rows = await Promise.all(hqData.map(async r => {
-        const {data} = await sb.from('po_data')
-          .select('id,entity')
+      const allInsert = [];
+
+      for (const r of hqData) {
+        // 동일 PO No. + Maker P/N 그룹 전체 조회 → ETD 오름차순
+        const {data: poGroup} = await sb.from('po_data')
+          .select('id, entity, qty, etd_request, item_code')
           .eq('po_no', r.pono||'')
           .eq('maker_pn', r.mkpn||'')
-          .eq('etd_request', r.etd||'')
-          .order('created_at', {ascending:false})
-          .limit(1);
-        const po = data?.[0];
-        return {
-          po_id:           po?.id || null,
-          po_no:           r.pono || '',
-          entity:          r.entity,
-          item_code:       r.erp || null,
-          ship_date:       r.shipdate,
-          ship_qty:        r.shipqty,
-          transport:       r.mode,
-          invoice_no:      r.invoice,
-          etd:             r.hqdate || null,
-          eta:             r.mkcommit || null,
-          sales_price_krw: r.sales_price || null,
-          status:          '출하완료',
-          remark:          r.remark || null,
-          created_by:      'HQ'
-        };
-      }));
-      const {error} = await sb.from('shipment_po').insert(rows);
+          .order('etd_request', {ascending: true});
+
+        if (!poGroup || !poGroup.length) {
+          // PO 없으면 그냥 단건 insert (po_id null)
+          allInsert.push({
+            po_id: null, po_no: r.pono||'', entity: r.entity,
+            item_code: r.erp||null,
+            lg_pn: r.lgpn||null, maker_pn: r.mkpn||null, maker: r.maker||null,
+            ship_date: r.shipdate,
+            ship_qty: r.shipqty, transport: r.mode,
+            invoice_no: r.invoice, sales_price_krw: r.sales_price||null,
+            status: '출하완료', created_by: 'HQ'
+          });
+          continue;
+        }
+
+        // 각 PO 기출하량 조회
+        const {data: existShips} = await sb.from('shipment_po')
+          .select('po_id, ship_qty')
+          .in('po_id', poGroup.map(p => p.id));
+        const shippedMap = {};
+        (existShips||[]).forEach(s => {
+          shippedMap[s.po_id] = (shippedMap[s.po_id]||0) + (s.ship_qty||0);
+        });
+
+        // ETD 순서대로 잔량 차감
+        let remaining = r.shipqty;
+        for (const po of poGroup) {
+          if (remaining <= 0) break;
+          const poRemain = (po.qty||0) - (shippedMap[po.id]||0);
+          if (poRemain <= 0) continue;
+          const allocQty = Math.min(remaining, poRemain);
+          allInsert.push({
+            po_id: po.id, po_no: r.pono||'', entity: r.entity,
+            item_code: po.item_code||r.erp||null,
+            lg_pn: po.lg_pn||r.lgpn||null,
+            maker_pn: r.mkpn||null,
+            maker: r.maker||null,
+            ship_date: r.shipdate,
+            ship_qty: allocQty, transport: r.mode,
+            invoice_no: r.invoice, sales_price_krw: r.sales_price||null,
+            status: '출하완료', created_by: 'HQ'
+          });
+          remaining -= allocQty;
+        }
+
+        // 전체 PO 잔량 초과 시 마지막 PO에 초과분 추가
+        if (remaining > 0) {
+          const lastPo = poGroup[poGroup.length - 1];
+          allInsert.push({
+            po_id: lastPo.id, po_no: r.pono||'', entity: r.entity,
+            item_code: lastPo.item_code||r.erp||null,
+            lg_pn: lastPo.lg_pn||r.lgpn||null,
+            maker_pn: r.mkpn||null,
+            maker: r.maker||null,
+            ship_date: r.shipdate,
+            ship_qty: remaining, transport: r.mode,
+            invoice_no: r.invoice, sales_price_krw: r.sales_price||null,
+            status: '초과출하', created_by: 'HQ'
+          });
+        }
+      }
+
+      const {error} = await sb.from('shipment_po').insert(allInsert);
       if (error) throw error;
-      showToast(`✓ ${hqData.length}건 출하 등록 완료`);
+      showToast(`✓ ${allInsert.length}건 출하 등록 완료`);
       clearHQFile();
     } catch(e) {
       showToast('⚠ 등록 실패: ' + e.message, 'error');
