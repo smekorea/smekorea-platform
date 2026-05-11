@@ -257,6 +257,15 @@ tbody tr:hover td{background:#f8fafc;}
 .alert-msg{font-size:13px;color:var(--text-s);line-height:1.6;margin-bottom:20px;}
 .alert-btns{display:flex;gap:8px;}
 .alert-btns .btn{flex:1;padding:12px;}
+
+/* 리사이저블 컬럼 */
+#pr_table th { position:relative; user-select:none; }
+#pr_table th .col-resizer {
+  position:absolute; right:0; top:0; bottom:0; width:5px;
+  cursor:col-resize; background:transparent;
+}
+#pr_table th .col-resizer:hover,
+#pr_table th .col-resizer.dragging { background:var(--pri-m); opacity:.5; }
 </style>
 </head>
 <body>
@@ -1561,20 +1570,16 @@ function loadPrintModels() {
       : face === 'BOT'
       ? `<span class="badge b-bot" style="font-size:10px">BOT</span>`
       : `<span class="badge" style="font-size:10px;background:#f0fdf4;color:#15803d">단면</span>`;
-    const lineBadge = r.line === '1라인' ? 'b-l1' : r.line === '2라인' ? 'b-l2' : 'b-l3';
-
-    return `<label style="display:flex;align-items:center;gap:6px;padding:7px 8px;
-      border-radius:8px;cursor:pointer;margin-bottom:4px;
-      border:2px solid var(--border);background:#fff;transition:all .15s"
-      onmouseover="this.style.borderColor='var(--pri)'" onmouseout="this.style.borderColor=''">
-      <input type="radio" name="pr_modelRadio" class="pr_modelChk" value="${r.barcode_val}" style="width:15px;height:15px;accent-color:var(--pri)">
-      <span class="badge ${lineBadge}" style="font-size:10px">${r.line}</span>
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;
+      border-radius:8px;cursor:pointer;margin-bottom:3px;
+      background:#f8fafc;transition:all .15s"
+      onmouseover="this.style.background='var(--pri-l)'" onmouseout="this.style.background='#f8fafc'">
+      <input type="radio" name="pr_modelRadio" class="pr_modelChk" value="${r.barcode_val}" style="width:15px;height:15px;accent-color:var(--pri);flex-shrink:0">
       ${faceBadge}
-      <span style="font-weight:700;font-size:13px">${r.barcode_val}</span>
+      <span style="font-weight:700;font-size:12px;font-family:var(--mono);word-break:break-all">${r.barcode_val}</span>
       ${r.machine_program
-        ? `<span style="color:#1565c0;font-size:10px;font-family:var(--mono)">▶ ${r.machine_program}</span>`
+        ? `<span style="color:#1565c0;font-size:10px;font-family:var(--mono);flex-shrink:0">▶ ${r.machine_program}</span>`
         : ''}
-      ${r.note ? `<span style="color:#aaa;font-size:10px">— ${r.note}</span>` : ''}
     </label>`;
   }).join('');
 }
@@ -1762,8 +1767,14 @@ function renderPrintPreview(selectedModels) {
   const thead = document.getElementById('pr_thead');
   const tbody = document.getElementById('pr_tbody');
 
-  thead.innerHTML = `<tr>${headers.map(h =>
-    `<th style="white-space:nowrap;font-size:13px;padding:10px 8px">${h}</th>`).join('')}</tr>`;
+  // 저장된 컬럼 폭 불러오기
+  const savedWidths = JSON.parse(localStorage.getItem('pr_col_widths') || '{}');
+  thead.innerHTML = `<tr>${headers.map((h, i) => {
+    const w = savedWidths[i] ? `width:${savedWidths[i]}px;` : '';
+    return `<th style="white-space:nowrap;font-size:13px;padding:10px 8px;${w}position:relative;">${h}<div class="col-resizer" data-col="${i}"></div></th>`;
+  }).join('')}</tr>`;
+  // 리사이저 이벤트 등록
+  initColResize();
 
   tbody.innerHTML = _printData.map(r => {
     const cells = [];
@@ -2006,6 +2017,40 @@ async function exportPrint() {
 // ══════════════════════════════════
 // 토스트
 // ════════════════════════════════
+// ── 컬럼 리사이저 ──
+function initColResize() {
+  const table = document.getElementById('pr_table');
+  if (!table) return;
+  const resizers = table.querySelectorAll('.col-resizer');
+  resizers.forEach(resizer => {
+    let startX, startW, th;
+    resizer.addEventListener('mousedown', e => {
+      th = resizer.parentElement;
+      startX = e.clientX;
+      startW = th.offsetWidth;
+      resizer.classList.add('dragging');
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      e.preventDefault();
+    });
+    function onMouseMove(e) {
+      const w = Math.max(50, startW + (e.clientX - startX));
+      th.style.width = w + 'px';
+      th.style.minWidth = w + 'px';
+    }
+    function onMouseUp() {
+      resizer.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      // 폭 저장
+      const ths = table.querySelectorAll('thead th');
+      const widths = {};
+      ths.forEach((t, i) => { widths[i] = t.offsetWidth; });
+      localStorage.setItem('pr_col_widths', JSON.stringify(widths));
+    }
+  });
+}
+
 </script>
 </body>
 </html>
