@@ -134,10 +134,14 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .fi{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border);background:#fff;cursor:pointer;transition:all .15s;}
 .fi:hover{border-color:var(--pri-m);background:var(--pri-l);}
 .fi.cur{border-color:var(--warn);background:var(--warn-l);box-shadow:0 0 0 2px rgba(217,119,6,.15);}
-.fi.d-ok{border-color:var(--ok);background:var(--ok-l);opacity:.8;}
+.fi.d-ok{border-color:var(--ok);background:var(--ok-l);opacity:.85;}
+.fi.d-ok .fno{color:var(--pri-m);}
+.fi.d-ok .fpn{color:var(--pri-m);}
 .fi.d-ng{border-color:var(--ng);background:var(--ng-l);}
+.fi.d-ng .fno{color:var(--ng);}
+.fi.d-ng .fpn{color:var(--ng);}
 .fi.skip{opacity:.35;cursor:default;}
-.fno{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--pri);min-width:85px;}
+.fno{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);min-width:85px;}
 .fpn{flex:1;font-family:var(--mono);font-size:10px;color:var(--text-s);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .fqty{font-family:var(--mono);font-size:11px;color:var(--text-s);}
 .fico{font-size:15px;}
@@ -284,10 +288,324 @@ tbody tr:hover td{background:#f8fafc;}
 
 <!-- 탭 -->
 <div class="tabs">
-  <div class="tab on" onclick="changeTab('fc')" id="tab_fc"><span class="ti">🔍</span>피더 세팅 체크</div>
+  <div class="tab on" onclick="changeTab('map')" id="tab_map"><span class="ti">🗺️</span>부품배치도 출력</div>
+  <div class="tab" onclick="changeTab('fc')" id="tab_fc"><span class="ti">🔍</span>피더 세팅 체크</div>
   <div class="tab"    onclick="changeTab('rc')" id="tab_rc"><span class="ti">🔄</span>부품 교환 체크</div>
   <div class="tab"    onclick="changeTab('hi')" id="tab_hi"><span class="ti">📋</span>체크 이력</div>
   <div class="tab"    onclick="changeTab('sn')" id="tab_sn"><span class="ti">🔊</span>소리 설정</div>
+</div>
+
+<!-- ══════════════════════
+     탭1: 부품배치도 출력
+══════════════════════ -->
+<div class="pnl" id="pnl_map">
+
+  <div class="card">
+    <div class="card-tit">🖨️ 부품배치도 출력</div>
+
+    <!-- 모델 선택 -->
+    <div class="fg">
+      <label>라인 선택</label>
+      <select id="pr_line" onchange="loadPrintModels()">
+        <option value="">전체 라인</option>
+        <option>1라인</option><option>2라인</option><option>3라인</option>
+      </select>
+    </div>
+
+    <div class="fg">
+      <label>모델 선택 (다중 선택 가능)</label>
+      <div id="pr_modelList" style="
+        border:1.5px solid var(--border); border-radius:8px; padding:10px;
+        max-height:200px; overflow-y:auto; background:#fafafa;
+        font-size:12px; font-family:var(--mono);">
+        <div style="color:#bbb; text-align:center; padding:20px;">
+          라인별 적용모델 탭에서 데이터를 먼저 업로드하세요
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <span style="font-size:11px;color:var(--text-s);font-weight:600">※ 모델 1개 선택</span>
+      </div>
+    </div>
+
+    <!-- 출력 컬럼 선택 -->
+    <div class="fg">
+      <label>출력 컬럼 선택</label>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; padding:10px; background:#fafafa; border-radius:8px; border:1.5px solid var(--border);">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_stno"    checked> ST No</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_lgpn"    checked> LG품번</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_mkrpn"   checked> 메이커품번</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_spec"    checked> SPEC</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_moq"          > MOQ</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_maker"        > Maker</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_trade"        > 거래유형</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_qty"     checked> 점수(소요량)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="col_barcode" checked> 바코드</label>
+      </div>
+    </div>
+
+    <!-- 미리보기 -->
+    <div class="status-bar" id="pr_statusBar" style="display:none">
+      <span class="sdot ok" id="pr_sdot"></span>
+      <span id="pr_stext"></span>
+    </div>
+
+    <!-- 버튼 -->
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="previewPrint()">🔍 미리보기</button>
+      <button class="btn btn-green"   onclick="exportPrint()" id="pr_exportBtn" style="display:none">📥 엑셀 다운로드</button>
+    </div>
+
+    <!-- 미리보기 테이블 -->
+    <div id="pr_preview" style="display:none; margin-top:12px;">
+      <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:8px" id="pr_previewTitle"></div>
+      <div class="tbl-wrap">
+        <table id="pr_table">
+          <thead id="pr_thead"></thead>
+          <tbody id="pr_tbody"></tbody>
+        </table>
+      </div>
+      <div class="tbl-count" id="pr_count"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════
+     탭5: 작업자 관리
+══════════════════════ -->
+<div class="pnl" id="pnl_operator">
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-val" id="op_kpi_total">-</div><div class="kpi-lbl">전체</div></div>
+    <div class="kpi ok"><div class="kpi-val" id="op_kpi_active">-</div><div class="kpi-lbl">재직중 Y</div></div>
+    <div class="kpi off"><div class="kpi-val" id="op_kpi_inactive">-</div><div class="kpi-lbl">퇴직/미사용 N</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-tit">👤 작업자 관리</div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="openOpAddModal()">➕ 신규 등록</button>
+      <button class="btn btn-green"   onclick="downloadOperators()">📥 엑셀 다운</button>
+    </div>
+
+    <!-- 필터 -->
+    <div class="filter-row">
+      <select id="op_fDept" onchange="renderOperators()">
+        <option value="">전체 소속</option>
+        <option>제조팀</option><option>자재팀</option><option>품질팀</option><option>기타</option>
+      </select>
+      <select id="op_fActive" onchange="renderOperators()">
+        <option value="">전체</option>
+        <option value="Y">재직중 Y</option>
+        <option value="N">퇴직/미사용 N</option>
+      </select>
+      <input type="text" class="filter-search" id="op_fKw"
+        placeholder="🔍 이름 검색..." oninput="renderOperators()">
+    </div>
+
+    <!-- 상태바 -->
+    <div class="status-bar">
+      <span class="sdot load" id="op_sdot"></span>
+      <span id="op_stext">데이터 로딩 중...</span>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>이름</th>
+            <th>직급/직책</th>
+            <th>소속</th>
+            <th>입사일자</th>
+            <th>연락처</th>
+            <th>Telegram ID</th>
+            <th>사용여부</th>
+            <th>비고</th>
+            <th>관리</th>
+          </tr>
+        </thead>
+        <tbody id="op_tbody">
+          <tr><td colspan="10" style="text-align:center;padding:28px;color:#bbb">로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl-count" id="op_count"></div>
+  </div>
+</div>
+
+<!-- ══ 추가/수정 모달 ══ -->
+<div class="modal-overlay" id="lmModal">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <span class="m-title" id="lmModalTitle">신규 모델 추가</span>
+      <button class="m-close" onclick="closeLMModal()">✕</button>
+    </div>
+    <div class="m-body">
+      <input type="hidden" id="lm_editId">
+
+      <div class="fg">
+        <label>라인 *</label>
+        <select id="inp_line">
+          <option value="">선택하세요</option>
+          <option>1라인</option><option>2라인</option><option>3라인</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <label>작업지시 바코드값 * &nbsp;<span style="font-weight:400;color:var(--text-s)">(예: EBR85064958-TOP / EBR850649_57_TOP / EBR85064958TOP)</span></label>
+        <input type="text" id="inp_barcode" placeholder="EBR85064958-TOP"
+          style="font-family:var(--mono); letter-spacing:.5px; text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase(); previewParse()">
+      </div>
+
+      <!-- 자동 파싱 프리뷰 -->
+      <div id="parsePreview" style="display:none; margin-bottom:10px;">
+        <div class="parse-row">
+          <div class="parse-box" style="background:var(--primary-l)">
+            <div class="parse-lbl">모델코드 (자동인식)</div>
+            <div class="parse-val" id="pv_model" style="color:var(--primary)">-</div>
+          </div>
+          <div class="parse-box" style="background:var(--warn-l)">
+            <div class="parse-lbl">면구분 (자동인식)</div>
+            <div class="parse-val" id="pv_face" style="color:var(--warn)">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>설비프로그램명 &nbsp;<span style="font-weight:400;color:var(--text-s)">(설비에 저장된 실제 프로그램명)</span></label>
+        <input type="text" id="inp_program" placeholder="예: EBR370406_131417_TOP"
+          style="font-family:var(--mono); font-size:12px;">
+      </div>
+
+      <div class="fg">
+        <label>사용여부</label>
+        <select id="inp_active">
+          <option value="Y">Y — 사용중</option>
+          <option value="N">N — 미사용</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <label>담당자</label>
+        <input type="text" id="inp_manager" placeholder="담당자명">
+      </div>
+
+      <div class="fg">
+        <label>등록일</label>
+        <input type="date" id="inp_date">
+      </div>
+
+      <div class="fg">
+        <label>비고</label>
+        <input type="text" id="inp_note" placeholder="비고">
+      </div>
+    </div>
+    <div class="m-footer">
+      <button class="btn btn-gray" onclick="closeLMModal()">취소</button>
+      <button class="btn btn-primary" id="lmSaveBtn" onclick="saveLM()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 작업자 추가/수정 모달 ══ -->
+<div class="modal-overlay" id="opModal">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <span class="m-title" id="opModalTitle">작업자 신규 등록</span>
+      <button class="m-close" onclick="closeOpModal()">✕</button>
+    </div>
+    <div class="m-body">
+      <input type="hidden" id="op_editId">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="fg">
+          <label>이름 *</label>
+          <input type="text" id="op_inp_name" placeholder="이름 입력">
+        </div>
+        <div class="fg">
+          <label>직급/직책</label>
+          <input type="text" id="op_inp_position" placeholder="예: 반장, 작업자">
+        </div>
+        <div class="fg">
+          <label>소속</label>
+          <select id="op_inp_dept">
+            <option value="제조팀">제조팀</option>
+            <option value="자재팀">자재팀</option>
+            <option value="품질팀">품질팀</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>사용여부</label>
+          <select id="op_inp_active">
+            <option value="Y">Y — 재직중</option>
+            <option value="N">N — 퇴직/미사용</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>입사일자</label>
+          <input type="date" id="op_inp_join">
+        </div>
+        <div class="fg">
+          <label>연락처</label>
+          <input type="text" id="op_inp_phone" placeholder="010-0000-0000">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>Telegram ID &nbsp;<span style="font-weight:400;color:var(--text-s)">(알림 연동용 — @없이 입력)</span></label>
+        <input type="text" id="op_inp_telegram" placeholder="예: username123">
+      </div>
+
+      <div class="fg">
+        <label>비고</label>
+        <input type="text" id="op_inp_note" placeholder="비고">
+      </div>
+    </div>
+    <div class="m-footer">
+      <button class="btn btn-gray" onclick="closeOpModal()">취소</button>
+      <button class="btn btn-primary" id="opSaveBtn" onclick="saveOperator()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 삭제 확인 모달 ══ -->
+<div class="modal-overlay" id="delModal">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <span class="m-title" style="color:var(--danger)">삭제 확인</span>
+      <button class="m-close" onclick="closeDelModal()">✕</button>
+    </div>
+    <div class="m-body">
+      <div class="alert a-warn">
+        <span>⚠️</span>
+        <div>
+          <strong id="delTarget"></strong> 항목을 삭제합니다.<br>
+          <span style="font-size:11px;color:var(--text-s)">※ 사용 중단 시에는 삭제 대신 사용여부 N 변경을 권장합니다.</span>
+        </div>
+      </div>
+    </div>
+    <div class="m-footer">
+      <button class="btn btn-gray" onclick="closeDelModal()">취소</button>
+      <button class="btn btn-red" onclick="confirmDel()">삭제 확인</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════
@@ -362,7 +680,7 @@ tbody tr:hover td{background:#f8fafc;}
         <!-- 피더 목록 -->
         <div id="fc_fSec" style="display:none">
           <div style="font-size:11px;font-weight:800;color:var(--text-s);margin-bottom:5px;">피더 목록</div>
-          <div class="flist" id="fc_flist"></div>
+          <div class="flist" id="fc_flist" style="max-height:320px;overflow-y:auto;padding-right:2px;"></div>
         </div>
 
       </div>
@@ -700,9 +1018,11 @@ function goHome() {
 
 // ── 탭 전환 (이탈 체크) ──
 function changeTab(name) {
-  if (name !== 'fc' && hasPendingFc()) {
-    showAlert(getAlertMsg(), () => doChangeTab(name));
-    return;
+  if (name === 'fc' || name === 'rc') {
+    if (hasPendingFc()) {
+      showAlert(getAlertMsg(), () => doChangeTab(name));
+      return;
+    }
   }
   doChangeTab(name);
 }
@@ -857,7 +1177,7 @@ function confirmFcSt() {
 
 // ── FC: 피더 목록 구성 ──
 async function buildFcFeeders(line,bc) {
-  const mn=norm(parseBC(bc)?.modelCode||'');
+  const mn=norm(bc); // 전체 바코드값 정규화 (TOP/BOT 포함)
   const bMap={},qMap={};
   _bom.forEach(r=>bMap[r.lg_pn]=r);
   _bm.forEach(r=>{if(!qMap[r.lg_pn])qMap[r.lg_pn]={};qMap[r.lg_pn][norm(r.model_code)]=r.qty;});
