@@ -87,7 +87,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: va
   position: sticky; top: 57px; z-index: 90; overflow-x: auto;
 }
 .tab-group {
-  display: flex; flex: 1; position: relative;
+  display: flex; flex: 1; position: relative; justify-content: center;
 }
 .tab-group + .tab-group {
   border-left: 2px solid var(--border);
@@ -643,6 +643,110 @@ input[type=file] { display: none; }
 </div>
 
 
+
+<!-- ══════════════════════════════
+     탭4: 작업자 관리
+══════════════════════════════ -->
+<div class="pnl" id="pnl_operator">
+  <div class="kpi-row" id="op_kpi">
+    <div class="kpi-card"><div class="kpi-val" id="op_total">-</div><div class="kpi-lbl">전체</div></div>
+    <div class="kpi-card ok"><div class="kpi-val" id="op_active">-</div><div class="kpi-lbl">재직중 Y</div></div>
+    <div class="kpi-card ng"><div class="kpi-val" id="op_inactive">-</div><div class="kpi-lbl">퇴직 N</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-tit">👤 작업자 관리</div>
+    <div class="btn-row">
+      <button class="btn btn-pri" onclick="openOpAddModal()">+ 신규 추가</button>
+      <button class="btn btn-green" onclick="downloadOperators()">⬇ 엑셀 다운</button>
+    </div>
+    <div class="frow" style="margin-bottom:10px;">
+      <select id="op_fActive" onchange="renderOperators()" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;">
+        <option value="">전체</option>
+        <option value="Y">재직중 Y</option>
+        <option value="N">퇴직 N</option>
+      </select>
+      <input type="text" id="op_fKw" placeholder="🔍 이름 검색..." oninput="renderOperators()"
+        style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;">
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>#</th><th>이름</th><th>직급/직책</th><th>소속</th>
+          <th>입사일자</th><th>연락처</th><th>Telegram ID</th>
+          <th>사용여부</th><th>비고</th><th>관리</th>
+        </tr></thead>
+        <tbody id="op_tbody"></tbody>
+      </table>
+    </div>
+    <div class="tbl-count" id="op_count"></div>
+  </div>
+</div>
+
+<!-- 작업자 모달 -->
+<div class="modal-overlay" id="opModal">
+  <div class="modal-box" style="background:#fff;border-radius:16px;padding:28px;width:520px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <span class="m-title" id="opModalTitle" style="font-size:16px;font-weight:800;color:var(--pri);">작업자 신규 등록</span>
+      <button onclick="closeOpModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;">✕</button>
+    </div>
+    <input type="hidden" id="op_editId">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="fg"><label>이름 *</label><input type="text" id="op_inp_name" placeholder="이름 입력"></div>
+      <div class="fg"><label>직급/직책</label><input type="text" id="op_inp_position" placeholder="예: 반장, 작업자"></div>
+      <div class="fg"><label>소속</label>
+        <select id="op_inp_dept" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;outline:none;">
+          <option value="제조팀">제조팀</option><option value="자재팀">자재팀</option><option value="품질팀">품질팀</option><option value="기타">기타</option>
+        </select>
+      </div>
+      <div class="fg"><label>사용여부</label>
+        <select id="op_inp_active" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;outline:none;">
+          <option value="Y">Y — 재직중</option><option value="N">N — 퇴직</option>
+        </select>
+      </div>
+      <div class="fg"><label>입사일자</label><input type="date" id="op_inp_join"></div>
+      <div class="fg"><label>연락처</label><input type="text" id="op_inp_phone" placeholder="010-0000-0000"></div>
+      <div class="fg" style="grid-column:1/-1;"><label>Telegram ID (알림 연동용 — @없이 입력)</label><input type="text" id="op_inp_telegram" placeholder="예: hong_gildong"></div>
+      <div class="fg" style="grid-column:1/-1;"><label>비고</label><input type="text" id="op_inp_note" placeholder="비고"></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-gray" onclick="closeOpModal()">취소</button>
+      <button class="btn btn-pri" onclick="saveOperator()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 작업자 삭제 확인 모달 -->
+<div class="modal-overlay" id="opDelModal">
+  <div class="modal-box" style="background:#fff;border-radius:16px;padding:28px;width:380px;max-width:95vw;">
+    <div style="font-size:16px;font-weight:800;color:var(--ng);margin-bottom:12px;">⚠️ 삭제 확인</div>
+    <p style="font-size:13px;color:var(--text-s);margin-bottom:20px;">해당 작업자를 삭제합니다.<br>※ 삭제 대신 사용여부 N 변경을 권장합니다.</p>
+    <input type="hidden" id="op_delId">
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-gray" onclick="document.getElementById('opDelModal').style.display='none'">취소</button>
+      <button class="btn btn-red" onclick="confirmOpDel()">삭제 확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 공통 삭제 확인 모달 -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-box">
+    <div class="m-header">
+      <span class="m-title" style="color:var(--danger)">삭제 확인</span>
+      <button class="m-close" onclick="document.getElementById('deleteModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="m-body">
+      <p style="color:var(--text-s);font-size:13px;">⚠️ <strong id="delTarget"></strong> 항목을 삭제합니다.</p>
+      <p style="color:var(--text-s);font-size:12px;margin-top:6px;">※ 삭제 중단 시에는 삭제 대신 사용여부 N 변경을 권장합니다.</p>
+    </div>
+    <div class="m-footer">
+      <button class="btn btn-gray" onclick="document.getElementById('deleteModal').classList.remove('show')">취소</button>
+      <button class="btn btn-red" onclick="confirmDelAction()">삭제 확인</button>
+    </div>
+  </div>
+</div>
+
 <!-- 토스트 -->
 <div class="toast" id="toast"></div>
 
@@ -693,7 +797,7 @@ function init() {
   const today = new Date();
   document.getElementById('inp_date').value =
     `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  loadLM().then(() => loadPrintModels());
+  loadLM();
   loadBOM();
   loadPlacement();
   loadOperators();
@@ -2209,6 +2313,21 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginOverlay').style.display = 'flex';
   }
 });
+
+function confirmDelAction() {
+  const modal = document.getElementById('deleteModal');
+  const mode = modal.dataset.mode;
+  if (mode === 'operator') {
+    sb.from('mfg_operators').delete().eq('id', _opDelId).then(({error}) => {
+      if (error) { showToast('⚠️ 삭제 실패: ' + error.message); return; }
+      modal.classList.remove('show');
+      showToast('✅ 삭제 완료');
+      loadOperators();
+    });
+  } else {
+    confirmDel(); // 기존 라인모델 삭제
+  }
+}
 </script>
 </body>
 </html>
