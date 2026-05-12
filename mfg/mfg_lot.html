@@ -105,8 +105,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .rs{font-size:10px;color:var(--text-s);font-weight:400;font-family:inherit;margin-top:1px;}
 
 /* 4개 스캔 박스 */
-.scan4{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0;}
-.s4b{background:#fff;border:2px solid var(--border);border-radius:8px;padding:7px 10px;min-height:50px;transition:all .2s;}
+.scan4{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 0;}
+.s4b{background:#fff;border:2px solid var(--border);border-radius:7px;padding:5px 8px;min-height:40px;transition:all .2s;}
 .s4b.ok{border-color:var(--ok);background:var(--ok-l);}
 .s4b.ng{border-color:var(--ng);background:var(--ng-l);}
 .s4b.empty{border-style:dashed;}
@@ -222,7 +222,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .jng.on:active{transform:scale(.97);}
 
 /* 섹션 구분 블록 (좌측 패널) */
-.sec-blk{border-radius:10px;padding:9px 11px;margin-bottom:8px;}
+.sec-blk{border-radius:10px;padding:7px 10px;margin-bottom:6px;}
 .sec-blk.blk-op{background:#1e3a8a;border:none;}
 .sec-blk.blk-scan{background:#eff6ff;border:1.5px solid #bfdbfe;}
 .sec-blk.blk-info{background:#f0fdf4;border:1.5px solid #bbf7d0;}
@@ -652,7 +652,7 @@ tbody tr:hover td{background:#f8fafc;}
       <div class="pbody">
 
         <!-- 작업자 -->
-        <div class="sec-blk blk-op" style="margin-bottom:8px;">
+        <div class="sec-blk blk-op" style="margin-bottom:6px;">
           <div class="sec-blk-title">👤 작업자</div>
           <select class="op-sel" id="rc_op" style="width:100%;padding:9px 11px;border:2px solid rgba(255,255,255,.25);border-radius:9px;font-size:14px;font-weight:700;font-family:inherit;color:#1e3a8a;background:#fff;outline:none;"></select>
         </div>
@@ -865,7 +865,9 @@ tbody tr:hover td{background:#f8fafc;}
 
     <!-- 필터 + 검색 버튼 -->
     <div class="frow" style="margin-bottom:12px;">
-      <input type="date" id="hi_date">
+      <input type="date" id="hi_from" style="width:140px;">
+      <span style="align-self:center;font-size:12px;color:var(--text-s);">~</span>
+      <input type="date" id="hi_to" style="width:140px;">
       <select id="hi_line"><option value="">전체 라인</option><option>1라인</option><option>2라인</option><option>3라인</option></select>
       <select id="hi_type">
         <option value="f">🔍 피더체크 이력</option>
@@ -1024,7 +1026,7 @@ function doChangeTab(name) {
   else { p.style.display='flex'; p.classList.add('on'); }
   document.getElementById('tab_'+name).classList.add('on');
   if (name==='hi') {
-    if (!document.getElementById('hi_date').value) document.getElementById('hi_date').value=today();
+    if (!document.getElementById('hi_date').value) 
     loadHist();
   }
   if (name==='map') {
@@ -1067,7 +1069,7 @@ function forceLeave() { document.getElementById('alertBox').classList.remove('sh
 async function init() {
   loadSnd();
   document.getElementById('snd_vol').addEventListener('input',function(){document.getElementById('svp').textContent=Math.round(this.value*100)+'%';});
-  document.getElementById('hi_date').value=today();
+  
   await Promise.all([loadMaster(), loadOps()]);
   loadFcModels();
   loadPrintModels(); // 배치도출력 탭 모델 목록 초기화
@@ -1738,7 +1740,14 @@ function closeWrongPartAlert(){
 // ── RC: 기존 릴 자동판정 ──
 function autoJudgeOld(){
   const mkrPn=_rc.mkrPn1||'';
-  const matched=_rc.oldScans.find(s=>!mkrPn||s.includes(mkrPn));
+  const lgPn=_rc.lgPn||'';
+  const normS=s=>(s||'').replace(/[\s\-_]/g,'').toUpperCase();
+  // mkrPn1 포함 OR lgPn 포함 으로 비교
+  const matched=_rc.oldScans.find(s=>
+    (!mkrPn && !lgPn) ||
+    (mkrPn && normS(s).includes(normS(mkrPn))) ||
+    (lgPn && normS(s).includes(normS(lgPn)))
+  );
   if(matched||!mkrPn){
     // 일치
     _rc.oldOk=true;
@@ -1769,14 +1778,23 @@ function autoJudgeOld(){
     document.getElementById('rc_jstat').textContent='오사용 감지';
     document.getElementById('rc_jstat').style.color='#fca5a5';
     playSound('ng');
-    showWrongPartAlert(_rc.stno, mkrPn, _rc.oldScans[0]||'-');
+    showWrongPartAlert(_rc.stno, mkrPn||lgPn, _rc.oldScans[0]||'-');
+    // NG 이력 저장
+    _rc.newPn=''; _rc.newLot='';
+    saveReelChange('NG', '기존릴 품번 불일치');
   }
 }
 
 // ── RC: 신규 릴 자동판정 ──
 function autoJudgeNew(){
   const mkrPn=_rc.mkrPn1||'';
-  const matched=_rc.newScans.find(s=>!mkrPn||s.includes(mkrPn));
+  const lgPn=_rc.lgPn||'';
+  const normS=s=>(s||'').replace(/[\s\-_]/g,'').toUpperCase();
+  const matched=_rc.newScans.find(s=>
+    (!mkrPn && !lgPn) ||
+    (mkrPn && normS(s).includes(normS(mkrPn))) ||
+    (lgPn && normS(s).includes(normS(lgPn)))
+  );
   if(matched||!mkrPn){
     _rc.newOk=true;
     _rc.newPn=mkrPn||_rc.newScans[0]||'';
@@ -1813,10 +1831,9 @@ function autoJudgeNew(){
     document.getElementById('rc_jstat').style.color='#fca5a5';
     document.getElementById('rc_cfm').style.display='none';
     playSound('ng');
+    saveReelChange('NG', '신규릴 품번 불일치');
   }
 }
-
-function loadRcFeeders(){
   const line=document.getElementById('rc_line').value;
   const sel=document.getElementById('rc_fdrop');
   sel.innerHTML='<option value="">— 드롭다운 선택 —</option>';
@@ -1888,8 +1905,13 @@ function addOldScan(){
   _rc.oldScans.push(scan);
   document.getElementById('rc_old').value='';
   s4Update('rc_o',_rc.oldScans,_rc.mkrPn1);
-  const matched=_rc.oldScans.find(s=>!_rc.mkrPn1||s.includes(_rc.mkrPn1));
-  if(matched||!_rc.mkrPn1){
+  const normS=s=>(s||'').replace(/[\s\-_]/g,'').toUpperCase();
+  const matched=_rc.oldScans.find(s=>
+    (!_rc.mkrPn1&&!_rc.lgPn)||
+    (_rc.mkrPn1&&normS(s).includes(normS(_rc.mkrPn1)))||
+    (_rc.lgPn&&normS(s).includes(normS(_rc.lgPn)))
+  );
+  if(matched||(!_rc.mkrPn1&&!_rc.lgPn)){
     startRcOldTimer();
   } else if(_rc.oldScans.length>=4){
     clearRcOldTimer();autoJudgeOld();
@@ -1906,8 +1928,13 @@ function addNewScan(){
   _rc.newScans.push(scan);
   document.getElementById('rc_new').value='';
   s4Update('rc_n',_rc.newScans,_rc.mkrPn1);
-  const matched=_rc.newScans.find(s=>!_rc.mkrPn1||s.includes(_rc.mkrPn1));
-  if(matched||!_rc.mkrPn1){
+  const normS=s=>(s||'').replace(/[\s\-_]/g,'').toUpperCase();
+  const matched=_rc.newScans.find(s=>
+    (!_rc.mkrPn1&&!_rc.lgPn)||
+    (_rc.mkrPn1&&normS(s).includes(normS(_rc.mkrPn1)))||
+    (_rc.lgPn&&normS(s).includes(normS(_rc.lgPn)))
+  );
+  if(matched||(!_rc.mkrPn1&&!_rc.lgPn)){
     startRcNewTimer();
   } else if(_rc.newScans.length>=4){
     clearRcNewTimer();autoJudgeNew();
@@ -1917,7 +1944,7 @@ function addNewScan(){
   }
 }
 
-async function doReelChange(){
+async function saveReelChange(result, ngReason){
   const op=document.getElementById('rc_op').value;
   if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
   const model=document.getElementById('rc_model').value||null;
@@ -1932,15 +1959,20 @@ async function doReelChange(){
       new_maker_pn:_rc.newPn||null,
       new_lot:_rc.newLot||null,
       new_qty:_rc.moq||null,
-      result:'OK', operator:op
+      result, ng_reason:ngReason||null, operator:op
     });
-    playSound('done');
-    showToast('✅ 부품 교환 이력 등록 완료');
     loadRcHist();
-    // 라인+모델 유지, 나머지 초기화 후 피더 No 스캔 포커스
-    setTimeout(()=>{ resetRcPartial(); }, 1200);
+    if(result==='OK'){
+      playSound('done');
+      showToast('✅ 부품 교환 이력 등록 완료');
+      setTimeout(()=>{ resetRcPartial(); }, 1200);
+    } else {
+      showToast(`⚠️ NG 이력 등록 완료 (${ngReason||''})`);
+    }
   }catch(e){showToast('❌ 등록 실패: '+(e.message||String(e)));console.error(e);}
 }
+
+async function doReelChange(){ await saveReelChange('OK', null); }
 
 // 라인+모델 유지, ST No 이하만 초기화
 function resetRcPartial(){
@@ -2000,7 +2032,8 @@ function resetRc(){
 // 이력 조회
 // ════════════════════════════════
 async function loadHist(){
-  const date=document.getElementById('hi_date').value;
+  const fromDate=document.getElementById('hi_from').value;
+  const toDate=document.getElementById('hi_to').value;
   const line=document.getElementById('hi_line').value;
   const type=document.getElementById('hi_type').value;
   const res =document.getElementById('hi_res').value;
@@ -2016,7 +2049,6 @@ async function loadHist(){
   const lineBadge=l=>`<span class="badge ${l==='1라인'?'b-l1':l==='2라인'?'b-l2':'b-l3'}">${l}</span>`;
 
   if(type==='f'){
-    // ── 피더체크 이력 ──
     titleEl.textContent='🔍 피더 세팅 체크 이력';
     titleEl.style.display='block';
     thead.innerHTML=`<tr>
@@ -2025,7 +2057,8 @@ async function loadHist(){
     </tr>`;
     try{
       let q=sb.from('mfg_feeder_check').select('*').order('created_at',{ascending:false});
-      if(date)q=q.eq('check_date',date);
+      if(fromDate)q=q.gte('check_date',fromDate);
+      if(toDate)q=q.lte('check_date',toDate);
       if(line)q=q.eq('line',line);
       if(res) q=q.eq('result',res);
       const{data}=await q.limit(300);
@@ -2066,7 +2099,8 @@ async function loadHist(){
     </tr>`;
     try{
       let q=sb.from('mfg_reel_change').select('*').order('created_at',{ascending:false});
-      if(date)q=q.eq('change_date',date);
+      if(fromDate)q=q.gte('change_date',fromDate);
+      if(toDate)q=q.lte('change_date',toDate);
       if(line)q=q.eq('line',line);
       if(res) q=q.eq('result',res);
       const{data}=await q.limit(300);
