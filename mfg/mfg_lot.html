@@ -898,9 +898,46 @@ tbody tr:hover td{background:#f8fafc;}
   <div style="background:var(--surf);border-radius:var(--r);box-shadow:var(--sh);padding:16px;max-width:480px;">
     <div style="font-size:13px;font-weight:800;color:var(--pri);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--border);">🔊 소리 설정</div>
     <div class="sc-card"><div class="sc-tit">🎵 판정 소리</div>
-      <div class="sc-row"><span class="sc-lbl" style="color:var(--ok)">OK</span><select class="sc-sel" id="snd_ok"><option value="ok1">삐삐 — 높은음 2번</option><option value="ok2">삐~ — 길게</option><option value="ok3">삐삐삐 — 3번</option><option value="ok4">딩동 — 상승</option></select><button class="sc-prev" onclick="playSound('ok')">▶</button></div>
-      <div class="sc-row"><span class="sc-lbl" style="color:var(--ng)">NG</span><select class="sc-sel" id="snd_ng"><option value="ng1">부~~ — 낮게 길게</option><option value="ng2">부부부부 — 4번</option><option value="ng3">부부 — 2번</option><option value="ng4">경보음</option></select><button class="sc-prev" onclick="playSound('ng')">▶</button></div>
-      <div class="sc-row"><span class="sc-lbl" style="color:var(--pri)">등록</span><select class="sc-sel" id="snd_done"><option value="d1">딩 — 짧게</option><option value="d2">삐 — 짧게</option><option value="d3">딩동</option></select><button class="sc-prev" onclick="playSound('done')">▶</button></div>
+      <div class="sc-row"><span class="sc-lbl" style="color:var(--pri-m)">OK</span>
+        <select class="sc-sel" id="snd_ok">
+          <option value="ok1">삐삐 — 높은음 2번</option>
+          <option value="ok2">삐~ — 길게</option>
+          <option value="ok3">삐삐삐 — 3번</option>
+          <option value="ok4">딩동 — 상승 2음</option>
+          <option value="ok5">🎵 피아노 딩동 — 맑게</option>
+          <option value="ok6">🎵 상승 3음계 — 밝게</option>
+          <option value="ok7">🎵 성공 팡파레 — 4음</option>
+          <option value="ok8">🎵 맑은 벨 — 3번</option>
+          <option value="ok9">🎵 높은 차임벨</option>
+          <option value="ok10">🎵 포근한 화음</option>
+        </select>
+        <button class="sc-prev" onclick="playSound('ok')">▶</button>
+      </div>
+      <div class="sc-row"><span class="sc-lbl" style="color:var(--ng)">NG</span>
+        <select class="sc-sel" id="snd_ng">
+          <option value="ng1">부~~ — 낮게 길게</option>
+          <option value="ng2">부부부부 — 4번</option>
+          <option value="ng3">부부 — 2번</option>
+          <option value="ng4">경보음 — 상승</option>
+          <option value="ng5">🔔 저음 버저 — 묵직</option>
+          <option value="ng6">🔔 에러 틱틱 — 짧게 3번</option>
+          <option value="ng7">🔔 경고 사이렌 — 파동</option>
+          <option value="ng8">🔔 삐~부~ 교차음</option>
+          <option value="ng9">🔔 하강 3음계 — 어둡게</option>
+          <option value="ng10">🔔 긴 경보 — 강하게</option>
+        </select>
+        <button class="sc-prev" onclick="playSound('ng')">▶</button>
+      </div>
+      <div class="sc-row"><span class="sc-lbl" style="color:var(--pri)">등록</span>
+        <select class="sc-sel" id="snd_done">
+          <option value="d1">딩 — 짧게</option>
+          <option value="d2">삐 — 짧게</option>
+          <option value="d3">딩동</option>
+          <option value="d4">🎵 완료 차임 — 부드럽게</option>
+          <option value="d5">🎵 틱 — 아주 짧게</option>
+        </select>
+        <button class="sc-prev" onclick="playSound('done')">▶</button>
+      </div>
     </div>
     <div class="sc-card"><div class="sc-tit">🔈 볼륨</div>
       <div style="display:flex;align-items:center;gap:10px;"><span>🔈</span><input type="range" id="snd_vol" min="0" max="1" step="0.1" value="0.8" style="flex:1;accent-color:var(--pri)" oninput="document.getElementById('svp').textContent=Math.round(this.value*100)+'%'"><span>🔊</span><span id="svp" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--pri);min-width:36px">80%</span></div>
@@ -1106,6 +1143,13 @@ async function loadMaster() {
 // ── 파싱 ──
 const parseBC=val=>{if(!val)return null;const m=val.match(/^(.+?)[-_]?(TOP|BOT|단면)$/i);if(!m)return null;return{modelCode:m[1].replace(/[-_]$/,''),face:m[2]};};
 const norm=c=>(c||'').replace(/_/g,'');
+// 바코드에서 품번 추출 (구분자: ; ! , 앞 첫번째 유효값)
+const extractPn=scan=>{
+  if(!scan)return '';
+  const parts=scan.split(/[;!,]/);
+  const pn=parts.find(p=>p.trim().length>3);
+  return (pn||parts[0]||'').trim();
+};
 
 // ── 헬퍼 ──
 function setR(id,type,icon,text,sub=''){const el=document.getElementById(id);el.className='rd '+(type||'empty');el.innerHTML=`<span class="ri">${icon}</span><div class="rt">${text}${sub?`<div class="rs">${sub}</div>`:''}</div>`;}
@@ -1797,7 +1841,7 @@ function autoJudgeNew(){
   );
   if(matched||!mkrPn){
     _rc.newOk=true;
-    _rc.newPn=mkrPn||_rc.newScans[0]||'';
+    _rc.newPn=mkrPn||extractPn(_rc.newScans.find(s=>normS(s).includes(normS(mkrPn||lgPn)))||_rc.newScans[0]||'');
     _rc.newLot=_rc.newScans.map(s=>mkrPn?s.replace(mkrPn,'').trim()||s:s).join(' / ');
     setR('rc_r3','ok','✅','품번 일치','신규 릴 확인 완료');
     setRcBadge(3,'ok');
@@ -1818,7 +1862,7 @@ function autoJudgeNew(){
     setTimeout(()=>{ doReelChange(); }, 1500);
   } else {
     _rc.newOk=false;
-    _rc.newPn=_rc.newScans[0]||''; // NG여도 스캔값 저장
+    _rc.newPn=extractPn(_rc.newScans[0]||''); // NG여도 스캔값에서 품번 추출
     _rc.newLot=_rc.newScans.map(s=>mkrPn?s.replace(mkrPn,'').trim()||s:s).join(' / ');
     setR('rc_r3','ng','❌','품번 불일치','NG 처리');
     document.getElementById('rc_nsum').className='rsum ng';
@@ -2233,7 +2277,65 @@ async function exportHist(){
 // ════════════════════════════════
 // 소리
 // ════════════════════════════════
-function playSound(t){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const vol=parseFloat(document.getElementById('snd_vol').value)||0.8;const g=ctx.createGain();g.gain.value=vol;g.connect(ctx.destination);const ok=document.getElementById('snd_ok').value,ng=document.getElementById('snd_ng').value,done=document.getElementById('snd_done').value;const b=(f,s,d,tp='sine')=>{const o=ctx.createOscillator();o.type=tp;o.frequency.value=f;o.connect(g);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d);};if(t==='ok'){if(ok==='ok1'){b(880,0,.12);b(880,.16,.12);}if(ok==='ok2')b(880,0,.4);if(ok==='ok3'){b(880,0,.1);b(880,.14,.1);b(880,.28,.1);}if(ok==='ok4'){b(660,0,.15);b(880,.18,.2);}}if(t==='ng'){if(ng==='ng1')b(280,0,.8,'sawtooth');if(ng==='ng2')[0,.15,.3,.45].forEach(s=>b(280,s,.1,'sawtooth'));if(ng==='ng3'){b(280,0,.25,'sawtooth');b(280,.3,.25,'sawtooth');}if(ng==='ng4')for(let i=0;i<8;i++)b(300+i*20,i*.08,.06,'sawtooth');}if(t==='done'){if(done==='d1')b(600,0,.15);if(done==='d2')b(880,0,.1);if(done==='d3'){b(600,0,.12);b(800,.15,.15);}}}catch(e){console.warn(e);}}
+function playSound(t){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const vol=parseFloat(document.getElementById('snd_vol').value)||0.8;
+    const g=ctx.createGain();g.gain.value=vol;g.connect(ctx.destination);
+    const ok=document.getElementById('snd_ok').value;
+    const ng=document.getElementById('snd_ng').value;
+    const done=document.getElementById('snd_done').value;
+    // 기본 오실레이터
+    const b=(f,s,d,tp='sine',vol2=1)=>{
+      const o=ctx.createOscillator();
+      const gn=ctx.createGain();gn.gain.value=vol2;
+      o.type=tp;o.frequency.value=f;
+      o.connect(gn);gn.connect(g);
+      o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d);
+    };
+    // 페이드아웃 음
+    const bf=(f,s,d,tp='sine')=>{
+      const o=ctx.createOscillator();
+      const gn=ctx.createGain();
+      o.type=tp;o.frequency.value=f;
+      o.connect(gn);gn.connect(g);
+      gn.gain.setValueAtTime(1,ctx.currentTime+s);
+      gn.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+s+d);
+      o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d+0.05);
+    };
+    if(t==='ok'){
+      if(ok==='ok1'){b(880,0,.12);b(880,.16,.12);}
+      if(ok==='ok2')b(880,0,.4);
+      if(ok==='ok3'){b(880,0,.1);b(880,.14,.1);b(880,.28,.1);}
+      if(ok==='ok4'){b(660,0,.15);b(880,.18,.2);}
+      if(ok==='ok5'){bf(523,.0,.25);bf(659,.12,.25);bf(784,.24,.35);} // 도미솔 피아노
+      if(ok==='ok6'){b(523,0,.1);b(659,.12,.1);b(784,.24,.1);b(1047,.36,.2);} // 상승 4음계
+      if(ok==='ok7'){b(523,0,.08);b(659,.10,.08);b(784,.20,.08);b(1047,.30,.3);} // 팡파레
+      if(ok==='ok8'){bf(880,0,.2);bf(880,.22,.2);bf(880,.44,.3);} // 맑은 벨 3번
+      if(ok==='ok9'){bf(1200,0,.15);bf(1400,.18,.15);bf(1600,.36,.25);} // 높은 차임벨
+      if(ok==='ok10'){b(523,0,.3);b(659,0,.3,'sine');b(784,0,.3,'sine');} // 화음
+    }
+    if(t==='ng'){
+      if(ng==='ng1')b(280,0,.8,'sawtooth');
+      if(ng==='ng2')[0,.15,.3,.45].forEach(s=>b(280,s,.1,'sawtooth'));
+      if(ng==='ng3'){b(280,0,.25,'sawtooth');b(280,.3,.25,'sawtooth');}
+      if(ng==='ng4')for(let i=0;i<8;i++)b(300+i*20,i*.08,.06,'sawtooth');
+      if(ng==='ng5'){b(120,0,.6,'sawtooth',.8);b(100,.1,.6,'sawtooth',.6);} // 저음 버저
+      if(ng==='ng6'){b(400,0,.06,'square');b(400,.1,.06,'square');b(400,.2,.06,'square');} // 틱틱틱
+      if(ng==='ng7'){for(let i=0;i<12;i++)b(300+Math.sin(i)*80,i*.06,.05,'sawtooth');} // 파동 사이렌
+      if(ng==='ng8'){b(880,0,.2,'sine');b(280,.25,.3,'sawtooth');b(880,.6,.2,'sine');b(280,.85,.3,'sawtooth');} // 삐~부~ 교차
+      if(ng==='ng9'){b(784,0,.15);b(659,.18,.15);b(523,.36,.3);} // 하강 3음계
+      if(ng==='ng10'){b(200,0,1,'sawtooth',.9);b(180,.1,1,'sawtooth',.7);} // 긴 경보
+    }
+    if(t==='done'){
+      if(done==='d1')b(600,0,.15);
+      if(done==='d2')b(880,0,.1);
+      if(done==='d3'){b(600,0,.12);b(800,.15,.15);}
+      if(done==='d4'){bf(523,0,.2);bf(659,.15,.25);} // 완료 차임
+      if(done==='d5')b(1000,0,.05); // 틱
+    }
+  }catch(e){console.warn(e);}
+}
 function saveSnd(){['ok','ng','done'].forEach(k=>localStorage.setItem('mfg_snd_'+k,document.getElementById('snd_'+k).value));localStorage.setItem('mfg_snd_vol',document.getElementById('snd_vol').value);showToast('💾 저장 완료');playSound('done');}
 function loadSnd(){const ok=localStorage.getItem('mfg_snd_ok'),ng=localStorage.getItem('mfg_snd_ng'),done=localStorage.getItem('mfg_snd_done'),vol=localStorage.getItem('mfg_snd_vol');if(ok)document.getElementById('snd_ok').value=ok;if(ng)document.getElementById('snd_ng').value=ng;if(done)document.getElementById('snd_done').value=done;if(vol){document.getElementById('snd_vol').value=vol;document.getElementById('svp').textContent=Math.round(vol*100)+'%';}}
 
