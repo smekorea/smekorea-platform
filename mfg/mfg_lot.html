@@ -1093,7 +1093,8 @@ function renderFcList() {
     else                     tag=`<span class="ftag wait">대기</span>`;
     // 메이커품번 + SPEC 2번째 줄
     const sub=[f.maker_pn1,f.spec].filter(Boolean).join(' · ');
-    return `<div class="${cls}" onclick="moveFc(${i})">
+    const clickable=f.status!=="ok";
+    return `<div class="${cls}" ${clickable?`onclick="moveFc(${i})"`:"style=\"cursor:default;\""}>`
       <span class="fno">${f.st_no}</span>
       <div class="fi-mid">
         <div class="fpn">${f.lg_pn}</div>
@@ -1168,15 +1169,17 @@ function confirmManual(){
   if(!reason){showToast('⚠️ 사유를 선택하세요');return;}
   if(!_fc.feeders.length){showToast('⚠️ 모델을 먼저 확인하세요');return;}
 
-  const f=_fc.feeders[_fc.curIdx];
-  // 공백·개행·특수문자 모두 제거 후 비교
-  const normPn = s => (s||'').replace(/[\s\-_]/g,'').toUpperCase();
-  const isMatch = normPn(lgpn) === normPn(f.lg_pn);
-  const lotStr=`[수동입력] ${reason}`;
+  // 기존 릴 스캔 타이머 즉시 취소
+  clearFcTimer();
 
-  // 결과창 표시
+  const f=_fc.feeders[_fc.curIdx];
+  const normPn=s=>(s||'').replace(/[\s\-_]/g,'').toUpperCase();
+  const isMatch=normPn(lgpn)===normPn(f.lg_pn);
+  const lotStr=`[수동입력] ${reason}`;
   const rs=document.getElementById('fc_rsum');
+
   if(isMatch){
+    // ── OK ──
     _fc.matched=true;
     _fc.matchedPn=lgpn;
     _fc.matchedLot=lotStr;
@@ -1188,16 +1191,20 @@ function confirmManual(){
     document.getElementById('fc_rqty').textContent=f.qty+'개';
     document.getElementById('fc_cbox').className='cbox ok';
     document.getElementById('fc_rpanel').className='panel ok';
-    document.getElementById('fc_jstat').textContent='OK 가능';
+    document.getElementById('fc_jstat').textContent='OK';
     document.getElementById('fc_jstat').style.color='var(--pri-m)';
     document.getElementById('fc_bok').className='jok on';
-    document.getElementById('fc_bng').style.display='';
-    document.getElementById('fc_bng').className='jng on';
+    document.getElementById('fc_bok').style.display='';
+    document.getElementById('fc_bng').style.display='none';
     playSound('ok');
-    // 1.5초 후 자동 OK 판정
+    // 1.5초 후 자동 judgeOK
     setTimeout(()=>{ judgeOK(); }, 1500);
+
+  } else {
+    // ── NG — 사유 이미 입력됐으므로 즉시 저장 ──
     _fc.matched=false;
     _fc.matchedLot=lotStr;
+    f.status='ng'; f.ng_reason=`수동입력 NG — ${reason}`;
     rs.className='rsum ng';
     document.getElementById('fc_rtit').className='rsum-title ng';
     document.getElementById('fc_rtit').textContent=`품번 불일치 — 입력: ${lgpn} / BOM등록: ${f.lg_pn}`;
@@ -1208,10 +1215,25 @@ function confirmManual(){
     document.getElementById('fc_rpanel').className='panel ng';
     document.getElementById('fc_jstat').textContent='NG';
     document.getElementById('fc_jstat').style.color='var(--ng)';
-    document.getElementById('fc_bok').style.display='none';
-    document.getElementById('fc_bng').className='jng on';
+    setJBtn(false,false);
     playSound('ng');
+    // DB 저장 즉시 실행
+    const op=document.getElementById('fc_op').value;
+    sb.from('mfg_feeder_check').insert({
+      check_date:today(),line:_fc.line,barcode_val:_fc.barcode,
+      feeder_no:f.st_no,lg_pn:f.lg_pn,maker_pn:f.maker_pn1||null,
+      lot_no:lotStr,qty:f.qty||null,
+      result:'NG',ng_reason:f.ng_reason,operator:op,
+    }).then(({error})=>{if(error)console.error(error);});
+    updateFcProg(); renderFcList();
+    checkFcComplete(op);
+    // 1.5초 후 다음 대기 피더로 이동
+    setTimeout(()=>{
+      const ni=_fc.feeders.findIndex((ff,i)=>i>_fc.curIdx&&ff.status==='wait');
+      if(ni>=0){moveFc(ni);document.getElementById('fc_st').focus();}
+    },1500);
   }
+
   // 수동 패널 닫기
   document.getElementById('fc_manualPanel').classList.remove('show');
 }
