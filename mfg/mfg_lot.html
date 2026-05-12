@@ -464,32 +464,30 @@ tbody tr:hover td{background:#f8fafc;}
         <!-- 모델 정보 -->
         <div class="sec-blk blk-info" id="fc_minfo" style="display:none;margin-bottom:10px;">
           <div class="sec-blk-title">📋 모델 정보</div>
-          <div class="mgrid">
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
             <div><div class="ml">모델</div><div class="mv" id="fc_mi_bc" style="font-size:11px">-</div></div>
             <div><div class="ml">면구분</div><div class="mv" id="fc_mi_face">-</div></div>
             <div><div class="ml">라인</div><div class="mv" id="fc_mi_line">-</div></div>
-            <div><div class="ml">설비프로그램</div><div class="mv" id="fc_mi_prog" style="font-size:11px">-</div></div>
+            <div style="flex:1;min-width:0;"><div class="ml">설비프로그램</div><div class="mv" id="fc_mi_prog" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</div></div>
           </div>
         </div>
 
         <!-- 진행현황 -->
-        <div class="sec-blk blk-prog" id="fc_psec" style="display:none;margin-bottom:10px;">
-          <div class="sec-blk-title">📊 피더 체크 진행현황</div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-            <span class="pc" id="fc_pc" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--pri);white-space:nowrap;">0/0</span>
+        <div class="sec-blk blk-prog" id="fc_psec" style="display:none;margin-bottom:10px;padding:8px 12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:10px;font-weight:800;color:var(--text-s);white-space:nowrap;">📊 진행현황</span>
+            <span class="pc" id="fc_pc" style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--pri);white-space:nowrap;">0/0</span>
             <div class="pbar" style="flex:1;"><div class="pfil" id="fc_pf" style="width:0%;background:linear-gradient(90deg,var(--pri-m),#60a5fa);"></div></div>
-          </div>
-          <div class="pst">
-            <div class="psi"><div class="pd" style="background:var(--pri-m)"></div><span id="fc_oc" style="color:var(--pri-m)">OK 0</span></div>
-            <div class="psi"><div class="pd" style="background:var(--ng)"></div><span id="fc_nc" style="color:var(--ng)">NG 0</span></div>
-            <div class="psi"><div class="pd" style="background:#e2e8f0"></div><span id="fc_wc" style="color:var(--text-s)">대기 0</span></div>
+            <span id="fc_oc" style="color:var(--pri-m);font-size:11px;font-weight:700;white-space:nowrap;">OK 0</span>
+            <span id="fc_nc" style="color:var(--ng);font-size:11px;font-weight:700;white-space:nowrap;">NG 0</span>
+            <span id="fc_wc" style="color:var(--text-s);font-size:11px;white-space:nowrap;">대기 0</span>
           </div>
         </div>
 
         <!-- 피더 목록 -->
-        <div class="sec-blk blk-list" id="fc_fSec" style="display:none;margin-bottom:0;">
-          <div class="sec-blk-title">🔩 피더 목록</div>
-          <div class="flist" id="fc_flist" style="max-height:280px;overflow-y:auto;padding-right:2px;"></div>
+        <div class="sec-blk blk-list" id="fc_fSec" style="display:none;margin-bottom:0;padding:8px 10px;">
+          <div class="sec-blk-title" style="margin-bottom:5px;">🔩 피더 목록</div>
+          <div class="flist" id="fc_flist" style="max-height:420px;overflow-y:auto;padding-right:2px;"></div>
         </div>
 
       </div>
@@ -1046,7 +1044,8 @@ function moveFc(idx) {
   document.getElementById('fc_rpanel').className='panel';
   document.getElementById('fc_jstat').textContent='체크 중';
   document.getElementById('fc_jstat').style.color='var(--warn)';
-  // ST No 결과창 초기화
+  // ST No 입력창 + 결과창 초기화
+  document.getElementById('fc_st').value='';
   const r2=document.getElementById('fc_r2');
   r2.className='rd empty';r2.textContent='ST No 대기 중...';
   // 릴 스캔 초기화
@@ -1056,6 +1055,9 @@ function moveFc(idx) {
   s4Update('fc_',[],'');
   document.getElementById('fc_rsum').className='rsum';
   setJBtn(false,false);
+  // 버튼 표시 상태 초기화 (이전 피더에서 숨겨진 버튼 복원)
+  document.getElementById('fc_bok').style.display='';
+  document.getElementById('fc_bng').style.display='';
   setDot('fd3','act');
   renderFcList();
 }
@@ -1086,25 +1088,29 @@ function autoJudgeFc(){
   const mkrPn=f.maker_pn1||'';
   const matched=_fc.scans.find(s=>!mkrPn||s.includes(mkrPn));
   if(matched||!mkrPn){
-    // OK 자동 판정
+    // OK → 자동 저장 + 다음 피더 이동
     _fc.matched=true;
     _fc.matchedPn=mkrPn||_fc.scans[0]||'';
     _fc.matchedLot=mkrPn&&matched?matched.replace(mkrPn,'').trim()||matched:_fc.scans[0]||'';
     const rs=document.getElementById('fc_rsum');
     rs.className='rsum ok';
     document.getElementById('fc_rtit').className='rsum-title ok';
-    document.getElementById('fc_rtit').textContent='품번 일치 — OK 가능';
+    document.getElementById('fc_rtit').textContent='품번 일치 — OK 자동 판정';
     document.getElementById('fc_rpn').textContent=_fc.matchedPn;
     document.getElementById('fc_rlot').textContent=_fc.matchedLot;
     document.getElementById('fc_rqty').textContent=f.qty+'개';
-    setJBtn(true,true);
     document.getElementById('fc_cbox').className='cbox ok';
     document.getElementById('fc_rpanel').className='panel ok';
-    document.getElementById('fc_jstat').textContent='OK 가능';
-    document.getElementById('fc_jstat').style.color='var(--ok)';
+    document.getElementById('fc_jstat').textContent='OK';
+    document.getElementById('fc_jstat').style.color='var(--pri-m)';
+    // OK 버튼만 표시 (파란색), NG 비활성
+    document.getElementById('fc_bok').className='jok on';
+    document.getElementById('fc_bng').style.display='none';
     playSound('ok');
+    // 자동 judgeOK 실행
+    judgeOK();
   } else {
-    // NG 자동 판정
+    // NG → NG 버튼만 표시하여 사용자 확인
     _fc.matched=false;
     const rs=document.getElementById('fc_rsum');
     rs.className='rsum ng';
@@ -1113,11 +1119,13 @@ function autoJudgeFc(){
     document.getElementById('fc_rpn').textContent=mkrPn||'-';
     document.getElementById('fc_rlot').textContent=_fc.scans[0]||'-';
     document.getElementById('fc_rqty').textContent=f.qty+'개';
-    setJBtn(false,true);
     document.getElementById('fc_cbox').className='cbox ng';
     document.getElementById('fc_rpanel').className='panel ng';
     document.getElementById('fc_jstat').textContent='NG';
     document.getElementById('fc_jstat').style.color='var(--ng)';
+    // NG 버튼만 표시, OK 숨김
+    document.getElementById('fc_bok').style.display='none';
+    document.getElementById('fc_bng').className='jng on';
     playSound('ng');
   }
 }
