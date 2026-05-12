@@ -1927,31 +1927,49 @@ function addNewScan(){
 }
 
 async function saveReelChange(result, ngReason){
-  const op=document.getElementById('rc_op').value;
-  if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
+  const op=document.getElementById('rc_op').value||null;
   const model=document.getElementById('rc_model').value||null;
+  const line=_rc.line||document.getElementById('rc_line').value||null;
+
+  // 저장 전 값 확인 (디버그용)
+  console.log('[saveReelChange]', {result, ngReason, op, line, model,
+    stno:_rc.stno, lgPn:_rc.lgPn, mkrPn1:_rc.mkrPn1,
+    newPn:_rc.newPn, newLot:_rc.newLot, moq:_rc.moq});
+
+  if(!_rc.stno){showToast('⚠️ ST No가 없습니다. 다시 스캔해주세요.'); return;}
+
+  const payload = {
+    change_date:today(),
+    line,
+    barcode_val:model,
+    feeder_no:_rc.stno,
+    lg_pn:_rc.lgPn||null,
+    old_maker_pn:_rc.mkrPn1||null,
+    new_lg_pn:_rc.lgPn||null,
+    new_maker_pn:_rc.newPn||null,
+    new_lot:_rc.newLot||null,
+    new_qty:_rc.moq||null,
+    result,
+    operator:op
+  };
+  // ng_reason 컬럼이 있을 경우만 추가
+  if(ngReason) payload.ng_reason = ngReason;
+
   try{
-    await sb.from('mfg_reel_change').insert({
-      change_date:today(), line:_rc.line,
-      barcode_val:model,
-      feeder_no:_rc.stno,
-      lg_pn:_rc.lgPn||null,
-      old_maker_pn:_rc.mkrPn1||null,
-      new_lg_pn:_rc.lgPn||null,
-      new_maker_pn:_rc.newPn||null,
-      new_lot:_rc.newLot||null,
-      new_qty:_rc.moq||null,
-      result, ng_reason:ngReason||null, operator:op
-    });
+    const {error} = await sb.from('mfg_reel_change').insert(payload);
+    if(error) throw error;
     loadRcHist();
     if(result==='OK'){
       playSound('done');
       showToast('✅ 부품 교환 이력 등록 완료');
       setTimeout(()=>{ resetRcPartial(); }, 1200);
     } else {
-      showToast(`⚠️ NG 이력 등록 완료 (${ngReason||''})`);
+      showToast(`📋 NG 이력 등록 완료 (${ngReason||''})`);
     }
-  }catch(e){showToast('❌ 등록 실패: '+(e.message||String(e)));console.error(e);}
+  }catch(e){
+    console.error('[saveReelChange 실패]', e);
+    alert('❌ 교환 이력 등록 실패\n\n' + (e.message||JSON.stringify(e)));
+  }
 }
 
 async function doReelChange(){ await saveReelChange('OK', null); }
