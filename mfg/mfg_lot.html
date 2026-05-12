@@ -143,14 +143,16 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .fi.d-ng .fpn{color:#ef4444;}
 .fi.d-ng .fqty{color:var(--ng);}
 .fi.skip{border-color:#e2e8f0;background:#f8fafc;opacity:.4;cursor:default;}
-.fno{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--text);min-width:88px;}
+.fno{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--text);min-width:88px;flex-shrink:0;}
 .fi.cur .fno{color:var(--warn);font-size:14px;}
-.fpn{flex:1;font-family:var(--mono);font-size:12px;color:var(--text-s);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.fi.cur .fpn{color:var(--text);font-weight:700;font-size:12px;}
-.fqty{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text-s);margin-right:2px;white-space:nowrap;}
+.fi-mid{flex:1;min-width:0;overflow:hidden;}
+.fpn{font-family:var(--mono);font-size:12px;color:var(--text-s);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fi.cur .fpn{color:var(--text);font-weight:700;}
+.fpn2{font-family:var(--mono);font-size:10px;color:var(--text-x);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;}
+.fqty{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text-s);margin-right:2px;white-space:nowrap;flex-shrink:0;}
 .fico{font-size:14px;flex-shrink:0;min-width:18px;text-align:center;}
 /* 피더 상태 배지 */
-.ftag{font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;flex-shrink:0;font-family:var(--mono);}
+.ftag{font-size:11px;font-weight:900;padding:4px 9px;border-radius:6px;flex-shrink:0;font-family:var(--mono);letter-spacing:.5px;}
 .ftag.ok{background:var(--pri-m);color:#fff;}
 .ftag.ng{background:var(--ng);color:#fff;}
 .ftag.cur{background:var(--warn);color:#fff;}
@@ -1084,14 +1086,19 @@ function renderFcList() {
     const isCur=i===_fc.curIdx;
     const cls=isCur?'fi cur':f.status==='ok'?'fi d-ok':f.status==='ng'?'fi d-ng':f.status==='skip'?'fi skip':'fi';
     let tag='';
-    if(isCur)       tag=`<span class="ftag cur">체크중</span>`;
+    if(isCur)                tag=`<span class="ftag cur">체크중</span>`;
     else if(f.status==='ok') tag=`<span class="ftag ok">OK</span>`;
     else if(f.status==='ng') tag=`<span class="ftag ng">NG</span>`;
     else if(f.status==='skip') tag=`<span class="ftag wait">SKIP</span>`;
-    else             tag=`<span class="ftag wait">대기</span>`;
+    else                     tag=`<span class="ftag wait">대기</span>`;
+    // 메이커품번 + SPEC 2번째 줄
+    const sub=[f.maker_pn1,f.spec].filter(Boolean).join(' · ');
     return `<div class="${cls}" onclick="moveFc(${i})">
       <span class="fno">${f.st_no}</span>
-      <span class="fpn">${f.lg_pn}</span>
+      <div class="fi-mid">
+        <div class="fpn">${f.lg_pn}</div>
+        ${sub?`<div class="fpn2">${sub}</div>`:''}
+      </div>
       <span class="fqty">×${f.qty}</span>
       ${tag}
     </div>`;
@@ -1185,7 +1192,8 @@ function confirmManual(){
     document.getElementById('fc_bng').style.display='';
     document.getElementById('fc_bng').className='jng on';
     playSound('ok');
-  } else {
+    // 1.5초 후 자동 OK 판정
+    setTimeout(()=>{ judgeOK(); }, 1500);
     _fc.matched=false;
     _fc.matchedLot=lotStr;
     rs.className='rsum ng';
