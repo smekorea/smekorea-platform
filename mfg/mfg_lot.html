@@ -130,21 +130,29 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .pd{width:7px;height:7px;border-radius:50%;}
 
 /* 피더 목록 */
-.flist{display:flex;flex-direction:column;gap:4px;}
-.fi{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border);background:#fff;cursor:pointer;transition:all .15s;}
+.flist{display:flex;flex-direction:column;gap:3px;}
+.fi{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:2px solid var(--border);background:#fff;cursor:pointer;transition:all .15s;}
 .fi:hover{border-color:var(--pri-m);background:var(--pri-l);}
 .fi.cur{border-color:var(--warn);background:var(--warn-l);box-shadow:0 0 0 2px rgba(217,119,6,.15);}
-.fi.d-ok{border-color:var(--ok);background:var(--ok-l);opacity:.85;}
-.fi.d-ok .fno{color:var(--pri-m);}
-.fi.d-ok .fpn{color:var(--pri-m);}
-.fi.d-ng{border-color:var(--ng);background:var(--ng-l);}
-.fi.d-ng .fno{color:var(--ng);}
-.fi.d-ng .fpn{color:var(--ng);}
-.fi.skip{opacity:.35;cursor:default;}
+.fi.d-ok{border-color:#bfdbfe;background:#eff6ff;}
+.fi.d-ok .fno{color:var(--pri-m);font-weight:900;}
+.fi.d-ok .fpn{color:#3b82f6;}
+.fi.d-ok .fqty{color:var(--pri-m);}
+.fi.d-ng{border-color:#fca5a5;background:#fff5f5;}
+.fi.d-ng .fno{color:var(--ng);font-weight:900;}
+.fi.d-ng .fpn{color:#ef4444;}
+.fi.d-ng .fqty{color:var(--ng);}
+.fi.skip{border-color:#e2e8f0;background:#f8fafc;opacity:.4;cursor:default;}
 .fno{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);min-width:85px;}
 .fpn{flex:1;font-family:var(--mono);font-size:10px;color:var(--text-s);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.fqty{font-family:var(--mono);font-size:11px;color:var(--text-s);}
-.fico{font-size:15px;}
+.fqty{font-family:var(--mono);font-size:11px;color:var(--text-s);margin-right:2px;}
+.fico{font-size:14px;flex-shrink:0;min-width:18px;text-align:center;}
+/* 피더 상태 배지 */
+.ftag{font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;flex-shrink:0;font-family:var(--mono);}
+.ftag.ok{background:var(--pri-m);color:#fff;}
+.ftag.ng{background:var(--ng);color:#fff;}
+.ftag.cur{background:var(--warn);color:#fff;}
+.ftag.wait{background:#e2e8f0;color:#64748b;}
 
 /* 현재 피더 박스 */
 .cbox{border-radius:10px;padding:12px 16px;margin-bottom:12px;transition:all .3s;border:2px solid var(--border);background:var(--pri-l);}
@@ -516,7 +524,7 @@ tbody tr:hover td{background:#f8fafc;}
         <!-- ② ST No 스캔 -->
         <div style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:10px;padding:11px 12px;margin-bottom:10px;display:none;" id="fc_stGrp">
           <div style="font-size:11px;font-weight:800;color:#6d28d9;letter-spacing:1px;margin-bottom:7px;text-transform:uppercase;">② ST No 바코드 스캔</div>
-          <input type="text" class="sinp" id="fc_st" placeholder="M1-F-12L" style="text-transform:uppercase;border-color:#ddd6fe;" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmFcSt()">
+          <input type="text" class="sinp" id="fc_st" placeholder="피더 No 스캔..." style="text-transform:uppercase;border-color:#ddd6fe;" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmFcSt()">
           <div class="rd empty" id="fc_r2" style="margin-top:6px;">ST No 대기 중...</div>
         </div>
 
@@ -547,8 +555,8 @@ tbody tr:hover td{background:#f8fafc;}
 
         <!-- 판정 결과 버튼 -->
         <div class="jrow">
-          <button class="jok off" id="fc_bok" onclick="judgeOK()">✅ OK</button>
-          <button class="jng off" id="fc_bng" onclick="openNGModal()">❌ NG</button>
+          <button class="jok off" id="fc_bok" onclick="judgeOK()">OK</button>
+          <button class="jng off" id="fc_bng" onclick="openNGModal()">NG</button>
         </div>
 
       </div>
@@ -986,11 +994,15 @@ function confirmFcSt() {
   if(!val)return;
   const idx=_fc.feeders.findIndex(f=>f.st_no===val);
   if(idx<0){setR('fc_r2','ng','❌',val,'피더 목록에 없습니다');return;}
+  // ST No 매칭 결과 먼저 표시
   setR('fc_r2','ok','✅',val,_fc.feeders[idx].lg_pn);
   setDot('fd2','ok');setDot('fd3','act');
-  moveFc(idx);
   document.getElementById('fc_st').value='';
-  document.getElementById('fc_rel').focus();
+  // 300ms 후 피더 이동 + 릴 스캔 포커스 (결과 잠깐 보이게)
+  setTimeout(()=>{
+    moveFc(idx);
+    document.getElementById('fc_rel').focus();
+  }, 300);
 }
 
 // ── FC: 피더 목록 구성 ──
@@ -1022,9 +1034,20 @@ function renderFcList() {
   const list=document.getElementById('fc_flist');
   if(!_fc.feeders.length){list.innerHTML='<div style="text-align:center;padding:16px;color:#bbb;font-size:12px">피더 없음</div>';return;}
   list.innerHTML=_fc.feeders.map((f,i)=>{
-    const c=i===_fc.curIdx?'fi cur':f.status==='ok'?'fi d-ok':f.status==='ng'?'fi d-ng':f.status==='skip'?'fi skip':'fi';
-    const ic=f.status==='ok'?'✅':f.status==='ng'?'❌':f.status==='skip'?'⏭':i===_fc.curIdx?'⚡':'○';
-    return `<div class="${c}" onclick="moveFc(${i})"><span class="fno">${f.st_no}</span><span class="fpn">${f.lg_pn}</span><span class="fqty">×${f.qty}</span><span class="fico">${ic}</span></div>`;
+    const isCur=i===_fc.curIdx;
+    const cls=isCur?'fi cur':f.status==='ok'?'fi d-ok':f.status==='ng'?'fi d-ng':f.status==='skip'?'fi skip':'fi';
+    let tag='';
+    if(isCur)       tag=`<span class="ftag cur">체크중</span>`;
+    else if(f.status==='ok') tag=`<span class="ftag ok">OK</span>`;
+    else if(f.status==='ng') tag=`<span class="ftag ng">NG</span>`;
+    else if(f.status==='skip') tag=`<span class="ftag wait">SKIP</span>`;
+    else             tag=`<span class="ftag wait">대기</span>`;
+    return `<div class="${cls}" onclick="moveFc(${i})">
+      <span class="fno">${f.st_no}</span>
+      <span class="fpn">${f.lg_pn}</span>
+      <span class="fqty">×${f.qty}</span>
+      ${tag}
+    </div>`;
   }).join('');
   const items=document.querySelectorAll('.fi');
   if(items[_fc.curIdx])items[_fc.curIdx].scrollIntoView({behavior:'smooth',block:'nearest'});
