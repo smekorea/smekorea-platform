@@ -284,7 +284,16 @@ tbody tr:hover td{background:#f8fafc;}
 .ngbtn{padding:13px 10px;border:2px solid var(--border);border-radius:9px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;transition:all .15s;}
 .ngbtn:hover,.ngbtn.sel{border-color:var(--ng);background:var(--ng-l);color:var(--ng-d);}
 
-/* 토스트 */
+/* 수동 입력 패널 */
+.manual-panel{background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;padding:12px 14px;margin-top:8px;display:none;}
+.manual-panel.show{display:block;}
+.manual-title{font-size:12px;font-weight:900;color:#92400e;letter-spacing:1px;margin-bottom:10px;text-transform:uppercase;}
+.manual-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.manual-lbl{font-size:11px;font-weight:700;color:#78350f;margin-bottom:4px;}
+.manual-inp{width:100%;padding:9px 11px;border:2px solid #fcd34d;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#fff;transition:border-color .2s;}
+.manual-inp:focus{border-color:#f59e0b;}
+.manual-btn{width:100%;padding:11px;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;margin-top:4px;}
+.manual-btn:active{transform:scale(.97);}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.9);color:#fff;padding:9px 20px;border-radius:22px;font-size:12px;font-weight:700;z-index:10001;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;max-width:90vw;}
 .toast.show{opacity:1;}
 
@@ -550,6 +559,34 @@ tbody tr:hover td{background:#f8fafc;}
             <div class="s4b empty" id="fc_b1"><div class="s4l">스캔 2</div><div class="s4v empty" id="fc_v1">-</div></div>
             <div class="s4b empty" id="fc_b2"><div class="s4l">스캔 3</div><div class="s4v empty" id="fc_v2">-</div></div>
             <div class="s4b empty" id="fc_b3"><div class="s4l">스캔 4</div><div class="s4v empty" id="fc_v3">-</div></div>
+          </div>
+          <!-- 수동 입력 토글 -->
+          <button onclick="toggleManual()" style="width:100%;padding:7px;border:1.5px dashed #93c5fd;border-radius:8px;background:transparent;color:#3b82f6;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;">✏️ 바코드 없음 — 수동 입력</button>
+          <!-- 수동 입력 패널 -->
+          <div class="manual-panel" id="fc_manualPanel">
+            <div class="manual-title">✏️ 수동 입력 (바코드 파손 / 없음)</div>
+            <div class="manual-row">
+              <div>
+                <div class="manual-lbl">LG품번 *</div>
+                <input type="text" class="manual-inp" id="fc_manualLgpn" placeholder="LG품번 입력..."
+                  style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+              </div>
+              <div>
+                <div class="manual-lbl">사유 *</div>
+                <select class="manual-inp" id="fc_manualReason">
+                  <option value="">선택...</option>
+                  <option value="바코드 파손">바코드 파손</option>
+                  <option value="바코드 없음">바코드 없음</option>
+                  <option value="스캔 불가">스캔 불가</option>
+                  <option value="기타">기타 (직접 입력)</option>
+                </select>
+              </div>
+            </div>
+            <div id="fc_manualEtcRow" style="display:none;margin-bottom:8px;">
+              <div class="manual-lbl">기타 사유 직접 입력</div>
+              <input type="text" class="manual-inp" id="fc_manualEtc" placeholder="사유 입력...">
+            </div>
+            <button class="manual-btn" onclick="confirmManual()">✅ 수동 입력 확인</button>
           </div>
         </div>
 
@@ -1086,14 +1123,88 @@ function moveFc(idx) {
   s4Update('fc_',[],'');
   document.getElementById('fc_rsum').className='rsum';
   setJBtn(false,false);
-  // 버튼 표시 상태 초기화 (이전 피더에서 숨겨진 버튼 복원)
+  // 버튼 표시 상태 초기화
   document.getElementById('fc_bok').style.display='';
   document.getElementById('fc_bng').style.display='';
+  // 수동 입력 패널 초기화
+  document.getElementById('fc_manualPanel').classList.remove('show');
+  document.getElementById('fc_manualLgpn').value='';
+  document.getElementById('fc_manualReason').value='';
+  document.getElementById('fc_manualEtcRow').style.display='none';
   setDot('fd3','act');
   renderFcList();
 }
 
-// ── FC: 릴 스캔 타이머 ──
+// ── FC: 수동 입력 ──
+function toggleManual(){
+  const p=document.getElementById('fc_manualPanel');
+  p.classList.toggle('show');
+  if(p.classList.contains('show')){
+    document.getElementById('fc_manualLgpn').focus();
+  }
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const sel=document.getElementById('fc_manualReason');
+  if(sel) sel.addEventListener('change',function(){
+    document.getElementById('fc_manualEtcRow').style.display=this.value==='기타'?'block':'none';
+  });
+});
+
+function confirmManual(){
+  const lgpn=document.getElementById('fc_manualLgpn').value.trim().toUpperCase();
+  const reasonSel=document.getElementById('fc_manualReason').value;
+  const reasonEtc=document.getElementById('fc_manualEtc').value.trim();
+  const reason=reasonSel==='기타'?reasonEtc:reasonSel;
+
+  if(!lgpn){showToast('⚠️ LG품번을 입력하세요');return;}
+  if(!reason){showToast('⚠️ 사유를 선택하세요');return;}
+  if(!_fc.feeders.length){showToast('⚠️ 모델을 먼저 확인하세요');return;}
+
+  const f=_fc.feeders[_fc.curIdx];
+  const isMatch = lgpn===f.lg_pn;
+  const lotStr=`[수동입력] ${reason}`;
+
+  // 결과창 표시
+  const rs=document.getElementById('fc_rsum');
+  if(isMatch){
+    _fc.matched=true;
+    _fc.matchedPn=lgpn;
+    _fc.matchedLot=lotStr;
+    rs.className='rsum ok';
+    document.getElementById('fc_rtit').className='rsum-title ok';
+    document.getElementById('fc_rtit').textContent='품번 일치 — 수동 입력 OK';
+    document.getElementById('fc_rpn').textContent=lgpn;
+    document.getElementById('fc_rlot').textContent=lotStr;
+    document.getElementById('fc_rqty').textContent=f.qty+'개';
+    document.getElementById('fc_cbox').className='cbox ok';
+    document.getElementById('fc_rpanel').className='panel ok';
+    document.getElementById('fc_jstat').textContent='OK 가능';
+    document.getElementById('fc_jstat').style.color='var(--pri-m)';
+    document.getElementById('fc_bok').className='jok on';
+    document.getElementById('fc_bng').style.display='';
+    document.getElementById('fc_bng').className='jng on';
+    playSound('ok');
+  } else {
+    _fc.matched=false;
+    _fc.matchedLot=lotStr;
+    rs.className='rsum ng';
+    document.getElementById('fc_rtit').className='rsum-title ng';
+    document.getElementById('fc_rtit').textContent=`품번 불일치 — 수동입력 NG (입력:${lgpn} / 등록:${f.lg_pn})`;
+    document.getElementById('fc_rpn').textContent=lgpn;
+    document.getElementById('fc_rlot').textContent=lotStr;
+    document.getElementById('fc_rqty').textContent=f.qty+'개';
+    document.getElementById('fc_cbox').className='cbox ng';
+    document.getElementById('fc_rpanel').className='panel ng';
+    document.getElementById('fc_jstat').textContent='NG';
+    document.getElementById('fc_jstat').style.color='var(--ng)';
+    document.getElementById('fc_bok').style.display='none';
+    document.getElementById('fc_bng').className='jng on';
+    playSound('ng');
+  }
+  // 수동 패널 닫기
+  document.getElementById('fc_manualPanel').classList.remove('show');
+}
 let _fcTimer=null, _fcTimerCnt=0;
 function clearFcTimer(){
   clearInterval(_fcTimer);_fcTimer=null;
@@ -1122,7 +1233,7 @@ function autoJudgeFc(){
     // OK → 자동 저장 + 다음 피더 이동
     _fc.matched=true;
     _fc.matchedPn=mkrPn||_fc.scans[0]||'';
-    _fc.matchedLot=mkrPn&&matched?matched.replace(mkrPn,'').trim()||matched:_fc.scans[0]||'';
+    _fc.matchedLot=_fc.scans.join(' / ');
     const rs=document.getElementById('fc_rsum');
     rs.className='rsum ok';
     document.getElementById('fc_rtit').className='rsum-title ok';
@@ -1148,7 +1259,7 @@ function autoJudgeFc(){
     document.getElementById('fc_rtit').className='rsum-title ng';
     document.getElementById('fc_rtit').textContent='품번 불일치 — NG 처리 필요';
     document.getElementById('fc_rpn').textContent=mkrPn||'-';
-    document.getElementById('fc_rlot').textContent=_fc.scans[0]||'-';
+    document.getElementById('fc_rlot').textContent=_fc.scans.join(' / ')||'-';
     document.getElementById('fc_rqty').textContent=f.qty+'개';
     document.getElementById('fc_cbox').className='cbox ng';
     document.getElementById('fc_rpanel').className='panel ng';
@@ -1193,7 +1304,11 @@ async function judgeOK() {
   if(!op){showToast('⚠️ 작업자를 선택하세요');return;}
   if(!_fc.feeders.length){showToast('⚠️ 모델을 먼저 선택하세요');return;}
   const f=_fc.feeders[_fc.curIdx];
-  f.status='ok';f.lot_no=_fc.matchedLot||_fc.scans.join('/');
+  f.status='ok';
+  // 수동 입력이면 matchedLot 사용, 아니면 전체 스캔값
+  f.lot_no=(_fc.matchedLot&&_fc.matchedLot.startsWith('[수동입력]'))
+    ? _fc.matchedLot
+    : _fc.scans.join(' / ');
   setJBtn(false,false);
   document.getElementById('fc_cbox').className='cbox ok';
   try {
@@ -1231,7 +1346,7 @@ async function judgeNG() {
     await sb.from('mfg_feeder_check').insert({
       check_date:today(),line:_fc.line,barcode_val:_fc.barcode,
       feeder_no:f.st_no,lg_pn:f.lg_pn,maker_pn:f.maker_pn1||null,
-      lot_no:_fc.scans.join('/')||null,qty:f.qty||null,
+      lot_no:_fc.scans.join(' / ')||null,qty:f.qty||null,
       result:'NG',ng_reason:reason,operator:op,
     });
   } catch(e){console.error(e);}
@@ -1928,7 +2043,7 @@ function renderPrintPreview(selectedModels) {
     return `<th style="white-space:nowrap;font-size:13px;padding:10px 8px;${w}position:relative;">${h}<div class="col-resizer" data-col="${i}"></div></th>`;
   }).join('')}</tr>`;
   // 리사이저 이벤트 등록
-  initColResize();
+  initPrColResize();
 
   tbody.innerHTML = _printData.map(r => {
     const cells = [];
@@ -2172,9 +2287,11 @@ async function exportPrint() {
 // 토스트
 // ════════════════════════════════
 // ── 컬럼 리사이저 ──
-function initColResize() {
+function initPrColResize() {
   const table = document.getElementById('pr_table');
   if (!table) return;
+  const saved = JSON.parse(localStorage.getItem('pr_col_widths')||'{}');
+  table.querySelectorAll('thead th').forEach((th,i)=>{ if(saved[i]) th.style.width=saved[i]+'px'; });
   const resizers = table.querySelectorAll('.col-resizer');
   resizers.forEach(resizer => {
     let startX, startW, th;
@@ -2196,7 +2313,6 @@ function initColResize() {
       resizer.classList.remove('dragging');
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      // 폭 저장
       const ths = table.querySelectorAll('thead th');
       const widths = {};
       ths.forEach((t, i) => { widths[i] = t.offsetWidth; });
