@@ -200,15 +200,15 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
 /* 결과 종합 */
 .rsum{border-radius:10px;padding:12px 14px;margin:10px 0;display:none;transition:all .3s;}
-.rsum.ok{background:#f0fdf4;border:2px solid var(--ok);display:block;}
+.rsum.ok{background:#eff6ff;border:2px solid var(--pri-m);display:block;}
 .rsum.ng{background:#fff5f5;border:2px solid var(--ng);display:block;}
 .rsum-title{font-size:16px;font-weight:900;margin-bottom:8px;}
-.rsum-title.ok{color:var(--ok-d);}
+.rsum-title.ok{color:var(--pri);}
 .rsum-title.ng{color:var(--ng-d);}
 .rsum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
 .rsum-item{background:#fff;border-radius:8px;padding:8px 10px;}
 .rsum-lbl{font-size:11px;font-weight:700;color:var(--text-s);margin-bottom:4px;}
-.rsum-val{font-family:var(--mono);font-size:14px;font-weight:800;color:var(--text);word-break:break-all;}
+.rsum-val{font-family:var(--mono);font-size:16px;font-weight:800;color:var(--text);word-break:break-all;}
 
 /* 판정 버튼 */
 .jrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
@@ -274,6 +274,11 @@ thead th{background:var(--pri-l);color:var(--pri);padding:9px 11px;font-size:11p
 tbody td{padding:9px 11px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover td{background:#f8fafc;}
+
+/* NG 사유 선택 버튼 */
+.ng-reason-btn{padding:11px 8px;border:2px solid #fca5a5;border-radius:9px;background:#fff;color:var(--ng-d);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
+.ng-reason-btn:hover{background:#fef2f2;border-color:var(--ng);}
+.ng-reason-btn.selected{background:var(--ng);color:#fff;border-color:var(--ng);}
 
 /* 소리 설정 */
 .sc-card{background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
@@ -790,7 +795,7 @@ tbody tr:hover td{background:#f8fafc;}
             <div class="rsum-title" id="rc_otit"></div>
             <div class="rsum-grid" style="grid-template-columns:1fr 1fr;">
               <div class="rsum-item"><div class="rsum-lbl">메이커품번</div><div class="rsum-val" id="rc_opn">-</div></div>
-              <div class="rsum-item"><div class="rsum-lbl">LOT</div><div class="rsum-val" id="rc_olot" style="font-size:10px;word-break:break-all;">-</div></div>
+              <div class="rsum-item"><div class="rsum-lbl">LOT</div><div class="rsum-val" id="rc_olot" style="word-break:break-all;">-</div></div>
             </div>
           </div>
           <div class="rd empty" id="rc_opla">기존 릴 스캔 후 결과 표시</div>
@@ -806,7 +811,7 @@ tbody tr:hover td{background:#f8fafc;}
             <div class="rsum-title" id="rc_ntit"></div>
             <div class="rsum-grid" style="grid-template-columns:1fr 1fr 1fr;">
               <div class="rsum-item"><div class="rsum-lbl">메이커품번</div><div class="rsum-val" id="rc_npn">-</div></div>
-              <div class="rsum-item"><div class="rsum-lbl">LOT</div><div class="rsum-val" id="rc_nlot" style="font-size:10px;word-break:break-all;">-</div></div>
+              <div class="rsum-item"><div class="rsum-lbl">LOT</div><div class="rsum-val" id="rc_nlot" style="word-break:break-all;">-</div></div>
               <div class="rsum-item"><div class="rsum-lbl">수량(BOM)</div><div class="rsum-val" id="rc_nqty">-</div></div>
             </div>
           </div>
@@ -828,7 +833,7 @@ tbody tr:hover td{background:#f8fafc;}
           <div class="tw" style="max-height:200px;overflow-y:auto;">
             <table id="rc_histTable" style="min-width:500px;">
               <thead><tr>
-                <th>일시</th><th>피더No</th><th>기존릴품번</th><th>신규릴품번</th><th>LOT</th><th>수량</th><th>판정</th>
+                <th>일시</th><th>피더No</th><th style="color:var(--pri)">SPEC품번(BOM)</th><th style="background:#fef9c3;color:#854d0e">기존릴(실스캔)</th><th style="background:#dcfce7;color:#166534">신규릴(실스캔)</th><th style="background:#dcfce7;color:#166534">LOT</th><th>판정</th>
               </tr></thead>
               <tbody id="rc_histBody">
                 <tr><td colspan="7" style="text-align:center;padding:16px;color:#bbb;font-size:12px;">조회 중...</td></tr>
@@ -843,14 +848,31 @@ tbody tr:hover td{background:#f8fafc;}
   </div>
 </div>
 
-<!-- 오사용 부품 경고 -->
-<div class="alert-overlay" id="wrongPartAlert">
-  <div class="alert-box" style="border:3px solid var(--ng);">
-    <div class="alert-icon">🚨</div>
-    <div class="alert-title" style="color:var(--ng);font-size:18px;">오사용 부품 감지</div>
-    <div class="alert-msg" id="wrongPartMsg" style="color:var(--text);font-weight:600;line-height:1.7;"></div>
-    <div class="alert-btns">
-      <button class="btn" onclick="closeWrongPartAlert()" style="background:var(--ng);color:#fff;padding:13px;font-weight:800;font-size:14px;">확인 — 처음부터 다시</button>
+<!-- NG 사유 선택 팝업 (기존릴/신규릴 공용) -->
+<div class="alert-overlay" id="ngReasonAlert">
+  <div class="alert-box" style="border:3px solid var(--ng);max-width:400px;">
+    <div class="alert-icon" id="ngReasonIcon">❌</div>
+    <div class="alert-title" style="color:var(--ng);font-size:16px;" id="ngReasonTitle">NG 발생</div>
+    <div class="alert-msg" id="ngReasonMsg" style="color:var(--text);font-weight:600;line-height:1.7;margin-bottom:14px;"></div>
+    <!-- 사유 선택 -->
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:800;color:var(--text-s);letter-spacing:1px;">NG 사유 선택</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+        <button class="ng-reason-btn" onclick="selectNgReason('오장착')">🔴 오장착</button>
+        <button class="ng-reason-btn" onclick="selectNgReason('바코드 스캔MISS')">📷 바코드 스캔MISS</button>
+        <button class="ng-reason-btn" onclick="selectNgReason('기타')" style="grid-column:1/-1;">✏️ 기타 (직접입력)</button>
+      </div>
+      <input type="text" id="ngReasonEtc" placeholder="기타 사유를 직접 입력하세요..."
+        style="display:none;width:100%;padding:10px 12px;border:2px solid var(--ng);border-radius:9px;font-size:13px;font-family:inherit;outline:none;">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <div id="ngReasonSelected" style="flex:1;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;color:var(--ng-d);display:none;"></div>
+    </div>
+    <div class="alert-btns" style="margin-top:12px;">
+      <button class="btn" id="ngReasonConfirmBtn" onclick="confirmNgReason()"
+        style="background:var(--ng);color:#fff;padding:13px;font-weight:800;font-size:14px;flex:1;opacity:.4;cursor:not-allowed;" disabled>
+        ✓ 확인 후 재스캔
+      </button>
     </div>
   </div>
 </div>
@@ -1010,6 +1032,7 @@ let _rc = {
   oldScans:[], newScans:[], oldOk:false, newOk:false,
   newLot:'', newPn:'', oldLot:'', newNgLocked:false,
 };
+let _ngStep = ''; // 현재 NG 발생 단계: 'old' | 'new'
 
 // 이탈 제어
 let _alertCb = null;
@@ -1725,10 +1748,10 @@ async function loadRcHist(){
     tbody.innerHTML=data.map(r=>`<tr>
       <td style="font-size:11px;white-space:nowrap;">${fmtDt(r.created_at)}</td>
       <td style="font-family:var(--mono);font-weight:700;font-size:11px;">${r.feeder_no||'-'}</td>
-      <td style="font-family:var(--mono);font-size:10px;">${r.old_maker_pn||'-'}</td>
-      <td style="font-family:var(--mono);font-size:10px;">${r.new_maker_pn||'-'}</td>
-      <td style="font-family:var(--mono);font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.new_lot||''}">${r.new_lot||'-'}</td>
-      <td style="font-family:var(--mono);font-size:11px;text-align:right;">${r.new_qty!=null?r.new_qty.toLocaleString():'-'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--pri);font-weight:700;">${r.spec_maker_pn||'-'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:#92400e;background:#fefce8;">${r.old_maker_pn||'-'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:#166534;background:#f0fdf4;">${r.new_maker_pn||'-'}</td>
+      <td style="font-family:var(--mono);font-size:10px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#f0fdf4;" title="${r.new_lot||''}">${r.new_lot||'-'}</td>
       <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
     </tr>`).join('');
   }catch(e){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--ng);font-size:11px;">조회 실패</td></tr>';}
@@ -1765,18 +1788,95 @@ function startRcNewTimer(){
   },1000);
 }
 
-// ── RC: 오사용 경고 ──
-function showWrongPartAlert(stno,expected,actual){
-  document.getElementById('wrongPartMsg').innerHTML=
-    `피더 <b style="color:var(--ng);font-size:16px;">${stno}</b> 에서 오사용 부품이 감지되었습니다.<br><br>`+
+// ── RC: NG 사유 선택 팝업 ──
+let _ngReason = ''; // 선택된 사유
+function showNgReasonPopup(step, stno, expected, actual){
+  _ngStep = step;
+  _ngReason = '';
+  // 버튼/입력 초기화
+  document.querySelectorAll('.ng-reason-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('ngReasonEtc').style.display='none';
+  document.getElementById('ngReasonEtc').value='';
+  document.getElementById('ngReasonSelected').style.display='none';
+  const confirmBtn=document.getElementById('ngReasonConfirmBtn');
+  confirmBtn.disabled=true; confirmBtn.style.opacity='.4'; confirmBtn.style.cursor='not-allowed';
+
+  const isOld = step==='old';
+  document.getElementById('ngReasonIcon').textContent = isOld ? '🚨' : '❌';
+  document.getElementById('ngReasonTitle').textContent = isOld ? '기존릴 품번 불일치' : '신규릴 품번 불일치';
+  document.getElementById('ngReasonMsg').innerHTML =
+    `피더: <b style="color:var(--pri);font-family:var(--mono)">${stno}</b><br>`+
     `등록 품번: <b>${expected||'-'}</b><br>`+
-    `스캔 바코드: <b style="color:var(--ng);">${actual||'-'}</b><br><br>`+
-    `<span style="color:var(--ng);font-weight:900;">즉시 라인 담당자에게 보고하세요!</span>`;
-  document.getElementById('wrongPartAlert').classList.add('show');
+    `스캔 바코드: <b style="color:var(--ng)">${actual||'-'}</b><br><br>`+
+    `<span style="color:var(--ng);font-weight:800;">NG 사유를 선택하세요</span>`;
+  document.getElementById('ngReasonAlert').classList.add('show');
 }
-function closeWrongPartAlert(){
-  document.getElementById('wrongPartAlert').classList.remove('show');
-  resetRc();
+function selectNgReason(reason){
+  _ngReason = reason;
+  document.querySelectorAll('.ng-reason-btn').forEach(b=>b.classList.remove('selected'));
+  event.target.classList.add('selected');
+  const etcEl=document.getElementById('ngReasonEtc');
+  const selEl=document.getElementById('ngReasonSelected');
+  if(reason==='기타'){
+    etcEl.style.display=''; etcEl.focus();
+    selEl.style.display='none';
+  } else {
+    etcEl.style.display='none';
+    selEl.style.display=''; selEl.textContent='선택: '+reason;
+  }
+  const confirmBtn=document.getElementById('ngReasonConfirmBtn');
+  confirmBtn.disabled=false; confirmBtn.style.opacity='1'; confirmBtn.style.cursor='pointer';
+}
+async function confirmNgReason(){
+  let reason = _ngReason;
+  if(reason==='기타'){
+    const etc=document.getElementById('ngReasonEtc').value.trim();
+    if(!etc){showToast('⚠️ 기타 사유를 입력하세요');return;}
+    reason='기타: '+etc;
+  }
+  if(!reason){showToast('⚠️ 사유를 선택하세요');return;}
+  document.getElementById('ngReasonAlert').classList.remove('show');
+
+  // NG 이력 저장
+  const ngReason = (_ngStep==='old'?'기존릴 — ':'신규릴 — ')+reason;
+  await saveReelChange('NG', ngReason);
+
+  // 스캔 단계 복귀
+  if(_ngStep==='old'){
+    // 기존릴만 초기화, ST No 유지
+    _rc.oldScans=[]; _rc.oldOk=false; _rc.oldLot='';
+    clearRcOldTimer();
+    const el=document.getElementById('rc_old');
+    if(el){el.value='';el.className='sinp';el.disabled=false;el.style.background='';}
+    s4Update('rc_o',[],'');
+    document.getElementById('rc_osum').className='rsum';
+    document.getElementById('rc_opla').style.display='';
+    setRcBadge(2,'');
+    document.getElementById('rc_oldOkBadge').style.display='none';
+    document.getElementById('rc_cbox').className='cbox active';
+    document.getElementById('rc_rpanel').className='panel';
+    document.getElementById('rc_jstat').textContent='체크 중';
+    document.getElementById('rc_jstat').style.color='#fff';
+    showToast('🔄 기존릴 다시 스캔하세요');
+    document.getElementById('rc_old').focus();
+  } else {
+    // 신규릴만 초기화, ST No + 기존릴 OK 유지
+    _rc.newScans=[]; _rc.newOk=false; _rc.newLot=''; _rc.newPn=''; _rc.newNgLocked=false;
+    clearRcNewTimer();
+    const el=document.getElementById('rc_new');
+    if(el){el.value='';el.className='sinp';el.disabled=false;el.style.background='';}
+    s4Update('rc_n',[],'');
+    document.getElementById('rc_nsum').className='rsum';
+    document.getElementById('rc_npla').style.display='';
+    setRcBadge(3,'');
+    document.getElementById('rc_newOkBadge').style.display='none';
+    document.getElementById('rc_rpanel').className='panel ok'; // 기존릴 OK 상태 복원
+    document.getElementById('rc_jstat').textContent='교환 진행';
+    document.getElementById('rc_jstat').style.color='#bfdbfe';
+    document.getElementById('rc_cfm').style.display='none';
+    showToast('🔄 신규릴 다시 스캔하세요');
+    document.getElementById('rc_new').focus();
+  }
 }
 
 // ── RC: 기존 릴 자동판정 ──
@@ -1808,22 +1908,19 @@ function autoJudgeOld(){
     playSound('ok');
     document.getElementById('rc_new').focus();
   } else {
-    // 불일치 → 오사용 경고
+    // 불일치 → NG 사유 선택 팝업
     _rc.oldOk=false;
-    setR('rc_r2','ng','❌','품번 불일치','오사용 부품 감지');
+    setR('rc_r2','ng','❌','품번 불일치','스캔값이 BOM 등록 품번과 다릅니다');
     document.getElementById('rc_osum').className='rsum ng';
     document.getElementById('rc_otit').className='rsum-title ng';
-    document.getElementById('rc_otit').textContent='⚠️ 품번 불일치 — 오사용 부품';
+    document.getElementById('rc_otit').textContent='⚠️ 품번 불일치';
     document.getElementById('rc_opla').style.display='none';
     document.getElementById('rc_cbox').className='cbox ng';
     document.getElementById('rc_rpanel').className='panel ng';
-    document.getElementById('rc_jstat').textContent='오사용 감지';
+    document.getElementById('rc_jstat').textContent='NG';
     document.getElementById('rc_jstat').style.color='#fca5a5';
     playSound('ng');
-    showWrongPartAlert(_rc.stno, mkrPn||lgPn, _rc.oldScans[0]||'-');
-    // NG 이력 저장
-    _rc.newPn=''; _rc.newLot='';
-    saveReelChange('NG', '기존릴 품번 불일치');
+    showNgReasonPopup('old', _rc.stno, mkrPn||lgPn, _rc.oldScans[0]||'-');
   }
 }
 
@@ -1860,10 +1957,10 @@ function autoJudgeNew(){
     setTimeout(()=>{ doReelChange(); }, 1500);
   } else {
     _rc.newOk=false;
-    _rc.newNgLocked=true; // NG 판정 후 추가 스캔 잠금
+    _rc.newNgLocked=true;
     document.getElementById('rc_new').disabled=true;
     document.getElementById('rc_new').style.background='#fee2e2';
-    _rc.newPn=extractPn(_rc.newScans[0]||''); // NG여도 스캔값에서 품번 추출
+    _rc.newPn=extractPn(_rc.newScans[0]||'');
     _rc.newLot=_rc.newScans.map(s=>mkrPn?s.replace(mkrPn,'').trim()||s:s).join(' / ');
     setR('rc_r3','ng','❌','품번 불일치','NG 처리');
     document.getElementById('rc_nsum').className='rsum ng';
@@ -1878,7 +1975,7 @@ function autoJudgeNew(){
     document.getElementById('rc_jstat').style.color='#fca5a5';
     document.getElementById('rc_cfm').style.display='none';
     playSound('ng');
-    saveReelChange('NG', '신규릴 품번 불일치');
+    showNgReasonPopup('new', _rc.stno, mkrPn||lgPn, _rc.newScans[0]||'-');
   }
 }
 
@@ -1898,7 +1995,6 @@ function confirmRcSt(){
   const b=_bom.find(x=>x.lg_pn===lgPn)||{};
   _rc={..._rc, line, stno:val, lgPn, mkrPn1:b.maker_pn1||'', moq:b.moq||0,
        oldScans:[], newScans:[], oldOk:false, newOk:false, newLot:'', newPn:'', oldLot:'', newNgLocked:false};
-  // rc_new 입력창 잠금 해제
   const rcNewEl=document.getElementById('rc_new');
   if(rcNewEl){rcNewEl.disabled=false;rcNewEl.style.background='';}
   setR('rc_r1','ok','✅',val,lgPn);
@@ -1955,12 +2051,7 @@ function addOldScan(){
 function addNewScan(){
   const scan=document.getElementById('rc_new').value.trim();
   if(!scan)return;
-  // NG 판정 후 잠금: 추가 스캔 불가
-  if(_rc.newNgLocked){
-    showToast('⚠️ NG 판정 완료. ST No부터 다시 스캔하세요');
-    document.getElementById('rc_new').value='';
-    return;
-  }
+  if(_rc.newNgLocked){showToast('⚠️ NG 판정 중. 사유 선택 후 재스캔하세요');document.getElementById('rc_new').value='';return;}
   if(_rc.newScans.length>=4){showToast('⚠️ 최대 4개까지');return;}
   _rc.newScans.push(scan);
   document.getElementById('rc_new').value='';
@@ -1999,9 +2090,10 @@ async function saveReelChange(result, ngReason){
     barcode_val:model,
     feeder_no:_rc.stno,
     lg_pn:_rc.lgPn||null,
-    old_maker_pn:_rc.mkrPn1||null,
+    spec_maker_pn:_rc.mkrPn1||null,          // BOM 등록 메이커품번 (SPEC)
+    old_maker_pn:extractPn(_rc.oldScans[0]||'')||null, // 실제 스캔 기존릴 품번
     new_lg_pn:_rc.lgPn||null,
-    new_maker_pn:_rc.newPn||null,
+    new_maker_pn:extractPn(_rc.newScans[0]||'')||null, // 실제 스캔 신규릴 품번
     new_lot:_rc.newLot||null,
     new_qty:_rc.moq||null,
     result,
@@ -2144,10 +2236,9 @@ async function loadHist(){
     titleEl.style.display='block';
     thead.innerHTML=`<tr>
       <th>일시<div class="col-resizer"></div></th><th>라인<div class="col-resizer"></div></th><th>피더No<div class="col-resizer"></div></th>
-      <th style="background:#fef9c3;color:#854d0e">구릴 LG품번<div class="col-resizer"></div></th>
-      <th style="background:#fef9c3;color:#854d0e">구릴 메이커품번<div class="col-resizer"></div></th>
-      <th style="background:#dcfce7;color:#166534">신규릴 LG품번<div class="col-resizer"></div></th>
-      <th style="background:#dcfce7;color:#166534">신규릴 메이커품번<div class="col-resizer"></div></th>
+      <th style="color:var(--pri)">SPEC품번(BOM)<div class="col-resizer"></div></th>
+      <th style="background:#fef9c3;color:#854d0e">기존릴(실스캔)<div class="col-resizer"></div></th>
+      <th style="background:#dcfce7;color:#166534">신규릴(실스캔)<div class="col-resizer"></div></th>
       <th style="background:#dcfce7;color:#166534">신규릴 LOT<div class="col-resizer"></div></th>
       <th style="background:#dcfce7;color:#166534">수량<div class="col-resizer"></div></th>
       <th>결과<div class="col-resizer"></div></th><th>작업자<div class="col-resizer"></div></th>
@@ -2167,13 +2258,12 @@ async function loadHist(){
         <td style="font-size:11px;color:var(--text-s);white-space:nowrap">${fmtDt(r.created_at)}</td>
         <td>${lineBadge(r.line)}</td>
         <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px;background:#fefce8">${r.lg_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:#92400e;background:#fefce8">${r.old_maker_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px;background:#f0fdf4">${r.new_lg_pn||r.lg_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:#166534;background:#f0fdf4">${r.new_maker_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--pri);font-weight:700">${r.spec_maker_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;background:#fefce8;color:#92400e">${r.old_maker_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;background:#f0fdf4;color:#166534">${r.new_maker_pn||'-'}</td>
         <td style="font-family:var(--mono);font-size:10px;color:var(--pri);background:#f0fdf4">${r.new_lot||'-'}</td>
         <td style="font-family:var(--mono);font-size:11px;text-align:right;background:#f0fdf4">${r.new_qty!=null?r.new_qty:'-'}</td>
-        <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}</span></td>
+        <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}${r.result==='NG'&&r.ng_reason?` — ${r.ng_reason}`:''}</span></td>
         <td style="font-size:12px">${r.operator||'-'}</td>
       </tr>`).join('');
       initColResize('hi_table','hi_col_r');
@@ -2243,7 +2333,7 @@ async function exportHist(){
     const wsName='부품교환이력';
     const fileName=`SME_부품교환이력_${ds}.xlsx`;
     const ws=wb.addWorksheet(wsName);
-    ws.columns=[16,10,13,18,18,18,18,20,8,10,12].map(w=>({width:w}));
+    ws.columns=[16,10,13,20,18,18,18,20,8,10,12].map(w=>({width:w}));
 
     // 제목행
     ws.mergeCells('A1:K1');
@@ -2253,12 +2343,13 @@ async function exportHist(){
     tc.value='부품 교환 이력';
     stl(tc,{fn:'Arial Narrow',sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
 
-    // 헤더행 (구릴/신규릴 구분)
-    const h1=ws.addRow(['일시','라인','피더No','구릴_LG품번','구릴_메이커품번','신규릴_LG품번','신규릴_메이커품번','신규릴_LOT','신규릴_수량','결과','작업자']);
+    // 헤더행
+    const h1=ws.addRow(['일시','라인','피더No','SPEC품번(BOM)','기존릴(실스캔)','신규릴(실스캔)','신규릴_LOT','신규릴_수량','결과','작업자']);
     h1.height=18;
     h1.eachCell((c,col)=>{
-      if(col>=4&&col<=5) stl(c,{sz:10,bold:true,col:'854d0e',bg:'fef9c3',align:'center'});
-      else if(col>=6&&col<=9) stl(c,{sz:10,bold:true,col:'166534',bg:'dcfce7',align:'center'});
+      if(col===4) stl(c,{sz:10,bold:true,col:'1e3a8a',bg:'dbeafe',align:'center'});
+      else if(col===5) stl(c,{sz:10,bold:true,col:'854d0e',bg:'fef9c3',align:'center'});
+      else if(col>=6&&col<=8) stl(c,{sz:10,bold:true,col:'166534',bg:'dcfce7',align:'center'});
       else stl(c,{sz:10,bold:true,col:'1e3a8a',bg:'dbeafe',align:'center'});
     });
 
@@ -2269,8 +2360,9 @@ async function exportHist(){
       const row=ws.addRow([...tds].map(td=>td.textContent.trim()));
       row.height=15;
       row.eachCell((c,col)=>{
-        if(col>=4&&col<=5) stl(c,{sz:9,bgRaw:'FFFEFCE8'});
-        else if(col>=6&&col<=9) stl(c,{sz:9,bgRaw:'FFF0FDF4'});
+        if(col===4) stl(c,{sz:9,bgRaw:'FFDBEAFE'});
+        else if(col===5) stl(c,{sz:9,bgRaw:'FFFEFCE8'});
+        else if(col>=6&&col<=8) stl(c,{sz:9,bgRaw:'FFF0FDF4'});
         else stl(c,{sz:9});
       });
     });
