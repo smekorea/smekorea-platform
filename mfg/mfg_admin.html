@@ -365,6 +365,15 @@ input[type=file] { display: none; }
       <span class="ti">👤</span>작업자 관리
     </div>
   </div>
+  <div class="tab-group">
+    <span class="tab-group-label">생산마스터</span>
+    <div class="tab" onclick="showTab('capa')" id="tab_capa">
+      <span class="ti">⚡</span>CAPA 마스터
+    </div>
+    <div class="tab" onclick="showTab('price')" id="tab_price">
+      <span class="ti">💰</span>단가 마스터
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════
@@ -773,6 +782,99 @@ input[type=file] { display: none; }
 <!-- 토스트 -->
 <div class="toast" id="toast"></div>
 
+
+<!-- ══════════════════════
+     탭5: CAPA 마스터
+══════════════════════ -->
+<div class="pnl" id="pnl_capa">
+  <div class="card">
+    <div class="card-tit">⚡ CAPA 마스터 관리</div>
+    <div class="btn-row">
+      <button class="btn btn-green" onclick="downloadCapaForm()">📥 양식 다운로드</button>
+      <button class="btn btn-orange" onclick="document.getElementById('capaFile').click()">📤 엑셀 업로드</button>
+      <button class="btn btn-gray" onclick="loadCapa()">🔄 새로고침</button>
+    </div>
+    <input type="file" id="capaFile" accept=".xlsx,.xls" style="display:none" onchange="uploadCapa(this)">
+    <div class="prog-wrap" id="capa_prog" style="display:none">
+      <div class="prog-bar"><div class="prog-fill" id="capa_progFill" style="width:0%"></div></div>
+      <div class="prog-text" id="capa_progText">0%</div>
+    </div>
+    <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:12px;line-height:1.7;">
+      ⚠️ SMT 라인: capa_per_hour = 실장점수/시간 &nbsp;|&nbsp; 조립라인: capa_per_hour = 수량/시간<br>
+      ⚠️ 업로드 시 동일 line + model_bom + process_type 조합은 자동 덮어쓰기 됩니다
+    </div>
+    <div class="filter-row" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <select id="capa_f_line" onchange="renderCapa()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+        <option value="">전체 라인</option>
+        <option>1라인</option><option>2라인</option><option>3라인</option><option>조립라인</option>
+      </select>
+      <select id="capa_f_proc" onchange="renderCapa()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+        <option value="">전체 공정</option>
+        <option>SMT_TOP</option><option>SMT_BOT</option><option>ASSY</option>
+      </select>
+      <input type="text" id="capa_f_kw" placeholder="🔍 모델코드 검색" oninput="renderCapa()"
+        style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;width:200px;">
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>라인</th><th>공정</th><th>BOM 모델코드</th>
+          <th style="text-align:right">CAPA/시간</th><th>단위</th><th>수정일</th><th>관리</th>
+        </tr></thead>
+        <tbody id="capa_tbody"><tr><td colspan="8" style="text-align:center;padding:24px;color:#bbb">로딩 중...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="tbl-count" id="capa_count"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════
+     탭6: 단가 마스터
+══════════════════════ -->
+<div class="pnl" id="pnl_price">
+  <div class="card">
+    <div class="card-tit">💰 단가 마스터 관리</div>
+    <div class="btn-row">
+      <button class="btn btn-green" onclick="downloadPriceForm()">📥 양식 다운로드</button>
+      <button class="btn btn-orange" onclick="document.getElementById('priceFile').click()">📤 엑셀 업로드</button>
+      <button class="btn btn-gray" onclick="loadPrice()">🔄 새로고침</button>
+    </div>
+    <input type="file" id="priceFile" accept=".xlsx,.xls" style="display:none" onchange="uploadPrice(this)">
+    <div class="prog-wrap" id="price_prog" style="display:none">
+      <div class="prog-bar"><div class="prog-fill" id="price_progFill" style="width:0%"></div></div>
+      <div class="prog-text" id="price_progText">0%</div>
+    </div>
+    <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:12px;line-height:1.7;">
+      ⚠️ TOP / BOT / ASSY 각각 별도 행으로 입력 &nbsp;|&nbsp; unit_price: 1장(PCS) 기준 원화<br>
+      ⚠️ 동일 model_bom + effective_date 조합은 자동 덮어쓰기 됩니다
+    </div>
+    <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <select id="price_f_cust" onchange="renderPrice()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+        <option value="">전체 고객사</option>
+        <option>LG전자</option><option>상신전자</option>
+      </select>
+      <select id="price_f_proc" onchange="renderPrice()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;">
+        <option value="">전체 공정</option>
+        <option>SMT_TOP</option><option>SMT_BOT</option><option>ASSY</option>
+      </select>
+      <input type="text" id="price_f_kw" placeholder="🔍 모델코드 검색" oninput="renderPrice()"
+        style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;width:200px;">
+    </div>
+    <!-- 모델별 합산 카드 -->
+    <div id="price_summary" style="display:none;margin-bottom:12px;"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>모델코드</th><th>고객사</th><th>공정</th><th>BOM 모델코드</th>
+          <th style="text-align:right">단가(원)</th><th>적용일</th><th>등록자</th><th>관리</th>
+        </tr></thead>
+        <tbody id="price_tbody"><tr><td colspan="9" style="text-align:center;padding:24px;color:#bbb">로딩 중...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="tbl-count" id="price_count"></div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════
 // Supabase
@@ -811,6 +913,8 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   document.getElementById('pnl_' + name).classList.add('on');
   document.getElementById('tab_' + name).classList.add('on');
+  if(name==='capa') loadCapa();
+  if(name==='price') loadPrice();
 }
 
 // ══════════════════════════════════
@@ -821,6 +925,8 @@ function init() {
   loadBOM();
   loadPlacement();
   loadOperators();
+  loadCapa();
+  loadPrice();
 }
 
 // ══════════════════════════════════
@@ -2312,6 +2418,296 @@ function downloadOperators() {
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   XLSX.writeFile(wb, `SME_작업자목록_${ds}.xlsx`);
   showToast('📥 엑셀 다운로드 완료');
+}
+
+
+// ══════════════════════════════════════
+// 탭5: CAPA 마스터
+// ══════════════════════════════════════
+let _capaData=[];
+
+async function loadCapa(){
+  const tbody=document.getElementById('capa_tbody');
+  tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#bbb">조회 중...</td></tr>';
+  const{data}=await sb.from('mfg_capa_master').select('*').order('line').order('model_bom');
+  _capaData=data||[];
+  renderCapa();
+}
+
+function renderCapa(){
+  const line=document.getElementById('capa_f_line').value;
+  const proc=document.getElementById('capa_f_proc').value;
+  const kw=(document.getElementById('capa_f_kw').value||'').toLowerCase();
+  const tbody=document.getElementById('capa_tbody');
+  let list=_capaData;
+  if(line)list=list.filter(r=>r.line===line);
+  if(proc)list=list.filter(r=>r.process_type===proc);
+  if(kw)list=list.filter(r=>(r.model_bom||'').toLowerCase().includes(kw));
+  if(!list.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#bbb">데이터 없음</td></tr>';document.getElementById('capa_count').textContent='';return;}
+  const procBg={'SMT_TOP':'#eff6ff','SMT_BOT':'#fff7ed','ASSY':'#f0fdf4'};
+  const procCol={'SMT_TOP':'#1d4ed8','SMT_BOT':'#c2410c','ASSY':'#166534'};
+  tbody.innerHTML=list.map((r,i)=>`<tr>
+    <td style="color:#94a3b8;font-size:11px">${i+1}</td>
+    <td style="font-weight:700">${r.line||'-'}</td>
+    <td><span style="background:${procBg[r.process_type]||'#f1f5f9'};color:${procCol[r.process_type]||'#475569'};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700">${r.process_type||'-'}</span></td>
+    <td style="font-family:var(--mono);font-size:12px;font-weight:700;color:#1a237e">${r.model_bom||'-'}</td>
+    <td style="text-align:right;font-family:var(--mono);font-weight:800;font-size:13px">${r.capa_per_hour!=null?Number(r.capa_per_hour).toLocaleString():'-'}</td>
+    <td style="font-size:12px;color:#64748b">${r.capa_unit||'-'}</td>
+    <td style="font-size:11px;color:#94a3b8">${r.updated_at?r.updated_at.slice(0,10):'-'}</td>
+    <td>
+      <button class="btn btn-red btn-sm" onclick="deleteCapa(${r.id})">삭제</button>
+    </td>
+  </tr>`).join('');
+  document.getElementById('capa_count').textContent=`총 ${list.length}건`;
+}
+
+async function deleteCapa(id){
+  if(!confirm('삭제하시겠습니까?'))return;
+  await sb.from('mfg_capa_master').delete().eq('id',id);
+  showToast('🗑 삭제 완료');loadCapa();
+}
+
+async function uploadCapa(input){
+  const file=input.files[0];if(!file)return;
+  const prog=document.getElementById('capa_prog');
+  const fill=document.getElementById('capa_progFill');
+  const txt=document.getElementById('capa_progText');
+  prog.style.display='block';fill.style.width='10%';txt.textContent='파일 읽는 중...';
+  try{
+    const ab=await file.arrayBuffer();
+    const wb=XLSX.read(ab,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    const keyMap={'line':'line','process_type':'process_type','model_bom':'model_bom','capa_per_hour':'capa_per_hour','capa_unit':'capa_unit'};
+    const valid=rows.filter(r=>(r.line||r['라인명'])&&(r.model_bom||r['BOM모델코드'])&&(r.capa_per_hour||r['시간당CAPA(숫자)']));
+    if(!valid.length){showToast('⚠️ 유효한 데이터가 없습니다');prog.style.display='none';input.value='';return;}
+    const payload=valid.map(r=>({
+      line:r.line||r['라인명']||'',
+      process_type:r.process_type||r['공정구분']||'',
+      model_bom:(r.model_bom||r['BOM모델코드']||'').toUpperCase(),
+      capa_per_hour:parseInt(r.capa_per_hour||r['시간당CAPA(숫자)']||0),
+      capa_unit:r.capa_unit||r['단위(점수/수량)']||'점수',
+      updated_at:new Date().toISOString()
+    }));
+    fill.style.width='50%';txt.textContent='업로드 중...';
+    // upsert: line+process_type+model_bom 조합으로
+    for(let i=0;i<payload.length;i+=50){
+      await sb.from('mfg_capa_master').upsert(payload.slice(i,i+50),{onConflict:'line,process_type,model_bom',ignoreDuplicates:false});
+      const pct=Math.round((i+50)/payload.length*50)+50;
+      fill.style.width=Math.min(pct,99)+'%';txt.textContent=`${Math.min(i+50,payload.length)}/${payload.length}`;
+    }
+    fill.style.width='100%';txt.textContent='완료!';
+    showToast(`✅ ${payload.length}건 업로드 완료`);
+    setTimeout(()=>{prog.style.display='none';fill.style.width='0%';},1500);
+    loadCapa();
+  }catch(e){showToast('❌ 업로드 실패: '+e.message);prog.style.display='none';console.error(e);}
+  input.value='';
+}
+
+async function downloadCapaForm(){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('CAPA_마스터');
+  ws.columns=[{width:14},{width:14},{width:28},{width:18},{width:12}];
+  ws.mergeCells('A1:E1');
+  const t=ws.getCell('A1');t.value='⚡ CAPA 마스터 — SME코리아 생산관리';
+  ws.getRow(1).height=24;
+  _stl(t,{sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+  ws.mergeCells('A2:E2');
+  const n=ws.getCell('A2');
+  n.value='※ SMT: capa_unit=점수(실장점수/시간) | 조립: capa_unit=수량(수량/시간) | model_bom 대문자+언더바';
+  ws.getRow(2).height=17;_stl(n,{sz:10,col:'92400e',bg:'fffbeb',align:'left'});
+  const hRow=ws.addRow(['line','process_type','model_bom','capa_per_hour','capa_unit']);
+  ws.getRow(3).height=18;hRow.eachCell(c=>_stl(c,{sz:11,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  const dRow=ws.addRow(['라인명 *','공정구분 *','BOM모델코드 *','시간당CAPA(숫자) *','단위(점수/수량)']);
+  ws.getRow(4).height=16;dRow.eachCell(c=>_stl(c,{sz:10,col:'475569',bg:'f8fafc',align:'center'}));
+  // 현재 DB 데이터가 있으면 추가
+  if(_capaData.length){
+    _capaData.forEach((r,ri)=>{
+      const row=ws.addRow([r.line,r.process_type,r.model_bom,r.capa_per_hour,r.capa_unit||'점수']);
+      ws.getRow(5+ri).height=15;
+      row.eachCell((c,ci)=>_stl(c,{sz:11,col:'1e293b',bg:ri%2===0?'f8fafc':'ffffff',align:ci===4?'right':'left'}));
+    });
+  } else {
+    // 예시 행
+    const ex=[['1라인','SMT_TOP','','','점수'],['1라인','SMT_BOT','','','점수'],['조립라인','ASSY','','','수량']];
+    ex.forEach((row,ri)=>{
+      const r=ws.addRow(row);ws.getRow(5+ri).height=15;
+      r.eachCell((c,ci)=>_stl(c,{sz:11,col:ci===3||ci===4?'94a3b8':'1e293b',bg:'f8fafc',align:'left'}));
+    });
+  }
+  const buf=await wb.xlsx.writeBuffer();
+  _dlBuf(buf,'SME_CAPA마스터.xlsx');
+  showToast('📥 CAPA 마스터 양식 다운로드 완료');
+}
+
+// ══════════════════════════════════════
+// 탭6: 단가 마스터
+// ══════════════════════════════════════
+let _priceData=[];
+
+async function loadPrice(){
+  const tbody=document.getElementById('price_tbody');
+  tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:#bbb">조회 중...</td></tr>';
+  const{data}=await sb.from('mfg_model_price').select('*').order('model_code').order('process_type').order('effective_date',{ascending:false});
+  _priceData=data||[];
+  renderPrice();
+}
+
+function renderPrice(){
+  const cust=document.getElementById('price_f_cust').value;
+  const proc=document.getElementById('price_f_proc').value;
+  const kw=(document.getElementById('price_f_kw').value||'').toLowerCase();
+  const tbody=document.getElementById('price_tbody');
+  let list=_priceData;
+  if(cust)list=list.filter(r=>r.customer===cust);
+  if(proc)list=list.filter(r=>r.process_type===proc);
+  if(kw)list=list.filter(r=>(r.model_code||'').toLowerCase().includes(kw)||(r.model_bom||'').toLowerCase().includes(kw));
+  if(!list.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:#bbb">데이터 없음</td></tr>';document.getElementById('price_count').textContent='';document.getElementById('price_summary').style.display='none';return;}
+  const procBg={'SMT_TOP':'#eff6ff','SMT_BOT':'#fff7ed','ASSY':'#f0fdf4'};
+  const procCol={'SMT_TOP':'#1d4ed8','SMT_BOT':'#c2410c','ASSY':'#166534'};
+  tbody.innerHTML=list.map((r,i)=>`<tr>
+    <td style="color:#94a3b8;font-size:11px">${i+1}</td>
+    <td style="font-family:var(--mono);font-weight:800;font-size:12px;color:#1a237e">${r.model_code||'-'}</td>
+    <td style="font-size:12px;font-weight:700">${r.customer||'-'}</td>
+    <td><span style="background:${procBg[r.process_type]||'#f1f5f9'};color:${procCol[r.process_type]||'#475569'};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700">${r.process_type||'-'}</span></td>
+    <td style="font-family:var(--mono);font-size:11px;color:#475569">${r.model_bom||'-'}</td>
+    <td style="text-align:right;font-family:var(--mono);font-weight:800;font-size:13px;color:#0e7490">${r.unit_price!=null?Number(r.unit_price).toLocaleString():'-'}</td>
+    <td style="font-size:11px;color:#94a3b8">${r.effective_date||'-'}</td>
+    <td style="font-size:12px">${r.updated_by||'-'}</td>
+    <td>
+      <button class="btn btn-red btn-sm" onclick="deletePrice(${r.id})">삭제</button>
+    </td>
+  </tr>`).join('');
+  document.getElementById('price_count').textContent=`총 ${list.length}건`;
+  // 모델별 합산 표시
+  renderPriceSummary(list);
+}
+
+function renderPriceSummary(list){
+  const byModel={};
+  list.forEach(r=>{
+    const k=r.model_code||'-';
+    if(!byModel[k])byModel[k]={model:k,customer:r.customer,top:0,bot:0,assy:0};
+    if(r.process_type==='SMT_TOP')byModel[k].top=r.unit_price||0;
+    else if(r.process_type==='SMT_BOT')byModel[k].bot=r.unit_price||0;
+    else if(r.process_type==='ASSY')byModel[k].assy=r.unit_price||0;
+  });
+  const models=Object.values(byModel);
+  if(!models.length){document.getElementById('price_summary').style.display='none';return;}
+  const el=document.getElementById('price_summary');
+  el.style.display='block';
+  el.innerHTML=`
+    <div style="font-size:12px;font-weight:800;color:#1a237e;margin-bottom:8px;">📊 모델별 단가 합산</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">
+      ${models.map(m=>{
+        const total=m.top+m.bot+m.assy;
+        return `<div style="background:#fff;border:1.5px solid #dde3ec;border-radius:10px;padding:12px 14px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-weight:800;font-size:13px;color:#1a237e;margin-bottom:4px;">${m.model}</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:6px;">${m.customer||'-'}</div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+            <span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700">TOP ${m.top?Number(m.top).toLocaleString()+'원':'-'}</span>
+            <span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700">BOT ${m.bot?Number(m.bot).toLocaleString()+'원':'-'}</span>
+            <span style="background:#f0fdf4;color:#166534;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700">ASSY ${m.assy?Number(m.assy).toLocaleString()+'원':'-'}</span>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:900;color:#0e7490;">합계: ${total?Number(total).toLocaleString()+'원':'미등록'}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function deletePrice(id){
+  if(!confirm('삭제하시겠습니까?'))return;
+  await sb.from('mfg_model_price').delete().eq('id',id);
+  showToast('🗑 삭제 완료');loadPrice();
+}
+
+async function uploadPrice(input){
+  const file=input.files[0];if(!file)return;
+  const prog=document.getElementById('price_prog');
+  const fill=document.getElementById('price_progFill');
+  const txt=document.getElementById('price_progText');
+  prog.style.display='block';fill.style.width='10%';txt.textContent='파일 읽는 중...';
+  try{
+    const ab=await file.arrayBuffer();
+    const wb=XLSX.read(ab,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    const valid=rows.filter(r=>(r.model_code||r['고객계획 모델코드'])&&(r.unit_price||r['단가(원,숫자)']));
+    if(!valid.length){showToast('⚠️ 유효한 데이터가 없습니다');prog.style.display='none';input.value='';return;}
+    const op=localStorage.getItem('mfg_operator')||localStorage.getItem('sme_user')||'';
+    const payload=valid.map(r=>({
+      model_code:(r.model_code||r['고객계획 모델코드']||'').toUpperCase(),
+      customer:r.customer||r['고객사']||'',
+      process_type:r.process_type||r['공정구분']||'',
+      model_bom:(r.model_bom||r['BOM모델코드']||'').toUpperCase(),
+      unit_price:parseInt(r.unit_price||r['단가(원,숫자)']||0),
+      effective_date:r.effective_date||r['적용일']||new Date().toISOString().slice(0,10),
+      updated_by:r.updated_by||r['등록자']||op
+    }));
+    fill.style.width='50%';txt.textContent='업로드 중...';
+    for(let i=0;i<payload.length;i+=50){
+      await sb.from('mfg_model_price').insert(payload.slice(i,i+50));
+      const pct=Math.round((i+50)/payload.length*50)+50;
+      fill.style.width=Math.min(pct,99)+'%';txt.textContent=`${Math.min(i+50,payload.length)}/${payload.length}`;
+    }
+    fill.style.width='100%';txt.textContent='완료!';
+    showToast(`✅ ${payload.length}건 업로드 완료`);
+    setTimeout(()=>{prog.style.display='none';fill.style.width='0%';},1500);
+    loadPrice();
+  }catch(e){showToast('❌ 업로드 실패: '+e.message);prog.style.display='none';console.error(e);}
+  input.value='';
+}
+
+async function downloadPriceForm(){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('단가_마스터');
+  ws.columns=[{width:20},{width:12},{width:14},{width:28},{width:14},{width:16},{width:12}];
+  ws.mergeCells('A1:G1');
+  const t=ws.getCell('A1');t.value='💰 모델별 단가 마스터 — SME코리아 생산관리';
+  ws.getRow(1).height=24;_stl(t,{sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+  ws.mergeCells('A2:G2');
+  const n=ws.getCell('A2');
+  n.value='※ TOP/BOT/ASSY 각각 별도 행 입력 | unit_price: 1장(PCS) 기준 원화 숫자만 | effective_date: YYYY-MM-DD';
+  ws.getRow(2).height=17;_stl(n,{sz:10,col:'92400e',bg:'fffbeb',align:'left'});
+  const hRow=ws.addRow(['model_code','customer','process_type','model_bom','unit_price','effective_date','updated_by']);
+  ws.getRow(3).height=18;hRow.eachCell(c=>_stl(c,{sz:11,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  const dRow=ws.addRow(['고객계획 모델코드 *','고객사 *','공정구분 *','BOM모델코드 *','단가(원,숫자) *','적용일 *','등록자']);
+  ws.getRow(4).height=16;dRow.eachCell(c=>_stl(c,{sz:10,col:'475569',bg:'f8fafc',align:'center'}));
+  const bgMap={'SMT_TOP':'eff6ff','SMT_BOT':'fff7ed','ASSY':'f0fdf4'};
+  if(_priceData.length){
+    _priceData.forEach((r,ri)=>{
+      const row=ws.addRow([r.model_code,r.customer,r.process_type,r.model_bom,r.unit_price,r.effective_date,r.updated_by||'']);
+      ws.getRow(5+ri).height=15;
+      row.eachCell((c,ci)=>_stl(c,{sz:11,col:'1e293b',bg:bgMap[r.process_type]||'ffffff',align:ci===5?'right':'left'}));
+    });
+  } else {
+    const today=new Date().toISOString().slice(0,10);
+    const ex=[['EBR267931-01','LG전자','SMT_TOP','EBR267931_01_TOP','',today,''],
+              ['EBR267931-01','LG전자','SMT_BOT','EBR267931_01_BOT','',today,''],
+              ['EBR267931-01','LG전자','ASSY','EBR267931_01_ASSY','',today,'']];
+    ex.forEach((row,ri)=>{
+      const r=ws.addRow(row);ws.getRow(5+ri).height=15;
+      r.eachCell((c,ci)=>_stl(c,{sz:11,col:ci===5?'94a3b8':'1e293b',bg:bgMap[row[2]]||'ffffff',align:ci===5?'right':'left'}));
+    });
+  }
+  const buf=await wb.xlsx.writeBuffer();
+  _dlBuf(buf,'SME_단가마스터.xlsx');
+  showToast('📥 단가 마스터 양식 다운로드 완료');
+}
+
+// 공통 ExcelJS 스타일
+function _stl(cell,opt){
+  const{sz=10,bold=false,col='1e293b',bg=null,align='left'}=opt||{};
+  cell.font={name:'Arial Narrow',size:sz,bold,color:{argb:'FF'+col}};
+  if(bg)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+  cell.alignment={horizontal:align,vertical:'middle'};
+  cell.border={top:{style:'thin',color:{argb:'FFD0D0D0'}},bottom:{style:'thin',color:{argb:'FFD0D0D0'}},
+    left:{style:'thin',color:{argb:'FFD0D0D0'}},right:{style:'thin',color:{argb:'FFD0D0D0'}}};
+}
+function _dlBuf(buf,filename){
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 function showToast(msg) {
