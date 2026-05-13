@@ -1024,13 +1024,14 @@ let _fc = {
   barcode:'', face:'', line:'', program:'',
   feeders:[], curIdx:0, scans:[],
   matched:false, matchedPn:'', matchedLot:'',
+  allDone:false,
 };
 
 // 부품 교환 상태
 let _rc = {
   line:'', barcode:'', stno:'', lgPn:'', mkrPn1:'', moq:0,
   oldScans:[], newScans:[], oldOk:false, newOk:false,
-  newLot:'', newPn:'', oldLot:'', newNgLocked:false,
+  newLot:'', newPn:'', oldLot:'', oldPn:'', newNgLocked:false,
 };
 let _ngStep = ''; // 현재 NG 발생 단계: 'old' | 'new'
 
@@ -1259,7 +1260,7 @@ function renderFcList() {
   const list=document.getElementById('fc_flist');
   if(!_fc.feeders.length){list.innerHTML='<div style="text-align:center;padding:16px;color:#bbb;font-size:12px">피더 없음</div>';return;}
   list.innerHTML=_fc.feeders.map((f,i)=>{
-    const isCur=i===_fc.curIdx;
+    const isCur=!_fc.allDone && i===_fc.curIdx;
     const cls=isCur?'fi cur':f.status==='ok'?'fi d-ok':f.status==='ng'?'fi d-ng':f.status==='skip'?'fi skip':'fi';
     let tag='';
     if(isCur)                tag=`<span class="ftag cur">체크중</span>`;
@@ -1269,7 +1270,7 @@ function renderFcList() {
     else                     tag=`<span class="ftag wait">대기</span>`;
     // 메이커품번 + SPEC 2번째 줄
     const sub=[f.maker_pn1,f.spec].filter(Boolean).join(' · ');
-    const clickable=f.status!=='ok';
+    const clickable=!_fc.allDone && f.status!=='ok';
     const clickAttr=clickable?'onclick="moveFc('+i+')"':'style="cursor:default;"';
     return `<div class="${cls}" ${clickAttr}>
       <span class="fno">${f.st_no}</span>
@@ -1588,6 +1589,7 @@ async function checkFcComplete(op) {
   } catch(e){console.error(e);}
 
   if(isComplete) {
+    _fc.allDone = true;
     const banner=document.getElementById('fc_doneBanner');
     document.getElementById('fc_doneText').textContent='✅ 피더 체크 완료';
     document.getElementById('fc_doneSub').textContent=`${_fc.barcode} / ${_fc.line} — ${total}개 전체 완료`;
@@ -1603,7 +1605,7 @@ async function checkFcComplete(op) {
 }
 
 function skipFc(){if(!_fc.feeders.length)return;_fc.feeders[_fc.curIdx].status='skip';renderFcList();updateFcProg();const ni=_fc.feeders.findIndex((f,i)=>i>_fc.curIdx&&f.status==='wait');if(ni>=0)moveFc(ni);}
-function resetFc(){if(!confirm('처음부터 다시 시작할까요?'))return;_fc.feeders.forEach(f=>{f.status='wait';f.lot_no='';f.ng_reason='';});_fc.curIdx=0;_fc.scans=[];_fc.matched=false;renderFcList();updateFcProg();document.getElementById('fc_doneBanner').classList.remove('show');if(_fc.feeders.length>0)moveFc(0);}
+function resetFc(){if(!confirm('처음부터 다시 시작할까요?'))return;_fc.feeders.forEach(f=>{f.status='wait';f.lot_no='';f.ng_reason='';});_fc.curIdx=0;_fc.scans=[];_fc.matched=false;_fc.allDone=false;renderFcList();updateFcProg();document.getElementById('fc_doneBanner').classList.remove('show');if(_fc.feeders.length>0)moveFc(0);}
 
 function updateFcProg(){
   const t=_fc.feeders.length,ok=_fc.feeders.filter(f=>f.status==='ok').length,ng=_fc.feeders.filter(f=>f.status==='ng').length,done=ok+ng;
@@ -1699,7 +1701,9 @@ function confirmRcManual(type){
   const isMatch=normPn(lgpn)===normPn(_rc.mkrPn1||_rc.lgPn);
   const lotStr=`[수동입력] ${reason}`;
   if(type==='old'){
+    _rc.oldPn = lgpn;          // 수동 입력 품번 저장 (OK/NG 무관)
     _rc.oldLot=lotStr;
+    document.getElementById('rc_manualOldPanel').classList.remove('show');  // 먼저 닫기
     if(isMatch){
       _rc.oldOk=true;
       setRcBadge(2,'ok');
@@ -1714,9 +1718,8 @@ function confirmRcManual(type){
       playSound('ok');
       document.getElementById('rc_new').focus();
     } else {
-      showWrongPartAlert(_rc.stno, _rc.mkrPn1||_rc.lgPn, lgpn);
+      showNgReasonPopup('old', _rc.stno, _rc.mkrPn1||_rc.lgPn, lgpn);
     }
-    document.getElementById('rc_manualOldPanel').classList.remove('show');
   } else {
     _rc.newOk=true;
     _rc.newPn=_rc.mkrPn1||lgpn;
@@ -2097,9 +2100,9 @@ async function saveReelChange(result, ngReason){
     feeder_no:_rc.stno,
     lg_pn:_rc.lgPn||null,
     spec_maker_pn:_rc.mkrPn1||null,          // BOM 등록 메이커품번 (SPEC)
-    old_maker_pn:extractPn(_rc.oldScans[0]||'')||null, // 실제 스캔 기존릴 품번
+    old_maker_pn:(_rc.oldScans.length ? extractPn(_rc.oldScans[0]||'') : _rc.oldPn)||null, // 실제 스캔 or 수동입력 기존릴 품번
     new_lg_pn:_rc.lgPn||null,
-    new_maker_pn:extractPn(_rc.newScans[0]||'')||null, // 실제 스캔 신규릴 품번
+    new_maker_pn:_rc.newPn || extractPn(_rc.newScans[0]||'')||null, // 실제 스캔 or 수동입력 신규릴 품번
     new_lot:_rc.newLot||null,
     new_qty:_rc.moq||null,
     result,
@@ -2131,7 +2134,7 @@ async function doReelChange(){ await saveReelChange('OK', null); }
 function resetRcPartial(){
   clearRcOldTimer();clearRcNewTimer();
   _rc={..._rc, stno:'',lgPn:'',mkrPn1:'',moq:0,
-       oldScans:[],newScans:[],oldOk:false,newOk:false,newLot:'',newPn:'',oldLot:'',newNgLocked:false};
+       oldScans:[],newScans:[],oldOk:false,newOk:false,newLot:'',newPn:'',oldLot:'',oldPn:'',newNgLocked:false};
   ['rc_st','rc_old','rc_new'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.className='sinp';el.disabled=false;el.style.background='';}});
   ['rc_r1','rc_r2','rc_r3'].forEach(id=>{const el=document.getElementById(id);el.className='rd empty';el.textContent='대기 중...';});
   [1,2,3].forEach(n=>setRcBadge(n,''));
