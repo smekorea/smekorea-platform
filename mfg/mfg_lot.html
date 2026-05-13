@@ -1008,7 +1008,7 @@ let _fc = {
 let _rc = {
   line:'', barcode:'', stno:'', lgPn:'', mkrPn1:'', moq:0,
   oldScans:[], newScans:[], oldOk:false, newOk:false,
-  newLot:'', newPn:'', oldLot:'',
+  newLot:'', newPn:'', oldLot:'', newNgLocked:false,
 };
 
 // 이탈 제어
@@ -1860,6 +1860,9 @@ function autoJudgeNew(){
     setTimeout(()=>{ doReelChange(); }, 1500);
   } else {
     _rc.newOk=false;
+    _rc.newNgLocked=true; // NG 판정 후 추가 스캔 잠금
+    document.getElementById('rc_new').disabled=true;
+    document.getElementById('rc_new').style.background='#fee2e2';
     _rc.newPn=extractPn(_rc.newScans[0]||''); // NG여도 스캔값에서 품번 추출
     _rc.newLot=_rc.newScans.map(s=>mkrPn?s.replace(mkrPn,'').trim()||s:s).join(' / ');
     setR('rc_r3','ng','❌','품번 불일치','NG 처리');
@@ -1894,7 +1897,10 @@ function confirmRcSt(){
   if(!lgPn){setR('rc_r1','ng','❌',val,'배치도에 없는 ST No');return;}
   const b=_bom.find(x=>x.lg_pn===lgPn)||{};
   _rc={..._rc, line, stno:val, lgPn, mkrPn1:b.maker_pn1||'', moq:b.moq||0,
-       oldScans:[], newScans:[], oldOk:false, newOk:false, newLot:'', newPn:'', oldLot:''};
+       oldScans:[], newScans:[], oldOk:false, newOk:false, newLot:'', newPn:'', oldLot:'', newNgLocked:false};
+  // rc_new 입력창 잠금 해제
+  const rcNewEl=document.getElementById('rc_new');
+  if(rcNewEl){rcNewEl.disabled=false;rcNewEl.style.background='';}
   setR('rc_r1','ok','✅',val,lgPn);
   setRcBadge(1,'ok');
   // 우측 피더 기준값 표시
@@ -1949,6 +1955,12 @@ function addOldScan(){
 function addNewScan(){
   const scan=document.getElementById('rc_new').value.trim();
   if(!scan)return;
+  // NG 판정 후 잠금: 추가 스캔 불가
+  if(_rc.newNgLocked){
+    showToast('⚠️ NG 판정 완료. ST No부터 다시 스캔하세요');
+    document.getElementById('rc_new').value='';
+    return;
+  }
   if(_rc.newScans.length>=4){showToast('⚠️ 최대 4개까지');return;}
   _rc.newScans.push(scan);
   document.getElementById('rc_new').value='';
@@ -2021,8 +2033,8 @@ async function doReelChange(){ await saveReelChange('OK', null); }
 function resetRcPartial(){
   clearRcOldTimer();clearRcNewTimer();
   _rc={..._rc, stno:'',lgPn:'',mkrPn1:'',moq:0,
-       oldScans:[],newScans:[],oldOk:false,newOk:false,newLot:'',newPn:'',oldLot:''};
-  ['rc_st','rc_old','rc_new'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.className='sinp';}});
+       oldScans:[],newScans:[],oldOk:false,newOk:false,newLot:'',newPn:'',oldLot:'',newNgLocked:false};
+  ['rc_st','rc_old','rc_new'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.className='sinp';el.disabled=false;el.style.background='';}});
   ['rc_r1','rc_r2','rc_r3'].forEach(id=>{const el=document.getElementById(id);el.className='rd empty';el.textContent='대기 중...';});
   [1,2,3].forEach(n=>setRcBadge(n,''));
   ['rc_oldOkBadge','rc_newOkBadge'].forEach(id=>document.getElementById(id).style.display='none');
@@ -2049,8 +2061,8 @@ function resetRc(){
   document.getElementById('rc_model').innerHTML='<option value="">— 모델 선택 —</option>';
   document.getElementById('rc_fdrop').innerHTML='<option value="">— 드롭다운 선택 —</option>';
   _rc={line:'',barcode:'',stno:'',lgPn:'',mkrPn1:'',moq:0,
-       oldScans:[],newScans:[],oldOk:false,newOk:false,newLot:'',newPn:'',oldLot:''};
-  ['rc_st','rc_old','rc_new'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.className='sinp';}});
+       oldScans:[],newScans:[],oldOk:false,newOk:false,newLot:'',newPn:'',oldLot:'',newNgLocked:false};
+  ['rc_st','rc_old','rc_new'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.className='sinp';el.disabled=false;el.style.background='';}});
   ['rc_r1','rc_r2','rc_r3'].forEach(id=>{const el=document.getElementById(id);el.className='rd empty';el.textContent='대기 중...';});
   [1,2,3].forEach(n=>setRcBadge(n,''));
   ['rc_oldOkBadge','rc_newOkBadge'].forEach(id=>document.getElementById(id).style.display='none');
@@ -2197,10 +2209,10 @@ async function exportHist(){
     const wsName='피더세팅체크이력';
     const fileName=`SME_피더세팅체크이력_${ds}.xlsx`;
     const ws=wb.addWorksheet(wsName);
-    ws.columns=[16,10,22,13,18,18,14,12].map(w=>({width:w}));
+    ws.columns=[16,10,22,13,18,18,22,14,12].map(w=>({width:w}));
 
     // 제목행
-    ws.mergeCells('A1:H1');
+    ws.mergeCells('A1:I1');
     const titleRow=ws.getRow(1);
     titleRow.height=22;
     const tc=ws.getCell('A1');
@@ -2208,7 +2220,7 @@ async function exportHist(){
     stl(tc,{fn:'Arial Narrow',sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
 
     // 헤더행
-    const hRow=ws.addRow(['일시','라인','모델(작업지시)','피더No','LG품번','메이커품번','결과','작업자']);
+    const hRow=ws.addRow(['일시','라인','모델(작업지시)','피더No','LG품번','메이커품번','LOT','결과','작업자']);
     hRow.height=18;
     hRow.eachCell(c=>stl(c,{sz:10,bold:true,col:'1e3a8a',bg:'dbeafe',align:'center'}));
 
