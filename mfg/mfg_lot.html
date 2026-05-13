@@ -1399,6 +1399,7 @@ function confirmManual(){
     sb.from('mfg_feeder_check').insert({
       check_date:today(),line:_fc.line,barcode_val:_fc.barcode,
       feeder_no:f.st_no,lg_pn:f.lg_pn,maker_pn:f.maker_pn1||null,
+      scan_maker_pn:lgpn||null,
       lot_no:lotStr,qty:f.qty||null,
       result:'NG',ng_reason:f.ng_reason,operator:op,
     }).then(({error})=>{if(error)console.error(error);});
@@ -1521,9 +1522,12 @@ async function judgeOK() {
   setJBtn(false,false);
   document.getElementById('fc_cbox').className='cbox ok';
   try {
+    // 수동입력이면 matchedPn, 스캔이면 첫 스캔값에서 품번 추출
+    const scanPn = _fc.scans.length>0 ? extractPn(_fc.scans[0]||'') : (_fc.matchedPn||null);
     await sb.from('mfg_feeder_check').insert({
       check_date:today(),line:_fc.line,barcode_val:_fc.barcode,
       feeder_no:f.st_no,lg_pn:f.lg_pn,maker_pn:f.maker_pn1||null,
+      scan_maker_pn:scanPn||null,
       lot_no:f.lot_no||null,qty:f.qty||null,result:'OK',operator:op,
     });
   } catch(e){console.error(e);}
@@ -1552,9 +1556,11 @@ async function judgeNG() {
   document.getElementById('fc_rpanel').className='panel ng';
   setJBtn(false,false);
   try {
+    const scanPn = _fc.scans.length>0 ? extractPn(_fc.scans[0]||'') : null;
     await sb.from('mfg_feeder_check').insert({
       check_date:today(),line:_fc.line,barcode_val:_fc.barcode,
       feeder_no:f.st_no,lg_pn:f.lg_pn,maker_pn:f.maker_pn1||null,
+      scan_maker_pn:scanPn||null,
       lot_no:_fc.scans.join(' / ')||null,qty:f.qty||null,
       result:'NG',ng_reason:reason,operator:op,
     });
@@ -2200,7 +2206,9 @@ async function loadHist(){
     titleEl.style.display='block';
     thead.innerHTML=`<tr>
       <th>일시<div class="col-resizer"></div></th><th>라인<div class="col-resizer"></div></th><th>모델(작업지시)<div class="col-resizer"></div></th><th>피더No<div class="col-resizer"></div></th>
-      <th>LG품번<div class="col-resizer"></div></th><th>메이커품번<div class="col-resizer"></div></th><th>LOT<div class="col-resizer"></div></th><th>결과<div class="col-resizer"></div></th><th>작업자<div class="col-resizer"></div></th>
+      <th style="color:var(--pri)">SPEC품번(BOM)<div class="col-resizer"></div></th>
+      <th style="background:#fef9c3;color:#854d0e">실스캔품번<div class="col-resizer"></div></th>
+      <th>LOT<div class="col-resizer"></div></th><th>결과<div class="col-resizer"></div></th><th>작업자<div class="col-resizer"></div></th>
     </tr>`;
     try{
       let q=sb.from('mfg_feeder_check').select('*').order('created_at',{ascending:false});
@@ -2218,9 +2226,9 @@ async function loadHist(){
         <td>${lineBadge(r.line)}</td>
         <td style="font-family:var(--mono);font-size:11px">${r.barcode_val||'-'}</td>
         <td style="font-family:var(--mono);font-weight:700">${r.feeder_no||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px">${r.lg_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.maker_pn||'-'}</td>
-        <td style="font-family:var(--mono);font-size:10px;color:var(--pri);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.lot_no||''}">${r.lot_no||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--pri);font-weight:700">${r.maker_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:#92400e;background:#fefce8">${r.scan_maker_pn||'-'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--text-s);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.lot_no||''}">${r.lot_no||'-'}</td>
         <td><span class="badge ${r.result==='OK'?'b-ok':'b-ng'}">${r.result}${r.result==='NG'&&r.ng_reason?` — ${r.ng_reason}`:''}</span></td>
         <td style="font-size:12px">${r.operator||'-'}</td>
       </tr>`).join('');
@@ -2310,9 +2318,13 @@ async function exportHist(){
     stl(tc,{fn:'Arial Narrow',sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
 
     // 헤더행
-    const hRow=ws.addRow(['일시','라인','모델(작업지시)','피더No','LG품번','메이커품번','LOT','결과','작업자']);
+    const hRow=ws.addRow(['일시','라인','모델(작업지시)','피더No','SPEC품번(BOM)','실스캔품번','LOT','결과','작업자']);
     hRow.height=18;
-    hRow.eachCell(c=>stl(c,{sz:10,bold:true,col:'1e3a8a',bg:'dbeafe',align:'center'}));
+    hRow.eachCell((c,col)=>{
+      if(col===5) stl(c,{sz:10,bold:true,col:'1e3a8a',bg:'dbeafe',align:'center'});
+      else if(col===6) stl(c,{sz:10,bold:true,col:'854d0e',bg:'fef9c3',align:'center'});
+      else stl(c,{sz:10,bold:true,col:'1e3a8a',bg:'dbeafe',align:'center'});
+    });
 
     // 데이터행
     rows.forEach(tr=>{
@@ -2320,7 +2332,11 @@ async function exportHist(){
       if(!tds.length)return;
       const row=ws.addRow([...tds].map(td=>td.textContent.trim()));
       row.height=15;
-      row.eachCell(c=>stl(c,{sz:9}));
+      row.eachCell((c,col)=>{
+        if(col===5) stl(c,{sz:9,bgRaw:'FFDBEAFE'});
+        else if(col===6) stl(c,{sz:9,bgRaw:'FFFEFCE8'});
+        else stl(c,{sz:9});
+      });
     });
 
     const buf=await wb.xlsx.writeBuffer();
