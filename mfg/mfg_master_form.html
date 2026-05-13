@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>생산관리 마스터 양식 다운로드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;800;900&family=IBM+Plex+Mono:wght@400;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:#eef2f7;min-height:100vh;padding:32px 16px;}
+.wrap{max-width:720px;margin:0 auto;}
+.page-title{font-size:20px;font-weight:900;color:#1e3a8a;margin-bottom:4px;}
+.page-sub{font-size:13px;color:#64748b;margin-bottom:28px;}
+.card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);padding:24px;margin-bottom:16px;}
+.card-title{font-size:15px;font-weight:800;color:#1e3a8a;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+.card-desc{font-size:12px;color:#64748b;margin-bottom:16px;line-height:1.7;}
+.col-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:18px;}
+.col-table th{background:#f0f4fa;color:#1e3a8a;padding:8px 12px;font-size:11px;font-weight:800;text-align:left;border-bottom:2px solid #dde3ec;}
+.col-table td{padding:8px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+.col-table td:first-child{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:11px;color:#1e3a8a;}
+.col-table td:nth-child(3){font-family:'IBM Plex Mono',monospace;font-size:11px;color:#475569;}
+.req{color:#dc2626;font-size:10px;font-weight:800;margin-left:4px;}
+.opt{color:#94a3b8;font-size:10px;font-weight:600;margin-left:4px;}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .15s;}
+.btn:active{transform:scale(.97);}
+.btn-dl{background:linear-gradient(135deg,#059669,#10b981);color:#fff;width:100%;}
+.note{background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-top:10px;line-height:1.7;}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#64748b;text-decoration:none;margin-bottom:20px;}
+.back:hover{color:#1e3a8a;}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;}
+.b-req{background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;}
+.b-opt{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="mfg_production.html">← 생산관리로 돌아가기</a>
+  <div class="page-title">📂 생산관리 마스터 양식</div>
+  <div class="page-sub">양식을 다운로드 → 데이터 입력 → 업로드 순서로 진행하세요</div>
+
+  <!-- CAPA 마스터 -->
+  <div class="card">
+    <div class="card-title">⚡ CAPA 마스터 <span class="badge b-req">필수</span></div>
+    <div class="card-desc">
+      라인별·모델별 시간당 CAPA를 등록합니다.<br>
+      SMT 라인은 <b>실장점수/시간</b>, 조립라인은 <b>수량/시간</b> 기준입니다.
+    </div>
+    <table class="col-table">
+      <thead><tr><th>컬럼명</th><th>설명</th><th>예시</th><th>필수</th></tr></thead>
+      <tbody>
+        <tr><td>line</td><td>라인명</td><td>1라인 / 2라인 / 3라인 / 조립라인</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>process_type</td><td>공정구분</td><td>SMT_TOP / SMT_BOT / ASSY</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>model_bom</td><td>BOM 모델코드</td><td>EBR267931_01_TOP</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>capa_per_hour</td><td>시간당 CAPA (숫자만)</td><td>45000 (SMT) / 120 (조립)</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>capa_unit</td><td>단위</td><td>점수 (SMT) / 수량 (조립)</td><td><span class="badge b-opt">선택</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      ⚠️ SMT_TOP과 SMT_BOT을 각각 별도 행으로 입력하세요<br>
+      ⚠️ model_bom은 BOM에 등록된 코드와 정확히 일치해야 합니다 (대문자, 언더바 구분)
+    </div>
+    <br>
+    <button class="btn btn-dl" onclick="downloadCapa()">📥 CAPA 마스터 양식 다운로드</button>
+  </div>
+
+  <!-- 모델별 단가 마스터 -->
+  <div class="card">
+    <div class="card-title">💰 모델별 단가 마스터 <span class="badge b-req">필수</span></div>
+    <div class="card-desc">
+      모델별 공정 단가를 등록합니다. TOP / BOT / ASSY를 각각 입력하면<br>
+      시스템이 자동으로 1대 완성품 단가로 합산합니다.
+    </div>
+    <table class="col-table">
+      <thead><tr><th>컬럼명</th><th>설명</th><th>예시</th><th>필수</th></tr></thead>
+      <tbody>
+        <tr><td>model_code</td><td>고객계획 모델코드</td><td>EBR267931-01</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>customer</td><td>고객사</td><td>LG전자 / 상신전자</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>process_type</td><td>공정구분</td><td>SMT_TOP / SMT_BOT / ASSY</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>model_bom</td><td>BOM 모델코드</td><td>EBR267931_01_TOP</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>unit_price</td><td>단가 (원, 숫자만)</td><td>15000</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>effective_date</td><td>적용일 (YYYY-MM-DD)</td><td>2026-01-01</td><td><span class="badge b-req">필수</span></td></tr>
+        <tr><td>updated_by</td><td>등록자</td><td>홍길동</td><td><span class="badge b-opt">선택</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      ⚠️ 동일 모델은 TOP / BOT / ASSY 3행으로 분리 입력하세요<br>
+      ⚠️ 단가는 1장(PCS) 기준 원화 금액으로 입력하세요<br>
+      ⚠️ 여러 날짜의 단가 이력을 모두 입력 가능합니다 (최신 날짜 기준 자동 적용)
+    </div>
+    <br>
+    <button class="btn btn-dl" onclick="downloadPrice()">📥 단가 마스터 양식 다운로드</button>
+  </div>
+</div>
+
+<script>
+// ── 스타일 공통 함수 ──
+function stl(cell, opt){
+  const{sz=10,bold=false,col='1e293b',bg=null,align='left',mono=false}=opt||{};
+  cell.font={name:mono?'Courier New':'Arial Narrow',size:sz,bold,color:{argb:'FF'+col}};
+  if(bg)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+  cell.alignment={horizontal:align,vertical:'middle',wrapText:false};
+  cell.border={
+    top:{style:'thin',color:{argb:'FFD0D0D0'}},
+    bottom:{style:'thin',color:{argb:'FFD0D0D0'}},
+    left:{style:'thin',color:{argb:'FFD0D0D0'}},
+    right:{style:'thin',color:{argb:'FFD0D0D0'}}
+  };
+}
+
+// ── CAPA 마스터 양식 ──
+async function downloadCapa(){
+  const wb=new ExcelJS.Workbook();
+  wb.creator='SMERP';wb.created=new Date();
+  const ws=wb.addWorksheet('CAPA_마스터');
+
+  ws.columns=[
+    {width:14},{width:14},{width:26},{width:18},{width:12}
+  ];
+
+  // 제목행
+  ws.mergeCells('A1:E1');
+  const t=ws.getCell('A1');
+  t.value='⚡ CAPA 마스터 — SME코리아 생산관리';
+  ws.getRow(1).height=24;
+  stl(t,{sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+
+  // 안내행
+  ws.mergeCells('A2:E2');
+  const n=ws.getCell('A2');
+  n.value='※ SMT라인: capa_unit=점수 (실장점수/시간) | 조립라인: capa_unit=수량 (수량/시간) | model_bom은 대문자+언더바 형식';
+  ws.getRow(2).height=18;
+  stl(n,{sz:10,col:'92400e',bg:'fffbeb',align:'left'});
+
+  // 헤더행
+  const hCols=['line','process_type','model_bom','capa_per_hour','capa_unit'];
+  const hDesc=['라인명 *','공정구분 *','BOM모델코드 *','시간당CAPA(숫자) *','단위(점수/수량)'];
+  const hRow=ws.addRow(hCols);
+  ws.getRow(3).height=18;
+  hRow.eachCell((c,i)=>{
+    stl(c,{sz:11,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+  });
+  // 설명행
+  const dRow=ws.addRow(hDesc);
+  ws.getRow(4).height=16;
+  dRow.eachCell(c=>stl(c,{sz:10,col:'475569',bg:'f8fafc',align:'center'}));
+
+  // 예시 데이터 (SMT)
+  const examples=[
+    ['1라인','SMT_TOP','EBR267931_01_TOP','','점수'],
+    ['1라인','SMT_BOT','EBR267931_01_BOT','','점수'],
+    ['2라인','SMT_TOP','EBR267931_01_TOP','','점수'],
+    ['2라인','SMT_BOT','EBR267931_01_BOT','','점수'],
+    ['3라인','SMT_TOP','EBR267931_01_TOP','','점수'],
+    ['3라인','SMT_BOT','EBR267931_01_BOT','','점수'],
+    ['조립라인','ASSY','EBR267931_01_ASSY','','수량'],
+  ];
+  examples.forEach((row,ri)=>{
+    const r=ws.addRow(row);
+    ws.getRow(5+ri).height=16;
+    r.eachCell((c,ci)=>{
+      const isAssy=row[1]==='ASSY';
+      const bg=isAssy?'f0fdf4':ri%2===0?'f8fafc':'ffffff';
+      stl(c,{sz:11,col:ci===3?'94a3b8':'1e293b',bg,mono:ci===3,
+        align:ci===4?'right':'left'});
+      if(ci===3)c.value='← 여기에 입력';
+    });
+  });
+
+  // 입력 가이드 시트
+  const ws2=wb.addWorksheet('입력가이드');
+  ws2.columns=[{width:20},{width:40}];
+  ws2.mergeCells('A1:B1');
+  const g=ws2.getCell('A1');g.value='📋 입력 가이드';ws2.getRow(1).height=22;
+  stl(g,{sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+  const guides=[
+    ['line 허용값','1라인 / 2라인 / 3라인 / 조립라인'],
+    ['process_type 허용값','SMT_TOP / SMT_BOT / ASSY'],
+    ['model_bom 형식','EBR267931_01_TOP (대문자, 하이픈→언더바)'],
+    ['capa_per_hour','숫자만 입력 (소수점 없이)'],
+    ['capa_unit','점수 (SMT 라인) 또는 수량 (조립라인)'],
+    ['',''],
+    ['SMT 예시','1라인 / SMT_TOP / EBR267931_01_TOP / 45000 / 점수'],
+    ['조립 예시','조립라인 / ASSY / EBR267931_01_ASSY / 120 / 수량'],
+  ];
+  guides.forEach((row,i)=>{
+    const r=ws2.addRow(row);
+    ws2.getRow(i+2).height=18;
+    r.getCell(1).font={name:'Arial Narrow',size:10,bold:true,color:{argb:'FF1e3a8a'}};
+    r.getCell(2).font={name:'Arial Narrow',size:10,color:{argb:'FF1e293b'}};
+  });
+
+  const buf=await wb.xlsx.writeBuffer();
+  dl(buf,'SME_CAPA마스터_양식.xlsx');
+}
+
+// ── 단가 마스터 양식 ──
+async function downloadPrice(){
+  const wb=new ExcelJS.Workbook();
+  wb.creator='SMERP';wb.created=new Date();
+  const ws=wb.addWorksheet('단가_마스터');
+
+  ws.columns=[
+    {width:18},{width:12},{width:14},{width:26},{width:14},{width:16},{width:12}
+  ];
+
+  // 제목행
+  ws.mergeCells('A1:G1');
+  const t=ws.getCell('A1');
+  t.value='💰 모델별 단가 마스터 — SME코리아 생산관리';
+  ws.getRow(1).height=24;
+  stl(t,{sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+
+  // 안내행
+  ws.mergeCells('A2:G2');
+  const n=ws.getCell('A2');
+  n.value='※ 동일 모델은 SMT_TOP / SMT_BOT / ASSY 각각 별도 행으로 입력 | unit_price: 1장(PCS) 기준 원화 금액 | effective_date: YYYY-MM-DD 형식';
+  ws.getRow(2).height=18;
+  stl(n,{sz:10,col:'92400e',bg:'fffbeb',align:'left'});
+
+  // 헤더
+  const hCols=['model_code','customer','process_type','model_bom','unit_price','effective_date','updated_by'];
+  const hDesc=['고객계획 모델코드 *','고객사 *','공정구분 *','BOM모델코드 *','단가(원,숫자) *','적용일 *','등록자'];
+  const hRow=ws.addRow(hCols);
+  ws.getRow(3).height=18;
+  hRow.eachCell(c=>stl(c,{sz:11,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
+  const dRow=ws.addRow(hDesc);
+  ws.getRow(4).height=16;
+  dRow.eachCell(c=>stl(c,{sz:10,col:'475569',bg:'f8fafc',align:'center'}));
+
+  // 예시 데이터
+  const examples=[
+    ['EBR267931-01','LG전자','SMT_TOP','EBR267931_01_TOP','','2026-01-01',''],
+    ['EBR267931-01','LG전자','SMT_BOT','EBR267931_01_BOT','','2026-01-01',''],
+    ['EBR267931-01','LG전자','ASSY','EBR267931_01_ASSY','','2026-01-01',''],
+    ['EBR267931-02','LG전자','SMT_TOP','EBR267931_02_TOP','','2026-01-01',''],
+    ['EBR267931-02','LG전자','SMT_BOT','EBR267931_02_BOT','','2026-01-01',''],
+    ['EBR267931-02','LG전자','ASSY','EBR267931_02_ASSY','','2026-01-01',''],
+  ];
+
+  // 행별 색상: TOP=파란, BOT=주황, ASSY=초록
+  const bgMap={'SMT_TOP':'eff6ff','SMT_BOT':'fff7ed','ASSY':'f0fdf4'};
+  const txtMap={'SMT_TOP':'1d4ed8','SMT_BOT':'c2410c','ASSY':'166534'};
+
+  examples.forEach((row,ri)=>{
+    const r=ws.addRow(row);
+    ws.getRow(5+ri).height=16;
+    const proc=row[2];
+    r.eachCell((c,ci)=>{
+      const bg=bgMap[proc]||'ffffff';
+      const col=ci===5?'94a3b8':ci===3?txtMap[proc]||'1e293b':'1e293b';
+      stl(c,{sz:11,col,bg,mono:ci===4||ci===5,align:ci===5?'right':'left'});
+      if(ci===5)c.value='← 단가 입력';
+    });
+  });
+
+  // 색상 범례
+  ws.addRow([]);
+  const legRow=ws.addRow(['공정 색상 기준','SMT_TOP = 파란배경','SMT_BOT = 주황배경','ASSY = 초록배경']);
+  ws.getRow(12).height=16;
+  legRow.getCell(1).font={name:'Arial Narrow',size:10,bold:true,color:{argb:'FF1e3a8a'}};
+  legRow.getCell(2).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFeff6ff'}};
+  legRow.getCell(2).font={name:'Arial Narrow',size:10,color:{argb:'FF1d4ed8'}};
+  legRow.getCell(3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFfff7ed'}};
+  legRow.getCell(3).font={name:'Arial Narrow',size:10,color:{argb:'FFc2410c'}};
+  legRow.getCell(4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFf0fdf4'}};
+  legRow.getCell(4).font={name:'Arial Narrow',size:10,color:{argb:'FF166534'}};
+
+  // 입력 가이드 시트
+  const ws2=wb.addWorksheet('입력가이드');
+  ws2.columns=[{width:22},{width:44}];
+  ws2.mergeCells('A1:B1');
+  const g=ws2.getCell('A1');g.value='📋 입력 가이드';ws2.getRow(1).height=22;
+  stl(g,{sz:13,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'});
+  const guides=[
+    ['model_code 형식','EBR267931-01 (하이픈 포함, 고객계획 기준)'],
+    ['customer 허용값','LG전자 / 상신전자 (정확히 일치)'],
+    ['process_type 허용값','SMT_TOP / SMT_BOT / ASSY'],
+    ['model_bom 형식','EBR267931_01_TOP (언더바, 대문자)'],
+    ['unit_price','숫자만 입력 (원화, 소수점 없이)'],
+    ['effective_date 형식','2026-01-01 (YYYY-MM-DD)'],
+    ['',''],
+    ['단가 합산 예시','TOP 8,000 + BOT 5,000 + ASSY 2,000 = 1대 15,000원'],
+    ['이력 관리','날짜가 다른 단가를 여러 행 입력 가능 → 최신 날짜 자동 적용'],
+  ];
+  guides.forEach((row,i)=>{
+    const r=ws2.addRow(row);
+    ws2.getRow(i+2).height=18;
+    r.getCell(1).font={name:'Arial Narrow',size:10,bold:true,color:{argb:'FF1e3a8a'}};
+    r.getCell(2).font={name:'Arial Narrow',size:10,color:{argb:'FF1e293b'}};
+  });
+
+  const buf=await wb.xlsx.writeBuffer();
+  dl(buf,'SME_단가마스터_양식.xlsx');
+}
+
+function dl(buf,filename){
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+</script>
+</body>
+</html>
