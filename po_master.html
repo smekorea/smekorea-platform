@@ -169,6 +169,7 @@
   .b-normal {background:rgba(14,159,110,0.1);color:var(--accent3);}
   .b-corp   {background:rgba(217,119,6,0.1);color:var(--amber);}
   .b-hq     {background:rgba(200,0,30,0.1);color:var(--accent);}
+  .b-excess {background:rgba(180,83,9,0.12);color:#B45309;font-weight:700;}
   .b-maker  {background:rgba(124,58,237,0.1);color:var(--purple);}
   .b-airship{background:rgba(26,86,219,0.1);color:var(--accent2);}
 
@@ -352,7 +353,7 @@
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#f8fafc,var(--surface));">
       <div style="font-size:14px;font-weight:700;">📤 본사 출하수량 업로드 / HQ Shipment Upload</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px;">SME_PO마스터 파일 기준 · O열(출하수량) 입력 후 업로드</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">법인 + Maker P/N 기준 PO 자동 매칭 · ETD순 자동 분산 등록</div>
     </div>
     <div style="padding:24px 20px;">
 
@@ -381,6 +382,7 @@
       </div>
 
       <div style="display:flex;gap:10px;margin-top:14px;">
+        <button onclick="downloadNewTemplate()" style="padding:9px 18px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">⬇ 양식 다운로드</button>
         <button onclick="parseHQFile()" id="hqParseBtn" style="display:none;padding:9px 18px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
           🔍 미리보기 / Preview
         </button>
@@ -398,14 +400,15 @@
               <tr style="background:#f0f4f9;">
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">#</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">법인</th>
-                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">인보이스 No.</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker P/N</th>
-                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">LG P/N</th>
                 <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하수량</th>
-                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">판매단가(KRW)</th>
-                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);border-bottom:1px solid var(--border);">출하금액(KRW)</th>
-                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하일</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">운송</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">인보이스 No.</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하일</th>
+                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">판매단가</th>
+                <th style="padding:9px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);border-bottom:1px solid var(--border);">출하금액</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">분산결과</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">상태</th>
               </tr>
             </thead>
@@ -756,7 +759,7 @@
       const allRows = (poRows||[]).map(r => {
         const shipped = shipMap[r.id] || 0;
         const remain  = (r.qty||0) - shipped;
-        const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
+        const resp    = shipped === 0 ? 'unordered' : remain < 0 ? 'excess' : remain === 0 ? 'complete' : 'pending';
         return {
           id: r.id, entity: r.entity, date: r.order_date,
           action_type: r.action_type,
@@ -795,7 +798,7 @@
         latest.hqdate = latestShipDate;
         // resp 재계산 (totalShipped 기준)
         const remain2 = (latest.qty||0) - totalShipped;
-        latest.resp = totalShipped === 0 ? 'unordered' : remain2 <= 0 ? 'complete' : 'pending';
+        latest.resp = totalShipped === 0 ? 'unordered' : remain2 < 0 ? 'excess' : remain2 === 0 ? 'complete' : 'pending';
 
         // 변경내용 감지 (수정/취소 시 신규와 비교)
         let changes = [];
@@ -875,6 +878,7 @@
       let trBg='';
       if(r.resp==='complete') trBg='background:#fff;';
       else if(r.resp==='pending') trBg='background:#FFFDE7;';
+      else if(r.resp==='excess') trBg='background:#FFF7ED;';
       else trBg='background:#FFF0F0;';
       // action_type 수정/취소이면 우선
       if(r.action_type==='수정') trBg='background:#FFFDE7;';
@@ -910,6 +914,7 @@
       complete:  ['b-ok',     '✓ 완료'],
       pending:   ['b-pending','잔량대기'],
       unordered: ['b-hq',    '미출하'],
+      excess:    ['b-excess','⚠ 초과출하'],
     };
     const [cls, label] = map[resp] || ['b-pending','—'];
     return `<span class="badge ${cls}" style="font-size:12px;">${label}</span>`;
@@ -996,6 +1001,7 @@
       complete:  ['✅', '정상 완료', 'var(--accent3)'],
       pending:   ['⏳', '잔량 대기 중', 'var(--amber)'],
       unordered: ['🔴', '본사 미발주 — 발주일 입력 필요', 'var(--accent)'],
+      excess:    ['⚠', '초과 출하 — PO 수량 초과됨', '#B45309'],
       maker:     ['🟣', '메이커 귀책 — 실입고일이 약속납기 초과', 'var(--purple)'],
       corp:      ['⚠', '법인 긴급요청 — 납기 촉박', 'var(--amber)'],
       air:       ['✈', '긴급 AIR 발송', 'var(--accent2)'],
@@ -1194,8 +1200,8 @@
     document.getElementById('tab-upload-btn').style.color = !isQuery ? '#fff' : 'var(--muted)';
   }
 
-  // ── 출하 업로드 ──
-  let hqData = [], hqFile = null;
+  // ── 출하 업로드 (새 양식 기준) ──
+  let hqData = [], hqFile = null, hqDistributed = []; // hqDistributed: 분산결과
 
   function onHQDrop(e) {
     e.preventDefault();
@@ -1203,271 +1209,243 @@
     const file = e.dataTransfer.files[0];
     if (file) processHQFile(file);
   }
+
   function onHQFileSelect(e) {
     const file = e.target.files[0];
     if (file) processHQFile(file);
   }
+
   function processHQFile(file) {
-    if (!file.name.match(/\.(xlsx|xls)$/i)) { showToast('⚠ Excel 파일(.xlsx)만 지원됩니다', 'error'); return; }
     hqFile = file;
     document.getElementById('hqFileName').textContent = file.name;
     document.getElementById('hqFileSize').textContent = (file.size/1024).toFixed(1) + ' KB';
     document.getElementById('hqFileSelected').style.display = 'flex';
     document.getElementById('hqParseBtn').style.display = 'flex';
     document.getElementById('hqPreviewWrap').style.display = 'none';
+    hqData = []; hqDistributed = [];
   }
+
   function clearHQFile() {
-    hqFile = null; hqData = [];
-    document.getElementById('hqFileInput').value = '';
+    hqFile = null; hqData = []; hqDistributed = [];
     document.getElementById('hqFileSelected').style.display = 'none';
     document.getElementById('hqParseBtn').style.display = 'none';
     document.getElementById('hqPreviewWrap').style.display = 'none';
+    document.getElementById('hqFileInput').value = '';
   }
-  function parseHQFile() {
+
+  // ── 새 양식 다운로드 ──
+  function downloadNewTemplate() {
+    const wb = XLSX.utils.book_new();
+    const headers = ['법인','Maker P/N','LG P/N','출하수량','운송구분(VSL/AIR)','인보이스No.','출하일(YYYY-MM-DD)','판매단가(KRW)','비고'];
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    ws['!cols'] = headers.map((h,i) => ({wch: [10,18,18,10,16,16,18,14,14][i]}));
+    XLSX.utils.book_append_sheet(wb, ws, '본사_출하입력');
+    XLSX.writeFile(wb, 'SME_출하입력양식.xlsx');
+    showToast('✓ 양식 다운로드 완료');
+  }
+
+  // ── 파싱 + 미리보기 (DB 조회 포함) ──
+  async function parseHQFile() {
     if (!hqFile) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
-        const sheetName = wb.SheetNames.find(n => n.includes('PO마스터') || n.includes('출하') || n.includes('Shipment')) || wb.SheetNames[0];
-        const ws = wb.Sheets[sheetName];
-        const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    const btn = document.getElementById('hqParseBtn');
+    btn.disabled = true; btn.textContent = '분석 중...';
+    try {
+      const buf = await hqFile.arrayBuffer();
+      const wb  = XLSX.read(buf, {type:'array', cellDates:true});
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
 
-        // SME_PO마스터 파일 기준
-        // 0:구분 1:법인 2:주문일자 3:PO No. 4:LG P/N 5:Maker P/N 6:ERP품번 7:Maker
-        // 8:주문수량 9:출하수량 10:잔량 11:판매단가(KRW) 12:ETD요청일 13:운송 14:상태
-        // 15:출하수량(입력) 16:운송구분(입력) 17:인보이스No.(입력) 18:출하일(입력) 19:비고
-        let headerRow = -1;
-        for (let i=0; i<Math.min(10, raw.length); i++) {
-          if (raw[i].some(c => String(c).includes('구분')) && raw[i].some(c => String(c).includes('PO No.'))) {
-            headerRow = i; break;
-          }
+      // 새 양식 헤더 감지: 0:법인 1:Maker P/N 2:LG P/N 3:출하수량 ...
+      let headerRow = -1;
+      for (let i = 0; i < Math.min(5, raw.length); i++) {
+        if (raw[i].some(c => String(c).includes('Maker P/N')) &&
+            raw[i].some(c => String(c).includes('출하수량'))) {
+          headerRow = i; break;
         }
-        if (headerRow < 0) { showToast('⚠ SME_PO마스터 파일을 확인해주세요', 'error'); return; }
-
-        // 출하수량(입력) 컬럼에 값이 있는 행만 파싱
-        const dataRows = raw.slice(headerRow + 1).filter(r => r.some(c => c !== '') && Number(r[15]) > 0);
-        if (!dataRows.length) { showToast('⚠ 출하수량(입력) 컬럼에 값을 입력해주세요', 'warn'); return; }
-
-        hqData = dataRows.map((r, idx) => ({
-          row:           idx + 1,
-          entity:        String(r[1]||'').trim(),
-          pono:          String(r[3]||'').trim(),
-          lgpn:          String(r[4]||'').trim(),
-          mkpn:          String(r[5]||'').trim(),
-          erp:           String(r[6]||'').trim(),
-          maker:         String(r[7]||'').trim(),
-          sales_price:   Number(r[11])||null,
-          etd:           formatDate(r[12]),
-          shipqty:       Number(r[15])||0,
-          mode:          (String(r[16]||'').trim().toUpperCase().replace('VSSL','VSL')),
-          invoice:       String(r[17]||'').trim(),
-          shipdate:      formatDate(r[18]),
-          remark:        String(r[19]||'').trim(),
-        }));
-
-        renderHQPreview();
-      } catch(err) {
-        showToast('⚠ 파일 읽기 실패: ' + err.message, 'error');
       }
-    };
-    reader.readAsArrayBuffer(hqFile);
-  }
+      if (headerRow < 0) { showToast('⚠ SME_출하입력양식 파일을 확인해주세요', 'error'); btn.disabled=false; btn.textContent='🔍 미리보기 / Preview'; return; }
 
-  function formatDate(val) {
-    if (!val) return '';
-    if (val instanceof Date) {
-      const y = val.getFullYear();
-      const m = String(val.getMonth()+1).padStart(2,'0');
-      const d = String(val.getDate()).padStart(2,'0');
-      return `${y}-${m}-${d}`;
+      const dataRows = raw.slice(headerRow + 1).filter(r => r.some(c => c !== '') && Number(r[3]) > 0);
+      if (!dataRows.length) { showToast('⚠ 출하수량 컬럼에 값을 입력해주세요', 'warn'); btn.disabled=false; btn.textContent='🔍 미리보기 / Preview'; return; }
+
+      hqData = dataRows.map((r, idx) => ({
+        row:        idx + 1,
+        entity:     String(r[0]||'').trim().toUpperCase(),
+        mkpn:       String(r[1]||'').trim(),
+        lgpn:       String(r[2]||'').trim(),
+        shipqty:    Number(r[3])||0,
+        mode:       String(r[4]||'').trim().toUpperCase().replace('VSSL','VSL'),
+        invoice:    String(r[5]||'').trim(),
+        shipdate:   formatDate(r[6]),
+        sales_price:Number(r[7])||null,
+        remark:     String(r[8]||'').trim(),
+      }));
+
+      // DB 조회 → 분산결과 계산
+      hqDistributed = await calcDistribution(hqData);
+      renderHQPreview();
+    } catch(e) {
+      showToast('⚠ 파일 읽기 오류: ' + e.message, 'error');
     }
-    return String(val).trim();
+    btn.disabled = false; btn.textContent = '🔍 미리보기 / Preview';
   }
 
+  // ── 분산 계산 (미리보기용, DB 조회) ──
+  async function calcDistribution(rows) {
+    const result = [];
+    for (const r of rows) {
+      if (!r.entity || !r.mkpn || r.shipqty <= 0) {
+        result.push({...r, distRows:[], errMsg:'필수값 누락'});
+        continue;
+      }
+      // 법인 + Maker P/N 기준 PO 전체 조회 (ETD 오름차순)
+      const {data: poGroup} = await sb.from('po_data')
+        .select('id, po_no, entity, qty, etd_request, item_code, lg_pn, maker')
+        .eq('entity', r.entity)
+        .eq('maker_pn', r.mkpn)
+        .order('etd_request', {ascending: true});
+
+      if (!poGroup || !poGroup.length) {
+        result.push({...r, distRows:[], errMsg:'매칭 PO 없음'});
+        continue;
+      }
+
+      // 기출하량 조회
+      const {data: existShips} = await sb.from('shipment_po')
+        .select('po_id, ship_qty')
+        .in('po_id', poGroup.map(p => p.id));
+      const shippedMap = {};
+      (existShips||[]).forEach(s => {
+        shippedMap[s.po_id] = (shippedMap[s.po_id]||0) + (s.ship_qty||0);
+      });
+
+      // ETD 순 차감
+      let remaining = r.shipqty;
+      const distRows = [];
+      for (const po of poGroup) {
+        if (remaining <= 0) break;
+        const poRemain = (po.qty||0) - (shippedMap[po.id]||0);
+        if (poRemain <= 0) continue;
+        const allocQty = Math.min(remaining, poRemain);
+        distRows.push({po_id:po.id, po_no:po.po_no, etd:po.etd_request, allocQty, status:'출하완료', maker:po.maker||r.maker, lg_pn:po.lg_pn||r.lgpn, item_code:po.item_code});
+        remaining -= allocQty;
+      }
+      // 초과분
+      if (remaining > 0) {
+        const lastPo = poGroup[poGroup.length-1];
+        distRows.push({po_id:lastPo.id, po_no:lastPo.po_no, etd:lastPo.etd_request, allocQty:remaining, status:'초과출하', maker:lastPo.maker||r.maker, lg_pn:lastPo.lg_pn||r.lgpn, item_code:lastPo.item_code});
+      }
+      result.push({...r, distRows, errMsg:''});
+    }
+    return result;
+  }
+
+  // ── 미리보기 렌더 ──
   function renderHQPreview() {
     const tbody = document.getElementById('hqPreviewBody');
     let errTotal = 0;
-    tbody.innerHTML = hqData.map(r => {
+    let rowNum = 0;
+
+    tbody.innerHTML = hqDistributed.map(r => {
       const errs = [];
       if (!r.entity)   errs.push('법인');
-      if (!r.pono)     errs.push('PO No.');
-      if (!r.mkpn)     errs.push('MakerP/N');
+      if (!r.mkpn)     errs.push('Maker P/N');
       if (!r.invoice)  errs.push('인보이스No.');
       if (!r.shipqty||r.shipqty<=0) errs.push('수량');
       if (!r.shipdate) errs.push('출하일');
       if (!r.mode||!['VSL','AIR'].includes(r.mode)) errs.push('운송(VSL/AIR)');
+      if (r.errMsg==='매칭 PO 없음') errs.push('PO없음');
       if (errs.length) errTotal++;
 
       const isErr = errs.length > 0;
       const modeBadge = r.mode==='AIR'
         ? `<span style="background:rgba(200,0,30,0.1);color:#c8001e;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">✈AIR</span>`
-        : `<span style="background:rgba(26,86,219,0.1);color:#1a56db;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">🚢VSSL</span>`;
+        : `<span style="background:rgba(26,86,219,0.1);color:#1a56db;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">🚢VSL</span>`;
       const statusBadge = isErr
-        ? `<span style="background:rgba(200,0,30,0.1);color:#c8001e;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;">⚠ ${errs.join(',')}</span>`
+        ? `<span style="background:rgba(200,0,30,0.1);color:#c8001e;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;">⚠ ${errs.join(', ')}</span>`
         : `<span style="background:rgba(14,159,110,0.1);color:#0e9f6e;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;">✓ OK</span>`;
 
-      const bg = isErr ? 'rgba(200,0,30,0.03)' : (r.row%2===0?'#fff':'#f8fafc');
       const shipAmt = (r.sales_price && r.shipqty) ? (r.sales_price * r.shipqty) : null;
+      const bg = isErr ? 'rgba(200,0,30,0.03)' : (r.row%2===0?'#fff':'#f8fafc');
+
+      // 분산결과 표시
+      let distHtml = '—';
+      if (r.errMsg==='매칭 PO 없음') {
+        distHtml = `<span style="color:#c8001e;font-size:11px;font-weight:700;">⚠ PO 없음</span>`;
+      } else if (r.distRows && r.distRows.length) {
+        distHtml = r.distRows.map(d => {
+          const color = d.status==='초과출하' ? '#B45309' : '#0e9f6e';
+          return `<div style="font-size:10px;color:${color};">${d.po_no} · ${d.allocQty.toLocaleString()}개 ${d.status==='초과출하'?'⚠':'✓'}</div>`;
+        }).join('');
+      }
+
+      rowNum++;
       return `<tr style="background:${bg};border-bottom:1px solid #f0f4f9;">
-        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);">${r.row}</td>
+        <td style="padding:8px 12px;font-size:10px;color:var(--muted);">${r.row}</td>
         <td style="padding:8px 12px;">${r.entity||'—'}</td>
-        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.invoice||'—'}</td>
         <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.mkpn||'—'}</td>
-        <td style="padding:8px 12px;">${r.maker||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.lgpn||'—'}</td>
         <td style="padding:8px 12px;text-align:right;font-weight:700;">${r.shipqty?r.shipqty.toLocaleString():'—'}</td>
-        <td style="padding:8px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.sales_price?r.sales_price.toLocaleString()+'원':'—'}</td>
-        <td style="padding:8px 12px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:var(--accent2);">${shipAmt?shipAmt.toLocaleString()+'원':'—'}</td>
-        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.shipdate||'—'}</td>
         <td style="padding:8px 12px;">${modeBadge}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.invoice||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;">${r.shipdate||'—'}</td>
+        <td style="padding:8px 12px;text-align:right;font-size:11px;">${r.sales_price?r.sales_price.toLocaleString()+'원':'—'}</td>
+        <td style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:var(--accent2);">${shipAmt?shipAmt.toLocaleString()+'원':'—'}</td>
+        <td style="padding:8px 12px;">${distHtml}</td>
         <td style="padding:8px 12px;">${statusBadge}</td>
       </tr>`;
     }).join('');
 
-    document.getElementById('hqRowCount').textContent = hqData.length;
+    document.getElementById('hqRowCount').textContent = hqDistributed.length;
     document.getElementById('hqErrCount').textContent = errTotal;
     document.getElementById('hqPreviewWrap').style.display = 'block';
+    // PO없음 포함 오류 있으면 등록 차단
     document.getElementById('hqSubmitBtn').disabled = errTotal > 0;
-
     if (errTotal > 0) {
-      document.getElementById('hqErrBadge').style.display = 'block';
-      document.getElementById('hqErrBadge').textContent = `⚠ ${errTotal}건 오류 확인 필요`;
-      showToast(`⚠ ${errTotal}건 오류를 확인해주세요`, 'warn');
+      showToast(`⚠ ${errTotal}건 오류 확인 후 수정해주세요`, 'error');
     } else {
-      document.getElementById('hqErrBadge').style.display = 'none';
-      showToast(`✓ ${hqData.length}건 확인 완료. 등록 버튼을 눌러주세요`);
+      showToast(`✓ ${hqDistributed.length}건 확인 완료. 등록 버튼을 눌러주세요`);
     }
   }
 
-  // ── 출하이력 수정 ──
-  function openEditModal(id, invoice, shipdate, qty, mode) {
-    document.getElementById('edit_ship_id').value   = id;
-    document.getElementById('edit_invoice').value   = invoice;
-    document.getElementById('edit_shipdate').value  = shipdate;
-    document.getElementById('edit_shipqty').value   = qty;
-    document.getElementById('edit_shipmode').value  = mode;
-    document.getElementById('editShipModal').style.display = 'flex';
-  }
-  function closeEditModal() {
-    document.getElementById('editShipModal').style.display = 'none';
-  }
-  async function saveEditShip() {
-    const id       = document.getElementById('edit_ship_id').value;
-    const invoice  = document.getElementById('edit_invoice').value.trim();
-    const shipdate = document.getElementById('edit_shipdate').value;
-    const shipqty  = Number(document.getElementById('edit_shipqty').value);
-    const shipmode = document.getElementById('edit_shipmode').value;
-    if (!invoice||!shipdate||!shipqty||!shipmode) { showToast('⚠ 모든 항목을 입력하세요', 'warn'); return; }
-    try {
-      const {error} = await sb.from('shipment_po').update({
-        invoice_no: invoice, ship_date: shipdate,
-        ship_qty: shipqty, transport: shipmode
-      }).eq('id', id);
-      if (error) throw error;
-      showToast('✓ 수정 완료');
-      closeEditModal();
-      loadHistory(selectedRow);
-      await loadPO();
-    } catch(e) { showToast('⚠ 수정 실패: ' + e.message, 'error'); }
-  }
-
-  // ── 출하이력 삭제 ──
-  async function deleteShip(id) {
-    if (!confirm('이 출하이력을 삭제하시겠습니까?')) return;
-    try {
-      const {error} = await sb.from('shipment_po').delete().eq('id', id);
-      if (error) throw error;
-      showToast('✓ 삭제 완료');
-      loadHistory(selectedRow);
-      await loadPO();
-    } catch(e) { showToast('⚠ 삭제 실패: ' + e.message, 'error'); }
-  }
-
-  // ── 엑셀 업로드 출하등록 (초과출하 자동분산) ──
+  // ── 등록 (분산결과 기반) ──
   async function submitHQShipment() {
-    if (!hqData.length) return;
+    if (!hqDistributed.length) return;
     const btn = document.getElementById('hqSubmitBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
     try {
       const allInsert = [];
-
-      for (const r of hqData) {
-        // 동일 PO No. + Maker P/N 그룹 전체 조회 → ETD 오름차순
-        const {data: poGroup} = await sb.from('po_data')
-          .select('id, entity, qty, etd_request, item_code')
-          .eq('po_no', r.pono||'')
-          .eq('maker_pn', r.mkpn||'')
-          .order('etd_request', {ascending: true});
-
-        if (!poGroup || !poGroup.length) {
-          // PO 없으면 그냥 단건 insert (po_id null)
+      for (const r of hqDistributed) {
+        if (!r.distRows || !r.distRows.length) continue;
+        for (const d of r.distRows) {
           allInsert.push({
-            po_id: null, po_no: r.pono||'', entity: r.entity,
-            item_code: r.erp||null,
-            lg_pn: r.lgpn||null, maker_pn: r.mkpn||null, maker: r.maker||null,
-            ship_date: r.shipdate,
-            ship_qty: r.shipqty, transport: r.mode,
-            invoice_no: r.invoice, sales_price_krw: r.sales_price||null,
-            status: '출하완료', created_by: 'HQ'
-          });
-          continue;
-        }
-
-        // 각 PO 기출하량 조회
-        const {data: existShips} = await sb.from('shipment_po')
-          .select('po_id, ship_qty')
-          .in('po_id', poGroup.map(p => p.id));
-        const shippedMap = {};
-        (existShips||[]).forEach(s => {
-          shippedMap[s.po_id] = (shippedMap[s.po_id]||0) + (s.ship_qty||0);
-        });
-
-        // ETD 순서대로 잔량 차감
-        let remaining = r.shipqty;
-        for (const po of poGroup) {
-          if (remaining <= 0) break;
-          const poRemain = (po.qty||0) - (shippedMap[po.id]||0);
-          if (poRemain <= 0) continue;
-          const allocQty = Math.min(remaining, poRemain);
-          allInsert.push({
-            po_id: po.id, po_no: r.pono||'', entity: r.entity,
-            item_code: po.item_code||r.erp||null,
-            lg_pn: po.lg_pn||r.lgpn||null,
-            maker_pn: r.mkpn||null,
-            maker: r.maker||null,
-            ship_date: r.shipdate,
-            ship_qty: allocQty, transport: r.mode,
-            invoice_no: r.invoice, sales_price_krw: r.sales_price||null,
-            status: '출하완료', created_by: 'HQ'
-          });
-          remaining -= allocQty;
-        }
-
-        // 전체 PO 잔량 초과 시 마지막 PO에 초과분 추가
-        if (remaining > 0) {
-          const lastPo = poGroup[poGroup.length - 1];
-          allInsert.push({
-            po_id: lastPo.id, po_no: r.pono||'', entity: r.entity,
-            item_code: lastPo.item_code||r.erp||null,
-            lg_pn: lastPo.lg_pn||r.lgpn||null,
-            maker_pn: r.mkpn||null,
-            maker: r.maker||null,
-            ship_date: r.shipdate,
-            ship_qty: remaining, transport: r.mode,
-            invoice_no: r.invoice, sales_price_krw: r.sales_price||null,
-            status: '초과출하', created_by: 'HQ'
+            po_id:           d.po_id,
+            po_no:           d.po_no,
+            entity:          r.entity,
+            item_code:       d.item_code||null,
+            lg_pn:           d.lg_pn||r.lgpn||null,
+            maker_pn:        r.mkpn||null,
+            maker:           d.maker||null,
+            ship_date:       r.shipdate,
+            ship_qty:        d.allocQty,
+            transport:       r.mode,
+            invoice_no:      r.invoice,
+            sales_price_krw: r.sales_price||null,
+            status:          d.status,
+            created_by:      'HQ'
           });
         }
       }
-
+      if (!allInsert.length) { showToast('⚠ 등록할 데이터가 없습니다', 'warn'); btn.disabled=false; btn.textContent='✓ 출하 등록'; return; }
       const {error} = await sb.from('shipment_po').insert(allInsert);
       if (error) throw error;
       showToast(`✓ ${allInsert.length}건 출하 등록 완료`);
       clearHQFile();
+      await loadPO();
     } catch(e) {
       showToast('⚠ 등록 실패: ' + e.message, 'error');
     }
-    btn.disabled = false; btn.textContent = '✓ 등록';
+    btn.disabled = false; btn.textContent = '✓ 출하 등록';
   }
 
   // ── mainLayout 높이 동적 계산 ──
