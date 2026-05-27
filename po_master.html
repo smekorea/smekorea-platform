@@ -759,14 +759,15 @@
       const allRows = (poRows||[]).map(r => {
         const shipped = shipMap[r.id] || 0;
         const remain  = (r.qty||0) - shipped;
-        const resp    = shipped === 0 ? 'unordered' : remain < 0 ? 'excess' : remain === 0 ? 'complete' : 'pending';
+        const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
+        const excess_qty = Math.max(0, shipped - (r.qty||0));
         return {
           id: r.id, entity: r.entity, date: r.order_date,
           action_type: r.action_type,
           pono: r.po_no, lgpn: r.lg_pn, mkpn: r.maker_pn,
           erp: r.item_code, maker: r.maker, qty: r.qty,
           shipped, etd: r.etd_request, eta: r.eta_hope,
-          mode: r.transport, resp,
+          mode: r.transport, resp, excess_qty,
           item_status: r.item_status,
           modify_reason: r.modify_reason || '',
           created_at: r.created_at || '',
@@ -798,7 +799,8 @@
         latest.hqdate = latestShipDate;
         // resp 재계산 (totalShipped 기준)
         const remain2 = (latest.qty||0) - totalShipped;
-        latest.resp = totalShipped === 0 ? 'unordered' : remain2 < 0 ? 'excess' : remain2 === 0 ? 'complete' : 'pending';
+        latest.resp = totalShipped === 0 ? 'unordered' : remain2 <= 0 ? 'complete' : 'pending';
+        latest.excess_qty = Math.max(0, totalShipped - (latest.qty||0));
 
         // 변경내용 감지 (수정/취소 시 신규와 비교)
         let changes = [];
@@ -867,22 +869,15 @@
       const modeBadge = r.mode === 'AIR'
         ? `<span class="badge b-air" style="font-size:12px;">✈ AIR</span>`
         : `<span class="badge b-vssl" style="font-size:12px;">🚢 VSL</span>`;
-      const respBadge = getResponsibilityBadge(r.resp);
+      const respBadge = getResponsibilityBadge(r.resp, r.excess_qty||0);
       const isLast = i === data.length - 1 ? ' last' : '';
 
       const rowBg = ''; // 출하현황 기준 행색상으로 대체
       const changeCell = r.changeNote
         ? `<span style="font-size:10px;color:#b45309;margin-left:4px;">(${r.changeNote})</span>` : '';
 
-      // 행 배경색 - 출하현황 기준
-      let trBg='';
-      if(r.resp==='complete') trBg='background:#fff;';
-      else if(r.resp==='pending') trBg='background:#FFFDE7;';
-      else if(r.resp==='excess') trBg='background:#FFF7ED;';
-      else trBg='background:#FFF0F0;';
-      // action_type 수정/취소이면 우선
-      if(r.action_type==='수정') trBg='background:#FFFDE7;';
-      if(r.action_type==='취소') trBg='background:#FFF0F0;';
+      // 행 배경색 — 흰색 고정
+      let trBg='background:#fff;';
 
       // ETA 자동계산
       const etaAuto = calcETA(r.etd, r.entity, r.mode);
@@ -909,15 +904,16 @@
   }
 
   // ── 출하현황 배지 ──
-  function getResponsibilityBadge(resp) {
-    const map = {
-      complete:  ['b-ok',     '✓ 완료'],
-      pending:   ['b-pending','잔량대기'],
-      unordered: ['b-hq',    '미출하'],
-      excess:    ['b-excess','⚠ 초과출하'],
-    };
-    const [cls, label] = map[resp] || ['b-pending','—'];
-    return `<span class="badge ${cls}" style="font-size:12px;">${label}</span>`;
+  function getResponsibilityBadge(resp, excess_qty) {
+    if (resp === 'complete') {
+      if (excess_qty > 0) {
+        return `<span class="badge" style="font-size:13px;font-weight:700;background:rgba(26,86,219,0.1);color:#1a56db;padding:3px 9px;border-radius:5px;">✓ 완료 <span style="color:#B45309;">(초과 ${excess_qty.toLocaleString()}개)</span></span>`;
+      }
+      return `<span class="badge" style="font-size:13px;font-weight:700;background:rgba(26,86,219,0.1);color:#1a56db;padding:3px 9px;border-radius:5px;">✓ 완료</span>`;
+    }
+    if (resp === 'pending')   return `<span class="badge" style="font-size:13px;font-weight:700;background:rgba(217,119,6,0.12);color:#B45309;padding:3px 9px;border-radius:5px;">⏳ 잔량대기</span>`;
+    if (resp === 'unordered') return `<span class="badge" style="font-size:13px;font-weight:700;background:rgba(200,0,30,0.1);color:#c8001e;padding:3px 9px;border-radius:5px;">● 미출하</span>`;
+    return `<span class="badge" style="font-size:13px;font-weight:700;background:#f0f4f9;color:var(--muted);padding:3px 9px;border-radius:5px;">—</span>`;
   }
 
   // ── KPI 업데이트 ──
