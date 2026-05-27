@@ -1451,17 +1451,29 @@
     btn.disabled = false; btn.textContent = '✓ 출하 등록';
   }
 
-  // ── 리사이저블 컬럼 (개별 컬럼 조정, 우측 여백) ──
+  // ── 리사이저블 컬럼 (독립 컬럼 리사이즈) ──
+  // 동작: 해당 컬럼만 조정 / 나머지 고정 / 테이블 전체폭 = 컬럼합계
   function initColResize(tableId, storageKey) {
     const table = document.getElementById(tableId);
     if (!table) return;
     const ths = table.querySelectorAll('thead th');
     const saved = JSON.parse(localStorage.getItem(storageKey)||'{}');
 
-    // 저장된 폭 복원
+    // ① 모든 컬럼에 현재 px폭 명시 고정 (브라우저 자동배분 차단)
     ths.forEach((th, i) => {
-      if (saved[i]) th.style.minWidth = saved[i] + 'px';
+      const w = saved[i] || th.offsetWidth;
+      th.style.width    = w + 'px';
+      th.style.minWidth = w + 'px';
     });
+
+    // ② table-layout:fixed + 전체폭 = 컬럼합계
+    table.style.tableLayout = 'fixed';
+    const updateTableWidth = () => {
+      let total = 0;
+      ths.forEach(th => { total += th.offsetWidth; });
+      table.style.width = total + 'px';
+    };
+    updateTableWidth();
 
     ths.forEach((th, i) => {
       let rsz = th.querySelector('.col-resizer');
@@ -1473,8 +1485,9 @@
 
         const onMove = e => {
           const w = Math.max(50, startW + e.clientX - startX);
-          th.style.minWidth = w + 'px';
           th.style.width    = w + 'px';
+          th.style.minWidth = w + 'px';
+          updateTableWidth(); // 전체폭 실시간 갱신
         };
         const onUp = () => {
           const ws = {};
