@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMECN — PO 입력/조회</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#f0f4f9;--surface:#fff;--border:#d0daea;--accent:#c8001e;--accent2:#1a56db;--accent3:#0e9f6e;--amber:#d97706;--text:#1a2233;--muted:#7a8baa;}
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -39,7 +39,7 @@
   thead th{background:#e8edf5;padding:11px 13px;text-align:left;font-weight:800;color:#3a4a6a;font-family:'Noto Sans KR',sans-serif;font-size:12px;letter-spacing:0;border-bottom:2px solid #c0cce0;}
   tbody tr{border-bottom:1px solid #e8edf5;transition:background .1s;}
   tbody tr:hover{filter:brightness(0.97);}
-  tbody td{padding:10px 13px;font-size:13px;color:#1a2233;}
+  tbody td{padding:10px 13px;font-size:14px;color:#1a2233;}
   .form-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:860px;}
   .field{margin-bottom:14px;}
   label{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:5px;}
@@ -69,6 +69,10 @@
   .toast.error{background:var(--accent);}
   .toast.warn{background:var(--amber);}
   .empty-state{text-align:center;padding:48px;color:var(--muted);}
+  /* 리사이저블 컬럼 */
+  th{position:relative;user-select:none;}
+  .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:1;}
+  .col-resizer:hover{background:rgba(26,86,219,0.15);}
   .empty-icon{font-size:36px;margin-bottom:10px;}
   hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
 </style>
@@ -257,6 +261,33 @@ const SUPABASE_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SUPABASE_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const ENTITY='SMECN';
+
+  // ── 독립 컬럼 리사이즈 ──
+  function initColResize(tableId, storageKey) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    const ths = table.querySelectorAll('thead th');
+    const saved = JSON.parse(localStorage.getItem(storageKey)||'{}');
+    ths.forEach((th, i) => {
+      const w = saved[i] || th.offsetWidth;
+      th.style.width = w + 'px'; th.style.minWidth = w + 'px';
+    });
+    table.style.tableLayout = 'fixed';
+    const updW = () => { let t=0; ths.forEach(th=>{t+=th.offsetWidth;}); table.style.width=t+'px'; };
+    updW();
+    ths.forEach((th, i) => {
+      let rsz = th.querySelector('.col-resizer');
+      if (!rsz) { rsz=document.createElement('div'); rsz.className='col-resizer'; th.appendChild(rsz); }
+      rsz.addEventListener('mousedown', e => {
+        const sx=e.clientX, sw=th.offsetWidth;
+        const onMove=e=>{ const w=Math.max(50,sw+e.clientX-sx); th.style.width=w+'px'; th.style.minWidth=w+'px'; updW(); };
+        const onUp=()=>{ const ws={}; ths.forEach((t,idx)=>{ws[idx]=t.offsetWidth;}); localStorage.setItem(storageKey,JSON.stringify(ws)); document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+        document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
+        e.preventDefault(); e.stopPropagation();
+      });
+    });
+  }
+
 if(sessionStorage.getItem('po_auth')!=='1')window.location.href='po_hub.html';
 
 function switchTab(t){
@@ -593,7 +624,7 @@ async function searchPO(){
     const today=new Date().toISOString().slice(0,10);
     const groups={};
     (poRows||[]).forEach(r=>{
-      const key=`${r.po_no}||${r.maker_pn}||${r.etd_request}`;
+      const key=`${r.po_no}||${r.maker_pn}||${r.etd_request}||${r.qty}`;
       if(!groups[key])groups[key]=[];
       groups[key].push(r);
     });
@@ -652,18 +683,20 @@ function renderList(){
     return;
   }
   document.getElementById('excelBtn').style.display='flex';
+  const listTable=document.getElementById('listTable');
+  if(listTable) listTable.id='listTable';
   document.getElementById('listBody').innerHTML=listData.map(r=>{
     let rowBg='';
-    if(r.shipped>0&&r.remain<=0)rowBg='background:#fff;';
-    else if(r.shipped>0&&r.remain>0)rowBg='background:#FFFDE7;';
-    else rowBg='background:#FFF0F0;';
+    rowBg='background:#fff;';
     const subStyle=r._sub?'opacity:0.6;':'';
     const tc=r.type==='수정'?'b-mod':r.type==='취소'?'b-can':'b-new';
-    const mb=r.mode==='AIR'?`<span class="badge b-air" style="font-size:12px;">✈AIR</span>`:`<span class="badge b-vssl" style="font-size:12px;">🚢VSL</span>`;
+    const mb=r.mode==='AIR'?`<span style="font-size:14px;font-weight:700;color:#c8001e;">✈ AIR</span>`:`<span style="font-size:14px;font-weight:700;color:#1a56db;">🚢 VSL</span>`;
     let statusBadge='';
-    if(r.shipped>0&&r.remain<=0)statusBadge=`<span class="badge b-ok" style="font-size:12px;">✓완료</span>`;
-    else if(r.shipped>0&&r.remain>0)statusBadge=`<span class="badge b-wait" style="font-size:12px;">잔량 ${r.remain.toLocaleString()}</span>`;
-    else statusBadge=`<span class="badge" style="background:rgba(200,0,30,0.08);color:var(--accent);font-size:12px;">미출하</span>`;
+    if(r.shipped>0&&r.remain<=0){
+      const ex=r.shipped-(r.qty||0);
+      statusBadge=ex>0?`<span style="font-size:14px;font-weight:700;color:#1a56db;">✓ 완료 <span style="color:#B45309;font-size:12px;">(초과 ${ex.toLocaleString()}개)</span></span>`:`<span style="font-size:14px;font-weight:700;color:#1a56db;">✓ 완료</span>`;
+    }else if(r.shipped>0&&r.remain>0)statusBadge=`<span style="font-size:14px;font-weight:700;color:#B45309;">⏳ 잔량대기</span>`;
+    else statusBadge=`<span style="font-size:14px;font-weight:700;color:#c8001e;">● 미출하</span>`;
     // Maker L/T
     const makerKey=(r.maker||'').toUpperCase();
     let makerLT=null;
@@ -685,9 +718,9 @@ function renderList(){
       <td style="font-family:'Courier New',Courier,monospace;font-size:12px;font-weight:600;">${r.mkpn||'—'}</td>
       <td style="font-family:'Courier New',Courier,monospace;font-size:12px;">${r.erp||'—'}</td>
       <td style="font-size:13px;font-weight:600;">${r.maker||'—'}</td>
-      <td style="text-align:right;font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:700;">${(r.qty||0).toLocaleString()}</td>
-      <td style="text-align:right;font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:700;color:var(--accent3);">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
-      <td style="text-align:right;font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:700;color:${r.remain>0?'var(--amber)':'var(--accent3)'};">${r.remain>0?r.remain.toLocaleString():'0'}</td>
+      <td style="text-align:right;font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+      <td style="text-align:right;font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:700;color:#1a56db;">${r.shipped>0?r.shipped.toLocaleString():'—'}</td>
+      <td style="text-align:right;font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:700;color:${r.remain<=0?'#1a56db':'#c8001e'};">${r.remain<=0?'완료':r.remain.toLocaleString()}</td>
       <td style="font-family:'Courier New',Courier,monospace;font-size:12px;font-weight:600;">${r.etd||'—'}</td>
       <td style="text-align:center;">${ltDaysBadge}</td>
       <td style="text-align:center;">${ltCondBadge}</td>
@@ -696,6 +729,7 @@ function renderList(){
       <td>${statusBadge}</td>
     </tr>`;
   }).join('');
+  initColResize('listTable','sc_col');
 }
 function exportExcel(){
   if(!listData.length){showToast('⚠ 먼저 조회해주세요','warn');return;}
