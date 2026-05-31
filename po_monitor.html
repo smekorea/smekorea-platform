@@ -234,6 +234,9 @@ th{position:relative;user-select:none;}
     <div class="f-group"><div class="f-label">~</div>
       <input type="month" id="h-to" style="width:130px;">
     </div>
+    <div class="f-group" style="align-self:flex-end;">
+      <button onclick="setHistoryAll()" style="height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">전체 기간</button>
+    </div>
     <div class="f-group"><div class="f-label">운송</div>
       <select id="h-mode" style="width:100px;">
         <option value="">전체</option>
@@ -451,7 +454,7 @@ th{position:relative;user-select:none;}
       <div><span class="table-title">PSI 분석</span> <span class="table-count" id="psi-count"></span></div>
       <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportPSI()">⬇ 엑셀</button>
     </div>
-    <div id="psiTableWrap" style="overflow-x:auto;max-width:100%;">
+    <div id="psiTableWrap" style="overflow:auto;max-width:100%;max-height:calc(100vh - 280px);">
       <div class="empty-state"><div class="empty-icon">📊</div><p>법인 선택 후 조회해주세요</p></div>
     </div>
   </div>
@@ -767,6 +770,11 @@ function loadDeadline(){
 // ─────────────────────────────────────────
 // ② 출하이력
 // ─────────────────────────────────────────
+function setHistoryAll(){
+  document.getElementById('h-from').value='';
+  document.getElementById('h-to').value='';
+  loadHistory();
+}
 function loadHistory(){
   const entity=document.getElementById('h-entity').value;
   const from=document.getElementById('h-from').value;
@@ -1114,12 +1122,12 @@ function renderPSI(){
     const thPeriods=psiPeriods.map(pk=>{
       const [y,m]=pk.split('-');
       const lbl=`${parseInt(m)}월 (${pk})`;
-      return`<th style="background:#e8edf5;padding:9px 10px;text-align:center;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;">${lbl}</th>`;
+      return`<th style="background:#e8edf5;padding:9px 10px;text-align:center;border:1px solid #c0cce0;border-left:2px solid #8899bb;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;position:sticky;top:0;z-index:2;">${lbl}</th>`;
     }).join('');
     thead=`<thead><tr>
-      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;">메이커</th>
-      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:130px;">품번</th>
-      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:50px;">구분</th>
+      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;position:sticky;left:0;top:0;z-index:5;">메이커</th>
+      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:130px;position:sticky;left:80px;top:0;z-index:5;">품번</th>
+      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:50px;position:sticky;left:210px;top:0;z-index:5;">구분</th>
       ${thPeriods}
     </tr></thead>`;
   } else {
@@ -1171,13 +1179,15 @@ function renderPSI(){
       :'<span class="badge b-vsl" style="font-size:10px;">VSL</span>';
     const rowBg=idx%2===0?'':'background:#f8fafc;';
 
-    const pCells=psiPeriods.map(pk=>{
+    const pCells=psiPeriods.map((pk,idx)=>{
       const v=row.p[pk]||0;
-      return`<td style="padding:7px 10px;text-align:right;border:1px solid #e8edf5;font-family:'Courier New',Courier,monospace;font-size:12px;${rowBg}">${v?v.toLocaleString():'—'}</td>`;
+      const lB=idx>0?'border-left:2px solid #c0cce0;':'';
+      return`<td style="padding:7px 10px;text-align:right;border:1px solid #e8edf5;${lB}font-family:'Courier New',Courier,monospace;font-size:12px;${rowBg}">${v?v.toLocaleString():'—'}</td>`;
     }).join('');
-    const sCells=psiPeriods.map(pk=>{
+    const sCells=psiPeriods.map((pk,idx)=>{
       const v=row.s[pk]||0;
-      return`<td style="padding:7px 10px;text-align:right;border:1px solid #e8edf5;font-family:'Courier New',Courier,monospace;font-size:12px;color:var(--accent3);${rowBg}">${v?v.toLocaleString():'—'}</td>`;
+      const lB=idx>0?'border-left:2px solid #c0cce0;':'';
+      return`<td style="padding:7px 10px;text-align:right;border:1px solid #e8edf5;${lB}font-family:'Courier New',Courier,monospace;font-size:12px;color:#1a56db;${rowBg}">${v?v.toLocaleString():'—'}</td>`;
     }).join('');
     const iCells=psiPeriods.map(pk=>{
       const v=row.i[pk]||0;
@@ -1188,7 +1198,8 @@ function renderPSI(){
       const color=v<0&&show?'color:var(--accent);font-weight:700;':v===0&&show?'color:var(--accent3);font-weight:700;':show?'color:var(--accent2);font-weight:700;':'';
       const bg=v<0&&show?'background:#FFF0F0;':v===0&&show?'background:#f0fdf4;':show?'background:#EEF3FC;':rowBg;
       const txt=show?(v<0?v.toLocaleString():v===0?'0':'+'+v.toLocaleString()):'—';
-      return`<td style="padding:7px 10px;text-align:right;border:1px solid #e8edf5;font-family:'Courier New',Courier,monospace;font-size:12px;${color}${bg}">${txt}</td>`;
+      const lB=psiPeriods.indexOf(pk)>0?'border-left:2px solid #c0cce0;':'';
+      return`<td style="padding:7px 10px;text-align:right;border:1px solid #e8edf5;border-bottom:2px solid #c0cce0;${lB}font-family:'Courier New',Courier,monospace;font-size:12px;${color}${bg}">${txt}</td>`;
     }).join('');
 
     const borderTop=idx>0?'border-top:2px solid #c0cce0;':'';
