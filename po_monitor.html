@@ -1133,7 +1133,7 @@ function loadPSI(){
 
   const poIdMap={};
   allPO.filter(r=>r.entity===entity).forEach(r=>{
-    r.shipRows.forEach(s=>{poIdMap[s.id]={mkpn:r.maker_pn,maker:r.maker,mode:r.mode};});
+    r.shipRows.forEach(s=>{poIdMap[s.id]={mkpn:r.maker_pn,lgpn:r.lg_pn,maker:r.maker,mode:r.mode};});
   });
   let shipFiltered=allShip.filter(s=>s.entity===entity);
   if(makerF) shipFiltered=shipFiltered.filter(s=>(poIdMap[s.id]?.maker||'').toLowerCase().includes(makerF));
@@ -1146,7 +1146,7 @@ function loadPSI(){
   const rowKeys={};
   poFiltered.forEach(r=>{
     const k=`${r.maker}||${r.maker_pn}||${r.mode}`;
-    if(!rowKeys[k]) rowKeys[k]={maker:r.maker,mkpn:r.maker_pn,mode:r.mode,p:{},s:{}};
+    if(!rowKeys[k]) rowKeys[k]={maker:r.maker,lgpn:r.lg_pn||'—',mkpn:r.maker_pn,mode:r.mode,p:{},s:{}};
     const pk=getPeriodKey(r.etd);
     if(pk) rowKeys[k].p[pk]=(rowKeys[k].p[pk]||0)+(r.qty||0);
   });
@@ -1193,9 +1193,10 @@ function renderPSI(){
       return`<th style="background:#e8edf5;padding:9px 10px;text-align:center;border:1px solid #c0cce0;border-left:2px solid #8899bb;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;position:sticky;top:0;z-index:2;">${lbl}</th>`;
     }).join('');
     thead=`<thead><tr>
-      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;position:sticky;left:0;top:0;z-index:5;">메이커</th>
-      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:130px;position:sticky;left:80px;top:0;z-index:5;">품번</th>
-      <th style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:50px;position:sticky;left:210px;top:0;z-index:5;">구분</th>
+      <th style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:80px;position:sticky;left:0px;top:0;z-index:5;">메이커</th>
+      <th style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:91px;position:sticky;left:80px;top:0;z-index:5;">LG P/N</th>
+      <th style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:91px;position:sticky;left:171px;top:0;z-index:5;">Maker P/N</th>
+      <th style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:50px;position:sticky;left:262px;top:0;z-index:5;">구분</th>
       ${thPeriods}
     </tr></thead>`;
   } else {
@@ -1231,9 +1232,10 @@ function renderPSI(){
     }).join('');
     thead=`<thead>
       <tr>
-        <th rowspan="2" style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:80px;position:sticky;left:0;top:0;z-index:6;">메이커</th>
-        <th rowspan="2" style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:130px;position:sticky;left:80px;top:0;z-index:6;">품번</th>
-        <th rowspan="2" style="background:#e8edf5;padding:9px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:800;color:#3a4a6a;min-width:50px;position:sticky;left:210px;top:0;z-index:6;">구분</th>
+        <th rowspan="2" style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:80px;position:sticky;left:0px;top:0;z-index:6;">메이커</th>
+        <th rowspan="2" style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:91px;position:sticky;left:80px;top:0;z-index:6;">LG P/N</th>
+        <th rowspan="2" style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:91px;position:sticky;left:171px;top:0;z-index:6;">Maker P/N</th>
+        <th rowspan="2" style="background:#e8edf5;padding:7px 8px;border:1px solid #c0cce0;font-size:11px;font-weight:800;color:#3a4a6a;text-align:center;min-width:50px;position:sticky;left:262px;top:0;z-index:6;">구분</th>
         ${thMonths}
       </tr>
       <tr>${thWeeks}</tr>
@@ -1271,19 +1273,21 @@ function renderPSI(){
     }).join('');
 
     const borderTop=idx>0?'border-top:2px solid #c0cce0;':'';
+    const cellBg=rowBg||'#fff';
     return`
       <tr style="${rowBg}">
-        <td rowspan="3" style="padding:8px 10px;border:1px solid #c0cce0;font-size:13px;font-weight:700;vertical-align:middle;text-align:center;position:sticky;left:0;z-index:1;background:${rowBg||'#fff'};${borderTop}">${row.maker||'—'}<br><small style="font-size:10px;font-weight:400;color:var(--muted);">${modeB}</small></td>
-        <td rowspan="3" style="padding:8px 10px;border:1px solid #c0cce0;font-family:'Courier New',Courier,monospace;font-size:11px;vertical-align:middle;position:sticky;left:80px;z-index:1;background:${rowBg||'#fff'};${borderTop}">${row.mkpn||'—'}</td>
-        <td style="padding:7px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:700;color:#1a56db;background:#EEF3FC;">P</td>
+        <td rowspan="3" style="padding:6px 8px;border:1px solid #c0cce0;font-size:12px;font-weight:700;vertical-align:middle;text-align:center;position:sticky;left:0px;z-index:1;background:${cellBg};${borderTop}">${row.maker||'—'}<br><small style="font-size:10px;font-weight:400;color:var(--muted);">${modeB}</small></td>
+        <td rowspan="3" style="padding:6px 8px;border:1px solid #c0cce0;font-family:'Courier New',Courier,monospace;font-size:10px;vertical-align:middle;text-align:center;position:sticky;left:80px;z-index:1;background:${cellBg};${borderTop}">${row.lgpn||'—'}</td>
+        <td rowspan="3" style="padding:6px 8px;border:1px solid #c0cce0;font-family:'Courier New',Courier,monospace;font-size:10px;vertical-align:middle;text-align:center;position:sticky;left:171px;z-index:1;background:${cellBg};${borderTop}">${row.mkpn||'—'}</td>
+        <td style="padding:7px 8px;border:1px solid #c0cce0;font-size:12px;font-weight:700;color:#1a56db;background:#EEF3FC;position:sticky;left:262px;z-index:1;">P</td>
         ${pCells}
       </tr>
       <tr style="${rowBg}">
-        <td style="padding:7px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:700;color:#0e9f6e;background:#EEF9F4;">S</td>
+        <td style="padding:7px 8px;border:1px solid #c0cce0;font-size:12px;font-weight:700;color:#0e9f6e;background:#EEF9F4;position:sticky;left:262px;z-index:1;">S</td>
         ${sCells}
       </tr>
       <tr style="${rowBg}">
-        <td style="padding:7px 10px;border:1px solid #c0cce0;font-size:12px;font-weight:700;color:#d97706;background:#FEF9EC;border-bottom:2px solid #c0cce0;">I</td>
+        <td style="padding:7px 8px;border:1px solid #c0cce0;font-size:12px;font-weight:700;color:#d97706;background:#FEF9EC;border-bottom:2px solid #c0cce0;position:sticky;left:262px;z-index:1;">I</td>
         ${iCells}
       </tr>`;
   }).join('');
