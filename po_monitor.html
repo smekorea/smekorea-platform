@@ -91,6 +91,14 @@ tbody td{padding:10px 13px;color:#1a2233;font-size:13px;}
 
 /* EMPTY */
 .empty-state{text-align:center;padding:48px;color:var(--muted);}
+/* PSI 자동완성 */
+.psi-ac-wrap{position:relative;display:inline-block;}
+.psi-ac-list{position:absolute;top:100%;left:0;width:100%;max-height:200px;overflow-y:auto;
+  background:#fff;border:1.5px solid var(--accent2);border-radius:8px;z-index:100;display:none;
+  box-shadow:0 4px 16px rgba(0,0,0,0.12);}
+.psi-ac-list.show{display:block;}
+.psi-ac-item{padding:8px 12px;font-size:13px;cursor:pointer;color:#1a2233;border-bottom:1px solid #f0f4f9;}
+.psi-ac-item:hover{background:#EEF3FC;color:var(--accent2);}
 /* 리사이저블 */
 th{position:relative;user-select:none;}
 .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:1;}
@@ -407,13 +415,34 @@ th{position:relative;user-select:none;}
       <input type="month" id="p-to" style="width:130px;">
     </div>
     <div class="f-group"><div class="f-label">LG P/N</div>
-      <input type="text" id="p-lgpn" placeholder="LG품번..." style="width:140px;">
+      <div class="psi-ac-wrap">
+        <input type="text" id="p-lgpn" placeholder="LG품번..." style="width:140px;"
+          oninput="psiAC('p-lgpn','p-lgpn-list',psiLgpnList)"
+          onkeydown="if(event.key==='Enter'){closePsiAC('p-lgpn-list');loadPSI();}"
+          onfocus="psiAC('p-lgpn','p-lgpn-list',psiLgpnList)"
+          onblur="setTimeout(()=>closePsiAC('p-lgpn-list'),200)">
+        <div id="p-lgpn-list" class="psi-ac-list"></div>
+      </div>
     </div>
     <div class="f-group"><div class="f-label">Maker P/N</div>
-      <input type="text" id="p-mkpn" placeholder="메이커품번..." style="width:140px;">
+      <div class="psi-ac-wrap">
+        <input type="text" id="p-mkpn" placeholder="메이커품번..." style="width:140px;"
+          oninput="psiAC('p-mkpn','p-mkpn-list',psiMkpnList)"
+          onkeydown="if(event.key==='Enter'){closePsiAC('p-mkpn-list');loadPSI();}"
+          onfocus="psiAC('p-mkpn','p-mkpn-list',psiMkpnList)"
+          onblur="setTimeout(()=>closePsiAC('p-mkpn-list'),200)">
+        <div id="p-mkpn-list" class="psi-ac-list"></div>
+      </div>
     </div>
     <div class="f-group"><div class="f-label">Maker</div>
-      <input type="text" id="p-maker" placeholder="메이커 검색..." style="width:120px;">
+      <div class="psi-ac-wrap">
+        <input type="text" id="p-maker" placeholder="메이커 검색..." style="width:120px;"
+          oninput="psiAC('p-maker','p-maker-list',psiMakerList)"
+          onkeydown="if(event.key==='Enter'){closePsiAC('p-maker-list');loadPSI();}"
+          onfocus="psiAC('p-maker','p-maker-list',psiMakerList)"
+          onblur="setTimeout(()=>closePsiAC('p-maker-list'),200)">
+        <div id="p-maker-list" class="psi-ac-list"></div>
+      </div>
     </div>
     <div class="f-group"><div class="f-label">운송</div>
       <select id="p-mode" style="width:100px;">
@@ -454,7 +483,7 @@ th{position:relative;user-select:none;}
       <div><span class="table-title">PSI 분석</span> <span class="table-count" id="psi-count"></span></div>
       <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportPSI()">⬇ 엑셀</button>
     </div>
-    <div id="psiTableWrap" style="overflow:auto;max-width:100%;max-height:calc(100vh - 260px);">
+    <div id="psiTableWrap" style="overflow:auto;max-height:calc(100vh - 260px);border:1px solid var(--border);border-radius:12px;">
       <div class="empty-state"><div class="empty-icon">📊</div><p>법인 선택 후 조회해주세요</p></div>
     </div>
   </div>
@@ -591,6 +620,40 @@ let allPO=[], allShip=[];
         e.preventDefault(); e.stopPropagation();
       });
     });
+  }
+
+
+  // ── PSI 자동완성 데이터 ──
+  let psiLgpnList=[], psiMkpnList=[], psiMakerList=[];
+
+  function buildPsiAcData(){
+    psiLgpnList=[...new Set(allPO.map(r=>r.lg_pn).filter(Boolean))].sort();
+    psiMkpnList=[...new Set(allPO.map(r=>r.maker_pn).filter(Boolean))].sort();
+    psiMakerList=[...new Set(allPO.map(r=>r.maker).filter(Boolean))].sort();
+  }
+
+  function psiAC(inputId, listId, dataList){
+    const val=document.getElementById(inputId).value.trim().toLowerCase();
+    const list=document.getElementById(listId);
+    if(!val){list.classList.remove('show');return;}
+    const matches=dataList.filter(d=>(d||'').toLowerCase().includes(val)).slice(0,30);
+    if(!matches.length){list.classList.remove('show');return;}
+    list.innerHTML=matches.map(m=>{
+      const hl=m.replace(new RegExp('('+val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong>$1</strong>');
+      return`<div class="psi-ac-item" onmousedown="psiAcSelect('${inputId}','${listId}','${m.replace(/'/g,"\'")}')">
+        ${hl}</div>`;
+    }).join('');
+    list.classList.add('show');
+  }
+
+  function psiAcSelect(inputId, listId, val){
+    document.getElementById(inputId).value=val;
+    closePsiAC(listId);
+    loadPSI();
+  }
+
+  function closePsiAC(listId){
+    document.getElementById(listId)?.classList.remove('show');
   }
 
 async function loadBaseData(){
@@ -985,6 +1048,7 @@ function setPSIMode(mode){
   const offStyle='height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:\'Noto Sans KR\',sans-serif;';
   document.getElementById('psi-toggle-month').style.cssText=mode==='month'?onStyle:offStyle;
   document.getElementById('psi-toggle-week').style.cssText=mode==='week'?onStyle:offStyle;
+  buildPsiAcData();
   if(psiData.length) renderPSI();
 }
 
@@ -1050,6 +1114,8 @@ function loadPSI(){
   const from=document.getElementById('p-from').value;
   const to=document.getElementById('p-to').value;
   const makerF=document.getElementById('p-maker').value.trim().toLowerCase();
+  const lgpnF=(document.getElementById('p-lgpn')?.value||'').trim().toLowerCase();
+  const mkpnF=(document.getElementById('p-mkpn')?.value||'').trim().toLowerCase();
   const modeF=document.getElementById('p-mode').value;
   if(!entity){showToast('⚠ 법인을 선택해주세요','warn');return;}
   psiEntity=entity;
@@ -1058,6 +1124,8 @@ function loadPSI(){
   // PSI는 기본 전체(완료 포함) — 필터 선택 시만 제한
   let poFiltered=allPO.filter(r=>r.entity===entity);
   if(makerF) poFiltered=poFiltered.filter(r=>(r.maker||'').toLowerCase().includes(makerF));
+  if(lgpnF) poFiltered=poFiltered.filter(r=>(r.lg_pn||'').toLowerCase().includes(lgpnF));
+  if(mkpnF) poFiltered=poFiltered.filter(r=>(r.maker_pn||'').toLowerCase().includes(mkpnF));
   if(modeF) poFiltered=poFiltered.filter(r=>(r.mode||'').toUpperCase()===modeF);
   if(statusF) poFiltered=poFiltered.filter(r=>r.resp===statusF);
   if(from) poFiltered=poFiltered.filter(r=>ym(r.etd)>=from);
@@ -1221,10 +1289,9 @@ function renderPSI(){
   }).join('');
 
   document.getElementById('psiTableWrap').innerHTML=`
-    <div style="display:inline-block;border:1px solid var(--border);border-radius:12px;overflow:visible;min-width:300px;">
-    <table class="psi-table" style="width:auto;border-collapse:collapse;white-space:nowrap;">
+    <table class="psi-table" style="width:auto;border-collapse:collapse;white-space:nowrap;min-width:100%;">
       ${thead}<tbody>${tbody}</tbody>
-    </table></div>`;
+    </table>`;
 }
 
 function exportPSI(){
