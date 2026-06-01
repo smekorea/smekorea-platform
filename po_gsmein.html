@@ -337,7 +337,7 @@ async function parseFile(){
       const m=curFile.name.match(/^([A-Z]+)_PO_(\d{8})/);
       const fnDate=m?`${m[2].slice(0,4)}-${m[2].slice(4,6)}-${m[2].slice(6,8)}`:'';
       curData=raw.slice(hdr+3).filter(r=>r.some(c=>c!=='')).map((r,i)=>({
-        row:i+1,type:String(r[0]||'신규').trim(),entity:String(r[1]||'').trim()||ENTITY,
+        row:i+1,type:(()=>{const t=String(r[0]||'신규').trim();return t.match(/^new$/i)?'신규':t.match(/^modify$/i)?'수정':t.match(/^cancel$/i)?'취소':t;})(),entity:String(r[1]||'').trim()||ENTITY,
         date:fmtD(r[2])||fnDate,pono:String(r[3]||'').trim(),lgpn:String(r[4]||'').trim(),
         mkpn:String(r[5]||'').trim(),erp:String(r[6]||'').trim(),desc:String(r[7]||'').trim(),
         spec:String(r[8]||'').trim(),maker:String(r[9]||'').trim(),qty:Number(r[10])||0,
@@ -363,7 +363,7 @@ function validate(r){
   if(r.type!=='취소'&&!r.qty)e.push('수량');
   if(r.type!=='취소'&&!r.etd)e.push('ETD');
   if(r.type!=='취소'&&!['VSL','AIR'].includes(r.mode))e.push('운송');
-  if(r.type!=='신규'&&!r.reason)e.push('수정사유');
+  if(!['신규','NEW','new'].includes(r.type)&&!r.reason)e.push('수정사유');
   return e;
 }
 function renderPreview(){
