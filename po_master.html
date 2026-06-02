@@ -80,7 +80,7 @@
   .search-section{padding:16px 28px;border-bottom:1px solid var(--border);}
   .search-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;}
   .s-group{display:flex;flex-direction:column;gap:4px;}
-  .s-label{font-size:9px;font-family:'Courier New',Courier,monospace;color:var(--muted);letter-spacing:1px;}
+  .s-label{font-size:12px;font-family:'Noto Sans KR',sans-serif;color:#1a2233;font-weight:500;letter-spacing:0;}
   .s-group input,.s-group select{
     height:36px;background:var(--surface);border:1.5px solid var(--border);
     border-radius:8px;color:var(--text);font-family:'Noto Sans KR',sans-serif;
@@ -462,15 +462,15 @@
     </div>
     <div class="s-group wide">
       <div class="s-label">PO No. / Maker P/N</div>
-      <input type="text" id="s-keyword" placeholder="PO번호 또는 Maker P/N 검색...">
+      <input type="text" id="s-keyword" placeholder="PO번호 또는 Maker P/N 검색..." onkeydown="if(event.key==='Enter')loadPO()">
     </div>
     <div class="s-group narrow">
       <div class="s-label">Maker</div>
-      <input type="text" id="s-maker" placeholder="예: SMART">
+      <input type="text" id="s-maker" placeholder="예: SMART" onkeydown="if(event.key==='Enter')loadPO()">
     </div>
     <div class="s-group narrow">
       <div class="s-label">주문년월</div>
-      <input type="month" id="s-month">
+      <input type="month" id="s-month" onkeydown="if(event.key==='Enter')loadPO()">
     </div>
     <button class="btn-search" onclick="loadPO()">🔍 조회</button>
     <button class="btn-reset" onclick="resetSearch()">↺ 초기화</button>
@@ -1084,36 +1084,74 @@
     btn.disabled = true; btn.textContent = '등록 중...';
 
     try {
-      // ── 초과출하 자동분산 로직 ──
-      // 동일 mkpn + pono 그룹에서 ETD 오름차순으로 정렬 → 잔량 순서대로 차감
-      const sameGroup = allData
-        .filter(d => d.mkpn === selectedRow.mkpn && d.pono === selectedRow.pono)
-        .sort((a, b) => (a.etd||'') < (b.etd||'') ? -1 : 1);
+      // ── 차감 로직 ──
+      // 1단계: 동일 entity + mkpn 기준 전체 PO 조회
+      // 2단계: ETD 오름차순 → 동일 ETD 내 qty 내림차순 정렬
+      // 3단계: 기출하 이력을 출하일자 오름차순으로 순차 차감 후 이번 출하 차감
+      const {data: poGroupAll} = await sb.from('po_data')
+        .select('id, po_no, entity, qty, etd_request, item_code, lg_pn, maker_pn, maker')
+        .eq('entity', selectedRow.entity)
+        .eq('maker_pn', selectedRow.mkpn);
 
-      // 각 PO의 현재 잔량 계산
-      const {data: existingShips} = await sb.from('shipment_po')
-        .select('po_id, ship_qty')
-        .in('po_id', sameGroup.map(d => d.id));
-      const shipedMap = {};
-      (existingShips||[]).forEach(s => {
-        shipedMap[s.po_id] = (shipedMap[s.po_id]||0) + (s.ship_qty||0);
+      if (!poGroupAll || !poGroupAll.length) throw new Error('매칭 PO 없음');
+
+      // ETD 오름차순 → 동일 ETD 내 qty 내림차순
+      poGroupAll.sort((a, b) => {
+        if ((a.etd_request||'') !== (b.etd_request||''))
+          return (a.etd_request||'') < (b.etd_request||'') ? -1 : 1;
+        return (b.qty||0) - (a.qty||0);
       });
 
+      // 기출하 이력 조회 (출하일자 오름차순)
+      const {data: existingShips} = await sb.from('shipment_po')
+        .select('po_id, ship_qty, ship_date')
+        .in('po_id', poGroupAll.map(p => p.id))
+        .order('ship_date', {ascending: true});
+
+      // 각 PO별 잔량 계산 (기출하 순차 차감 방식)
+      const poRemainMap = {};
+      poGroupAll.forEach(p => { poRemainMap[p.id] = p.qty||0; });
+
+      // 출하일별로 그룹핑하여 순차 차감
+      const shipsByDate = {};
+      (existingShips||[]).forEach(s => {
+        if (!shipsByDate[s.ship_date]) shipsByDate[s.ship_date] = [];
+        shipsByDate[s.ship_date].push(s);
+      });
+      const sortedDates = Object.keys(shipsByDate).sort();
+      for (const date of sortedDates) {
+        let dateTotal = shipsByDate[date].reduce((sum, s) => sum + (s.ship_qty||0), 0);
+        for (const po of poGroupAll) {
+          if (dateTotal <= 0) break;
+          const rem = poRemainMap[po.id];
+          if (rem <= 0) continue;
+          const used = Math.min(dateTotal, rem);
+          poRemainMap[po.id] -= used;
+          dateTotal -= used;
+        }
+        // 초과분은 마지막 PO에서 처리 (음수 허용)
+        if (dateTotal > 0) {
+          const lastPo = poGroupAll[poGroupAll.length - 1];
+          poRemainMap[lastPo.id] -= dateTotal;
+        }
+      }
+
+      // 이번 출하 차감
       let remaining = shipqty;
       const insertRows = [];
 
-      for (const po of sameGroup) {
+      for (const po of poGroupAll) {
         if (remaining <= 0) break;
-        const poRemain = (po.qty||0) - (shipedMap[po.id]||0);
+        const poRemain = poRemainMap[po.id];
         if (poRemain <= 0) continue;
         const allocQty = Math.min(remaining, poRemain);
         insertRows.push({
           po_id:           po.id,
-          po_no:           po.pono,
+          po_no:           po.po_no,
           entity:          po.entity,
-          item_code:       po.erp || null,
-          lg_pn:           po.lgpn || null,
-          maker_pn:        po.mkpn || null,
+          item_code:       po.item_code || null,
+          lg_pn:           po.lg_pn || null,
+          maker_pn:        po.maker_pn || null,
           maker:           po.maker || null,
           ship_date:       shipdate,
           ship_qty:        allocQty,
@@ -1126,16 +1164,16 @@
         remaining -= allocQty;
       }
 
-      // 잔량 초과 시 마지막 PO에 초과분 추가 (불가피한 초과 출하)
+      // 초과분 → 마지막 PO에 초과출하
       if (remaining > 0) {
-        const lastPo = sameGroup[sameGroup.length - 1];
+        const lastPo = poGroupAll[poGroupAll.length - 1];
         insertRows.push({
           po_id:           lastPo.id,
-          po_no:           lastPo.pono,
+          po_no:           lastPo.po_no,
           entity:          lastPo.entity,
-          item_code:       lastPo.erp || null,
-          lg_pn:           lastPo.lgpn || null,
-          maker_pn:        lastPo.mkpn || null,
+          item_code:       lastPo.item_code || null,
+          lg_pn:           lastPo.lg_pn || null,
+          maker_pn:        lastPo.maker_pn || null,
           maker:           lastPo.maker || null,
           ship_date:       shipdate,
           ship_qty:        remaining,
@@ -1343,21 +1381,46 @@
         continue;
       }
 
-      // 기출하량 조회
-      const {data: existShips} = await sb.from('shipment_po')
-        .select('po_id, ship_qty')
-        .in('po_id', poGroup.map(p => p.id));
-      const shippedMap = {};
-      (existShips||[]).forEach(s => {
-        shippedMap[s.po_id] = (shippedMap[s.po_id]||0) + (s.ship_qty||0);
+      // ETD 오름차순 → 동일 ETD 내 qty 내림차순
+      poGroup.sort((a, b) => {
+        if ((a.etd_request||'') !== (b.etd_request||''))
+          return (a.etd_request||'') < (b.etd_request||'') ? -1 : 1;
+        return (b.qty||0) - (a.qty||0);
       });
 
-      // ETD 순 차감
+      // 기출하 이력 조회 (출하일자 오름차순)
+      const {data: existShips} = await sb.from('shipment_po')
+        .select('po_id, ship_qty, ship_date')
+        .in('po_id', poGroup.map(p => p.id))
+        .order('ship_date', {ascending: true});
+
+      // 각 PO별 잔량 계산 (출하일별 순차 차감)
+      const poRemainMap = {};
+      poGroup.forEach(p => { poRemainMap[p.id] = p.qty||0; });
+      const shipsByDate = {};
+      (existShips||[]).forEach(s => {
+        if (!shipsByDate[s.ship_date]) shipsByDate[s.ship_date] = [];
+        shipsByDate[s.ship_date].push(s);
+      });
+      for (const date of Object.keys(shipsByDate).sort()) {
+        let dateTotal = shipsByDate[date].reduce((sum, s) => sum + (s.ship_qty||0), 0);
+        for (const po of poGroup) {
+          if (dateTotal <= 0) break;
+          const rem = poRemainMap[po.id];
+          if (rem <= 0) continue;
+          const used = Math.min(dateTotal, rem);
+          poRemainMap[po.id] -= used;
+          dateTotal -= used;
+        }
+        if (dateTotal > 0) poRemainMap[poGroup[poGroup.length-1].id] -= dateTotal;
+      }
+
+      // 이번 출하 ETD순 차감
       let remaining = r.shipqty;
       const distRows = [];
       for (const po of poGroup) {
         if (remaining <= 0) break;
-        const poRemain = (po.qty||0) - (shippedMap[po.id]||0);
+        const poRemain = poRemainMap[po.id];
         if (poRemain <= 0) continue;
         const allocQty = Math.min(remaining, poRemain);
         distRows.push({po_id:po.id, po_no:po.po_no, etd:po.etd_request, allocQty, status:'출하완료', maker:po.maker||r.maker, lg_pn:po.lg_pn||r.lgpn, item_code:po.item_code});
