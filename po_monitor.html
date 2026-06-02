@@ -77,7 +77,7 @@ tbody td{padding:10px 13px;color:#1a2233;font-size:13px;}
 .b-transit{background:rgba(124,58,237,0.1);color:var(--purple);}
 
 /* D-DAY */
-.dday-red{color:var(--accent);font-weight:800;}
+.sortable-th:hover{color:var(--accent2);background:#d8e4f5;}
 .dday-amber{color:var(--amber);font-weight:700;}
 .dday-green{color:var(--accent3);font-weight:600;}
 
@@ -184,16 +184,16 @@ th{position:relative;user-select:none;}
       </select>
     </div>
     <div class="f-group"><div class="f-label">Maker P/N</div>
-      <input type="text" id="d-mkpn" placeholder="품번 검색..." style="width:150px;">
+      <input type="text" id="d-mkpn" placeholder="품번 검색..." style="width:150px;" onkeydown="if(event.key==='Enter')loadDeadline()">
     </div>
     <div class="f-group"><div class="f-label">LG P/N</div>
-      <input type="text" id="d-lgpn" placeholder="LG품번 검색..." style="width:140px;">
+      <input type="text" id="d-lgpn" placeholder="LG품번 검색..." style="width:140px;" onkeydown="if(event.key==='Enter')loadDeadline()">
     </div>
     <div class="f-group"><div class="f-label">출하일자</div>
-      <input type="month" id="d-shipdate" style="width:130px;">
+      <input type="month" id="d-shipdate" style="width:130px;" onkeydown="if(event.key==='Enter')loadDeadline()">
     </div>
     <div class="f-group"><div class="f-label">Maker</div>
-      <input type="text" id="d-maker" placeholder="메이커 검색..." style="width:120px;">
+      <input type="text" id="d-maker" placeholder="메이커 검색..." style="width:120px;" onkeydown="if(event.key==='Enter')loadDeadline()">
     </div>
     <button class="btn-search" onclick="loadDeadline()">🔍 조회</button>
     <button class="btn-reset" onclick="resetFilter('deadline')">↺ 초기화</button>
@@ -211,11 +211,15 @@ th{position:relative;user-select:none;}
     <div class="table-wrap">
       <table id="deadlineTable">
         <thead><tr>
-          <th>구분<div class="col-resizer"></div></th><th>법인<div class="col-resizer"></div></th><th>주문일자<div class="col-resizer"></div></th><th>PO No.<div class="col-resizer"></div></th>
+          <th>구분<div class="col-resizer"></div></th><th>법인<div class="col-resizer"></div></th>
+          <th class="sortable-th" onclick="sortDeadline('order_date')" style="cursor:pointer;" title="클릭하여 정렬">주문일자 <span id="sort-order_date"></span><div class="col-resizer"></div></th>
+          <th class="sortable-th" onclick="sortDeadline('pono')" style="cursor:pointer;" title="클릭하여 정렬">PO No. <span id="sort-pono"></span><div class="col-resizer"></div></th>
           <th>LG P/N<div class="col-resizer"></div></th><th>Maker P/N<div class="col-resizer"></div></th><th>Maker<div class="col-resizer"></div></th>
           <th class="right">주문수량<div class="col-resizer"></div></th><th class="right">출하수량<div class="col-resizer"></div></th><th class="right">잔량<div class="col-resizer"></div></th>
-          <th>ETD요청<div class="col-resizer"></div></th><th class="center">D-day<div class="col-resizer"></div></th><th>운송<div class="col-resizer"></div></th>
-          <th>출하일자<div class="col-resizer"></div></th><th>출하현황<div class="col-resizer"></div></th>
+          <th class="sortable-th" onclick="sortDeadline('etd')" style="cursor:pointer;" title="클릭하여 정렬">ETD요청 <span id="sort-etd">↑</span><div class="col-resizer"></div></th>
+          <th class="center">D-day<div class="col-resizer"></div></th><th>운송<div class="col-resizer"></div></th>
+          <th class="sortable-th" onclick="sortDeadline('hqdate')" style="cursor:pointer;" title="클릭하여 정렬">출하일자 <span id="sort-hqdate"></span><div class="col-resizer"></div></th>
+          <th>출하현황<div class="col-resizer"></div></th>
         </tr></thead>
         <tbody id="deadlineBody">
           <tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📅</div><p>조회 버튼을 눌러주세요</p></div></td></tr>
@@ -594,6 +598,24 @@ function resetFilter(tab){
 // 공통 데이터 로드 (allData, shipData)
 // ─────────────────────────────────────────
 let allPO=[], allShip=[];
+let deadlineSortKey='etd', deadlineSortAsc=true;
+let deadlineLastData=[];
+
+function sortDeadline(key){
+  if(deadlineSortKey===key){
+    deadlineSortAsc=!deadlineSortAsc;
+  } else {
+    deadlineSortKey=key;
+    deadlineSortAsc=true;
+  }
+  // 정렬 아이콘 업데이트
+  ['order_date','pono','etd','hqdate'].forEach(k=>{
+    const el=document.getElementById('sort-'+k);
+    if(!el) return;
+    el.textContent = k===deadlineSortKey ? (deadlineSortAsc?'↑':'↓') : '';
+  });
+  if(deadlineLastData.length) renderDeadline(deadlineLastData);
+}
 
 
   // ── 독립 컬럼 리사이즈 ──
@@ -781,8 +803,26 @@ function loadDeadline(){
   if(status==='normal') data=data.filter(r=>r.resp!=='complete'&&r.etd&&diffDays(r.etd,tod)>50);
   else if(status==='short') data=data.filter(r=>r.resp!=='complete'&&r.etd&&diffDays(r.etd,tod)<=50);
 
-  // ETD 기준 정렬
-  data.sort((a,b)=>(a.etd||'').localeCompare(b.etd||''));
+  // ETD 기준 정렬 (기본)
+  deadlineLastData = data;
+  // 정렬 아이콘 초기화 (ETD 기본)
+  ['order_date','pono','etd','hqdate'].forEach(k=>{
+    const el=document.getElementById('sort-'+k);
+    if(el) el.textContent = k===deadlineSortKey ? (deadlineSortAsc?'↑':'↓') : '';
+  });
+  renderDeadline(data);
+}
+
+function renderDeadline(data){
+  // 정렬 적용
+  const key=deadlineSortKey;
+  const asc=deadlineSortAsc;
+  const getVal=r=>key==='order_date'?(r.order_date||''):key==='pono'?(r.pono||r.po_no||''):key==='etd'?(r.etd||''):key==='hqdate'?(r.hqdate||''):'';
+  data=[...data].sort((a,b)=>{
+    const va=getVal(a), vb=getVal(b);
+    return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
   document.getElementById('deadline-count').textContent=`— ${data.length.toLocaleString()}건`;
 
   if(!data.length){
