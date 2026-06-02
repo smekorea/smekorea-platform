@@ -238,10 +238,16 @@
     <div class="table-wrap">
       <table id="listTable">
         <thead><tr>
-          <th>구분<div class="col-resizer"></div></th><th>주문일자<div class="col-resizer"></div></th><th>PO No.<div class="col-resizer"></div></th><th>LG P/N<div class="col-resizer"></div></th><th>Maker P/N<div class="col-resizer"></div></th>
+          <th>구분<div class="col-resizer"></div></th>
+          <th style="cursor:pointer;" onclick="sortList('date')">주문일자 <span id="gs-sort-date"></span><div class="col-resizer"></div></th>
+          <th style="cursor:pointer;" onclick="sortList('pono')">PO No. <span id="gs-sort-pono"></span><div class="col-resizer"></div></th>
+          <th>LG P/N<div class="col-resizer"></div></th><th>Maker P/N<div class="col-resizer"></div></th>
           <th>ERP<div class="col-resizer"></div></th><th>Maker<div class="col-resizer"></div></th><th style="text-align:right">주문수량<div class="col-resizer"></div></th>
           <th style="text-align:right">출하수량<div class="col-resizer"></div></th><th style="text-align:right">잔량<div class="col-resizer"></div></th>
-          <th>ETD요청<div class="col-resizer"></div></th><th style="text-align:center">Maker L/T<div class="col-resizer"></div></th><th style="text-align:center">납기조건<div class="col-resizer"></div></th><th>본사출하일<div class="col-resizer"></div></th><th>운송<div class="col-resizer"></div></th><th>출하현황<div class="col-resizer"></div></th>
+          <th style="cursor:pointer;" onclick="sortList('etd')">ETD요청 <span id="gs-sort-etd">↑</span><div class="col-resizer"></div></th>
+          <th style="text-align:center">Maker L/T<div class="col-resizer"></div></th><th style="text-align:center">납기조건<div class="col-resizer"></div></th>
+          <th style="cursor:pointer;" onclick="sortList('shipDate')">본사출하일 <span id="gs-sort-shipDate"></span><div class="col-resizer"></div></th>
+          <th>운송<div class="col-resizer"></div></th><th>출하현황<div class="col-resizer"></div></th>
         </tr></thead>
         <tbody id="listBody">
           <tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📋</div><p>조회 버튼을 눌러 PO 목록을 불러오세요</p></div></td></tr>
@@ -520,6 +526,18 @@ async function submitManual(){
 // ── 조회 ──
 let listData=[],ddData={pono:[],maker:[],mkpn:[],lgpn:[],erp:[]};
 let makerLeadMap={};
+let listSortKey='etd', listSortAsc=true;
+
+function sortList(key){
+  if(listSortKey===key){ listSortAsc=!listSortAsc; }
+  else { listSortKey=key; listSortAsc=true; }
+  ['date','pono','etd','shipDate'].forEach(k=>{
+    const el=document.getElementById('gs-sort-'+k);
+    if(el) el.textContent=k===listSortKey?(listSortAsc?'↑':'↓'):'';
+  });
+  renderList();
+}
+let makerLeadMap={};
 
 async function loadMakerLeadTimes(){
   if(Object.keys(makerLeadMap).length) return;
@@ -674,13 +692,19 @@ async function searchPO(){
   renderList();
 }
 function renderList(){
-  document.getElementById('listCount').textContent=`— ${listData.length.toLocaleString()}건`;
-  if(!listData.length){
+  const getV=r=>listSortKey==='date'?(r.date||''):listSortKey==='pono'?(r.pono||''):listSortKey==='etd'?(r.etd||''):listSortKey==='shipDate'?(r.shipDate||''):'';
+  const sorted=[...listData].sort((a,b)=>listSortAsc?getV(a).localeCompare(getV(b)):getV(b).localeCompare(getV(a)));
+  ['date','pono','etd','shipDate'].forEach(k=>{
+    const el=document.getElementById('gs-sort-'+k);
+    if(el) el.textContent=k===listSortKey?(listSortAsc?'↑':'↓'):'';
+  });
+  document.getElementById('listCount').textContent=`— ${sorted.length.toLocaleString()}건`;
+  if(!sorted.length){
     document.getElementById('listBody').innerHTML='<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
     return;
   }
   document.getElementById('excelBtn').style.display='flex';
-  document.getElementById('listBody').innerHTML=listData.map(r=>{
+  document.getElementById('listBody').innerHTML=sorted.map(r=>{
     let rowBg='';
     rowBg='background:#fff;';
     const subStyle=r._sub?'opacity:0.6;':'';

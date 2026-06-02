@@ -495,19 +495,19 @@
         <tr>
           <th>구분<div class="col-resizer"></div></th>
           <th>법인<div class="col-resizer"></div></th>
-          <th class="sortable">주문일자 ↕<div class="col-resizer"></div></th>
-          <th>PO No.<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('date')" style="cursor:pointer;">주문일자 <span id="pm-sort-date"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('pono')" style="cursor:pointer;">PO No. <span id="pm-sort-pono"></span><div class="col-resizer"></div></th>
           <th>Maker P/N<div class="col-resizer"></div></th>
           <th>Maker<div class="col-resizer"></div></th>
           <th>LG P/N<div class="col-resizer"></div></th>
           <th class="td-right">주문수량<div class="col-resizer"></div></th>
           <th class="td-right">출하수량<div class="col-resizer"></div></th>
           <th class="td-right">잔량<div class="col-resizer"></div></th>
-          <th>ETD요청<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('etd')" style="cursor:pointer;">ETD요청 <span id="pm-sort-etd">↑</span><div class="col-resizer"></div></th>
           <th>ETA(자동)<div class="col-resizer"></div></th>
           <th>운송<div class="col-resizer"></div></th>
           <th>출하현황<div class="col-resizer"></div></th>
-          <th>출하일<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('hqdate')" style="cursor:pointer;">출하일 <span id="pm-sort-hqdate"></span><div class="col-resizer"></div></th>
           <th>메이커납기<div class="col-resizer"></div></th>
         </tr>
       </thead>
@@ -707,8 +707,19 @@
     return d.toISOString().slice(0,10);
   }
   let allData = [];
-  let filteredData = []; // ① 버그수정: filtered 별도 관리
+  let filteredData = [];
   let selectedRow = null;
+  let poSortKey = 'etd', poSortAsc = true;
+
+  function sortPO(key){
+    if(poSortKey===key){ poSortAsc=!poSortAsc; }
+    else { poSortKey=key; poSortAsc=true; }
+    ['date','pono','etd','hqdate'].forEach(k=>{
+      const el=document.getElementById('pm-sort-'+k);
+      if(el) el.textContent=k===poSortKey?(poSortAsc?'↑':'↓'):'';
+    });
+    renderTable(filteredData);
+  }
 
   // ── 토스트 ──
   function showToast(msg, type='') {
@@ -856,9 +867,15 @@
 
   // ── 테이블 렌더 ──
   function renderTable(data) {
-    // ETD 오름차순 기본 정렬
-    data = [...data].sort((a,b)=>(a.etd||'').localeCompare(b.etd||''));
     filteredData = data;
+    // 정렬 적용
+    const getV=r=>poSortKey==='date'?(r.date||''):poSortKey==='pono'?(r.pono||''):poSortKey==='etd'?(r.etd||''):poSortKey==='hqdate'?(r.hqdate||''):'';
+    data=[...data].sort((a,b)=>poSortAsc?getV(a).localeCompare(getV(b)):getV(b).localeCompare(getV(a)));
+    // 아이콘 갱신
+    ['date','pono','etd','hqdate'].forEach(k=>{
+      const el=document.getElementById('pm-sort-'+k);
+      if(el) el.textContent=k===poSortKey?(poSortAsc?'↑':'↓'):'';
+    });
     const body = document.getElementById('poTableBody');
     document.getElementById('tableCount').textContent = `— ${data.length.toLocaleString()}건`;
 
