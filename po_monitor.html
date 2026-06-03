@@ -208,6 +208,13 @@ th{position:relative;user-select:none;}
       <div><span class="table-title">납기현황</span> <span class="table-count" id="deadline-count"></span></div>
       <button class="badge b-ok" style="cursor:pointer;font-size:11px;" onclick="exportTable('deadlineBody','납기현황')">⬇ 엑셀</button>
     </div>
+    <!-- 합계 바 -->
+    <div id="dl-summary-bar" style="display:none;background:#f0f4f9;border:1px solid var(--border);border-radius:10px;padding:9px 18px;margin-bottom:12px;gap:24px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">조회 합계</span>
+      <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">주문수량 <b id="dl-sum-qty" style="color:#1a2233;font-size:14px;">—</b></span>
+      <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">출하수량 <b id="dl-sum-shipped" style="color:#1a56db;font-size:14px;">—</b></span>
+      <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">잔량 <b id="dl-sum-remain" style="color:#c8001e;font-size:14px;">—</b></span>
+    </div>
     <div class="table-wrap">
       <table id="deadlineTable">
         <thead><tr>
@@ -728,7 +735,7 @@ async function loadBaseData(){
         if(!calcShipMap[po.id])calcShipMap[po.id]={shipped:0,shipDate:''};
         calcShipMap[po.id].shipped+=used;
         if(date>(calcShipMap[po.id].shipDate||''))calcShipMap[po.id].shipDate=date;
-        remain[po.id]-=used;
+        remain[po.id]=Math.max(0,remain[po.id]-used); // 0 이하 방지
         leftQty-=used;
       }
       if(leftQty>0){
@@ -736,6 +743,7 @@ async function loadBaseData(){
         if(!calcShipMap[lastPo.id])calcShipMap[lastPo.id]={shipped:0,shipDate:''};
         calcShipMap[lastPo.id].shipped+=leftQty;
         if(date>(calcShipMap[lastPo.id].shipDate||''))calcShipMap[lastPo.id].shipDate=date;
+        // remain[lastPo.id]는 수정 안 함 → 이후 새 PO는 독립적으로 시작
       }
     }
   }
@@ -868,6 +876,18 @@ function renderDeadline(data){
   });
 
   document.getElementById('deadline-count').textContent=`— ${data.length.toLocaleString()}건`;
+
+  // 합계 계산
+  const sumQty=data.reduce((s,r)=>s+(r.qty||0),0);
+  const sumShipped=data.reduce((s,r)=>s+(r.shipped||0),0);
+  const sumRemain=data.reduce((s,r)=>s+(r.remain>0?r.remain:0),0);
+  const dlBar=document.getElementById('dl-summary-bar');
+  if(dlBar){
+    dlBar.style.display='flex';
+    document.getElementById('dl-sum-qty').textContent=sumQty.toLocaleString();
+    document.getElementById('dl-sum-shipped').textContent=sumShipped.toLocaleString();
+    document.getElementById('dl-sum-remain').textContent=sumRemain.toLocaleString();
+  }
 
   if(!data.length){
     document.getElementById('deadlineBody').innerHTML='<tr><td colspan="13"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과 없음</p></div></td></tr>';

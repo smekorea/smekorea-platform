@@ -488,6 +488,13 @@
     </div>
     <button class="btn-excel" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
   </div>
+  <!-- 합계 바 -->
+  <div id="pm-summary-bar" style="display:none;background:#f0f4f9;border:1px solid var(--border);border-radius:10px;padding:9px 18px;margin-bottom:12px;gap:24px;align-items:center;flex-wrap:wrap;">
+    <span style="font-size:12px;color:var(--muted);font-weight:600;">조회 합계</span>
+    <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">주문수량 <b id="pm-sum-qty" style="color:#1a2233;font-size:14px;">—</b></span>
+    <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">출하수량 <b id="pm-sum-shipped" style="color:#1a56db;font-size:14px;">—</b></span>
+    <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">잔량 <b id="pm-sum-remain" style="color:#c8001e;font-size:14px;">—</b></span>
+  </div>
 
   <div class="table-wrap" style="flex:1;min-height:0;overflow:auto;">
     <table id="poTable">
@@ -811,7 +818,7 @@
             if (!calcShipMap[po.id]) calcShipMap[po.id] = {shipped:0, shipDate:''};
             calcShipMap[po.id].shipped += used;
             if (date > (calcShipMap[po.id].shipDate||'')) calcShipMap[po.id].shipDate = date;
-            remain[po.id] -= used;
+            remain[po.id] = Math.max(0, remain[po.id] - used); // 0 이하 방지
             leftQty -= used;
           }
           if (leftQty > 0) {
@@ -819,6 +826,7 @@
             if (!calcShipMap[lastPo.id]) calcShipMap[lastPo.id] = {shipped:0, shipDate:''};
             calcShipMap[lastPo.id].shipped += leftQty;
             if (date > (calcShipMap[lastPo.id].shipDate||'')) calcShipMap[lastPo.id].shipDate = date;
+            // remain[lastPo.id]는 수정 안 함 → 이후 새 PO는 독립적으로 시작
           }
         }
       }
@@ -924,6 +932,18 @@
     });
     const body = document.getElementById('poTableBody');
     document.getElementById('tableCount').textContent = `— ${data.length.toLocaleString()}건`;
+
+    // 합계 계산
+    const sumQty=data.reduce((s,r)=>s+(r.qty||0),0);
+    const sumShipped=data.reduce((s,r)=>s+(r.shipped||0),0);
+    const sumRemain=data.reduce((s,r)=>s+((r.qty||0)-(r.shipped||0)>0?(r.qty||0)-(r.shipped||0):0),0);
+    const pmBar=document.getElementById('pm-summary-bar');
+    if(pmBar){
+      pmBar.style.display='flex';
+      document.getElementById('pm-sum-qty').textContent=sumQty.toLocaleString();
+      document.getElementById('pm-sum-shipped').textContent=sumShipped.toLocaleString();
+      document.getElementById('pm-sum-remain').textContent=sumRemain.toLocaleString();
+    }
 
     if (!data.length) {
       body.innerHTML = '<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
@@ -1191,13 +1211,12 @@
           const rem = poRemainMap[po.id];
           if (rem <= 0) continue;
           const used = Math.min(dateTotal, rem);
-          poRemainMap[po.id] -= used;
+          poRemainMap[po.id] = Math.max(0, poRemainMap[po.id] - used); // 0 이하 방지
           dateTotal -= used;
         }
-        // 초과분은 마지막 PO에서 처리 (음수 허용)
+        // 초과분 → 마지막 PO shipped에만 기록, remain은 건드리지 않음
         if (dateTotal > 0) {
-          const lastPo = poGroupAll[poGroupAll.length - 1];
-          poRemainMap[lastPo.id] -= dateTotal;
+          // remain 수정 없음 → 이후 새 PO는 독립적으로 시작
         }
       }
 
