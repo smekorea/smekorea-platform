@@ -630,15 +630,75 @@ async function searchPO(){
     const {data:poRows,error:poErr}=await q;
     if(poErr)throw poErr;
 
+    // 출하 이력 전체 조회 (entity 기준)
     const {data:shipRows}=await sb.from('shipment_po').select('po_id,ship_qty,ship_date').eq('entity',ENTITY);
-    const shipMap={};
+
+    // po_id → ship_date별 출하수량 매핑
+    const shipRawMap={}; // po_id → [{ship_qty, ship_date}]
     (shipRows||[]).forEach(s=>{
-      if(!shipMap[s.po_id])shipMap[s.po_id]={qty:0,date:''};
-      shipMap[s.po_id].qty+=(s.ship_qty||0);
-      if(s.ship_date&&s.ship_date>shipMap[s.po_id].date)shipMap[s.po_id].date=s.ship_date;
+      if(!shipRawMap[s.po_id])shipRawMap[s.po_id]=[];
+      shipRawMap[s.po_id].push({qty:s.ship_qty||0,date:s.ship_date||''});
     });
 
     const today=new Date().toISOString().slice(0,10);
+
+    // ── ETD순 순차차감 재계산 ──
+    // 1) maker_pn별로 전체 PO 그룹핑
+    const mkpnGroups={};
+    (poRows||[]).forEach(r=>{
+      const mk=r.maker_pn||'';
+      if(!mkpnGroups[mk])mkpnGroups[mk]=[];
+      mkpnGroups[mk].push(r);
+    });
+
+    // 2) 각 maker_pn 그룹에서 ETD 오름차순 + 동일ETD 내 qty 내림차순 정렬 후 순차차감
+    const calcShipMap={}; // po_id → {shipped, shipDate}
+    for(const [,poList] of Object.entries(mkpnGroups)){
+      // ETD 오름차순 → qty 내림차순
+      const sorted=[...poList].sort((a,b)=>{
+        if((a.etd_request||'')!==(b.etd_request||''))
+          return (a.etd_request||'')<(b.etd_request||'')?-1:1;
+        return (b.qty||0)-(a.qty||0);
+      });
+      // 각 PO 잔량 초기화
+      const remain={};
+      sorted.forEach(p=>{remain[p.id]=p.qty||0;});
+      // 출하 이력 수집 (출하일 오름차순)
+      const allShips=[];
+      sorted.forEach(p=>{
+        (shipRawMap[p.id]||[]).forEach(s=>allShips.push({...s,origPoId:p.id}));
+      });
+      allShips.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      // 출하일별 순차차감
+      const dateGroups={};
+      allShips.forEach(s=>{
+        if(!dateGroups[s.date])dateGroups[s.date]=0;
+        dateGroups[s.date]+=s.qty;
+      });
+      for(const date of Object.keys(dateGroups).sort()){
+        let leftQty=dateGroups[date];
+        for(const po of sorted){
+          if(leftQty<=0)break;
+          const r=remain[po.id];
+          if(r<=0)continue;
+          const used=Math.min(leftQty,r);
+          if(!calcShipMap[po.id])calcShipMap[po.id]={shipped:0,shipDate:''};
+          calcShipMap[po.id].shipped+=used;
+          if(date>calcShipMap[po.id].shipDate)calcShipMap[po.id].shipDate=date;
+          remain[po.id]-=used;
+          leftQty-=used;
+        }
+        // 초과분 → 마지막 PO에 추가
+        if(leftQty>0){
+          const lastPo=sorted[sorted.length-1];
+          if(!calcShipMap[lastPo.id])calcShipMap[lastPo.id]={shipped:0,shipDate:''};
+          calcShipMap[lastPo.id].shipped+=leftQty;
+          if(date>calcShipMap[lastPo.id].shipDate)calcShipMap[lastPo.id].shipDate=date;
+        }
+      }
+    }
+
+    // 3) 기존 그룹핑 로직 유지, shipped/remain을 calcShipMap 기준으로 교체
     const groups={};
     (poRows||[]).forEach(r=>{
       const key=`${r.po_no}||${r.maker_pn}||${r.etd_request}||${r.qty}`;
@@ -650,8 +710,8 @@ async function searchPO(){
     for(const [,grp] of Object.entries(groups)){
       const latest=grp[grp.length-1];
       const uniqueIds=[...new Set(grp.map(r=>r.id))];
-      const totalShipped=uniqueIds.reduce((s,id)=>s+(shipMap[id]?.qty||0),0);
-      const latestShipDate=grp.reduce((d,r)=>{const sd=shipMap[r.id]?.date||'';return sd>d?sd:d;},'');
+      const totalShipped=uniqueIds.reduce((s,id)=>s+(calcShipMap[id]?.shipped||0),0);
+      const latestShipDate=uniqueIds.reduce((d,id)=>{const sd=calcShipMap[id]?.shipDate||'';return sd>d?sd:d;},'');
       const rem=(latest.qty||0)-totalShipped;
       const expETD=calcExpectedETD(latest.maker,today);
       const ltInfo=classifyLeadTime(latest.maker,latest.etd_request,today);
@@ -678,8 +738,8 @@ async function searchPO(){
         if(r.allRows&&r.allRows.length>1){
           r.allRows.forEach((sub,idx)=>{
             const isLast=idx===r.allRows.length-1;
-            const subShipped=shipMap[sub.id]?.qty||0;
-            const subDate=shipMap[sub.id]?.date||'';
+            const subShipped=calcShipMap[sub.id]?.shipped||0;
+            const subDate=calcShipMap[sub.id]?.shipDate||'';
             listData.push({...r,id:sub.id,type:sub.action_type,qty:sub.qty,
               shipped:isLast?r.shipped:subShipped,
               remain:isLast?r.remain:(sub.qty-subShipped),

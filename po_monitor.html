@@ -685,17 +685,60 @@ async function loadBaseData(){
     sb.from('shipment_po').select('*')
   ]);
 
-  // shipment_po → po_id별 합산
-  const shipMap={}, shipDateMap={}, shipTransMap={}, shipInvMap={}, shipAllMap={};
+  // shipment_po 원본 매핑
+  const shipRawMap={}, shipTransMap={}, shipInvMap={}, shipAllMap={};
   (shipRows||[]).forEach(s=>{
-    if(!shipMap[s.po_id]) shipMap[s.po_id]=0;
-    shipMap[s.po_id]+=(s.ship_qty||0);
-    if(s.ship_date&&(!shipDateMap[s.po_id]||s.ship_date>shipDateMap[s.po_id])) shipDateMap[s.po_id]=s.ship_date;
+    if(!shipRawMap[s.po_id])shipRawMap[s.po_id]=[];
+    shipRawMap[s.po_id].push({qty:s.ship_qty||0,date:s.ship_date||''});
     shipTransMap[s.po_id]=s.transport||'';
     shipInvMap[s.po_id]=s.invoice_no||'';
-    if(!shipAllMap[s.po_id]) shipAllMap[s.po_id]=[];
+    if(!shipAllMap[s.po_id])shipAllMap[s.po_id]=[];
     shipAllMap[s.po_id].push(s);
   });
+
+  // ── ETD순 순차차감 재계산 (entity+maker_pn 기준) ──
+  const entityMkpnGroups={};
+  (poRows||[]).forEach(r=>{
+    const k=`${r.entity}||${r.maker_pn||''}`;
+    if(!entityMkpnGroups[k])entityMkpnGroups[k]=[];
+    entityMkpnGroups[k].push(r);
+  });
+
+  const calcShipMap={}; // po_id → {shipped, shipDate}
+  for(const [,poList] of Object.entries(entityMkpnGroups)){
+    const sorted=[...poList].sort((a,b)=>{
+      if((a.etd_request||'')!==(b.etd_request||''))
+        return (a.etd_request||'')<(b.etd_request||'')?-1:1;
+      return (b.qty||0)-(a.qty||0);
+    });
+    const remain={};
+    sorted.forEach(p=>{remain[p.id]=p.qty||0;});
+    const allShips=[];
+    sorted.forEach(p=>{(shipRawMap[p.id]||[]).forEach(s=>allShips.push({...s}));});
+    allShips.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const dateGroups={};
+    allShips.forEach(s=>{dateGroups[s.date]=(dateGroups[s.date]||0)+s.qty;});
+    for(const date of Object.keys(dateGroups).sort()){
+      let leftQty=dateGroups[date];
+      for(const po of sorted){
+        if(leftQty<=0)break;
+        const r=remain[po.id];
+        if(r<=0)continue;
+        const used=Math.min(leftQty,r);
+        if(!calcShipMap[po.id])calcShipMap[po.id]={shipped:0,shipDate:''};
+        calcShipMap[po.id].shipped+=used;
+        if(date>(calcShipMap[po.id].shipDate||''))calcShipMap[po.id].shipDate=date;
+        remain[po.id]-=used;
+        leftQty-=used;
+      }
+      if(leftQty>0){
+        const lastPo=sorted[sorted.length-1];
+        if(!calcShipMap[lastPo.id])calcShipMap[lastPo.id]={shipped:0,shipDate:''};
+        calcShipMap[lastPo.id].shipped+=leftQty;
+        if(date>(calcShipMap[lastPo.id].shipDate||''))calcShipMap[lastPo.id].shipDate=date;
+      }
+    }
+  }
 
   // PO 그룹핑
   const groups={};
@@ -709,8 +752,8 @@ async function loadBaseData(){
     grp.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     const latest=grp[grp.length-1];
     const uniqueIds=[...new Set(grp.map(r=>r.id))];
-    const totalShipped=uniqueIds.reduce((s,id)=>s+(shipMap[id]||0),0);
-    const latestShipDate=grp.reduce((d,r)=>{const sd=shipDateMap[r.id];return sd&&sd>d?sd:d;},'');
+    const totalShipped=uniqueIds.reduce((s,id)=>s+(calcShipMap[id]?.shipped||0),0);
+    const latestShipDate=uniqueIds.reduce((d,id)=>{const sd=calcShipMap[id]?.shipDate||'';return sd>d?sd:d;},'');
     const latestTransport=grp.reduce((t,r)=>shipTransMap[r.id]||t,'');
     const latestInvoice=grp.reduce((t,r)=>shipInvMap[r.id]||t,'');
     const remain=(latest.qty||0)-totalShipped;

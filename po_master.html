@@ -762,22 +762,72 @@
       const {data: poRows, error} = await q;
       if (error) throw error;
 
-      // shipment_po 조회 (po_id 기준 합산)
-      let shipMap = {}; // key: po_id → 출하수량
-      let shipDateMap = {}; // key: po_id → 출하일
+      // shipment_po 전체 조회
+      let shipRawMap = {}; // po_id → [{qty, date}]
+      let shipDateMap = {};
       {
         const {data: ships} = await sb.from('shipment_po').select('po_id, ship_qty, ship_date');
         (ships||[]).forEach(s => {
-          if (s.po_id) shipMap[s.po_id] = (shipMap[s.po_id]||0) + (s.ship_qty||0);
-          if (s.po_id && s.ship_date) shipDateMap[s.po_id] = s.ship_date;
+          if (!shipRawMap[s.po_id]) shipRawMap[s.po_id] = [];
+          shipRawMap[s.po_id].push({qty: s.ship_qty||0, date: s.ship_date||''});
+          if (s.po_id && s.ship_date && (!shipDateMap[s.po_id] || s.ship_date > shipDateMap[s.po_id]))
+            shipDateMap[s.po_id] = s.ship_date;
         });
       }
 
-      // 전체 이력 매핑
-      const allRows = (poRows||[]).map(r => {
-        const shipped = shipMap[r.id] || 0;
-        const remain  = (r.qty||0) - shipped;
-        const resp    = shipped === 0 ? 'unordered' : remain <= 0 ? 'complete' : 'pending';
+      // ── ETD순 순차차감 재계산 ──
+      // maker_pn별 전체 PO 그룹핑 (필터와 무관하게 전체 PO 기준)
+      const {data: allPoRows} = await sb.from('po_data').select('id,maker_pn,qty,etd_request,entity').eq('entity', 'SMECN');
+      const mkpnGroups = {};
+      (allPoRows||[]).forEach(r => {
+        const mk = r.maker_pn||'';
+        if (!mkpnGroups[mk]) mkpnGroups[mk] = [];
+        mkpnGroups[mk].push(r);
+      });
+
+      const calcShipMap = {}; // po_id → {shipped, shipDate}
+      for (const [, poList] of Object.entries(mkpnGroups)) {
+        const sorted = [...poList].sort((a,b) => {
+          if ((a.etd_request||'') !== (b.etd_request||''))
+            return (a.etd_request||'') < (b.etd_request||'') ? -1 : 1;
+          return (b.qty||0) - (a.qty||0);
+        });
+        const remain = {};
+        sorted.forEach(p => { remain[p.id] = p.qty||0; });
+        // 출하 이력 수집
+        const allShips = [];
+        sorted.forEach(p => { (shipRawMap[p.id]||[]).forEach(s => allShips.push({...s})); });
+        allShips.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+        // 출하일별 합산 후 순차차감
+        const dateGroups = {};
+        allShips.forEach(s => { dateGroups[s.date] = (dateGroups[s.date]||0) + s.qty; });
+        for (const date of Object.keys(dateGroups).sort()) {
+          let leftQty = dateGroups[date];
+          for (const po of sorted) {
+            if (leftQty <= 0) break;
+            const r = remain[po.id];
+            if (r <= 0) continue;
+            const used = Math.min(leftQty, r);
+            if (!calcShipMap[po.id]) calcShipMap[po.id] = {shipped:0, shipDate:''};
+            calcShipMap[po.id].shipped += used;
+            if (date > (calcShipMap[po.id].shipDate||'')) calcShipMap[po.id].shipDate = date;
+            remain[po.id] -= used;
+            leftQty -= used;
+          }
+          if (leftQty > 0) {
+            const lastPo = sorted[sorted.length-1];
+            if (!calcShipMap[lastPo.id]) calcShipMap[lastPo.id] = {shipped:0, shipDate:''};
+            calcShipMap[lastPo.id].shipped += leftQty;
+            if (date > (calcShipMap[lastPo.id].shipDate||'')) calcShipMap[lastPo.id].shipDate = date;
+          }
+        }
+      }
+
+      // 전체 이력 매핑 (calcShipMap 기준)
+      const allRows2 = (poRows||[]).map(r => {
+        const shipped = calcShipMap[r.id]?.shipped || 0;
+        const remain2 = (r.qty||0) - shipped;
+        const resp    = shipped === 0 ? 'unordered' : remain2 <= 0 ? 'complete' : 'pending';
         const excess_qty = Math.max(0, shipped - (r.qty||0));
         return {
           id: r.id, entity: r.entity, date: r.order_date,
@@ -789,34 +839,30 @@
           item_status: r.item_status,
           modify_reason: r.modify_reason || '',
           created_at: r.created_at || '',
-          hqdate:'', mkcommit:'', mkactual:'', history:[]
+          hqdate: calcShipMap[r.id]?.shipDate || '', mkcommit:'', mkactual:'', history:[]
         };
       });
 
       // PO No. + Maker P/N + ETD 3개 조합으로 그룹핑
       const groupMap = {};
-      allRows.forEach(r => {
+      allRows2.forEach(r => {
         const key = `${r.pono}||${r.mkpn}||${r.etd}||${r.qty}`;
         if (!groupMap[key]) groupMap[key] = [];
         groupMap[key].push(r);
       });
 
       allData = Object.values(groupMap).map(group => {
-        // created_at 기준 오름차순 정렬 → 마지막이 최신건
         group.sort((a,b) => new Date(a.created_at||a.date) - new Date(b.created_at||b.date));
         const latest = group[group.length-1];
         const orig = group.find(r => r.action_type === '신규') || group[0];
-        // 그룹 내 고유 po_id 기준 합산 (중복 po_id 제거하여 이중합산 방지)
         const uniqueIds = [...new Set(group.map(r => r.id))];
-        const totalShipped = uniqueIds.reduce((sum, id) => sum + (shipMap[id]||0), 0);
+        const totalShipped = uniqueIds.reduce((sum, id) => sum + (calcShipMap[id]?.shipped||0), 0);
         latest.shipped = totalShipped;
-        // 출하일 반영 (그룹 내 가장 최근 출하일)
-        const latestShipDate = group.reduce((date, r) => {
-          const d = shipDateMap[r.id];
+        const latestShipDate = uniqueIds.reduce((date, id) => {
+          const d = calcShipMap[id]?.shipDate||'';
           return d && (!date || d > date) ? d : date;
         }, '');
         latest.hqdate = latestShipDate;
-        // resp 재계산 (totalShipped 기준)
         const remain2 = (latest.qty||0) - totalShipped;
         latest.resp = totalShipped === 0 ? 'unordered' : remain2 <= 0 ? 'complete' : 'pending';
         latest.excess_qty = Math.max(0, totalShipped - (latest.qty||0));
