@@ -489,8 +489,10 @@
     <button class="btn-excel" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
   </div>
   <!-- 합계 바 -->
-  <div id="pm-summary-bar" style="display:none;background:#f0f4f9;border:1px solid var(--border);border-radius:10px;padding:9px 18px;margin-bottom:12px;gap:24px;align-items:center;flex-wrap:wrap;">
+  <div id="pm-summary-bar" style="display:none;background:#f0f4f9;border:1px solid var(--border);border-radius:10px;padding:9px 18px;margin-bottom:12px;gap:16px;align-items:center;flex-wrap:wrap;">
     <span style="font-size:12px;color:var(--muted);font-weight:600;">조회 합계</span>
+    <span id="pm-sum-label" style="font-size:12px;color:var(--accent2);font-weight:700;font-family:'Noto Sans KR',sans-serif;"></span>
+    <span style="width:1px;height:16px;background:var(--border);display:inline-block;"></span>
     <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">주문수량 <b id="pm-sum-qty" style="color:#1a2233;font-size:14px;">—</b></span>
     <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">출하수량 <b id="pm-sum-shipped" style="color:#1a56db;font-size:14px;">—</b></span>
     <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">잔량 <b id="pm-sum-remain" style="color:#c8001e;font-size:14px;">—</b></span>
@@ -741,6 +743,8 @@
     ['s-entity','s-mode'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('s-status').value = '';
     ['s-keyword','s-maker','s-month'].forEach(id => document.getElementById(id).value = '');
+    const pmBar=document.getElementById('pm-summary-bar');
+    if(pmBar) pmBar.style.display='none';
   }
 
   // ── PO 조회 ──
@@ -933,13 +937,23 @@
     const body = document.getElementById('poTableBody');
     document.getElementById('tableCount').textContent = `— ${data.length.toLocaleString()}건`;
 
-    // 합계 계산
+    // 합계 계산 + 조회조건 레이블
     const sumQty=data.reduce((s,r)=>s+(r.qty||0),0);
     const sumShipped=data.reduce((s,r)=>s+(r.shipped||0),0);
     const sumRemain=data.reduce((s,r)=>s+((r.qty||0)-(r.shipped||0)>0?(r.qty||0)-(r.shipped||0):0),0);
     const pmBar=document.getElementById('pm-summary-bar');
     if(pmBar){
       pmBar.style.display='flex';
+      // 조회조건 레이블 구성
+      const kw = (document.getElementById('s-keyword')?.value||'').trim();
+      const mk = (document.getElementById('s-maker')?.value||'').trim();
+      const mo = (document.getElementById('s-month')?.value||'').trim();
+      const parts=[];
+      if(mk) parts.push(mk);
+      if(kw) parts.push(kw);
+      if(mo) parts.push(mo);
+      const labelEl=document.getElementById('pm-sum-label');
+      if(labelEl) labelEl.textContent=parts.length>0?parts.join(' / '):'전체';
       document.getElementById('pm-sum-qty').textContent=sumQty.toLocaleString();
       document.getElementById('pm-sum-shipped').textContent=sumShipped.toLocaleString();
       document.getElementById('pm-sum-remain').textContent=sumRemain.toLocaleString();
