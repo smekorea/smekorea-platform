@@ -235,6 +235,15 @@
         <button class="btn-excel" id="excelBtn" onclick="exportExcel()" style="display:none;">⬇ 엑셀 다운로드</button>
       </div>
     </div>
+    <!-- 합계 바 -->
+    <div id="gs-summary-bar" style="display:none;background:#f0f4f9;border:1px solid var(--border);border-radius:10px;padding:9px 18px;margin-bottom:12px;gap:16px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">조회 합계</span>
+      <span id="gs-sum-label" style="font-size:12px;color:var(--accent2);font-weight:700;font-family:'Noto Sans KR',sans-serif;"></span>
+      <span style="width:1px;height:16px;background:var(--border);display:inline-block;"></span>
+      <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">주문수량 <b id="gs-sum-qty" style="color:#1a2233;font-size:14px;">—</b></span>
+      <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">출하수량 <b id="gs-sum-shipped" style="color:#1a56db;font-size:14px;">—</b></span>
+      <span style="font-size:13px;font-family:'Courier New',Courier,monospace;">잔량 <b id="gs-sum-remain" style="color:#c8001e;font-size:14px;">—</b></span>
+    </div>
     <div class="table-wrap">
       <table id="listTable">
         <thead><tr>
@@ -629,14 +638,63 @@ async function searchPO(){
     if(poErr)throw poErr;
 
     const {data:shipRows}=await sb.from('shipment_po').select('po_id,ship_qty,ship_date').eq('entity',ENTITY);
-    const shipMap={};
+
+    // po_id → [{qty, date}] 원본 매핑
+    const shipRawMap={};
     (shipRows||[]).forEach(s=>{
-      if(!shipMap[s.po_id])shipMap[s.po_id]={qty:0,date:''};
-      shipMap[s.po_id].qty+=(s.ship_qty||0);
-      if(s.ship_date&&s.ship_date>shipMap[s.po_id].date)shipMap[s.po_id].date=s.ship_date;
+      if(!shipRawMap[s.po_id])shipRawMap[s.po_id]=[];
+      shipRawMap[s.po_id].push({qty:s.ship_qty||0,date:s.ship_date||''});
     });
 
     const today=new Date().toISOString().slice(0,10);
+
+    // ── ETD순 순차차감 재계산 ──
+    // 1) maker_pn별 전체 PO 그룹핑
+    const mkpnGroups={};
+    (poRows||[]).forEach(r=>{
+      const mk=r.maker_pn||'';
+      if(!mkpnGroups[mk])mkpnGroups[mk]=[];
+      mkpnGroups[mk].push(r);
+    });
+
+    // 2) ETD 오름차순 + 동일ETD 내 qty 내림차순 → 출하일별 순차차감
+    const calcShipMap={}; // po_id → {shipped, shipDate}
+    for(const [,poList] of Object.entries(mkpnGroups)){
+      const sorted=[...poList].sort((a,b)=>{
+        if((a.etd_request||'')!==(b.etd_request||''))
+          return (a.etd_request||'')<(b.etd_request||'')?-1:1;
+        return (b.qty||0)-(a.qty||0);
+      });
+      const remain={};
+      sorted.forEach(p=>{remain[p.id]=p.qty||0;});
+      const allShips=[];
+      sorted.forEach(p=>{(shipRawMap[p.id]||[]).forEach(s=>allShips.push({...s}));});
+      allShips.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      const dateGroups={};
+      allShips.forEach(s=>{dateGroups[s.date]=(dateGroups[s.date]||0)+s.qty;});
+      for(const date of Object.keys(dateGroups).sort()){
+        let leftQty=dateGroups[date];
+        for(const po of sorted){
+          if(leftQty<=0)break;
+          const r=remain[po.id];
+          if(r<=0)continue;
+          const used=Math.min(leftQty,r);
+          if(!calcShipMap[po.id])calcShipMap[po.id]={shipped:0,shipDate:''};
+          calcShipMap[po.id].shipped+=used;
+          if(date>calcShipMap[po.id].shipDate)calcShipMap[po.id].shipDate=date;
+          remain[po.id]=Math.max(0,remain[po.id]-used); // 0 이하 방지
+          leftQty-=used;
+        }
+        // 초과분 → 마지막 PO shipped에만, remain은 건드리지 않음
+        if(leftQty>0){
+          const lastPo=sorted[sorted.length-1];
+          if(!calcShipMap[lastPo.id])calcShipMap[lastPo.id]={shipped:0,shipDate:''};
+          calcShipMap[lastPo.id].shipped+=leftQty;
+          if(date>calcShipMap[lastPo.id].shipDate)calcShipMap[lastPo.id].shipDate=date;
+          // remain[lastPo.id] 수정 안 함 → 이후 새 PO는 독립적으로 시작
+        }
+      }
+    }
     const groups={};
     (poRows||[]).forEach(r=>{
       const key=`${r.po_no}||${r.maker_pn}||${r.etd_request}||${r.qty}`;
@@ -648,8 +706,8 @@ async function searchPO(){
     for(const [,grp] of Object.entries(groups)){
       const latest=grp[grp.length-1];
       const uniqueIds=[...new Set(grp.map(r=>r.id))];
-      const totalShipped=uniqueIds.reduce((s,id)=>s+(shipMap[id]?.qty||0),0);
-      const latestShipDate=grp.reduce((d,r)=>{const sd=shipMap[r.id]?.date||'';return sd>d?sd:d;},'');
+      const totalShipped=uniqueIds.reduce((s,id)=>s+(calcShipMap[id]?.shipped||0),0);
+      const latestShipDate=uniqueIds.reduce((d,id)=>{const sd=calcShipMap[id]?.shipDate||'';return sd>d?sd:d;},'');
       const rem=(latest.qty||0)-totalShipped;
       const expETD=calcExpectedETD(latest.maker,today);
       const ltInfo=classifyLeadTime(latest.maker,latest.etd_request,today);
@@ -676,8 +734,8 @@ async function searchPO(){
         if(r.allRows&&r.allRows.length>1){
           r.allRows.forEach((sub,idx)=>{
             const isLast=idx===r.allRows.length-1;
-            const subShipped=shipMap[sub.id]?.qty||0;
-            const subDate=shipMap[sub.id]?.date||'';
+            const subShipped=calcShipMap[sub.id]?.shipped||0;
+            const subDate=calcShipMap[sub.id]?.shipDate||'';
             listData.push({...r,id:sub.id,type:sub.action_type,qty:sub.qty,
               shipped:isLast?r.shipped:subShipped,
               remain:isLast?r.remain:(sub.qty-subShipped),
@@ -699,6 +757,29 @@ function renderList(){
     if(el) el.textContent=k===listSortKey?(listSortAsc?'↑':'↓'):'';
   });
   document.getElementById('listCount').textContent=`— ${sorted.length.toLocaleString()}건`;
+
+  // 합계 계산 + 조회조건 레이블
+  const sumQty=sorted.reduce((s,r)=>s+(r.qty||0),0);
+  const sumShipped=sorted.reduce((s,r)=>s+(r.shipped||0),0);
+  const sumRemain=sorted.reduce((s,r)=>s+(r.remain>0?r.remain:0),0);
+  const gsBar=document.getElementById('gs-summary-bar');
+  if(gsBar){
+    gsBar.style.display='flex';
+    const pono=(document.getElementById('s-pono')?.value||'').trim();
+    const maker=(document.getElementById('s-maker')?.value||'').trim();
+    const mkpn=(document.getElementById('s-mkpn')?.value||'').trim();
+    const lgpn=(document.getElementById('s-lgpn')?.value||'').trim();
+    const parts=[];
+    if(maker) parts.push(maker);
+    if(mkpn) parts.push(mkpn);
+    if(lgpn) parts.push('LG:'+lgpn);
+    if(pono) parts.push(pono);
+    const labelEl=document.getElementById('gs-sum-label');
+    if(labelEl) labelEl.textContent=parts.length>0?parts.join(' / '):'전체';
+    document.getElementById('gs-sum-qty').textContent=sumQty.toLocaleString();
+    document.getElementById('gs-sum-shipped').textContent=sumShipped.toLocaleString();
+    document.getElementById('gs-sum-remain').textContent=sumRemain.toLocaleString();
+  }
   if(!sorted.length){
     document.getElementById('listBody').innerHTML='<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📭</div><p>조회 결과가 없습니다</p></div></td></tr>';
     return;
