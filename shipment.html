@@ -433,6 +433,75 @@
   </div>
 </div>
 
+<!-- ★ 출하 완료 확인 모달 -->
+<div class="modal-overlay" id="completeModal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--accent3);">✓ 출하 완료 처리</div>
+      <button class="modal-close" onclick="closeCompleteModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">출하 건</div>
+        <div class="orig-info" id="completeCardInfo" style="font-size:13px;font-weight:600;color:var(--text);"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">완료 처리 담당자 <span style="color:var(--accent);font-size:9px;">* 필수</span></div>
+        <select class="form-select" id="completeBy" style="width:100%;">
+          <option value="">— 담당자 선택 —</option>
+          <optgroup label="대표이사">
+            <option>곽선효</option>
+          </optgroup>
+          <optgroup label="상무이사">
+            <option>박정용</option>
+          </optgroup>
+          <optgroup label="재경팀">
+            <option>김근복</option>
+            <option>이서연</option>
+          </optgroup>
+          <optgroup label="개발기획팀">
+            <option>김봉승</option>
+          </optgroup>
+          <optgroup label="자재구매팀">
+            <option>배병대</option>
+            <option>조승연</option>
+            <option>곽경민</option>
+            <option>박영주</option>
+          </optgroup>
+          <optgroup label="개발구매팀">
+            <option>김종길</option>
+            <option>최성빈</option>
+            <option>최세진</option>
+          </optgroup>
+          <optgroup label="출하팀">
+            <option>박형호</option>
+            <option>김재옥</option>
+            <option>최혜영</option>
+            <option>송윤석</option>
+            <option>박현길</option>
+          </optgroup>
+          <optgroup label="제조팀">
+            <option>문상호</option>
+            <option>장우승</option>
+            <option>김기훈</option>
+            <option>김아현</option>
+            <option>윤선정</option>
+            <option>공수지</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeCompleteModal()">취소</button>
+      <button class="modal-btn modal-btn-save" id="completeSaveBtn"
+        onclick="confirmComplete()"
+        style="background:var(--accent3);border-color:var(--accent3);box-shadow:0 2px 8px rgba(14,159,110,0.3);">
+        완료 확인
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -619,14 +688,44 @@
   }
 
   // ── 완료 처리 ──
-  async function markComplete(id) {
-    if (!confirm('출하 완료 처리하시겠습니까?')) return;
+  let completeTargetId = null;
+
+  function markComplete(id) {
+    completeTargetId = id;
+    const r = allData.find(x => x.id === id);
+    if (!r) return;
+    // 출하 카드 정보 표시
+    document.getElementById('completeCardInfo').textContent =
+      `${r.customer||'-'} · ${r.ship_date||'-'} · ${r.manager||'-'}`;
+    // 담당자 드롭다운 초기화
+    document.getElementById('completeBy').value = '';
+    document.getElementById('completeModal').classList.add('show');
+  }
+
+  async function confirmComplete() {
+    const completeBy = document.getElementById('completeBy').value;
+    if (!completeBy) { showToast('⚠ 담당자를 선택해주세요', true); return; }
+
+    const btn = document.getElementById('completeSaveBtn');
+    btn.disabled = true; btn.textContent = '처리 중...';
+
     const now = new Date();
-    // KST 문자열로 저장
-    const kst = new Date(now.getTime() + 9*3600000).toISOString().slice(0,16).replace('T',' ');
-    await sbPatch('ship_schedule', id, { ship_done: '완료', updated_at: now.toISOString() });
+    await sbPatch('ship_schedule', completeTargetId, {
+      ship_done:  '완료',
+      updated_at: now.toISOString(),
+      updated_by: completeBy,
+      update_reason: '출하완료'
+    });
     showToast('✓ 출하 완료 처리되었습니다');
+    closeCompleteModal();
     loadData();
+
+    btn.disabled = false; btn.textContent = '완료 확인';
+  }
+
+  function closeCompleteModal() {
+    document.getElementById('completeModal').classList.remove('show');
+    completeTargetId = null;
   }
 
   // ── 삭제 ──
@@ -764,12 +863,10 @@
     const btn = document.getElementById('inputSaveBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
 
-    // KST 현재시각
     const now = new Date();
-    const kstNow = new Date(now.getTime() + 9*3600000).toISOString();
 
     const body = {
-      created_at: kstNow,
+      created_at: now.toISOString(),
       ship_date: shipDate,
       customer,
       note: note || null,
@@ -847,7 +944,7 @@
       input_by:     document.getElementById('editInputBy').value,
       pack_done:    document.getElementById('editPackDone').value.trim() || '-',
       note:         document.getElementById('editNote').value.trim() || null,
-      updated_at:   new Date(now.getTime() + 9*3600000).toISOString(),
+      updated_at:   now.toISOString(),
       updated_by:   editBy,
       update_reason: editReason
     };
@@ -873,11 +970,11 @@
 
   // ── ESC / 외부 클릭 ──
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeEditModal(); closeInputModal(); }
+    if (e.key === 'Escape') { closeEditModal(); closeInputModal(); closeCompleteModal(); }
   });
-  ['inputModal','editModal'].forEach(id => {
+  ['inputModal','editModal','completeModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', function(e) {
-      if (e.target === this) { closeEditModal(); closeInputModal(); }
+      if (e.target === this) { closeEditModal(); closeInputModal(); closeCompleteModal(); }
     });
   });
 
