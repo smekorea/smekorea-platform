@@ -689,10 +689,22 @@ function sortDeadline(key){
 
 async function loadBaseData(){
   await loadEntityTransit();
-  const [{data:poRows},{data:shipRows}]=await Promise.all([
-    sb.from('po_data').select('*').order('created_at',{ascending:true}),
-    sb.from('shipment_po').select('*')
-  ]);
+  // po_data 전수조회 (1,000건 초과 대응)
+  let poRows=[], _ppg=0;
+  while(true){
+    const {data:_d}=await sb.from('po_data').select('*').order('created_at',{ascending:true}).range(_ppg*1000,(_ppg+1)*1000-1);
+    if(!_d||!_d.length)break;
+    poRows=[...poRows,..._d]; _ppg++;
+    if(_d.length<1000)break;
+  }
+  // shipment_po 전수조회
+  let shipRows=[], _spg=0;
+  while(true){
+    const {data:_s}=await sb.from('shipment_po').select('*').range(_spg*1000,(_spg+1)*1000-1);
+    if(!_s||!_s.length)break;
+    shipRows=[...shipRows,..._s]; _spg++;
+    if(_s.length<1000)break;
+  }
 
   // shipment_po 원본 매핑
   const shipRawMap={}, shipTransMap={}, shipInvMap={}, shipAllMap={};

@@ -637,11 +637,24 @@ async function searchPO(){
     if(mkpn)q=q.ilike('maker_pn','%'+mkpn+'%');
     if(lgpn)q=q.ilike('lg_pn','%'+lgpn+'%');
     if(erp)q=q.ilike('item_code','%'+erp+'%');
-    const {data:poRows,error:poErr}=await q;
-    if(poErr)throw poErr;
+    // 전수조회 (1,000건 초과 대응)
+    let poRows=[], _pg=0;
+    while(true){
+      const {data:_d,error:poErr}=await q.range(_pg*1000,(_pg+1)*1000-1);
+      if(poErr)throw poErr;
+      if(!_d||!_d.length)break;
+      poRows=[...poRows,..._d]; _pg++;
+      if(_d.length<1000)break;
+    }
 
-    // 출하 이력 전체 조회 (entity 기준)
-    const {data:shipRows}=await sb.from('shipment_po').select('po_id,ship_qty,ship_date').eq('entity',ENTITY);
+    // 출하 이력 전수조회
+    let shipRows=[], _spg=0;
+    while(true){
+      const {data:_s}=await sb.from('shipment_po').select('po_id,ship_qty,ship_date').eq('entity',ENTITY).range(_spg*1000,(_spg+1)*1000-1);
+      if(!_s||!_s.length)break;
+      shipRows=[...shipRows,..._s]; _spg++;
+      if(_s.length<1000)break;
+    }
 
     // po_id → ship_date별 출하수량 매핑
     const shipRawMap={}; // po_id → [{ship_qty, ship_date}]
