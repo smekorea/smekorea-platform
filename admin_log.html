@@ -380,7 +380,7 @@ thead th{position:relative;user-select:none;}
   </div>
   <div id="bsr-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;"></div>
   <div class="tbl-wrap">
-    <table>
+    <table id="bsr-table">
       <thead><tr>
         <th style="width:50px;">#</th>
         <th style="width:160px;">브랜드</th>
@@ -411,7 +411,7 @@ thead th{position:relative;user-select:none;}
     <div class="up-info">💡 alias는 쉼표(,)로 구분하여 여러 개 입력. 엑셀 업로드 시 전체 교체됩니다.</div>
   </div>
   <div class="tbl-wrap">
-    <table>
+    <table id="alias-table">
       <thead><tr>
         <th style="width:50px;">#</th>
         <th style="width:200px;">기준명 (standard_name)</th>
@@ -459,7 +459,7 @@ thead th{position:relative;user-select:none;}
     <div class="up-info">💡 납기일 수정 후 [저장] 클릭 시 즉시 반영. 엑셀 업로드 시 전체 교체됩니다.</div>
   </div>
   <div class="tbl-wrap">
-    <table>
+    <table id="maker-table">
       <thead><tr>
         <th style="width:50px;">#</th>
         <th style="width:220px;">메이커명</th>
@@ -509,7 +509,7 @@ thead th{position:relative;user-select:none;}
     <div class="up-info">💡 VSL/AIR 납기일 수정 후 [저장] 클릭 시 즉시 반영됩니다. PO 납기 계산에 자동 적용됩니다.</div>
   </div>
   <div class="tbl-wrap">
-    <table>
+    <table id="logistics-table">
       <thead><tr>
         <th style="width:120px;">법인코드</th>
         <th style="width:220px;">법인명</th>
@@ -670,7 +670,7 @@ thead th{position:relative;user-select:none;}
     </div>
   </div>
   <div class="tbl-wrap">
-    <table>
+    <table id="emp-table">
       <thead><tr>
         <th class="center" style="width:45px;">No.</th>
         <th style="width:70px;">채용구분</th>
@@ -760,7 +760,7 @@ thead th{position:relative;user-select:none;}
     <div style="font-size:14px;font-weight:700;color:var(--text);">접속 이력 <span id="logCount" style="font-size:12px;color:var(--muted);font-family:'Share Tech Mono',monospace;"></span></div>
   </div>
   <div class="tbl-wrap">
-    <table>
+    <table id="log-table">
       <thead><tr><th style="width:50px;">#</th><th style="width:100px;">이름</th><th>화면</th><th style="width:80px;">기기</th><th style="width:140px;">IP 주소</th><th style="width:160px;">접속 일시</th></tr></thead>
       <tbody id="logBody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div> 데이터 로딩 중...</div></td></tr></tbody>
     </table>
@@ -1129,7 +1129,7 @@ function renderBsrTable(){
     return;
   }
 
-  const fmt = v => v?Math.round(v).toLocaleString():'';
+  const fmtAmt = v => v!=null ? Math.round(v).toLocaleString('ko-KR') : '—';
   document.getElementById('bsr-tbody').innerHTML = rows.map((r,i)=>`
     <tr id="bsr-row-${r.id}">
       <td class="center mono">${i+1}</td>
@@ -1137,49 +1137,54 @@ function renderBsrTable(){
       <td class="center">
         <span class="supply-badge ${r.supply_type==='LG사급품'?'sb-lg':'sb-dt'}">${r.supply_type||'—'}</span>
       </td>
+      <td class="center" id="bsr-view-months-${r.id}">${r.target_months!=null?r.target_months:'—'}</td>
+      <td class="center" id="bsr-view-amount-${r.id}" style="font-family:'Share Tech Mono',monospace;">${fmtAmt(r.target_amount)}</td>
       <td class="center">
-        <input class="bsr-input" id="bsr-months-${r.id}" type="number" step="0.1" min="0" max="12"
-          value="${r.target_months!=null?r.target_months:''}" placeholder="—">
-      </td>
-      <td class="center">
-        <input class="bsr-input amt" id="bsr-amount-${r.id}" type="number" step="1000000" min="0"
-          value="${r.target_amount!=null?r.target_amount:''}" placeholder="—">
-      </td>
-      <td class="center">
-        <button class="bsr-save-btn" onclick="saveBsrRow(${r.id})">저장</button>
-        <span class="bsr-saved" id="bsr-ok-${r.id}" style="display:none;">✓</span>
+        <button class="row-btn row-btn-edit" onclick="editBsrRow(${r.id})">수정</button>
+        <button class="row-btn row-btn-del" onclick="deleteBsrRow(${r.id},'${(r.brand||'').replace(/'/g,"\\'")}')">삭제</button>
       </td>
     </tr>`).join('');
+  setTimeout(()=>initColResize('bsr-table','al_bsr'),50);
 }
 
 async function saveBsrRow(id){
-  const months = document.getElementById('bsr-months-'+id).value;
-  const amount = document.getElementById('bsr-amount-'+id).value;
-  const now = new Date();
-  const ds = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const months = document.getElementById('bsr-edit-months-'+id).value;
+  const amount = document.getElementById('bsr-edit-amount-'+id).value;
   const userName = localStorage.getItem('sme_user_name') || '관리자';
-
   const {error} = await sb.from('brand_stock_rule').update({
     target_months: months!==''?parseFloat(months):null,
-    target_amount: amount!==''?parseInt(amount):null,
+    target_amount: amount!==''?parseInt(String(amount).replace(/,/g,'')):null,
     updated_by: userName,
     updated_at: new Date().toISOString()
   }).eq('id', id);
-
-  const okEl = document.getElementById('bsr-ok-'+id);
   if(!error){
-    // 로컬 캐시도 업데이트
     const row = _bsrData.find(r=>r.id===id);
     if(row){
       row.target_months = months!==''?parseFloat(months):null;
-      row.target_amount = amount!==''?parseInt(amount):null;
+      row.target_amount = amount!==''?parseInt(String(amount).replace(/,/g,'')):null;
     }
     renderBsrSummary();
-    okEl.style.display='inline';
-    setTimeout(()=>{ okEl.style.display='none'; }, 2000);
-  } else {
-    alert('저장 실패: '+error.message);
-  }
+    renderBsrTable();
+  } else alert('저장 실패: '+error.message);
+}
+
+function editBsrRow(id) {
+  const r = _bsrData.find(x=>x.id===id);
+  if(!r) return;
+  const row = document.getElementById('bsr-row-'+id);
+  row.cells[3].innerHTML = `<input class="bsr-input" id="bsr-edit-months-${id}" type="number" step="0.1" min="0" max="12" value="${r.target_months!=null?r.target_months:''}" placeholder="—">`;
+  row.cells[4].innerHTML = `<input class="bsr-input amt" id="bsr-edit-amount-${id}" type="number" step="1000000" min="0" value="${r.target_amount!=null?r.target_amount:''}" placeholder="—">`;
+  row.cells[5].innerHTML = `
+    <button class="row-btn row-btn-save" onclick="saveBsrRow(${id})">저장</button>
+    <button class="row-btn row-btn-cancel" onclick="renderBsrTable()">취소</button>`;
+}
+
+async function deleteBsrRow(id, brand) {
+  if(!confirm(`[${brand}] 기준을 삭제하시겠습니까?`)) return;
+  const {error} = await sb.from('brand_stock_rule').delete().eq('id', id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  _bsrData = _bsrData.filter(x=>x.id!==id);
+  renderBsrSummary(); renderBsrTable();
 }
 
 // 엑셀 다운로드
@@ -1739,14 +1744,20 @@ async function downloadStockData() {
   const year  = document.getElementById('stock-year').value;
   const month = document.getElementById('stock-month').value;
   const ym = year + month;
-  const {data, error} = await sb.from('stock_inventory').select('*').eq('ym', ym);
-  if(error||!data?.length) { alert('데이터가 없습니다.'); return; }
-  const rows = data.map(r => ({
+  let rows=[], pg=0;
+  while(true){
+    const {data,error} = await sb.from('stock_inventory').select('*').eq('ym', ym).range(pg*1000,(pg+1)*1000-1);
+    if(error){alert('조회 실패: '+error.message);return;}
+    if(!data||!data.length) break;
+    rows=[...rows,...data]; pg++; if(data.length<1000) break;
+  }
+  if(!rows.length) { alert(`${year}년 ${parseInt(month)}월 데이터가 없습니다.\n(ym: ${ym})`); return; }
+  const sheet = rows.map(r => ({
     '공급유형':r.supply_type,'브랜드':r.brand,'품목코드':r.item_code,'품명':r.description,
     'LG P/N':r.lg_pn,'Maker P/N':r.maker_pn,'ERP수량':r.erp_qty,'실재고':r.real_qty,
     '차이':r.diff_qty,'단가':r.unit_price,'재고금액':r.stock_amount
   }));
-  const ws = XLSX.utils.json_to_sheet(rows);
+  const ws = XLSX.utils.json_to_sheet(sheet);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '재고조사');
   XLSX.writeFile(wb, `SME_재고조사_${ym}.xlsx`);
@@ -1782,20 +1793,36 @@ function renderAliasTable() {
   const rows = _aliasData.filter(r =>
     !search || (r.standard_name||'').toLowerCase().includes(search) || (r.alias||'').toLowerCase().includes(search)
   );
-  document.getElementById('alias-tbody').innerHTML = rows.map(r => `
-    <tr>
+  document.getElementById('alias-tbody').innerHTML = rows.map((r,i) => `
+    <tr id="alias-row-${r.id}">
+      <td class="center mono">${i+1}</td>
       <td style="font-weight:700;">${r.standard_name||''}</td>
-      <td><input class="mk-input" style="width:100%;" id="alias-val-${r.id}" value="${(r.alias||'').replace(/"/g,'&quot;')}"></td>
-      <td style="text-align:center;">
-        <button class="mk-save-btn" onclick="saveAlias(${r.id})">저장</button>
-        <span class="mk-saved" id="alias-ok-${r.id}" style="display:none;">✓</span>
+      <td>${(r.alias||'').split(',').map(a=>a.trim()).filter(Boolean).join(', ')||'—'}</td>
+      <td class="center">
+        <button class="row-btn row-btn-edit" onclick="editAliasRow(${r.id})">수정</button>
+        <button class="row-btn row-btn-del" onclick="deleteAliasRow(${r.id},'${(r.standard_name||'').replace(/'/g,"\\'")}')">삭제</button>
       </td>
-    </tr>`).join('') +
-    `<tr class="mk-add-row">
-      <td><input class="mk-input w160" id="alias-new-std" placeholder="새 기준명"></td>
-      <td><input class="mk-input" style="width:100%;" id="alias-new-val" placeholder="alias (쉼표 구분)"></td>
-      <td style="text-align:center;"><button class="mk-save-btn" onclick="addAlias()">추가</button></td>
-    </tr>`;
+    </tr>`).join('');
+  setTimeout(()=>initColResize('alias-table','al_alias'),50);
+}
+
+function editAliasRow(id) {
+  const r = _aliasData.find(x=>x.id===id);
+  if(!r) return;
+  const row = document.getElementById('alias-row-'+id);
+  row.cells[2].innerHTML = `<input class="mk-input" style="width:100%;" id="alias-val-${id}" value="${(r.alias||'').replace(/"/g,'&quot;')}" placeholder="alias (쉼표 구분)">`;
+  row.cells[3].innerHTML = `
+    <button class="row-btn row-btn-save" onclick="saveAlias(${id})">저장</button>
+    <button class="row-btn row-btn-cancel" onclick="renderAliasTable()">취소</button>`;
+}
+
+async function deleteAliasRow(id, name) {
+  if(!confirm(`[${name}] alias를 삭제하시겠습니까?`)) return;
+  const {error} = await sb.from('maker_alias').delete().eq('id', id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  _aliasData = _aliasData.filter(x=>x.id!==id);
+  document.getElementById('alias-count-label').textContent=`(${_aliasData.length}개)`;
+  renderAliasTable();
 }
 
 async function saveAlias(id) {
@@ -1821,26 +1848,42 @@ async function addAlias() {
 function renderMakerTable() {
   const search = (document.getElementById('maker-search')?.value||'').trim().toLowerCase();
   const rows = _makerData.filter(r => !search || (r.maker_name||'').toLowerCase().includes(search));
-  document.getElementById('maker-tbody').innerHTML = rows.map(r => `
-    <tr>
+  document.getElementById('maker-tbody').innerHTML = rows.map((r,i) => `
+    <tr id="maker-row-${r.id}">
+      <td class="center mono">${i+1}</td>
       <td style="font-weight:700;">${r.maker_name||''}</td>
-      <td style="text-align:center;"><input class="mk-input w60" id="mk-days-${r.id}" type="number" value="${r.lead_time_days||''}"></td>
-      <td style="text-align:center;"><input class="mk-input w60" id="mk-weeks-${r.id}" type="number" value="${r.lead_time_weeks||''}"></td>
-      <td><input class="mk-input w80" id="mk-trans-${r.id}" value="${r.transport_default||''}"></td>
-      <td><input class="mk-input w120" id="mk-remark-${r.id}" value="${r.remark||''}"></td>
-      <td style="text-align:center;">
-        <button class="mk-save-btn" onclick="saveMaker('${r.id}')">저장</button>
-        <span class="mk-saved" id="mk-ok-${r.id}" style="display:none;">✓</span>
+      <td class="center mono">${r.lead_time_days||'—'}</td>
+      <td class="center mono">${r.lead_time_weeks||'—'}</td>
+      <td class="center">${r.transport_default||'—'}</td>
+      <td>${r.remark||''}</td>
+      <td class="center">
+        <button class="row-btn row-btn-edit" onclick="editMakerRow(${r.id})">수정</button>
+        <button class="row-btn row-btn-del" onclick="deleteMakerRow(${r.id},'${(r.maker_name||'').replace(/'/g,"\\'")}')">삭제</button>
       </td>
-    </tr>`).join('') +
-    `<tr class="mk-add-row">
-      <td><input class="mk-input w160" id="mk-new-name" placeholder="메이커명"></td>
-      <td style="text-align:center;"><input class="mk-input w60" id="mk-new-days" type="number" placeholder="일"></td>
-      <td style="text-align:center;"><input class="mk-input w60" id="mk-new-weeks" type="number" placeholder="주"></td>
-      <td><input class="mk-input w80" id="mk-new-trans" placeholder="VSL/AIR"></td>
-      <td><input class="mk-input w120" id="mk-new-remark" placeholder="비고"></td>
-      <td style="text-align:center;"><button class="mk-save-btn" onclick="addMaker()">추가</button></td>
-    </tr>`;
+    </tr>`).join('');
+  setTimeout(()=>initColResize('maker-table','al_maker'),50);
+}
+
+function editMakerRow(id) {
+  const r = _makerData.find(x=>x.id===id);
+  if(!r) return;
+  const row = document.getElementById('maker-row-'+id);
+  row.cells[2].innerHTML = `<input class="mk-input w60" id="mk-days-${id}" type="number" value="${r.lead_time_days||''}">`;
+  row.cells[3].innerHTML = `<input class="mk-input w60" id="mk-weeks-${id}" type="number" value="${r.lead_time_weeks||''}">`;
+  row.cells[4].innerHTML = `<input class="mk-input w80" id="mk-trans-${id}" value="${r.transport_default||''}">`;
+  row.cells[5].innerHTML = `<input class="mk-input" style="width:100%;" id="mk-remark-${id}" value="${r.remark||''}">`;
+  row.cells[6].innerHTML = `
+    <button class="row-btn row-btn-save" onclick="saveMaker(${id})">저장</button>
+    <button class="row-btn row-btn-cancel" onclick="renderMakerTable()">취소</button>`;
+}
+
+async function deleteMakerRow(id, name) {
+  if(!confirm(`[${name}] 메이커를 삭제하시겠습니까?`)) return;
+  const {error} = await sb.from('makers').delete().eq('id', id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  _makerData = _makerData.filter(x=>x.id!==id);
+  document.getElementById('maker-count-label').textContent=`(${_makerData.length}개)`;
+  renderMakerTable();
 }
 
 function addMakerRow() {
@@ -1856,8 +1899,9 @@ async function saveMaker(id) {
   };
   const {error} = await sb.from('makers').update(body).eq('id', id);
   if(!error) {
-    const ok = document.getElementById('mk-ok-'+id);
-    ok.style.display='inline'; setTimeout(()=>ok.style.display='none', 2000);
+    const row = _makerData.find(r=>r.id===id);
+    if(row){ row.lead_time_days=body.lead_time_days; row.lead_time_weeks=body.lead_time_weeks; row.transport_default=body.transport_default; row.remark=body.remark; }
+    renderMakerTable();
   } else alert('저장 실패: '+error.message);
 }
 
@@ -1903,18 +1947,30 @@ async function loadLogisticsData() {
 
 function renderLogisticsTable() {
   const ENTITY_NAMES = { GSMEIN:'GSMEIN (India)', SMEGLOBAL:'SMEGLOBAL (Thailand)', SMECN:'SME Tianjin (China)' };
-  document.getElementById('logistics-tbody').innerHTML = _logisticsData.map(r => `
-    <tr>
+  document.getElementById('logistics-tbody').innerHTML = _logisticsData.map((r,i) => `
+    <tr id="logi-row-${r.entity_code}">
       <td style="font-weight:700;font-family:'Share Tech Mono',monospace;">${r.entity_code}</td>
       <td>${ENTITY_NAMES[r.entity_code]||r.entity_name||'-'}</td>
-      <td style="text-align:center;"><input class="mk-input w60" id="lg-vsl-${r.entity_code}" type="number" value="${r.vsl_days||''}"></td>
-      <td style="text-align:center;"><input class="mk-input w60" id="lg-air-${r.entity_code}" type="number" value="${r.air_days||''}"></td>
-      <td><input class="mk-input w160" id="lg-remark-${r.entity_code}" value="${r.remark||''}"></td>
-      <td style="text-align:center;">
-        <button class="mk-save-btn" onclick="saveLogistics('${r.entity_code}')">저장</button>
-        <span class="mk-saved" id="lg-ok-${r.entity_code}" style="display:none;">✓</span>
+      <td class="center mono" id="logi-view-vsl-${r.entity_code}">${r.vsl_days||'—'}</td>
+      <td class="center mono" id="logi-view-air-${r.entity_code}">${r.air_days||'—'}</td>
+      <td id="logi-view-remark-${r.entity_code}">${r.remark||''}</td>
+      <td class="center">
+        <button class="row-btn row-btn-edit" onclick="editLogisticsRow('${r.entity_code}')">수정</button>
       </td>
     </tr>`).join('');
+  setTimeout(()=>initColResize('logistics-table','al_logi'),50);
+}
+
+function editLogisticsRow(code) {
+  const r = _logisticsData.find(x=>x.entity_code===code);
+  if(!r) return;
+  const row = document.getElementById('logi-row-'+code);
+  row.cells[2].innerHTML = `<input class="mk-input w60" id="lg-vsl-${code}" type="number" value="${r.vsl_days||''}">`;
+  row.cells[3].innerHTML = `<input class="mk-input w60" id="lg-air-${code}" type="number" value="${r.air_days||''}">`;
+  row.cells[4].innerHTML = `<input class="mk-input" style="width:100%;" id="lg-remark-${code}" value="${r.remark||''}">`;
+  row.cells[5].innerHTML = `
+    <button class="row-btn row-btn-save" onclick="saveLogistics('${code}')">저장</button>
+    <button class="row-btn row-btn-cancel" onclick="renderLogisticsTable()">취소</button>`;
 }
 
 async function saveLogistics(code) {
@@ -1926,10 +1982,159 @@ async function saveLogistics(code) {
   const {error} = await sb.from('entities').update(body).eq('entity_code', code);
   if(!error) {
     const row = _logisticsData.find(r=>r.entity_code===code);
-    if(row){ row.vsl_days=body.vsl_days; row.air_days=body.air_days; }
-    const ok = document.getElementById('lg-ok-'+code);
-    ok.style.display='inline'; setTimeout(()=>ok.style.display='none',2000);
+    if(row){ row.vsl_days=body.vsl_days; row.air_days=body.air_days; row.remark=body.remark; }
+    renderLogisticsTable();
   } else alert('저장 실패: '+error.message);
+}
+
+// ════════════════════════════════════════════════════
+// ── 직원 관리 (employees) ──
+// ════════════════════════════════════════════════════
+let _empData = [], _empEditId = null;
+
+async function loadEmpData() {
+  const tbody = document.getElementById('emp-tbody');
+  tbody.innerHTML = '<tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  const {data, error} = await sb.from('employees').select('*').order('emp_no');
+  if(error){tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
+  _empData = data || [];
+  updateEmpKpi();
+  renderEmpTable();
+}
+
+function updateEmpKpi() {
+  const active = _empData.filter(r=>r.active!==false);
+  const korea = active.filter(r=>r.entity==='KOREA');
+  const overseas = active.filter(r=>r.entity!=='KOREA');
+  const inactive = _empData.filter(r=>r.active===false);
+  const now = new Date();
+  const tenures = active.filter(r=>r.join_date).map(r=>{
+    return (now - new Date(r.join_date)) / (1000*60*60*24*365.25);
+  });
+  const avgTenure = tenures.length ? (tenures.reduce((a,b)=>a+b,0)/tenures.length).toFixed(1) : '—';
+  document.getElementById('emp-kpi-total').textContent = active.length;
+  document.getElementById('emp-kpi-korea').textContent = korea.length;
+  document.getElementById('emp-kpi-overseas').textContent = overseas.length;
+  document.getElementById('emp-kpi-tenure').textContent = avgTenure;
+  document.getElementById('emp-kpi-inactive').textContent = inactive.length;
+}
+
+function calcTenure(joinDate) {
+  if(!joinDate) return '—';
+  const now = new Date(), d = new Date(joinDate);
+  let y = now.getFullYear()-d.getFullYear(), m = now.getMonth()-d.getMonth();
+  if(m<0){y--;m+=12;}
+  return y>0 ? `${y}년 ${m}개월` : `${m}개월`;
+}
+
+function renderEmpTable() {
+  const entity = document.getElementById('emp-f-entity').value;
+  const dept   = document.getElementById('emp-f-dept').value;
+  const active = document.getElementById('emp-f-active').value;
+  const search = document.getElementById('emp-f-search').value.trim().toLowerCase();
+  const rows = _empData.filter(r => {
+    if(entity && r.entity!==entity) return false;
+    if(dept   && r.dept!==dept)     return false;
+    if(active==='true'  && r.active===false) return false;
+    if(active==='false' && r.active!==false) return false;
+    if(search && !(r.name||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const tbody = document.getElementById('emp-tbody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="11"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';return;}
+  tbody.innerHTML = rows.map(r=>`
+    <tr class="${r.active===false?'opacity:0.45;':''}">
+      <td class="center mono">${r.emp_no||''}</td>
+      <td><span class="badge b-gray">${r.emp_type||''}</span></td>
+      <td><span class="badge b-green">${r.entity||''}</span></td>
+      <td style="font-weight:700;">${r.name||''}</td>
+      <td><span class="badge b-gray">${r.rank||''}</span></td>
+      <td><span class="badge b-dt">${r.dept||''}</span></td>
+      <td class="center">${r.gender||''}</td>
+      <td class="mono">${r.phone||''}</td>
+      <td class="mono">${r.join_date||''}</td>
+      <td class="mono" style="color:var(--accent2);font-weight:600;">${calcTenure(r.join_date)}</td>
+      <td class="center">
+        <button class="row-btn row-btn-edit" onclick="openEmpModal(${r.id})">수정</button>
+        ${r.active!==false
+          ? `<button class="row-btn row-btn-cancel" style="margin-top:3px;" onclick="retireEmp(${r.id},'${(r.name||'').replace(/'/g,"\\'")}')">퇴직</button>`
+          : `<span style="font-size:11px;color:var(--muted);">퇴직</span>`}
+      </td>
+    </tr>`).join('');
+  setTimeout(()=>initColResize('emp-table','al_emp'),50);
+}
+
+function openEmpModal(id) {
+  _empEditId = id || null;
+  const r = id ? _empData.find(x=>x.id===id) : null;
+  document.getElementById('empModalTitle').textContent = r ? '👤 직원 수정' : '👤 직원 등록';
+  document.getElementById('empSaveBtn').textContent = r ? '수정' : '등록';
+  document.getElementById('emp-in-type').value     = r?.emp_type   || '정직';
+  document.getElementById('emp-in-entity').value   = r?.entity     || 'KOREA';
+  document.getElementById('emp-in-gender').value   = r?.gender     || '남';
+  document.getElementById('emp-in-name').value     = r?.name       || '';
+  document.getElementById('emp-in-rank').value     = r?.rank       || '사원';
+  document.getElementById('emp-in-dept').value     = r?.dept       || '자재구매팀';
+  document.getElementById('emp-in-phone').value    = r?.phone      || '';
+  document.getElementById('emp-in-joindate').value = r?.join_date  || '';
+  document.getElementById('emp-in-loginid').value  = r?.login_id   || '';
+  document.getElementById('emp-in-password').value = '';
+  document.getElementById('emp-active-group').style.display = r ? 'flex' : 'none';
+  if(r) document.getElementById('emp-in-active').value = r.active===false?'false':'true';
+  document.getElementById('empModal').classList.add('show');
+}
+
+function closeEmpModal() {
+  document.getElementById('empModal').classList.remove('show');
+  _empEditId = null;
+}
+
+async function saveEmp() {
+  const name = document.getElementById('emp-in-name').value.trim();
+  if(!name){alert('성명은 필수입니다.');return;}
+  const joinDate = document.getElementById('emp-in-joindate').value;
+  if(!joinDate){alert('입사일자는 필수입니다.');return;}
+  const payload = {
+    emp_type: document.getElementById('emp-in-type').value,
+    entity:   document.getElementById('emp-in-entity').value,
+    gender:   document.getElementById('emp-in-gender').value,
+    name, rank: document.getElementById('emp-in-rank').value,
+    dept:     document.getElementById('emp-in-dept').value,
+    phone:    document.getElementById('emp-in-phone').value.trim()||null,
+    join_date: joinDate,
+    login_id: document.getElementById('emp-in-loginid').value.trim()||null,
+    updated_at: new Date().toISOString(),
+  };
+  const pw = document.getElementById('emp-in-password').value;
+  if(pw) payload.password = pw;
+  if(_empEditId) payload.active = document.getElementById('emp-in-active').value==='true';
+  const btn = document.getElementById('empSaveBtn');
+  btn.disabled=true; btn.textContent='저장 중...';
+  let error;
+  if(_empEditId){
+    ({error}=await sb.from('employees').update(payload).eq('id',_empEditId));
+  } else {
+    const maxNo = _empData.reduce((m,r)=>Math.max(m,r.emp_no||0),0);
+    payload.emp_no = maxNo+1; payload.active=true;
+    ({error}=await sb.from('employees').insert(payload));
+  }
+  btn.disabled=false; btn.textContent=_empEditId?'수정':'등록';
+  if(error){alert('저장 실패: '+error.message);return;}
+  closeEmpModal(); _empData=[]; await loadEmpData();
+}
+
+async function retireEmp(id, name) {
+  if(!confirm(`[${name}] 을 퇴직 처리하시겠습니까?`)) return;
+  const {error}=await sb.from('employees').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){alert('처리 실패: '+error.message);return;}
+  _empData=[]; await loadEmpData();
+}
+
+function downloadEmpExcel() {
+  const rows = _empData.map(r=>({'No':r.emp_no,'채용구분':r.emp_type,'법인':r.entity,'성명':r.name,'직급':r.rank,'부서':r.dept,'성별':r.gender,'연락처':r.phone,'입사일':r.join_date,'근속':calcTenure(r.join_date),'재직':r.active===false?'퇴직':'재직중'}));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'직원명단');
+  XLSX.writeFile(wb,'SME_직원명단_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 // ── 초기화 ──
@@ -2087,6 +2292,34 @@ async function uploadBsrExcel(e){
 // ── 초기화 ──
 setQ('today', document.getElementById('q-today'));
 initYearMonth();
+
+// ── 리사이저블 컬럼 ──
+function initColResize(tableId, storageKey) {
+  const table = document.getElementById(tableId);
+  if(!table) return;
+  const ths = table.querySelectorAll('thead th');
+  const saved = JSON.parse(localStorage.getItem(storageKey)||'{}');
+  ths.forEach((th,i) => {
+    const w = saved[i] || th.offsetWidth;
+    th.style.width=w+'px'; th.style.minWidth=w+'px';
+  });
+  table.style.tableLayout='fixed';
+  const upd = () => { let t=0; ths.forEach(th=>{t+=th.offsetWidth;}); table.style.width=t+'px'; };
+  upd();
+  ths.forEach((th,i) => {
+    if(!th.querySelector('.col-resizer')){
+      const r=document.createElement('div'); r.className='col-resizer'; th.appendChild(r);
+    }
+    th.querySelector('.col-resizer').addEventListener('mousedown', e => {
+      const sx=e.clientX, sw=th.offsetWidth;
+      const mv=e=>{const w=Math.max(50,sw+e.clientX-sx);th.style.width=w+'px';th.style.minWidth=w+'px';upd();};
+      const up=()=>{const ws={};ths.forEach((t,j)=>{ws[j]=t.offsetWidth;});localStorage.setItem(storageKey,JSON.stringify(ws));document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+      e.preventDefault(); e.stopPropagation();
+    });
+  });
+}
+
 loadItemsData();
 </script>
 </body>
