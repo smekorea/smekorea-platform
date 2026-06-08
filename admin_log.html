@@ -597,9 +597,34 @@ thead th{position:relative;user-select:none;}
       </label>
       <button class="up-btn up-btn-green" onclick="openStockDirectInput()">✚ 직접 입력</button>
       <button class="up-btn up-btn-secondary" onclick="downloadStockTemplate()">📄 양식 다운로드</button>
-      <button class="up-btn up-btn-secondary" onclick="downloadStockData()" style="margin-left:auto;">⬇ 현재 데이터</button>
+      <button class="up-btn up-btn-secondary" onclick="loadStockCurrentData()" style="margin-left:auto;">🔍 현재 데이터 조회</button>
+      <button class="up-btn up-btn-green" onclick="downloadStockData()" id="stockDownloadBtn" style="display:none;">⬇ 엑셀 다운로드</button>
     </div>
     <div class="up-info">💡 선택한 년/월(ym: YYYYMM)의 기존 재고조사 데이터를 삭제 후 새 데이터를 등록합니다.</div>
+  </div>
+
+  <!-- 조회 결과 요약 -->
+  <div id="stockCurrentSection" style="display:none;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;" id="stockSummaryCards"></div>
+    <div class="tbl-wrap">
+      <table id="stock-current-table">
+        <thead><tr>
+          <th style="width:80px;">년월</th>
+          <th style="width:90px;">공급유형</th>
+          <th style="width:120px;">브랜드</th>
+          <th style="width:110px;">품목코드</th>
+          <th>품명</th>
+          <th style="width:120px;">LG P/N</th>
+          <th style="width:120px;">Maker P/N</th>
+          <th class="center" style="width:80px;">ERP수량</th>
+          <th class="center" style="width:80px;">실재고</th>
+          <th class="center" style="width:70px;">차이</th>
+          <th class="right" style="width:100px;">단가</th>
+          <th class="right" style="width:110px;">재고금액</th>
+        </tr></thead>
+        <tbody id="stock-current-tbody"><tr><td colspan="12"><div class="empty-state">조회 버튼을 클릭하세요.</div></td></tr></tbody>
+      </table>
+    </div>
   </div>
   <div class="up-section" id="stockDirectForm" style="display:none;">
     <div class="up-section-title">✚ 직접 입력</div>
@@ -1740,6 +1765,68 @@ function downloadStockTemplate() {
   XLSX.writeFile(wb, 'SME_재고조사_업로드양식.xlsx');
 }
 
+async function loadStockCurrentData() {
+  const year  = document.getElementById('stock-year').value;
+  const month = document.getElementById('stock-month').value;
+  const ym = year + '-' + month;
+  const btn = document.querySelector('[onclick="loadStockCurrentData()"]');
+  btn.disabled = true; btn.textContent = '조회 중...';
+
+  let rows=[], pg=0;
+  while(true){
+    const {data,error} = await sb.from('stock_inventory').select('*').eq('ym', ym).range(pg*1000,(pg+1)*1000-1);
+    if(error){alert('조회 실패: '+error.message);btn.disabled=false;btn.textContent='🔍 현재 데이터 조회';return;}
+    if(!data||!data.length) break;
+    rows=[...rows,...data]; pg++; if(data.length<1000) break;
+  }
+  btn.disabled=false; btn.textContent='🔍 현재 데이터 조회';
+
+  if(!rows.length){ alert(`${year}년 ${parseInt(month)}월 데이터가 없습니다.`); return; }
+
+  // 요약 카드
+  const fmtAmt = v => v!=null ? Math.round(v).toLocaleString('ko-KR') : '0';
+  const total = rows.reduce((s,r)=>s+(r.stock_amount||0),0);
+  const lg    = rows.filter(r=>r.supply_type==='LG사급품').reduce((s,r)=>s+(r.stock_amount||0),0);
+  const dt    = rows.filter(r=>r.supply_type==='직거래품').reduce((s,r)=>s+(r.stock_amount||0),0);
+  document.getElementById('stockSummaryCards').innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-top:3px solid var(--accent);">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">전체 재고금액</div>
+      <div style="font-size:22px;font-weight:900;color:var(--text);font-family:'Share Tech Mono',monospace;">${fmtAmt(total)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${rows.length.toLocaleString()}개 품목 / ${year}년 ${parseInt(month)}월</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-top:3px solid var(--accent);">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">LG사급품</div>
+      <div style="font-size:22px;font-weight:900;color:#c8001e;font-family:'Share Tech Mono',monospace;">${fmtAmt(lg)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${rows.filter(r=>r.supply_type==='LG사급품').length.toLocaleString()}개 품목</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-top:3px solid var(--accent2);">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">직거래품</div>
+      <div style="font-size:22px;font-weight:900;color:#1a56db;font-family:'Share Tech Mono',monospace;">${fmtAmt(dt)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${rows.filter(r=>r.supply_type==='직거래품').length.toLocaleString()}개 품목</div>
+    </div>`;
+
+  // 테이블
+  document.getElementById('stock-current-tbody').innerHTML = rows.map(r=>`
+    <tr>
+      <td class="mono">${r.ym||''}</td>
+      <td><span class="badge ${r.supply_type==='LG사급품'?'b-lg':'b-dt'}">${r.supply_type||''}</span></td>
+      <td>${r.brand||''}</td>
+      <td class="mono">${r.item_code||''}</td>
+      <td>${r.description||''}</td>
+      <td class="mono">${r.lg_pn||''}</td>
+      <td class="mono">${r.maker_pn||''}</td>
+      <td class="center mono">${r.erp_qty!=null?r.erp_qty.toLocaleString():''}</td>
+      <td class="center mono">${r.real_qty!=null?r.real_qty.toLocaleString():''}</td>
+      <td class="center mono" style="color:${(r.diff_qty||0)<0?'var(--accent)':'inherit'}">${r.diff_qty!=null?r.diff_qty.toLocaleString():''}</td>
+      <td class="num">${r.unit_price!=null?r.unit_price.toLocaleString():''}</td>
+      <td class="num">${r.stock_amount!=null?Math.round(r.stock_amount).toLocaleString():''}</td>
+    </tr>`).join('');
+
+  document.getElementById('stockCurrentSection').style.display='block';
+  document.getElementById('stockDownloadBtn').style.display='';
+  setTimeout(()=>initColResize('stock-current-table','al_stock_cur'),50);
+}
+
 async function downloadStockData() {
   const year  = document.getElementById('stock-year').value;
   const month = document.getElementById('stock-month').value;
@@ -1751,8 +1838,9 @@ async function downloadStockData() {
     if(!data||!data.length) break;
     rows=[...rows,...data]; pg++; if(data.length<1000) break;
   }
-  if(!rows.length) { alert(`${year}년 ${parseInt(month)}월 데이터가 없습니다.\n(ym: ${ym})`); return; }
+  if(!rows.length) { alert(`${year}년 ${parseInt(month)}월 데이터가 없습니다.`); return; }
   const sheet = rows.map(r => ({
+    '년월':r.ym,
     '공급유형':r.supply_type,'브랜드':r.brand,'품목코드':r.item_code,'품명':r.description,
     'LG P/N':r.lg_pn,'Maker P/N':r.maker_pn,'ERP수량':r.erp_qty,'실재고':r.real_qty,
     '차이':r.diff_qty,'단가':r.unit_price,'재고금액':r.stock_amount
