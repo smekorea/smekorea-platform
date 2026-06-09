@@ -1741,11 +1741,17 @@ function renderStockPreview() {
   if(!_stockRows.length) return;
   document.getElementById('stockPreviewSection').style.display = '';
   const totalAmt = _stockRows.reduce((s,r)=>s+(r.stock_amount||0),0);
+  const lgAmt    = _stockRows.filter(r=>r.supply_type==='LG사급품').reduce((s,r)=>s+(r.stock_amount||0),0);
+  const dtAmt    = _stockRows.filter(r=>r.supply_type==='직거래품').reduce((s,r)=>s+(r.stock_amount||0),0);
+  const lgCnt    = _stockRows.filter(r=>r.supply_type==='LG사급품').length;
+  const dtCnt    = _stockRows.filter(r=>r.supply_type==='직거래품').length;
   // 포함된 월 목록
   const yms = [...new Set(_stockRows.map(r=>r.ym))].sort();
   document.getElementById('stockPreviewStat').innerHTML = `
-    <div class="up-stat-card"><b>${_stockRows.length.toLocaleString()}</b>건</div>
-    <div class="up-stat-card"><b>${Math.round(totalAmt).toLocaleString()}</b>원 재고금액</div>
+    <div class="up-stat-card"><b>${_stockRows.length.toLocaleString()}</b>건 전체</div>
+    <div class="up-stat-card"><b>${Math.round(totalAmt).toLocaleString()}</b>원 전체 재고금액</div>
+    <div class="up-stat-card" style="background:rgba(200,0,30,.04);border-color:rgba(200,0,30,.2);">LG사급품 <b style="color:var(--accent);font-size:14px;">${Math.round(lgAmt).toLocaleString()}</b>원 (${lgCnt.toLocaleString()}건)</div>
+    <div class="up-stat-card" style="background:rgba(26,86,219,.04);border-color:rgba(26,86,219,.2);">직거래품 <b style="color:var(--accent2);font-size:14px;">${Math.round(dtAmt).toLocaleString()}</b>원 (${dtCnt.toLocaleString()}건)</div>
     <div class="up-stat-card" style="background:rgba(26,86,219,.06);border-color:rgba(26,86,219,.2);">포함 월: <b style="color:var(--accent2);font-size:14px;">${yms.join(', ')}</b></div>`;
   const fmt = v => v!=null ? Number(v).toLocaleString() : '-';
   const tbody = document.getElementById('stockPreviewBody');
@@ -2482,10 +2488,6 @@ async function uploadBsrExcel(e){
   };
   reader.readAsArrayBuffer(file); e.target.value='';
 }
-
-// ── 초기화 ──
-setQ('today', document.getElementById('q-today'));
-initYearMonth();
 
 // ── 리사이저블 컬럼 ──
 function initColResize(tableId, storageKey) {
