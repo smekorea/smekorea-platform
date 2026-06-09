@@ -1895,26 +1895,33 @@ async function loadStockCurrentData() {
 
   if(!rows.length){ alert(`${year}년 ${parseInt(month)}월 데이터가 없습니다.`); return; }
 
-  // 요약 카드
+  // 요약 카드 — supply_type trim + 포함 여부로 방어적 매칭
   const fmtAmt = v => v!=null ? Math.round(v).toLocaleString('ko-KR') : '0';
-  const total = rows.reduce((s,r)=>s+(r.stock_amount||0),0);
-  const lg    = rows.filter(r=>r.supply_type==='LG사급품').reduce((s,r)=>s+(r.stock_amount||0),0);
-  const dt    = rows.filter(r=>r.supply_type==='직거래품').reduce((s,r)=>s+(r.stock_amount||0),0);
+  const isLg = r => (r.supply_type||'').trim().includes('LG') || (r.supply_type||'').trim().includes('사급');
+  const isDt = r => (r.supply_type||'').trim().includes('직거래');
+  const total   = rows.reduce((s,r)=>s+(r.stock_amount||0),0);
+  const lgRows  = rows.filter(isLg);
+  const dtRows  = rows.filter(isDt);
+  const lgAmt   = lgRows.reduce((s,r)=>s+(r.stock_amount||0),0);
+  const dtAmt   = dtRows.reduce((s,r)=>s+(r.stock_amount||0),0);
+  // supply_type 실제 값 목록 (디버그용 — 카드 하단에 표시)
+  const stypes  = [...new Set(rows.map(r=>(r.supply_type||'').trim()))].filter(Boolean);
   document.getElementById('stockSummaryCards').innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-top:3px solid var(--accent);">
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">전체 재고금액</div>
       <div style="font-size:22px;font-weight:900;color:var(--text);font-family:'Share Tech Mono',monospace;">${fmtAmt(total)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:3px;">${rows.length.toLocaleString()}개 품목 / ${year}년 ${parseInt(month)}월</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">공급유형: ${stypes.join(' / ')}</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-top:3px solid var(--accent);">
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">LG사급품</div>
-      <div style="font-size:22px;font-weight:900;color:#c8001e;font-family:'Share Tech Mono',monospace;">${fmtAmt(lg)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${rows.filter(r=>r.supply_type==='LG사급품').length.toLocaleString()}개 품목</div>
+      <div style="font-size:22px;font-weight:900;color:#c8001e;font-family:'Share Tech Mono',monospace;">${fmtAmt(lgAmt)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${lgRows.length.toLocaleString()}개 품목</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-top:3px solid var(--accent2);">
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">직거래품</div>
-      <div style="font-size:22px;font-weight:900;color:#1a56db;font-family:'Share Tech Mono',monospace;">${fmtAmt(dt)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${rows.filter(r=>r.supply_type==='직거래품').length.toLocaleString()}개 품목</div>
+      <div style="font-size:22px;font-weight:900;color:#1a56db;font-family:'Share Tech Mono',monospace;">${fmtAmt(dtAmt)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${dtRows.length.toLocaleString()}개 품목</div>
     </div>`;
 
   // 테이블
