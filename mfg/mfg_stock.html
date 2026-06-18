@@ -591,9 +591,10 @@ tbody td:last-child{border-right:none;}
             <th class="sortable" onclick="sortStock('lg_pn')" style="width:130px;">LG품번<span class="sort-icon" id="si-st-lg_pn"></span></th>
             <th class="sortable" onclick="sortStock('maker')" style="width:100px;">Maker<span class="sort-icon" id="si-st-maker"></span></th>
             <th class="sortable" onclick="sortStock('lot_no')" style="width:140px;">LOT번호<span class="sort-icon" id="si-st-lot_no"></span></th>
-            <th class="sortable" onclick="sortStock('qty')" style="width:110px;">수량(PCS)<span class="sort-icon" id="si-st-qty"></span></th>
+            <th class="sortable" onclick="sortStock('qty')" style="width:100px;">수량(PCS)<span class="sort-icon" id="si-st-qty"></span></th>
+            <th class="sortable" onclick="sortStock('operator')" style="width:80px;">작업자<span class="sort-icon" id="si-st-operator"></span></th>
             <th class="sortable" onclick="sortStock('updated_at')" style="width:150px;">리딩시각<span class="sort-icon" id="si-st-updated_at"></span></th>
-            <th style="width:70px;">상태</th>
+            <th style="width:60px;">상태</th>
           </tr>
         </thead>
         <tbody id="st_tbody">
@@ -1239,21 +1240,22 @@ async function saveMoveStock(){
 }
 
 // 재고 현황 업데이트
-async function updateStockCurrent(lgPn, lotNo, fromLoc, toLoc, qty){
+async function updateStockCurrent(lgPn, lotNo, fromLoc, toLoc, qty, operator){
   try{
+    const op = operator || document.getElementById('mv_op').value || '';
     // 출발지 재고 감소 (업체/부품업체 제외)
     if(fromLoc!=='부품업체'){
       const key={location:fromLoc,lg_pn:lgPn,lot_no:lotNo||''};
       const{data:cur}=await sb.from('mfg_stock_current').select('qty').match(key).single();
       const newQty=Math.max(0,(cur?.qty||0)-qty);
-      await sb.from('mfg_stock_current').upsert({...key,qty:newQty,updated_at:new Date().toISOString()},{onConflict:'location,lg_pn,lot_no'});
+      await sb.from('mfg_stock_current').upsert({...key,qty:newQty,operator:op,updated_at:new Date().toISOString()},{onConflict:'location,lg_pn,lot_no'});
     }
     // 도착지 재고 증가 (업체/부품업체 제외)
     if(toLoc!=='부품업체'){
       const key={location:toLoc,lg_pn:lgPn,lot_no:lotNo||''};
       const{data:cur}=await sb.from('mfg_stock_current').select('qty').match(key).single();
       const newQty=(cur?.qty||0)+qty;
-      await sb.from('mfg_stock_current').upsert({...key,qty:newQty,updated_at:new Date().toISOString()},{onConflict:'location,lg_pn,lot_no'});
+      await sb.from('mfg_stock_current').upsert({...key,qty:newQty,operator:op,updated_at:new Date().toISOString()},{onConflict:'location,lg_pn,lot_no'});
     }
   }catch(e){console.error('재고 업데이트 오류',e);}
 }
@@ -1358,7 +1360,7 @@ function renderStock(){
   _bom.forEach(r=>{ if(r.lg_pn) makerMap[r.lg_pn]=r.maker||''; });
 
   const tbody=document.getElementById('st_tbody');
-  _setSortIcons('st',['location','lg_pn','maker','lot_no','qty','updated_at'],_stSortKey,_stSortAsc);
+  _setSortIcons('st',['location','lg_pn','maker','lot_no','qty','operator','updated_at'],_stSortKey,_stSortAsc);
 
   if(_stockSumMode){
     // 품번 기준 합산 (현재 위치 필터 내에서 LOT 무시하고 합산)
@@ -1373,7 +1375,7 @@ function renderStock(){
     let rows=Object.values(map);
     rows.sort((a,b)=>_cmp(a,b,_stSortKey==='lot_no'?'lg_pn':_stSortKey,_stSortAsc));
 
-    if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#bbb">데이터 없음</td></tr>';document.getElementById('st_count').textContent='0건';return;}
+    if(!rows.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:#bbb">데이터 없음</td></tr>';document.getElementById('st_count').textContent='0건';return;}
 
     tbody.innerHTML=rows.map((r,i)=>{
       const expanded=_stExpanded[r.lg_pn];
@@ -1385,6 +1387,7 @@ function renderStock(){
         <td style="font-size:12px;color:var(--text-s)">${makerMap[r.lg_pn]||'-'}</td>
         <td style="font-size:11px;color:var(--text-s)">${lotCountTxt}</td>
         <td style="font-family:var(--mono);font-size:13px;font-weight:700;text-align:right">${r.qty.toLocaleString()}</td>
+        <td style="font-size:12px;color:var(--text-s)">${r.operator||'-'}</td>
         <td style="font-size:11px;color:var(--text-s)">${fmtKst(r.updated_at)}</td>
         <td><span class="bdg bdg-ok">정상</span></td>
       </tr>`;
@@ -1395,6 +1398,7 @@ function renderStock(){
             <td></td><td></td><td></td><td></td>
             <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${l.lot_no||'-'}</td>
             <td style="font-family:var(--mono);font-size:12px;text-align:right;color:var(--text-s)">${(l.qty||0).toLocaleString()}</td>
+            <td style="font-size:12px;color:var(--text-s)">${l.operator||'-'}</td>
             <td style="font-size:11px;color:var(--text-s)">${fmtKst(l.updated_at)}</td>
             <td></td>
           </tr>`;
@@ -1405,7 +1409,7 @@ function renderStock(){
     document.getElementById('st_count').textContent=`품번 ${rows.length}건 (LOT 합산)`;
   } else {
     data = [...data].sort((a,b)=>_cmp(a,b,_stSortKey,_stSortAsc));
-    if(!data.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#bbb">데이터 없음</td></tr>';document.getElementById('st_count').textContent='0건';return;}
+    if(!data.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:#bbb">데이터 없음</td></tr>';document.getElementById('st_count').textContent='0건';return;}
     tbody.innerHTML=data.map((r,i)=>`<tr>
       <td style="font-size:11px;color:var(--text-s)">${i+1}</td>
       <td><span class="bdg" style="background:${locBg(r.location)};color:${locFt(r.location)}">${r.location}</span></td>
@@ -1413,6 +1417,7 @@ function renderStock(){
       <td style="font-size:12px;color:var(--text-s)">${makerMap[r.lg_pn]||'-'}</td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--text-s)">${r.lot_no||'-'}</td>
       <td style="font-family:var(--mono);font-size:13px;font-weight:700;text-align:right">${r.qty.toLocaleString()}</td>
+      <td style="font-size:12px;color:var(--text-s)">${r.operator||'-'}</td>
       <td style="font-size:11px;color:var(--text-s)">${fmtKst(r.updated_at)}</td>
       <td><span class="bdg bdg-ok">정상</span></td>
     </tr>`).join('');
@@ -1491,11 +1496,11 @@ async function exportStock(){
   ws.columns=[4,10,16,14,16,10,18,8].map(w=>({width:w}));
   const stl=(cell,opts={})=>{const{fn=F_EN,sz=9,bold=false,col='000000',bg=null,align='left',numFmt=null}=opts;cell.font={name:fn,size:sz,bold,color:{argb:'FF'+col}};cell.alignment={horizontal:align,vertical:'middle'};if(bg)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};if(numFmt)cell.numFmt=numFmt;const bs={style:'thin',color:{argb:'FFD0D0D0'}};cell.border={top:bs,bottom:bs,left:bs,right:bs};};
   const makerMap={};_bom.forEach(r=>{if(r.lg_pn)makerMap[r.lg_pn]=r.maker||'';});
-  const h=ws.addRow(['#','위치','LG품번','Maker','LOT번호','수량(PCS)','리딩시각','상태']);
+  const h=ws.addRow(['#','위치','LG품번','Maker','LOT번호','수량(PCS)','작업자','리딩시각','상태']);
   h.height=18;h.eachCell(c=>stl(c,{sz:10,bold:true,col:'FFFFFF',bg:'1e3a8a',align:'center'}));
   const live=_stock.filter(r=>(r.qty||0)>0);
   live.forEach((r,i)=>{
-    const row=ws.addRow([i+1,r.location,r.lg_pn||'',makerMap[r.lg_pn]||'',r.lot_no||'',r.qty,fmtKst(r.updated_at),'정상']);
+    const row=ws.addRow([i+1,r.location,r.lg_pn||'',makerMap[r.lg_pn]||'',r.lot_no||'',r.qty,r.operator||'',fmtKst(r.updated_at),'정상']);
     row.height=15;row.eachCell((cell,ci)=>stl(cell,{fn:[3,4,5].includes(ci)?F_EN:F_KR,sz:9,align:ci===6?'right':'left',numFmt:ci===6?'#,##0':null,bg:i%2===0?null:'F5F5F5'}));
   });
   const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
