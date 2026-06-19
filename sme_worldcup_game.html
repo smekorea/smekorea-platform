@@ -169,13 +169,14 @@
   <div class="prize-box">
     <div>
       <div class="prize-label">🏆 상금 — 동점 시 균등 분배</div>
-      <div class="prize-sub">참가자 수 × 1만원</div>
+      <div class="prize-sub">멕시코전 이월 ₩150,000 + 신규참가 × 1만원</div>
     </div>
     <div class="prize-amount" id="prize-display">₩0</div>
   </div>
 
   <div class="payment-box">
-    💰 참가비(1만원)는 <strong>김근복 이사</strong>에게 제출해 주세요
+    💰 <strong>신규 참가자만</strong> 참가비(1만원)를 <strong>김근복 이사</strong>에게 제출해 주세요!<br>
+    <span style="font-size:12px;color:#4a7c59">※ 멕시코전 기존 참가자는 추가 참가비 없이 스코어만 새로 등록해 주세요</span>
   </div>
 
   <!-- 등록 카드 -->
@@ -299,8 +300,11 @@ const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const ADMIN_PIN = '1120';
-const DEADLINE  = new Date('2026-06-25T09:00:00+09:00');
+const ADMIN_PIN   = '1120';
+const DEADLINE    = new Date('2026-06-25T09:00:00+09:00');
+const CARRYOVER   = 150000; // 멕시코전 이월 상금
+// 멕시코전 기존 참가자 emp_no — 추가 참가비 없음
+const EXISTING_NOS = new Set([1,2,3,4,5,6,8,9,10,12,13,14,18,22,24]);
 
 const EMPLOYEES = [
   {no:1,  name:'곽선효', dept:'대표이사',   rank:'대표이사'},
@@ -461,7 +465,10 @@ function renderPublic() {
   const joiners  = allEntries.filter(e => e.joining);
   const notJoin  = allEntries.filter(e => !e.joining).length;
   const notYet   = 23 - allEntries.length;
-  const prize    = joiners.length * 10000;
+
+  // 상금 = 이월금액 + 신규참가자 × 1만원
+  const newJoiners = joiners.filter(e => !EXISTING_NOS.has(e.emp_no));
+  const prize = CARRYOVER + newJoiners.length * 10000;
 
   document.getElementById('stat-count').textContent   = allEntries.length;
   document.getElementById('stat-join').textContent    = joiners.length;
@@ -544,7 +551,8 @@ function calcWinner() {
   if (isNaN(realMx)||isNaN(realKr)) { alert('실제 스코어를 입력해 주세요.'); return; }
 
   const joiners = allEntries.filter(e => e.joining && e.mexico !== null);
-  const prize   = joiners.length * 10000;
+  const newJoiners = joiners.filter(e => !EXISTING_NOS.has(e.emp_no));
+  const prize   = CARRYOVER + newJoiners.length * 10000;
 
   let winners = joiners.filter(e => e.mexico===realMx && e.korea===realKr);
 
