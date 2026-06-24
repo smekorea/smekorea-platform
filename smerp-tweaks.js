@@ -1,6 +1,6 @@
 /* ================================================================
-   SMERP Tweaks — 전역 테마/폰트 설정 패널
-   smerp-tweaks.js  v1.0  2026-04-21
+   SMERP Tweaks — 전역 테마/폰트/화면꾸미기 설정 패널
+   smerp-tweaks.js  v2.0  2026-06-25
    모든 HTML 하단에 <script src="smerp-tweaks.js"></script> 추가
    ================================================================ */
 
@@ -11,11 +11,22 @@
     theme:    'light',
     darkL:    22,
     lightL:   98,
-    accent:   '22',        // LG Red
+    accent:   '22',
     layout:   'cockpit',
     fontKo:   'Noto Sans KR',
     fontEn:   'Inter',
     fontMono: 'JetBrains Mono',
+    // 화면 꾸미기
+    hdrH:     112,
+    hdrBg:    '#2c2420',
+    sideBg:   '#352c28',
+    sideW:    240,
+    logoSize: 52,
+    menuSize: 13,
+    tblHdSize:12,
+    rowH:     14,
+    mainBg:   '#ffffff',
+    tblHdBg:  '#ece8e2',
   };
 
   /* ── 2. Google Fonts URL 맵 ── */
@@ -62,7 +73,7 @@
     document.head.appendChild(link);
   }
 
-  /* ── 5. CSS 변수 주입 (html에 없으면 추가) ── */
+  /* ── 5. CSS 변수 주입 ── */
   function ensureTokens() {
     if (document.getElementById('smerp-token-style')) return;
     const s = document.createElement('style');
@@ -80,10 +91,8 @@
         --accent: oklch(var(--accent-L,0.62) var(--accent-C,0.19) var(--accent-hue,22));
         --accent-strong: oklch(calc(var(--accent-L,0.62) - 0.06) var(--accent-C,0.19) var(--accent-hue,22));
         --accent-soft: oklch(var(--accent-L,0.62) var(--accent-C,0.19) var(--accent-hue,22) / 0.16);
-        --live:   oklch(0.80 0.14 160);
-        --warn:   oklch(0.78 0.14 70);
-        --danger: oklch(0.70 0.19 25);
-        --info:   oklch(0.75 0.10 230);
+        --live: oklch(0.80 0.14 160); --warn: oklch(0.78 0.14 70);
+        --danger: oklch(0.70 0.19 25); --info: oklch(0.75 0.10 230);
         color-scheme: dark;
       }
       html[data-theme="light"] {
@@ -92,34 +101,44 @@
         --bg-2: oklch(calc(var(--light-L,0.985) - 0.05) 0.008 30);
         --line: oklch(calc(var(--light-L,0.985) - 0.10) 0.010 30);
         --line-strong: oklch(calc(var(--light-L,0.985) - 0.22) 0.012 30);
-        --fg-0: oklch(0.22 0.015 25);
-        --fg-1: oklch(0.42 0.015 25);
+        --fg-0: oklch(0.22 0.015 25); --fg-1: oklch(0.42 0.015 25);
         --fg-2: oklch(0.58 0.014 25);
         --accent: oklch(0.54 var(--accent-C,0.20) var(--accent-hue,22));
         --accent-strong: oklch(0.48 0.22 var(--accent-hue,22));
         --accent-soft: oklch(0.54 var(--accent-C,0.20) var(--accent-hue,22) / 0.12);
-        --live:   oklch(0.55 0.14 160);
-        --warn:   oklch(0.68 0.15 70);
-        --danger: oklch(0.54 0.20 25);
-        --info:   oklch(0.55 0.12 230);
+        --live: oklch(0.55 0.14 160); --warn: oklch(0.68 0.15 70);
+        --danger: oklch(0.54 0.20 25); --info: oklch(0.55 0.12 230);
         color-scheme: light;
       }
     `;
     document.head.appendChild(s);
   }
 
-  /* ── 6. 상태 적용 ── */
+  /* ── 6. 화면 꾸미기 CSS 적용 ── */
+  function applyUICustom() {
+    let s = document.getElementById('smerp-ui-custom');
+    if (!s) { s = document.createElement('style'); s.id = 'smerp-ui-custom'; document.head.appendChild(s); }
+    const rowPad = state.rowH;
+    s.textContent = `
+      .topbar { height: ${state.hdrH}px !important; background: ${state.hdrBg} !important; }
+      .tb-logo { width: ${state.sideW}px !important; background: ${state.hdrBg} !important; }
+      .tb-logo-text { font-size: ${state.logoSize}px !important; }
+      .sidebar { width: ${state.sideW}px !important; background: ${state.sideBg} !important;
+                 top: ${state.hdrH}px !important; height: calc(100vh - ${state.hdrH}px) !important; }
+      .sb-name { font-size: ${state.menuSize}px !important; }
+      .main { background: ${state.mainBg} !important; }
+      .menu-tbl thead th { font-size: ${state.tblHdSize}px !important; background: ${state.tblHdBg} !important; }
+      .menu-tbl td { padding: ${rowPad}px 20px !important; }
+      .app-body { min-height: calc(100vh - ${state.hdrH}px) !important; }
+    `;
+  }
+
+  /* ── 7. 전체 상태 적용 ── */
   function applyState() {
     const html = document.documentElement;
-
-    // theme
     html.dataset.theme = state.theme;
-
-    // brightness
     html.style.setProperty('--dark-L',  (state.darkL  / 100).toFixed(3));
     html.style.setProperty('--light-L', (state.lightL / 100).toFixed(3));
-
-    // accent
     if (String(state.accent) === '0') {
       html.style.setProperty('--accent-hue', '0');
       html.style.setProperty('--accent-C',   '0.005');
@@ -129,32 +148,21 @@
       html.style.setProperty('--accent-C',   '0.19');
       html.style.setProperty('--accent-L',   '0.62');
     }
-
-    // layout
     html.dataset.layout = state.layout;
-
-    // fonts
     [state.fontKo, state.fontEn, state.fontMono].forEach(loadFont);
     html.style.setProperty('--font-ko',   `'${state.fontKo}', sans-serif`);
     html.style.setProperty('--font-en',   `'${state.fontEn}', sans-serif`);
     html.style.setProperty('--font-mono', `'${state.fontMono}', monospace`);
-
-    // body font 적용
     document.body.style.fontFamily = `var(--font-en), var(--font-ko), system-ui, sans-serif`;
-
-    // mono 클래스
     document.querySelectorAll('.mono, .nums').forEach(el => {
       el.style.fontFamily = `var(--font-mono)`;
     });
-
-    // 패널 UI 동기화
+    applyUICustom();
     syncPanelUI();
-
-    // 저장
     try { localStorage.setItem('smerp_tweaks', JSON.stringify(state)); } catch(e) {}
   }
 
-  /* ── 7. 패널 HTML ── */
+  /* ── 8. 패널 HTML ── */
   function buildPanel() {
     const fontKoOptions   = ['Noto Sans KR', 'Pretendard', 'Nanum Gothic'];
     const fontEnOptions   = ['Inter', 'DM Sans', 'Roboto'];
@@ -170,74 +178,116 @@
         ${opts.map(o => `<option value="${o}" ${o===val?'selected':''}>${o}</option>`).join('')}
       </select>`;
 
+    const slider = (id, label, min, max, step, val, unit) =>
+      `<div class="stk-row">
+        <span class="stk-row-lbl">${label}</span>
+        <div class="stk-slider-row">
+          <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}">
+          <span class="stk-val" id="${id}-val">${val}${unit}</span>
+        </div>
+      </div>`;
+
+    const colorPick = (id, label, val) =>
+      `<div class="stk-row">
+        <span class="stk-row-lbl">${label}</span>
+        <div class="stk-color-row">
+          <input type="color" id="${id}" value="${val}" class="stk-color">
+          <span class="stk-val" id="${id}-val">${val}</span>
+        </div>
+      </div>`;
+
     return `
     <div id="stk-tweaks-overlay"></div>
     <div id="stk-tweaks-panel">
       <div class="stk-header">
-        <span class="stk-title">⚙ TWEAKS</span>
+        <span class="stk-title">⚙ 화면 설정</span>
         <button class="stk-close" id="stk-close-btn">✕</button>
       </div>
 
-      <div class="stk-section">
-        <div class="stk-label">THEME</div>
-        <div class="stk-seg" id="stk-theme">
-          <button data-v="dark">Dark</button>
-          <button data-v="light">Light</button>
+      <!-- 탭 -->
+      <div class="stk-tabs">
+        <button class="stk-tab on" data-tab="ui">🎨 화면 꾸미기</button>
+        <button class="stk-tab" data-tab="theme">🌙 테마·폰트</button>
+      </div>
+
+      <!-- 화면 꾸미기 탭 -->
+      <div class="stk-tab-content" id="stk-tab-ui">
+
+        <div class="stk-group-title">── 상단 바 ──</div>
+        ${colorPick('stk-hdrBg', '배경색', state.hdrBg)}
+        ${slider('stk-hdrH', '높이', 56, 160, 4, state.hdrH, 'px')}
+        ${slider('stk-logoSize', '로고 크기', 24, 72, 2, state.logoSize, 'px')}
+
+        <div class="stk-group-title">── 왼쪽 메뉴 ──</div>
+        ${colorPick('stk-sideBg', '배경색', state.sideBg)}
+        ${slider('stk-sideW', '메뉴 폭', 160, 320, 8, state.sideW, 'px')}
+        ${slider('stk-menuSize', '글자 크기', 10, 18, 1, state.menuSize, 'px')}
+
+        <div class="stk-group-title">── 목록 화면 ──</div>
+        ${colorPick('stk-mainBg', '배경색', state.mainBg)}
+        ${colorPick('stk-tblHdBg', '표 머리글 색', state.tblHdBg)}
+        ${slider('stk-tblHdSize', '머리글 글자', 10, 16, 1, state.tblHdSize, 'px')}
+        ${slider('stk-rowH', '행 높이', 6, 28, 2, state.rowH, 'px')}
+
+        <div class="stk-section">
+          <button class="stk-reset-btn" id="stk-reset-ui-btn">↩ 화면 기본값으로</button>
         </div>
       </div>
 
-      <div class="stk-section" id="stk-dark-bright" style="display:none">
-        <div class="stk-label">다크 밝기</div>
-        <div class="stk-slider-row">
-          <input type="range" id="stk-darkL" min="10" max="32" step="1">
-          <span class="stk-val" id="stk-darkL-val"></span>
+      <!-- 테마·폰트 탭 -->
+      <div class="stk-tab-content" id="stk-tab-theme" style="display:none">
+
+        <div class="stk-section">
+          <div class="stk-label">밝기 모드</div>
+          <div class="stk-seg" id="stk-theme">
+            <button data-v="dark">Dark</button>
+            <button data-v="light">Light</button>
+          </div>
+        </div>
+
+        <div class="stk-section" id="stk-dark-bright" style="display:none">
+          <div class="stk-label">다크 밝기</div>
+          <div class="stk-slider-row">
+            <input type="range" id="stk-darkL" min="10" max="32" step="1">
+            <span class="stk-val" id="stk-darkL-val"></span>
+          </div>
+        </div>
+
+        <div class="stk-section" id="stk-light-bright">
+          <div class="stk-label">라이트 밝기</div>
+          <div class="stk-slider-row">
+            <input type="range" id="stk-lightL" min="92" max="100" step="1">
+            <span class="stk-val" id="stk-lightL-val"></span>
+          </div>
+        </div>
+
+        <div class="stk-section">
+          <div class="stk-label">강조색</div>
+          <div class="stk-swatches" id="stk-swatches">${swatchHTML}</div>
+        </div>
+
+        <div class="stk-section">
+          <div class="stk-label">한글 폰트</div>
+          ${fontSel('stk-fontKo', fontKoOptions, state.fontKo)}
+        </div>
+        <div class="stk-section">
+          <div class="stk-label">영문 폰트</div>
+          ${fontSel('stk-fontEn', fontEnOptions, state.fontEn)}
+        </div>
+        <div class="stk-section">
+          <div class="stk-label">수치 폰트</div>
+          ${fontSel('stk-fontMono', fontMonoOptions, state.fontMono)}
+        </div>
+
+        <div class="stk-section">
+          <button class="stk-reset-btn" id="stk-reset-btn">↩ 전체 기본값으로</button>
         </div>
       </div>
 
-      <div class="stk-section" id="stk-light-bright">
-        <div class="stk-label">라이트 밝기</div>
-        <div class="stk-slider-row">
-          <input type="range" id="stk-lightL" min="92" max="100" step="1">
-          <span class="stk-val" id="stk-lightL-val"></span>
-        </div>
-      </div>
-
-      <div class="stk-section">
-        <div class="stk-label">LAYOUT</div>
-        <div class="stk-seg" id="stk-layout">
-          <button data-v="cockpit">Cockpit</button>
-          <button data-v="cards">Cards</button>
-          <button data-v="dense">Dense</button>
-        </div>
-      </div>
-
-      <div class="stk-section">
-        <div class="stk-label">ACCENT</div>
-        <div class="stk-swatches" id="stk-swatches">${swatchHTML}</div>
-      </div>
-
-      <div class="stk-section">
-        <div class="stk-label">한글 폰트</div>
-        ${fontSel('stk-fontKo', fontKoOptions, state.fontKo)}
-      </div>
-
-      <div class="stk-section">
-        <div class="stk-label">영문 폰트</div>
-        ${fontSel('stk-fontEn', fontEnOptions, state.fontEn)}
-      </div>
-
-      <div class="stk-section">
-        <div class="stk-label">수치 폰트</div>
-        ${fontSel('stk-fontMono', fontMonoOptions, state.fontMono)}
-      </div>
-
-      <div class="stk-section">
-        <button class="stk-reset-btn" id="stk-reset-btn">기본값으로 초기화</button>
-      </div>
     </div>
 
-    <!-- 톱니바퀴 FAB -->
-    <button id="stk-fab" title="테마 설정">
+    <!-- FAB -->
+    <button id="stk-fab" title="화면 설정">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
@@ -257,7 +307,7 @@
     `;
   }
 
-  /* ── 8. 패널 스타일 ── */
+  /* ── 9. 패널 스타일 ── */
   function injectPanelStyle() {
     if (document.getElementById('stk-style')) return;
     const s = document.createElement('style');
@@ -266,7 +316,7 @@
       #stk-fab {
         position: fixed; bottom: 24px; right: 24px; z-index: 9998;
         width: 44px; height: 44px; border-radius: 50%;
-        background: var(--accent, #e0002b); color: #fff;
+        background: var(--accent, #c8001e); color: #fff;
         border: none; cursor: pointer; display: grid; place-items: center;
         box-shadow: 0 4px 16px rgba(0,0,0,0.25);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -275,19 +325,19 @@
       #stk-fab.open  { transform: rotate(90deg); }
 
       #stk-tweaks-overlay {
-        display: none; position: fixed; inset: 0; z-index: 9998;
+        display: none; position: fixed; inset: 0; z-index: 9997;
       }
       #stk-tweaks-overlay.open { display: block; }
 
       #stk-tweaks-panel {
         display: none; position: fixed; bottom: 76px; right: 24px; z-index: 9999;
-        width: 270px; border-radius: 12px;
-        background: var(--bg-1, #fff);
-        border: 1px solid var(--line, #ddd);
-        box-shadow: 0 20px 50px -10px rgba(0,0,0,0.3);
-        font-family: var(--font-en, 'Inter'), var(--font-ko, 'Noto Sans KR'), sans-serif;
-        font-size: 13px; color: var(--fg-0, #111);
-        overflow: hidden;
+        width: 300px; border-radius: 14px;
+        background: #fff;
+        border: 1px solid #ddd;
+        box-shadow: 0 20px 50px -10px rgba(0,0,0,0.25);
+        font-family: 'Noto Sans KR', sans-serif;
+        font-size: 13px; color: #1a1612;
+        overflow: hidden; max-height: 80vh; overflow-y: auto;
       }
       #stk-tweaks-panel.open { display: block; animation: stk-slide-up 0.18s ease; }
 
@@ -298,78 +348,109 @@
 
       .stk-header {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 12px 16px 10px;
-        border-bottom: 1px solid var(--line, #ddd);
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid #eee;
+        position: sticky; top: 0; background: #fff; z-index: 1;
       }
-      .stk-title {
-        font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
-        text-transform: uppercase; color: var(--fg-2, #888);
-      }
+      .stk-title { font-size: 13px; font-weight: 700; color: #1a1612; }
       .stk-close {
         background: none; border: none; cursor: pointer;
-        color: var(--fg-2, #888); font-size: 14px; line-height: 1;
-        padding: 2px 4px; border-radius: 4px;
+        color: #aaa; font-size: 14px; line-height: 1;
+        padding: 2px 6px; border-radius: 4px;
       }
-      .stk-close:hover { background: var(--bg-2, #f0f0f0); color: var(--fg-0, #111); }
+      .stk-close:hover { background: #f0f0f0; color: #333; }
+
+      /* 탭 */
+      .stk-tabs {
+        display: flex; border-bottom: 2px solid #eee;
+        background: #fafafa;
+      }
+      .stk-tab {
+        flex: 1; padding: 10px 4px; border: none; background: none;
+        font-size: 11px; font-weight: 500; color: #999;
+        cursor: pointer; font-family: 'Noto Sans KR', sans-serif;
+        border-bottom: 2px solid transparent; margin-bottom: -2px;
+        transition: all .15s;
+      }
+      .stk-tab.on { color: #c8001e; border-bottom-color: #c8001e; font-weight: 700; background: #fff; }
+      .stk-tab:hover:not(.on) { color: #555; background: #f0ede8; }
+
+      .stk-tab-content { padding: 4px 0 8px; }
+
+      /* 그룹 타이틀 */
+      .stk-group-title {
+        font-size: 10px; font-weight: 700; color: #b0a090;
+        letter-spacing: 1px; padding: 10px 16px 4px;
+        font-family: 'Share Tech Mono', monospace;
+      }
+
+      /* 행 레이아웃 */
+      .stk-row {
+        display: flex; align-items: center;
+        padding: 7px 16px; gap: 8px;
+        border-bottom: 1px solid #f5f2ee;
+      }
+      .stk-row-lbl {
+        font-size: 12px; color: #5a5048; white-space: nowrap;
+        width: 90px; flex-shrink: 0;
+      }
 
       .stk-section {
         padding: 10px 16px;
-        border-bottom: 1px solid var(--line, #eee);
+        border-bottom: 1px solid #eee;
       }
       .stk-section:last-child { border-bottom: none; }
 
       .stk-label {
         font-size: 10px; font-weight: 600; letter-spacing: 0.13em;
-        text-transform: uppercase; color: var(--fg-2, #999);
+        text-transform: uppercase; color: #999;
         margin-bottom: 7px;
-        font-family: 'JetBrains Mono', monospace;
       }
 
       .stk-seg {
         display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-        background: var(--bg-0, #f5f5f5);
-        border: 1px solid var(--line, #ddd); border-radius: 6px;
+        background: #f5f2ee; border: 1px solid #ddd; border-radius: 6px;
         padding: 2px; gap: 2px;
       }
       .stk-seg button {
         border: none; background: transparent; cursor: pointer;
         padding: 6px 0; font-size: 12px; border-radius: 4px;
-        color: var(--fg-1, #555); font-family: inherit;
-        transition: background 0.12s;
+        color: #555; font-family: inherit; transition: background 0.12s;
       }
-      .stk-seg button.on {
-        background: var(--accent, #e0002b); color: #fff; font-weight: 600;
-      }
+      .stk-seg button.on { background: #c8001e; color: #fff; font-weight: 600; }
 
-      .stk-slider-row {
-        display: flex; align-items: center; gap: 10px;
-      }
+      /* 슬라이더 */
+      .stk-slider-row { display: flex; align-items: center; gap: 8px; flex: 1; }
       .stk-slider-row input[type="range"] {
         flex: 1; -webkit-appearance: none; appearance: none;
         height: 4px; border-radius: 3px;
-        background: var(--bg-0, #eee); border: 1px solid var(--line, #ddd);
-        outline: none;
+        background: #e8e4de; border: none; outline: none;
       }
       .stk-slider-row input[type="range"]::-webkit-slider-thumb {
         -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
-        background: var(--accent, #e0002b); border: 2px solid var(--bg-1, #fff);
-        cursor: pointer;
+        background: #c8001e; border: 2px solid #fff; cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,.2);
       }
       .stk-val {
-        font-family: 'JetBrains Mono', monospace; font-size: 10px;
-        color: var(--fg-2, #999); width: 36px; text-align: right;
+        font-family: 'Share Tech Mono', monospace; font-size: 10px;
+        color: #999; width: 44px; text-align: right; flex-shrink: 0;
       }
 
-      .stk-swatches {
-        display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+      /* 컬러 피커 */
+      .stk-color-row { display: flex; align-items: center; gap: 8px; flex: 1; }
+      .stk-color {
+        width: 32px; height: 28px; border: 1px solid #ddd; border-radius: 6px;
+        padding: 2px; cursor: pointer; background: none; flex-shrink: 0;
       }
+
+      /* 강조색 스와치 */
+      .stk-swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
       .stk-swatch {
         aspect-ratio: 1; border-radius: 6px; cursor: pointer;
-        border: 2px solid transparent; position: relative;
-        transition: transform 0.1s;
+        border: 2px solid transparent; position: relative; transition: transform 0.1s;
       }
       .stk-swatch:hover { transform: scale(1.1); }
-      .stk-swatch.on { border-color: var(--fg-0, #111); }
+      .stk-swatch.on { border-color: #1a1612; }
       .stk-swatch.on::after {
         content: "✓"; position: absolute; inset: 0;
         display: grid; place-items: center;
@@ -379,29 +460,23 @@
 
       .stk-sel {
         width: 100%; padding: 6px 8px; border-radius: 6px;
-        border: 1px solid var(--line, #ddd);
-        background: var(--bg-0, #f5f5f5); color: var(--fg-0, #111);
-        font-size: 12px; font-family: inherit; cursor: pointer;
-        outline: none;
+        border: 1px solid #ddd; background: #f5f2ee; color: #1a1612;
+        font-size: 12px; font-family: inherit; cursor: pointer; outline: none;
       }
-      .stk-sel:focus { border-color: var(--accent, #e0002b); }
+      .stk-sel:focus { border-color: #c8001e; }
 
       .stk-reset-btn {
-        width: 100%; padding: 7px; border-radius: 6px;
-        border: 1px solid var(--line, #ddd);
-        background: transparent; color: var(--fg-2, #999);
+        width: 100%; padding: 8px; border-radius: 6px;
+        border: 1px solid #ddd; background: transparent; color: #999;
         font-size: 11px; font-family: inherit; cursor: pointer;
-        letter-spacing: 0.04em;
         transition: background 0.12s, color 0.12s;
       }
-      .stk-reset-btn:hover {
-        background: var(--danger, #e0002b); color: #fff; border-color: transparent;
-      }
+      .stk-reset-btn:hover { background: #c8001e; color: #fff; border-color: transparent; }
     `;
     document.head.appendChild(s);
   }
 
-  /* ── 9. 패널 UI 동기화 ── */
+  /* ── 10. 패널 UI 동기화 ── */
   function syncPanelUI() {
     const panel = document.getElementById('stk-tweaks-panel');
     if (!panel) return;
@@ -410,50 +485,59 @@
     panel.querySelectorAll('#stk-theme button').forEach(b =>
       b.classList.toggle('on', b.dataset.v === state.theme));
 
-    // 밝기 슬라이더 표시 전환
     const darkRow  = document.getElementById('stk-dark-bright');
     const lightRow = document.getElementById('stk-light-bright');
     if (darkRow)  darkRow.style.display  = state.theme === 'dark'  ? '' : 'none';
     if (lightRow) lightRow.style.display = state.theme === 'light' ? '' : 'none';
 
-    // 슬라이더 값
     const dIn = document.getElementById('stk-darkL');
     const lIn = document.getElementById('stk-lightL');
     if (dIn) { dIn.value = state.darkL;  document.getElementById('stk-darkL-val').textContent  = (state.darkL/100).toFixed(2); }
     if (lIn) { lIn.value = state.lightL; document.getElementById('stk-lightL-val').textContent = (state.lightL/100).toFixed(2); }
 
-    // layout seg
-    panel.querySelectorAll('#stk-layout button').forEach(b =>
-      b.classList.toggle('on', b.dataset.v === state.layout));
-
-    // accent swatches
     panel.querySelectorAll('.stk-swatch').forEach(s =>
       s.classList.toggle('on', String(s.dataset.hue) === String(state.accent)));
 
-    // font selects
     ['fontKo','fontEn','fontMono'].forEach(k => {
       const el = document.getElementById(`stk-${k}`);
       if (el) el.value = state[k];
     });
-  }
 
-  /* ── 10. 이벤트 바인딩 ── */
-  function bindEvents() {
-    const fab    = document.getElementById('stk-fab');
-    const panel  = document.getElementById('stk-tweaks-panel');
-    const overlay= document.getElementById('stk-tweaks-overlay');
-
-    // FAB 토글
-    fab.addEventListener('click', () => {
-      const isOpen = panel.classList.contains('open');
-      panel.classList.toggle('open', !isOpen);
-      overlay.classList.toggle('open', !isOpen);
-      fab.classList.toggle('open', !isOpen);
+    // 화면 꾸미기 슬라이더 동기화
+    const uiFields = [
+      {id:'stk-hdrH',      key:'hdrH',      unit:'px'},
+      {id:'stk-logoSize',  key:'logoSize',  unit:'px'},
+      {id:'stk-sideW',     key:'sideW',     unit:'px'},
+      {id:'stk-menuSize',  key:'menuSize',  unit:'px'},
+      {id:'stk-tblHdSize', key:'tblHdSize', unit:'px'},
+      {id:'stk-rowH',      key:'rowH',      unit:'px'},
+    ];
+    uiFields.forEach(({id, key, unit}) => {
+      const el = document.getElementById(id);
+      const val = document.getElementById(id+'-val');
+      if (el) el.value = state[key];
+      if (val) val.textContent = state[key] + unit;
     });
 
-    // 오버레이 클릭 → 닫기
-    overlay.addEventListener('click', closePanel);
-    document.getElementById('stk-close-btn').addEventListener('click', closePanel);
+    const colorFields = [
+      {id:'stk-hdrBg',   key:'hdrBg'},
+      {id:'stk-sideBg',  key:'sideBg'},
+      {id:'stk-mainBg',  key:'mainBg'},
+      {id:'stk-tblHdBg', key:'tblHdBg'},
+    ];
+    colorFields.forEach(({id, key}) => {
+      const el = document.getElementById(id);
+      const val = document.getElementById(id+'-val');
+      if (el) el.value = state[key];
+      if (val) val.textContent = state[key];
+    });
+  }
+
+  /* ── 11. 이벤트 바인딩 ── */
+  function bindEvents() {
+    const fab     = document.getElementById('stk-fab');
+    const panel   = document.getElementById('stk-tweaks-panel');
+    const overlay = document.getElementById('stk-tweaks-overlay');
 
     function closePanel() {
       panel.classList.remove('open');
@@ -461,12 +545,31 @@
       fab.classList.remove('open');
     }
 
+    fab.addEventListener('click', () => {
+      const isOpen = panel.classList.contains('open');
+      panel.classList.toggle('open', !isOpen);
+      overlay.classList.toggle('open', !isOpen);
+      fab.classList.toggle('open', !isOpen);
+    });
+
+    overlay.addEventListener('click', closePanel);
+    document.getElementById('stk-close-btn').addEventListener('click', closePanel);
+
+    // 탭 전환
+    document.querySelectorAll('.stk-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.stk-tab').forEach(t => t.classList.remove('on'));
+        document.querySelectorAll('.stk-tab-content').forEach(c => c.style.display = 'none');
+        tab.classList.add('on');
+        document.getElementById('stk-tab-' + tab.dataset.tab).style.display = '';
+      });
+    });
+
     // theme
     document.querySelectorAll('#stk-theme button').forEach(b => {
       b.addEventListener('click', () => { state.theme = b.dataset.v; applyState(); });
     });
 
-    // 밝기
     document.getElementById('stk-darkL').addEventListener('input', e => {
       state.darkL = +e.target.value; applyState();
     });
@@ -474,48 +577,78 @@
       state.lightL = +e.target.value; applyState();
     });
 
-    // layout
-    document.querySelectorAll('#stk-layout button').forEach(b => {
-      b.addEventListener('click', () => { state.layout = b.dataset.v; applyState(); });
-    });
-
-    // accent swatches
     document.querySelectorAll('.stk-swatch').forEach(s => {
       s.addEventListener('click', () => { state.accent = s.dataset.hue; applyState(); });
     });
 
-    // fonts
     ['fontKo','fontEn','fontMono'].forEach(k => {
       document.getElementById(`stk-${k}`).addEventListener('change', e => {
         state[k] = e.target.value; applyState();
       });
     });
 
+    // 화면 꾸미기 슬라이더
+    const uiSliders = [
+      {id:'stk-hdrH',      key:'hdrH',      unit:'px'},
+      {id:'stk-logoSize',  key:'logoSize',  unit:'px'},
+      {id:'stk-sideW',     key:'sideW',     unit:'px'},
+      {id:'stk-menuSize',  key:'menuSize',  unit:'px'},
+      {id:'stk-tblHdSize', key:'tblHdSize', unit:'px'},
+      {id:'stk-rowH',      key:'rowH',      unit:'px'},
+    ];
+    uiSliders.forEach(({id, key, unit}) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', e => {
+        state[key] = +e.target.value;
+        const val = document.getElementById(id+'-val');
+        if (val) val.textContent = state[key] + unit;
+        applyState();
+      });
+    });
+
+    // 컬러 피커
+    const colorPickers = [
+      {id:'stk-hdrBg',   key:'hdrBg'},
+      {id:'stk-sideBg',  key:'sideBg'},
+      {id:'stk-mainBg',  key:'mainBg'},
+      {id:'stk-tblHdBg', key:'tblHdBg'},
+    ];
+    colorPickers.forEach(({id, key}) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', e => {
+        state[key] = e.target.value;
+        const val = document.getElementById(id+'-val');
+        if (val) val.textContent = state[key];
+        applyState();
+      });
+    });
+
     // 초기화
+    document.getElementById('stk-reset-ui-btn').addEventListener('click', () => {
+      if (!confirm('화면 꾸미기를 기본값으로 초기화할까요?')) return;
+      ['hdrH','hdrBg','sideBg','sideW','logoSize','menuSize','tblHdSize','rowH','mainBg','tblHdBg']
+        .forEach(k => { state[k] = DEFAULTS[k]; });
+      applyState();
+    });
+
     document.getElementById('stk-reset-btn').addEventListener('click', () => {
-      if (!confirm('기본값으로 초기화하시겠습니까?')) return;
+      if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) return;
       state = { ...DEFAULTS };
       applyState();
     });
   }
 
-  /* ── 11. 초기화 ── */
+  /* ── 12. 초기화 ── */
   function init() {
     ensureTokens();
     injectPanelStyle();
-
-    // 폰트 미리 로드
     [state.fontKo, state.fontEn, state.fontMono].forEach(loadFont);
-
-    // 패널 마운트
     const wrap = document.createElement('div');
     wrap.innerHTML = buildPanel();
     document.body.appendChild(wrap);
-
-    // 이벤트
     bindEvents();
-
-    // 초기 적용
     applyState();
   }
 
