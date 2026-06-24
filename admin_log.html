@@ -710,7 +710,8 @@ tr.dragging{opacity:.45;}
         <th style="width:70px;">직급</th>
         <th style="width:90px;">부서</th>
         <th class="center" style="width:50px;">성별</th>
-        <th style="width:130px;">연락처</th>
+        <th style="width:110px;">휴대폰</th>
+        <th class="center" style="width:80px;">WF비번</th>
         <th style="width:100px;">입사일</th>
         <th style="width:100px;">근속</th>
         <th class="center" style="width:80px;">관리</th>
@@ -747,7 +748,7 @@ tr.dragging{opacity:.45;}
         <div class="form-group"><label>로그인 ID</label><input id="emp-in-loginid" placeholder="추후 전자결재용"></div>
       </div>
       <div class="modal-row">
-        <div class="form-group"><label>비밀번호</label><input type="password" id="emp-in-password" placeholder="추후 권한설정용"></div>
+        <div class="form-group"><label>WF 비번</label><div style="display:flex;gap:6px;align-items:center;"><input type="text" id="emp-in-wfpw" placeholder="4자리 숫자" maxlength="4" style="width:100px;font-family:monospace;letter-spacing:2px;"><button type="button" onclick="autoSetWfPw()" style="height:36px;padding:0 10px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">📱 휴대폰<br>자동설정</button></div><div style="font-size:10px;color:var(--muted);margin-top:3px;">비워두면 기존 비번 유지 / 초기값: 휴대폰 뒷4자리 또는 1111</div></div>
         <div class="form-group" id="emp-active-group" style="display:none;"><label>재직 상태</label><select id="emp-in-active"><option value="true">재직중</option><option value="false">퇴직</option></select></div>
       </div>
     </div>
@@ -2201,9 +2202,9 @@ let _empData = [], _empEditId = null;
 
 async function loadEmpData() {
   const tbody = document.getElementById('emp-tbody');
-  tbody.innerHTML = '<tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="12"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const {data, error} = await sb.from('employees').select('*').order('emp_no');
-  if(error){tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
+  if(error){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
   _empData = data || [];
   updateEmpKpi();
   renderEmpTable();
@@ -2248,7 +2249,7 @@ function renderEmpTable() {
     return true;
   });
   const tbody = document.getElementById('emp-tbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="11"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';return;}
   tbody.innerHTML = rows.map(r=>`
     <tr class="${r.active===false?'opacity:0.45;':''}">
       <td class="center mono">${r.emp_no||''}</td>
@@ -2259,6 +2260,7 @@ function renderEmpTable() {
       <td><span class="badge b-dt">${r.dept||''}</span></td>
       <td class="center">${r.gender||''}</td>
       <td class="mono">${r.phone||''}</td>
+      <td class="center" style="font-family:monospace;letter-spacing:2px;color:var(--muted);">${r.wf_password ? '●'.repeat(Math.min(r.wf_password.length,4)) : '<span style="color:#ccc;font-size:11px;">미설정</span>'}</td>
       <td class="mono">${r.join_date||''}</td>
       <td class="mono" style="color:var(--accent2);font-weight:600;">${calcTenure(r.join_date)}</td>
       <td class="center">
@@ -2285,7 +2287,7 @@ function openEmpModal(id) {
   document.getElementById('emp-in-phone').value    = r?.phone      || '';
   document.getElementById('emp-in-joindate').value = r?.join_date  || '';
   document.getElementById('emp-in-loginid').value  = r?.login_id   || '';
-  document.getElementById('emp-in-password').value = '';
+  document.getElementById('emp-in-wfpw').value = '';
   document.getElementById('emp-active-group').style.display = r ? 'flex' : 'none';
   if(r) document.getElementById('emp-in-active').value = r.active===false?'false':'true';
   document.getElementById('empModal').classList.add('show');
@@ -2294,6 +2296,18 @@ function openEmpModal(id) {
 function closeEmpModal() {
   document.getElementById('empModal').classList.remove('show');
   _empEditId = null;
+}
+
+
+function autoSetWfPw() {
+  const phone = document.getElementById('emp-in-phone').value.trim();
+  const digits = phone.replace(/[^0-9]/g, '');
+  if(digits.length >= 4) {
+    document.getElementById('emp-in-wfpw').value = digits.slice(-4);
+  } else {
+    document.getElementById('emp-in-wfpw').value = '1111';
+    alert('휴대폰 번호가 없어 1111로 설정됩니다.');
+  }
 }
 
 async function saveEmp() {
@@ -2312,8 +2326,8 @@ async function saveEmp() {
     login_id: document.getElementById('emp-in-loginid').value.trim()||null,
     updated_at: new Date().toISOString(),
   };
-  const pw = document.getElementById('emp-in-password').value;
-  if(pw) payload.password = pw;
+  const wfpw = document.getElementById('emp-in-wfpw').value.trim();
+  if(wfpw) payload.wf_password = wfpw;
   if(_empEditId) payload.active = document.getElementById('emp-in-active').value==='true';
   const btn = document.getElementById('empSaveBtn');
   btn.disabled=true; btn.textContent='저장 중...';
@@ -2338,7 +2352,7 @@ async function retireEmp(id, name) {
 }
 
 function downloadEmpExcel() {
-  const rows = _empData.map(r=>({'No':r.emp_no,'채용구분':r.emp_type,'법인':r.entity,'성명':r.name,'직급':r.rank,'부서':r.dept,'성별':r.gender,'연락처':r.phone,'입사일':r.join_date,'근속':calcTenure(r.join_date),'재직':r.active===false?'퇴직':'재직중'}));
+  const rows = _empData.map(r=>({'No':r.emp_no,'채용구분':r.emp_type,'법인':r.entity,'성명':r.name,'직급':r.rank,'부서':r.dept,'성별':r.gender,'휴대폰':r.phone,'입사일':r.join_date,'근속':calcTenure(r.join_date),'재직':r.active===false?'퇴직':'재직중'}));
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'직원명단');
   XLSX.writeFile(wb,'SME_직원명단_'+new Date().toISOString().slice(0,10)+'.xlsx');
