@@ -285,26 +285,7 @@
       </div>
 
     </div>
-
-    <!-- FAB -->
-    <button id="stk-fab" title="화면 설정">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83
-          2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1
-          1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65
-          0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65
-          0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65
-          1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1
-          2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0
-          1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65
-          0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65
-          0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65
-          1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-    `;
+`;
   }
 
   /* ── 9. 패널 스타일 ── */
@@ -313,18 +294,7 @@
     const s = document.createElement('style');
     s.id = 'stk-style';
     s.textContent = `
-      #stk-fab {
-        position: fixed; bottom: 24px; right: 24px; z-index: 9998;
-        width: 44px; height: 44px; border-radius: 50%;
-        background: var(--accent, #c8001e); color: #fff;
-        border: none; cursor: pointer; display: grid; place-items: center;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      #stk-fab:hover { transform: scale(1.08) rotate(30deg); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
-      #stk-fab.open  { transform: rotate(90deg); }
-
-      #stk-tweaks-overlay {
+#stk-tweaks-overlay {
         display: none; position: fixed; inset: 0; z-index: 9997;
       }
       #stk-tweaks-overlay.open { display: block; }
@@ -535,22 +505,13 @@
 
   /* ── 11. 이벤트 바인딩 ── */
   function bindEvents() {
-    const fab     = document.getElementById('stk-fab');
     const panel   = document.getElementById('stk-tweaks-panel');
     const overlay = document.getElementById('stk-tweaks-overlay');
 
     function closePanel() {
       panel.classList.remove('open');
       overlay.classList.remove('open');
-      fab.classList.remove('open');
     }
-
-    fab.addEventListener('click', () => {
-      const isOpen = panel.classList.contains('open');
-      panel.classList.toggle('open', !isOpen);
-      overlay.classList.toggle('open', !isOpen);
-      fab.classList.toggle('open', !isOpen);
-    });
 
     overlay.addEventListener('click', closePanel);
     document.getElementById('stk-close-btn').addEventListener('click', closePanel);
