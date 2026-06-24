@@ -304,7 +304,7 @@ const ADMIN_PIN   = '1120';
 const DEADLINE    = new Date('2026-06-25T09:00:00+09:00');
 const CARRYOVER   = 150000; // 멕시코전 이월 상금
 // 멕시코전 기존 참가자 emp_no — 추가 참가비 없음
-const EXISTING_NOS = new Set([1,2,3,4,5,6,8,9,10,11,12,13,14,22,24]); // 멕시코전 15명
+const EXISTING_NOS = new Set([1,2,3,4,5,6,8,9,10,11,12,13,14,22,24]); // 멕시코전 참가자 15명
 
 const EMPLOYEES = [
   {no:1,  name:'곽선효', dept:'대표이사',   rank:'대표이사'},
@@ -467,7 +467,7 @@ function renderPublic() {
   const notJoin  = allEntries.filter(e => !e.joining).length;
   const notYet   = 23 - allEntries.length;
 
-  // 상금 = 이월금액 + 신규참가자 × 1만원
+  // 상금 = 이월금액 + 신규참가자(EXISTING_NOS에 없는 사람) × 1만원
   const newJoiners = joiners.filter(e => !EXISTING_NOS.has(e.emp_no));
   const prize = CARRYOVER + newJoiners.length * 10000;
 
@@ -540,9 +540,24 @@ function renderAdmin() {
   const regNos = new Set(allEntries.map(e => e.emp_no));
   const notReg = EMPLOYEES.filter(e => !regNos.has(e.no));
   const notEl  = document.getElementById('not-reg-list');
-  notEl.innerHTML = notReg.length === 0
-    ? '<span style="font-size:13px;color:#22c55e">🎉 전원 응답 완료!</span>'
-    : notReg.map(e => `<span class="not-reg-chip">${e.name}</span>`).join('');
+
+  if (notReg.length === 0) {
+    notEl.innerHTML = '<span style="font-size:13px;color:#22c55e">🎉 전원 응답 완료!</span>';
+  } else {
+    // 참가비 납부 but 미등록 / 미납부 미응답 구분
+    const paidNotReg   = notReg.filter(e => EXISTING_NOS.has(e.no));
+    const unpaidNotReg = notReg.filter(e => !EXISTING_NOS.has(e.no));
+    let html = '';
+    if (paidNotReg.length > 0) {
+      html += `<div style="font-size:11px;color:#e8421a;font-weight:700;margin-bottom:6px;width:100%">⚠️ 참가비 납부 — 스코어 미등록</div>`;
+      html += paidNotReg.map(e => `<span class="not-reg-chip" style="border-color:#fca5a5;color:#dc2626;background:#fef2f2">${e.name}</span>`).join('');
+    }
+    if (unpaidNotReg.length > 0) {
+      html += `<div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:6px;margin-top:${paidNotReg.length>0?'12px':'0'};width:100%">미참가 / 미응답</div>`;
+      html += unpaidNotReg.map(e => `<span class="not-reg-chip">${e.name}</span>`).join('');
+    }
+    notEl.innerHTML = html;
+  }
 }
 
 // ── 당첨자 계산 ──
