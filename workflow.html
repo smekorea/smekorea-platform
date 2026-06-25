@@ -2013,6 +2013,19 @@ async function saveDiary(){
     importance: document.getElementById('dm-imp').value,
     status: document.getElementById('dm-status').value,
     is_work_log: false,
+  }
+  // 공유 처리
+  var shareType = (document.getElementById('dm-share-type') || {}).value || '';
+  if(shareType === 'all') {
+    obj.is_shared = true;
+    obj.share_target = '전체';
+  } else if(shareType === 'dept') {
+    var checked = Array.from(document.querySelectorAll('.dept-share-cb:checked')).map(function(cb){return cb.value;});
+    obj.is_shared = checked.length > 0;
+    obj.share_target = checked.length > 0 ? JSON.stringify(checked) : null;
+  } else {
+    obj.is_shared = false;
+    obj.share_target = null;
   };
   if(!obj.date){alert('날짜를 입력해주세요.');return;}
 
@@ -2024,18 +2037,7 @@ async function saveDiary(){
     if(SB){
       try{
         obj.employee_id = wfSession.empId;
-        var shareType = document.getElementById('dm-share-type')?.value || '';
-        if(shareType === 'all') {
-          obj.is_shared = true;
-          obj.share_target = '전체';
-        } else if(shareType === 'dept') {
-          var checked = Array.from(document.querySelectorAll('.dept-share-cb:checked')).map(function(cb){return cb.value;});
-          obj.is_shared = checked.length > 0;
-          obj.share_target = checked.length > 0 ? JSON.stringify(checked) : null;
-        } else {
-          obj.is_shared = false;
-          obj.share_target = null;
-        }
+
         const {data}=await SB.from('work_diary').insert(obj).select().single();
         if(data) diaryRecords.unshift(data);
       }catch(e){console.warn(e);}
