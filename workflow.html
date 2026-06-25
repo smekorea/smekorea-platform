@@ -1243,7 +1243,7 @@ function convertToWorkDiary(id){
   document.getElementById('dm-status').value='완료'; // 기본값: 완료로 전환
   document.getElementById('diary-del-btn').style.display='';
   var aiSec2 = document.getElementById('ai-memo-section');
-  if(aiSec2) aiSec2.style.display = (localStorage.getItem('wf_api_key') ? 'block' : 'none');
+  if(aiSec2) aiSec2.style.display = localStorage.getItem('wf_api_key') ? 'block' : 'none';
   document.getElementById('diary-modal-overlay').classList.add('open');
 }
 async function deleteFromPopup(id){
@@ -1390,11 +1390,11 @@ function switchTab(tab){
   if(tab==='diary') renderDiary();
   else if(tab==='cal') renderCal();
   else if(tab==='list') renderList();
-  else if(tab==='share') loadShareView();
+  else if(tab==='share'){ loadShareView(); document.querySelector('.add-btn') && (document.querySelector('.add-btn').style.display='none'); }
   else if(tab==='wfsettings') initWfSettingsView();
 }
 function onAddBtnClick(){
-  // 모든 탭에서 업무일지 모달 사용 (일정 추가 포함)
+  if(currentTab==='share'||currentTab==='wfsettings') return;
   if(currentTab==='diary') openDiaryModal();
   else if(currentTab==='cal'||currentTab==='list') openDiaryModal();
   else openTodoModal();
@@ -1966,7 +1966,7 @@ function openDiaryModal(date){
   onShareTypeChange();
   // AI 섹션 — API Key 있을 때만 표시
   var aiSec = document.getElementById('ai-memo-section');
-  if(aiSec) aiSec.style.display = (localStorage.getItem('wf_api_key') ? 'block' : 'none');
+  if(aiSec) aiSec.style.display = localStorage.getItem('wf_api_key') ? 'block' : 'none';
   document.getElementById('diary-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('dm-partner').focus(),100);
 }
@@ -2034,12 +2034,14 @@ async function saveDiary(){
     status: document.getElementById('dm-status').value,
     is_work_log: false,
   };
-  // 공유 처리 (obj 완성 후)
-  var shareType = (document.getElementById('dm-share-type') || {}).value || '';
-  if(shareType === 'all') {
+
+  // 공유 처리
+  var shareEl = document.getElementById('dm-share-type');
+  var shareType = shareEl ? shareEl.value : '';
+  if(shareType === 'all'){
     obj.is_shared = true;
     obj.share_target = '전체';
-  } else if(shareType === 'dept') {
+  } else if(shareType === 'dept'){
     var checked = Array.from(document.querySelectorAll('.dept-share-cb:checked')).map(function(cb){return cb.value;});
     obj.is_shared = checked.length > 0;
     obj.share_target = checked.length > 0 ? JSON.stringify(checked) : null;
@@ -2053,15 +2055,19 @@ async function saveDiary(){
   if(diaryEditId){
     const idx=diaryRecords.findIndex(x=>String(x.id)===String(diaryEditId));
     if(idx>=0) Object.assign(diaryRecords[idx],obj);
-    if(SB){try{await SB.from('work_diary').update(obj).eq('id',diaryEditId).eq('employee_id',wfSession.empId);}catch(e){console.warn(e);}}
-  } else {
     if(SB){
       try{
-        obj.employee_id = wfSession.empId;
-
+        console.log('공유저장 update:', diaryEditId, 'empId:', wfSession.empId, 'is_shared:', obj.is_shared, 'share_target:', obj.share_target);
+        await SB.from('work_diary').update(obj).eq('id',diaryEditId);
+      }catch(e){console.warn('update 오류:',e);}
+    }
+  } else {
+    obj.employee_id = wfSession.empId;
+    if(SB){
+      try{
         const {data}=await SB.from('work_diary').insert(obj).select().single();
         if(data) diaryRecords.unshift(data);
-      }catch(e){console.warn(e);}
+      }catch(e){console.warn('insert 오류:',e);}
     } else {
       diaryRecords.unshift({id:Date.now(),...obj});
     }
@@ -2069,21 +2075,18 @@ async function saveDiary(){
 
   // 후속조치 → 할 일 자동 생성
   if(obj.follow_up){
-    const tobj={text:`[${obj.partner||obj.category}] ${obj.follow_up}`,cat:1,pri:0,
-      status:'todo',due:null,memo:`업무일지 후속: ${obj.date}`,
+    const tobj={text:'['+(obj.partner||obj.category)+'] '+obj.follow_up,cat:1,pri:0,
+      status:'todo',due:null,memo:'업무일지 후속: '+obj.date,
       created_at:new Date().toISOString()};
     if(SB){
-      try{const {data}=await SB.from('cal_todos').insert(tobj).select().single();
-        if(data) todos.unshift({id:data.id,...tobj});}
-      catch(e){todos.unshift({id:Date.now(),...tobj});}
-    } else {todos.unshift({id:Date.now(),...tobj});}
-    saveLocal();
+      try{await SB.from('cal_todos').insert(tobj);}catch(e){console.warn(e);}
+    }
+    todos.push(tobj);
   }
-
   closeDiaryModal();
   renderDiary();
+  renderAll();
 }
-
 async function deleteDiaryById(id){
   if(!confirm('이 업무일지를 삭제할까요?')) return;
   diaryRecords=diaryRecords.filter(x=>String(x.id)!==String(id));
