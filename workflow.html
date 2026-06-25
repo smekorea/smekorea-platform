@@ -2211,6 +2211,29 @@ function showShareDetail(r) {
   document.body.appendChild(emp);
 }
 
+
+function initShareResizable(){
+  var tbl = document.getElementById('shareTable');
+  if(!tbl) return;
+  var ths = tbl.querySelectorAll('thead th');
+  ths.forEach(function(th){
+    if(th.querySelector('.col-resizer')) return;
+    var resizer = document.createElement('span');
+    resizer.className = 'col-resizer';
+    th.style.position = 'relative';
+    th.appendChild(resizer);
+    var startX=0, startW=0;
+    var onMove = function(e){ th.style.width = Math.max(40, startW+(e.clientX-startX))+'px'; };
+    var onUp = function(){ resizer.classList.remove('dragging'); window.removeEventListener('mousemove',onMove); window.removeEventListener('mouseup',onUp); };
+    resizer.addEventListener('mousedown', function(e){
+      e.preventDefault(); startX=e.clientX; startW=th.offsetWidth;
+      resizer.classList.add('dragging');
+      window.addEventListener('mousemove',onMove);
+      window.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
 function wfDoLogout() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
   wfClearSession();
@@ -2249,6 +2272,7 @@ async function loadShareView() {
     } catch(e) { return r.share_target === myDept; }
   });
   count.textContent = items.length + '건';
+  setTimeout(function(){ initShareResizable(); }, 100);
   if (!items.length) { list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">공유된 내용이 없습니다.</div>'; return; }
   var statusColor = function(s) {
     var map = {'완료':'#1e7a45','진행중':'#d97706','보류':'#6b7280','후속필요':'#c8001e','지시':'#c8001e'};
