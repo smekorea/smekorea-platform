@@ -1128,12 +1128,13 @@ function renderCal(){
     let dayDisplay='';
     if(!isThis) dayDisplay=`<span class="other-label">${dm+1}/${dd}</span>`;
     // work_diary 기반: 일정/진행중/지시/후속필요 (날짜 앞 10자리 비교)
-    const dayAll=diaryRecords.filter(r=>(r.date||'').slice(0,10)===ds&&(r.date||'').slice(0,10)>=todayStr);
+    const dayAll=diaryRecords.filter(r=>(r.date||'').slice(0,10)===ds);
     const dayTodos=getTodoForDate(ds);
     const chips=dayAll.map(r=>{
       const isFuture=(r.date||'').slice(0,10)>=todayStr;
-      const bg=isFuture?'#E3F0FF':r.status==='진행중'?'#FFF3E0':'#FFEBEE';
-      const bar=isFuture?'#378ADD':r.status==='진행중'?'#E2772E':'#E24B4A';
+      const status=r.status||'완료';
+      const bg=isFuture?'#E3F0FF':status==='진행중'?'#FFF3E0':status==='지시'||status==='후속필요'?'#FFEBEE':'#F0F4F0';
+      const bar=isFuture?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
       return `<div class="event-chip" style="background:${bg};border-left-color:${bar}"
         onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}</div>`;
     }).join('');
@@ -1173,9 +1174,9 @@ function renderDayPopupList(){
   if(!list.length){el.innerHTML='<div class="dp-empty">이 날짜에 등록된 일정이 없어요<br><small style="color:var(--text3)">아래 추가 버튼으로 일정을 등록하세요</small></div>';return;}
   el.innerHTML=list.map(r=>{
     const status=r.status||'완료';
-    const barColor=isSchedule?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
-    // 오늘 이후 날짜면 일정 → 업무일지 전환 버튼 표시
+    // 오늘 이후 날짜면 일정, 이전이면 업무일지
     const isSchedule=(r.date||'').slice(0,10)>=todayStr;
+    const barColor=isSchedule?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
     const convertBtn=isSchedule
       ? `<button class="dp-item-btn convert" onclick="convertToWorkDiary('${r.id}')" title="업무일지로 전환">
            <i class="ti ti-transfer"></i>
