@@ -431,6 +431,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .share-card-title{font-size:14px;font-weight:700;color:var(--text1);margin-bottom:4px;}
 .share-card-content{font-size:13px;color:var(--text2);line-height:1.6;}
 #wfLoginScreen{display:none;}
+
+/* AI 채팅 */
+.ai-msg { padding:8px 12px; border-radius:8px; font-size:13px; line-height:1.6; max-width:90%; }
+.ai-msg.user { background:#1a4fa0; color:#fff; align-self:flex-end; }
+.ai-msg.assistant { background:#fff; border:1px solid var(--border); color:var(--text1); align-self:flex-start; }
+.ai-msg.loading { background:#f0ede8; color:var(--text3); align-self:flex-start; font-style:italic; }
 </style>
 </head>
 <body>
@@ -565,6 +571,26 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 
   <!-- 업무일지 뷰 -->
   <div id="diary-view" style="display:none;">
+
+  <!-- AI 질문 패널 -->
+  <div id="ai-chat-panel" style="display:none;background:linear-gradient(135deg,rgba(26,79,160,.04),rgba(109,40,217,.04));border:1.5px solid rgba(26,79,160,.15);border-radius:12px;margin:12px 0;padding:14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:16px;">🤖</span>
+        <span style="font-size:13px;font-weight:700;color:#1a4fa0;">SME AI 어시스턴트</span>
+        <span style="font-size:11px;color:var(--text3);">업무일지 기반 질문/분석</span>
+      </div>
+      <button onclick="toggleAiChat()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div id="ai-chat-history" style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:6px;">
+      <input id="ai-chat-input" type="text" placeholder="예) 이번 달 LG전자 방문 요약해줘 / 후속조치 필요한 건 알려줘"
+        style="flex:1;height:38px;border:1.5px solid rgba(26,79,160,.2);border-radius:8px;font-size:13px;padding:0 12px;outline:none;font-family:inherit;"
+        onkeydown="if(event.key==='Enter')aiChat()">
+      <button onclick="aiChat()" id="ai-chat-btn"
+        style="height:38px;padding:0 16px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">전송</button>
+    </div>
+  </div>
     <div class="diary-panel">
       <!-- 검색/필터 바 (한 줄) -->
       <div class="diary-filter-bar">
@@ -601,7 +627,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <option value="출하팀">출하팀</option>
           <option value="재경팀">재경팀</option>
         </select>
-        <button class="diary-dl-btn" onclick="downloadDiary()">
+        <button onclick="toggleAiChat()" id="ai-toggle-btn"
+        style="display:flex;align-items:center;gap:5px;height:32px;padding:0 12px;border:1.5px solid rgba(26,79,160,.3);border-radius:7px;background:rgba(26,79,160,.06);color:#1a4fa0;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
+        🤖 AI
+      </button>
+      <button class="diary-dl-btn" onclick="downloadDiary()">
           <i class="ti ti-download"></i> 다운로드
         </button>
       </div>
@@ -738,6 +768,20 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <div id="wfSessInfo" style="margin-top:10px;font-size:12px;color:var(--text3);"></div>
       </div>
 
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px;">
+        <div style="font-size:15px;font-weight:700;color:var(--text1);margin-bottom:14px;">🤖 Claude AI 설정</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Anthropic API Key를 입력하면 업무일지 AI 작성/분석 기능을 사용할 수 있습니다.</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="wfApiKey" type="password" placeholder="sk-ant-api03-..."
+            style="flex:1;height:40px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;padding:0 12px;font-family:monospace;outline:none;background:var(--surface);">
+          <button onclick="wfSaveApiKey()"
+            style="height:40px;padding:0 16px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">저장</button>
+          <button onclick="wfClearApiKey()"
+            style="height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;background:none;color:var(--text3);font-size:12px;cursor:pointer;">삭제</button>
+        </div>
+        <div id="wfApiKeyStatus" style="margin-top:8px;font-size:11px;color:var(--text3);"></div>
+      </div>
+
       <button onclick="wfDoLogout()"
         style="height:44px;border:1.5px solid var(--border);border-radius:8px;background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:inherit;">
         로그아웃
@@ -848,7 +892,45 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <option value="지시">지시</option>
         </select>
       </div>
+      <div class="dm-field">
+        <label class="dm-label">공유</label>
+        <select id="dm-share-type" class="dm-input" onchange="onShareTypeChange()">
+          <option value="">공유안함</option>
+          <option value="dept">부서공유</option>
+          <option value="all">전체공유</option>
+        </select>
+      </div>
     </div>
+    <!-- 부서 선택 (다중) -->
+    <div id="dm-dept-share-row" style="display:none;margin-bottom:8px;padding:10px 12px;background:#f5f8ff;border:1px solid rgba(26,79,160,.2);border-radius:8px;">
+      <div style="font-size:11px;font-weight:700;color:#1a4fa0;margin-bottom:8px;">공유할 부서 선택 (복수 선택 가능)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="재경팀" class="dept-share-cb"> 재경팀</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="개발기획팀" class="dept-share-cb"> 개발기획팀</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="자재구매팀" class="dept-share-cb"> 자재구매팀</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="개발구매팀" class="dept-share-cb"> 개발구매팀</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="출하팀" class="dept-share-cb"> 출하팀</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="제조팀" class="dept-share-cb"> 제조팀</label>
+      </div>
+    </div>
+    <!-- AI 메모 변환 -->
+    <div id="ai-memo-section" style="margin-top:12px;background:linear-gradient(135deg,rgba(26,79,160,.05),rgba(109,40,217,.05));border:1.5px solid rgba(26,79,160,.2);border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-size:14px;">✨</span>
+        <span style="font-size:12px;font-weight:700;color:#1a4fa0;">AI 자동 작성</span>
+        <span style="font-size:11px;color:var(--text3);">— 메모를 입력하면 업무일지를 자동으로 채워드립니다</span>
+      </div>
+      <textarea id="ai-memo-input" placeholder="예) 오늘 오후 LG전자 창원 방문, 구매팀 김부장 미팅, 신규 부품 공급 협의, 다음주 견적서 보내기로 함"
+        style="width:100%;height:72px;border:1px solid rgba(26,79,160,.2);border-radius:7px;font-size:13px;padding:8px 10px;font-family:inherit;resize:none;outline:none;background:#fff;color:var(--text1);"></textarea>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+        <button onclick="aiConvertMemo()" id="ai-convert-btn"
+          style="height:34px;padding:0 16px;border:none;border-radius:7px;background:#1a4fa0;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">
+          ✨ 변환
+        </button>
+        <span id="ai-convert-status" style="font-size:11px;color:var(--text3);"></span>
+      </div>
+    </div>
+
     <div class="modal-btns" style="margin-top:14px;">
       <button class="btn-cancel" onclick="closeDiaryModal()">취소</button>
       <button id="diary-del-btn" class="btn-del" style="display:none" onclick="deleteDiary()">삭제</button>
@@ -1101,7 +1183,7 @@ function renderDayPopupList(){
       : '';
     return `<div class="dp-item${isSchedule?' dp-item-schedule':''}">
       <div class="dp-cat-bar" style="background:${barColor}"></div>
-      <div class="dp-item-body">
+      <div class="dp-item-body" onclick="editDiary('${r.id}');closeDayPopup();" style="cursor:pointer;">
         <div class="dp-item-title">${escapeHtml(r.title||r.partner||'')}</div>
         <div class="dp-item-cat">${r.category||''} · <span class="status-badge sb-${status}" style="font-size:10px;padding:1px 5px;">${status}</span></div>
         ${r.content?`<div class="dp-item-memo">${escapeHtml(r.content.slice(0,80))}${r.content.length>80?'...':''}</div>`:''}
@@ -1118,8 +1200,10 @@ function escapeHtml(s){
   const d=document.createElement('div');d.textContent=s;return d.innerHTML;
 }
 function openModalFromPopup(){
+  var selDate = dpDate;
   closeDayPopup();
-  openDiaryModal(dpDate);
+  openDiaryModal(selDate);
+  document.getElementById("dm-status").value="일정";
 }
 // 일정 → 업무일지 전환
 function convertToWorkDiary(id){
@@ -1825,6 +1909,17 @@ async function onSelectAddNew(sel, type){
 }
 
 // 내용구분 변경 시 대상부서 필드 토글
+
+function onShareTypeChange() {
+  var t = document.getElementById('dm-share-type');
+  var row = document.getElementById('dm-dept-share-row');
+  if (!t || !row) return;
+  row.style.display = t.value === 'dept' ? 'block' : 'none';
+  if (t.value !== 'dept') {
+    document.querySelectorAll('.dept-share-cb').forEach(function(cb){ cb.checked = false; });
+  }
+}
+
 function onContentTypeChange(){
   const ct=document.getElementById('dm-content-type').value;
   const needDept=['전달사항','지시사항'].includes(ct);
@@ -1849,6 +1944,9 @@ function openDiaryModal(date){
   document.getElementById('dm-imp').value='중';
   document.getElementById('dm-status').value='완료';
   document.getElementById('diary-del-btn').style.display='none';
+  var shareEl2 = document.getElementById('dm-share-type'); if(shareEl2) shareEl2.value='';
+  document.querySelectorAll('.dept-share-cb').forEach(function(cb){cb.checked=false;});
+  onShareTypeChange();
   document.getElementById('diary-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('dm-partner').focus(),100);
 }
@@ -1878,6 +1976,20 @@ function editDiary(id){
   document.getElementById('dm-followup').value=r.follow_up||'';
   document.getElementById('dm-imp').value=r.importance||'중';
   document.getElementById('dm-status').value=r.status||'완료';
+  // 공유 복원
+  var shareEl = document.getElementById('dm-share-type');
+  if(shareEl) {
+    if(!r.is_shared||!r.share_target) shareEl.value='';
+    else if(r.share_target==='전체') shareEl.value='all';
+    else shareEl.value='dept';
+    onShareTypeChange();
+    if(r.share_target&&r.share_target!=='전체') {
+      try {
+        var tgts=JSON.parse(r.share_target);
+        document.querySelectorAll('.dept-share-cb').forEach(function(cb){cb.checked=tgts.indexOf(cb.value)>=0;});
+      }catch(e){}
+    }
+  }
   document.getElementById('diary-del-btn').style.display='';
   document.getElementById('diary-modal-overlay').classList.add('open');
 }
@@ -1912,8 +2024,18 @@ async function saveDiary(){
     if(SB){
       try{
         obj.employee_id = wfSession.empId;
-        obj.is_shared = document.getElementById('di-shared')?.checked || false;
-        obj.share_target = obj.is_shared ? '전체' : null;
+        var shareType = document.getElementById('dm-share-type')?.value || '';
+        if(shareType === 'all') {
+          obj.is_shared = true;
+          obj.share_target = '전체';
+        } else if(shareType === 'dept') {
+          var checked = Array.from(document.querySelectorAll('.dept-share-cb:checked')).map(function(cb){return cb.value;});
+          obj.is_shared = checked.length > 0;
+          obj.share_target = checked.length > 0 ? JSON.stringify(checked) : null;
+        } else {
+          obj.is_shared = false;
+          obj.share_target = null;
+        }
         const {data}=await SB.from('work_diary').insert(obj).select().single();
         if(data) diaryRecords.unshift(data);
       }catch(e){console.warn(e);}
@@ -2027,6 +2149,7 @@ async function wfEnterMain() {
   localStorage.removeItem('cal_events');
 }
 
+
 function wfDoLogout() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
   wfClearSession();
@@ -2035,46 +2158,57 @@ function wfDoLogout() {
 
 /* ═══ 공유함 ═══ */
 async function loadShareView() {
-  const list = document.getElementById('shareViewList');
-  const count = document.getElementById('shareViewCount');
+  var list = document.getElementById('shareViewList');
+  var count = document.getElementById('shareViewCount');
   list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);">로딩 중...</div>';
   if (!SB) { list.innerHTML = '<div style="padding:20px;color:var(--text3);">연결 오류</div>'; return; }
 
-  // 직원 정보 별도 조회 (외래키 조인 대신)
-  const { data: empData } = await SB.from('employees').select('id,name,rank,dept');
-  const empMap = {};
-  (empData || []).forEach(e => { empMap[e.id] = e; });
+  // 직원 정보 별도 조회
+  var empRes = await SB.from('employees').select('id,name,rank,dept');
+  var empMap = {};
+  (empRes.data || []).forEach(function(e){ empMap[e.id] = e; });
 
-  const filter = document.getElementById('shareTypeFilter').value;
-  let q = SB.from('work_diary')
-    .select('id,employee_id,date,title,content,content_type,is_shared')
+  var myDept = wfSession.dept || '';
+  var isAdmin = (myDept === '대표이사' || myDept === '상무이사');
+  var filter = document.getElementById('shareTypeFilter').value;
+  var qRes = await SB.from('work_diary')
+    .select('id,employee_id,date,title,content,content_type,is_shared,share_target')
     .eq('is_shared', true)
     .order('date', { ascending: false })
-    .limit(200);
-  if (filter) q = q.eq('content_type', filter);
-  const { data, error } = await q;
-  if (error) { list.innerHTML = '<div style="padding:20px;color:red;">오류: ' + error.message + '</div>'; return; }
-  const items = (data || []).filter(r => r.employee_id !== wfSession.empId);
+    .limit(300);
+  if (qRes.error) { list.innerHTML = '<div style="padding:20px;color:red;">오류: ' + qRes.error.message + '</div>'; return; }
+  var items = (qRes.data || []).filter(function(r) {
+    if (r.employee_id === wfSession.empId) return false;
+    if (filter && r.content_type !== filter) return false;
+    if (isAdmin) return true;
+    if (!r.share_target) return false;
+    if (r.share_target === '전체') return true;
+    try {
+      var targets = JSON.parse(r.share_target);
+      return Array.isArray(targets) && targets.indexOf(myDept) >= 0;
+    } catch(e) { return r.share_target === myDept; }
+  });
   count.textContent = items.length + '건';
   if (!items.length) { list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">공유된 내용이 없습니다.</div>'; return; }
-  list.innerHTML = items.map(r => {
-    const emp = empMap[r.employee_id] || {};
-    return `
-    <div class="share-card">
-      <div class="share-card-hdr">
-        <span class="share-from">${emp.name||'알 수 없음'} ${emp.rank||''}</span>
-        <span class="share-date">${r.date||''}</span>
-        <span class="share-type-badge share-type-${r.content_type||''}">${r.content_type||''}</span>
-      </div>
-      <div class="share-card-title">${r.title||''}</div>
-      ${r.content ? '<div class="share-card-content">' + r.content + '</div>' : ''}
-    </div>`;
+  list.innerHTML = items.map(function(r) {
+    var emp = empMap[r.employee_id] || {};
+    var html = '<div class="share-card">';
+    html += '<div class="share-card-hdr">';
+    html += '<span class="share-from">' + (emp.name||'알 수 없음') + ' ' + (emp.rank||'') + '</span>';
+    html += '<span class="share-date">' + (r.date||'') + '</span>';
+    html += '<span class="share-type-badge share-type-' + (r.content_type||'') + '">' + (r.content_type||'') + '</span>';
+    html += '</div>';
+    html += '<div class="share-card-title">' + (r.title||'') + '</div>';
+    if (r.content) html += '<div class="share-card-content">' + r.content + '</div>';
+    html += '</div>';
+    return html;
   }).join('');
 }
 
 /* ═══ WF 설정 ═══ */
 function initWfSettingsView() {
   const h = wfSession.sessH || 8;
+  initWfAiStatus();
   document.querySelectorAll('#wfSessOptsMain .wf-sess-btn').forEach(el => {
     el.classList.toggle('wf-sess-on', +el.dataset.h === h);
   });
@@ -2136,6 +2270,76 @@ if("serviceWorker" in navigator){
   if(window.caches){
     caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
   }
+}
+</script>
+<script>
+/* SME WorkFlow - Claude AI */
+function wfSaveApiKey(){var k=document.getElementById('wfApiKey').value.trim();if(!k.startsWith('sk-ant-')){alert('올바른 API Key 형식이 아닙니다.');return;}localStorage.setItem('wf_api_key',k);document.getElementById('wfApiKeyStatus').textContent='저장되었습니다.';document.getElementById('wfApiKey').value='';}
+function wfClearApiKey(){if(!confirm('API Key를 삭제하시겠습니까?'))return;localStorage.removeItem('wf_api_key');document.getElementById('wfApiKeyStatus').textContent='삭제되었습니다.';}
+function getApiKey(){return localStorage.getItem('wf_api_key')||'';}
+function initWfAiStatus(){var k=getApiKey();var s=document.getElementById('wfApiKeyStatus');if(s)s.textContent=k?('API Key 등록됨 (...'+k.slice(-4)+')'):'미등록 - API Key를 입력해주세요';}
+async function callClaude(sys,user){
+  var k=getApiKey();if(!k){alert('설정 탭에서 API Key를 먼저 등록해주세요.');return null;}
+  var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,system:sys,messages:[{role:'user',content:user}]})});
+  if(!r.ok){var e=await r.json();throw new Error(e.error?e.error.message:'오류');}
+  var d=await r.json();return d.content[0].text;
+}
+async function aiConvertMemo(){
+  var memo=document.getElementById('ai-memo-input').value.trim();
+  if(!memo){alert('메모를 입력해주세요.');return;}
+  var btn=document.getElementById('ai-convert-btn');
+  var st=document.getElementById('ai-convert-status');
+  btn.disabled=true;btn.textContent='변환 중...';st.textContent='';
+  var today=new Date().toISOString().substring(0,10);
+  var sys='당신은 SME Korea 업무일지 작성 도우미입니다. 메모를 보고 아래 JSON만 출력하세요(다른 텍스트 없이).\n{"date":"YYYY-MM-DD","category":"영업/거래처|설비/투자|개발/품질|사내관리|인사/조직|출장|개인업무","action_type":"방문|미팅/회의|식사/접대|라운딩|계약/협의|점검/정비|교육/심사|행사|행정처리","content_type":"일반기록|전달사항|지시사항","partner":"거래처명","title":"제목","content":"내용","status":"완료|진행중|보류|후속필요|지시","importance":"상|중|하","follow_up":"후속조치"}\n오늘:'+today;
+  try{
+    var res=await callClaude(sys,memo);
+    var m=res.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('JSON 파싱 실패');
+    var obj=JSON.parse(m[0]);
+    var d=document.getElementById('dm-date');if(d&&obj.date)d.value=obj.date;
+    var c=document.getElementById('dm-category');if(c&&obj.category)c.value=obj.category;
+    var a=document.getElementById('dm-action-type');if(a&&obj.action_type)a.value=obj.action_type;
+    var p=document.getElementById('dm-partner');if(p&&obj.partner)p.value=obj.partner;
+    var t=document.getElementById('dm-title');if(t&&obj.title)t.value=obj.title;
+    var co=document.getElementById('dm-content');if(co&&obj.content)co.value=obj.content;
+    var s=document.getElementById('dm-status');if(s&&obj.status)s.value=obj.status;
+    var f=document.getElementById('dm-followup');if(f&&obj.follow_up)f.value=obj.follow_up;
+    st.textContent='변환 완료 - 확인 후 저장해주세요';st.style.color='#1e7a45';
+    document.getElementById('ai-memo-input').value='';
+  }catch(e){st.textContent='오류: '+e.message;st.style.color='#c8001e';}
+  btn.disabled=false;btn.textContent='변환';
+}
+var _aiOpen=false;
+function toggleAiChat(){
+  _aiOpen=!_aiOpen;
+  document.getElementById('ai-chat-panel').style.display=_aiOpen?'block':'none';
+  if(_aiOpen&&document.getElementById('ai-chat-history').children.length===0){
+    addAiMsg('assistant','안녕하세요! 업무일지 기반 질문/분석을 도와드립니다.\n\n예시\n- 이번 달 LG전자 관련 업무 요약해줘\n- 후속조치 필요한 건 알려줘\n- 진행중인 업무 목록 보여줘');
+  }
+  if(_aiOpen)setTimeout(function(){document.getElementById('ai-chat-input').focus();},100);
+}
+function addAiMsg(role,text){
+  var h=document.getElementById('ai-chat-history');
+  var div=document.createElement('div');
+  div.className='ai-msg '+role;div.style.whiteSpace='pre-wrap';div.textContent=text;
+  h.appendChild(div);h.scrollTop=h.scrollHeight;return div;
+}
+async function aiChat(){
+  var inp=document.getElementById('ai-chat-input');
+  var q=inp.value.trim();if(!q)return;inp.value='';
+  addAiMsg('user',q);
+  var loading=addAiMsg('loading','분석 중...');
+  document.getElementById('ai-chat-btn').disabled=true;
+  var recs=(diaryRecords||[]).slice(0,100);
+  var ctx=recs.map(function(r){return '['+r.date+'] '+(r.category||'')+' / '+(r.partner||'')+' / '+(r.title||'')+' / 상태:'+(r.status||'');}).join('\n');
+  var today=new Date().toISOString().substring(0,10);
+  var sys='당신은 SME Korea 박정용 상무의 업무일지 분석 어시스턴트입니다. 한국어로 간결하게 답변하세요.\n오늘:'+today+'\n\n업무일지(최근'+recs.length+'건):\n'+ctx;
+  try{
+    var ans=await callClaude(sys,q);
+    loading.remove();addAiMsg('assistant',ans);
+  }catch(e){loading.remove();addAiMsg('assistant','오류: '+e.message);}
+  document.getElementById('ai-chat-btn').disabled=false;
 }
 </script>
 </body>
