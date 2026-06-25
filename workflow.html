@@ -726,19 +726,16 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       <span id="shareViewCount" style="font-size:12px;color:var(--text3);"></span>
     </div>
     <div style="overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:10px;">
-      <table style="width:100%;border-collapse:collapse;table-layout:fixed;" id="shareTable">
-        <colgroup>
-          <col style="width:95px"><col style="width:90px"><col style="width:90px">
-          <col style="width:80px"><col><col style="width:70px">
-        </colgroup>
+      <table style="width:100%;border-collapse:collapse;" id="shareTable">
         <thead>
           <tr style="background:#f0ede8;border-bottom:2px solid var(--border);">
-            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">날짜</th>
-            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">공유자</th>
-            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">업무유형</th>
-            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">내용구분</th>
-            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">제목</th>
-            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);">상태</th>
+            <th class="resizable" style="width:90px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">날짜</th>
+            <th class="resizable" style="width:80px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">공유자</th>
+            <th class="resizable" style="width:100px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">공유대상</th>
+            <th class="resizable" style="width:80px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">업무유형</th>
+            <th class="resizable" style="width:80px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">내용구분</th>
+            <th class="resizable" style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">제목</th>
+            <th style="width:60px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);">상태</th>
           </tr>
         </thead>
         <tbody id="shareViewList"></tbody>
@@ -915,14 +912,15 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <select id="dm-share-type" class="dm-input" onchange="onShareTypeChange()">
           <option value="">공유안함</option>
           <option value="dept">부서공유</option>
+          <option value="person">개인공유</option>
           <option value="all">전체공유</option>
         </select>
       </div>
     </div>
-    <!-- 부서 선택 (다중) -->
+    <!-- 부서/개인 선택 (다중) -->
     <div id="dm-dept-share-row" style="display:none;margin-bottom:8px;padding:10px 12px;background:#f5f8ff;border:1px solid rgba(26,79,160,.2);border-radius:8px;">
-      <div style="font-size:11px;font-weight:700;color:#1a4fa0;margin-bottom:8px;">공유할 부서 선택 (복수 선택 가능)</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <div style="font-size:11px;font-weight:700;color:#1a4fa0;margin-bottom:8px;" id="dm-share-row-title">공유할 부서 선택 (복수 선택 가능)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;" id="dm-dept-checks">
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="재경팀" class="dept-share-cb"> 재경팀</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="개발기획팀" class="dept-share-cb"> 개발기획팀</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="자재구매팀" class="dept-share-cb"> 자재구매팀</label>
@@ -930,6 +928,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="출하팀" class="dept-share-cb"> 출하팀</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="제조팀" class="dept-share-cb"> 제조팀</label>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;" id="dm-person-checks" style="display:none;"></div>
     </div>
     <!-- AI 메모 변환 -->
     <div id="ai-memo-section" style="margin-top:12px;background:linear-gradient(135deg,rgba(26,79,160,.05),rgba(109,40,217,.05));border:1.5px solid rgba(26,79,160,.2);border-radius:10px;padding:14px;">
@@ -958,6 +957,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 </div>
 
 <script>
+// WF 전역 세션 (최상단 선언)
+var wfSession = { empId:null, empNo:null, name:'', dept:'', rank:'', sessH:8, expire:0 };
+
+
 /* ═══ 음력 변환 ═══ */
 const LD=[
   0x04AE53,0x0A5748,0x5526BD,0x0D2650,0x0D9544,0x46AAB9,0x056A4D,0x09AD42,0x24AEB6,0x04AE4A,
@@ -1773,7 +1776,7 @@ function initDiaryResizable(){
 function initShareResizable(){
   var tbl = document.getElementById('shareTable');
   if(!tbl) return;
-  applyResizable(tbl.querySelectorAll('thead th'));
+  applyResizable(tbl.querySelectorAll('thead th.resizable'));
 }
 
 /* ─── 할 일 캘린더 표기 ─── */
@@ -1947,11 +1950,32 @@ async function onSelectAddNew(sel, type){
 function onShareTypeChange() {
   var t = document.getElementById('dm-share-type');
   var row = document.getElementById('dm-dept-share-row');
+  var deptChecks = document.getElementById('dm-dept-checks');
+  var personChecks = document.getElementById('dm-person-checks');
+  var rowTitle = document.getElementById('dm-share-row-title');
   if (!t || !row) return;
-  row.style.display = t.value === 'dept' ? 'block' : 'none';
-  if (t.value !== 'dept') {
-    document.querySelectorAll('.dept-share-cb').forEach(function(cb){ cb.checked = false; });
+  var v = t.value;
+  row.style.display = (v === 'dept' || v === 'person') ? 'block' : 'none';
+  if (deptChecks) deptChecks.style.display = v === 'dept' ? 'flex' : 'none';
+  if (personChecks) personChecks.style.display = v === 'person' ? 'flex' : 'none';
+  if (rowTitle) rowTitle.textContent = v === 'dept' ? '공유할 부서 선택 (복수 선택 가능)' : '공유할 직원 선택 (복수 선택 가능)';
+  document.querySelectorAll('.dept-share-cb').forEach(function(cb){ cb.checked = false; });
+  document.querySelectorAll('.person-share-cb').forEach(function(cb){ cb.checked = false; });
+  // 개인공유 선택 시 직원 목록 동적 로드
+  if (v === 'person' && personChecks && personChecks.children.length === 0) {
+    loadPersonShareList();
   }
+}
+async function loadPersonShareList() {
+  var personChecks = document.getElementById('dm-person-checks');
+  if (!personChecks || !SB) return;
+  var { data } = await SB.from('employees').select('id,name,rank,dept').eq('active', true).order('emp_no');
+  if (!data) return;
+  personChecks.innerHTML = data.map(function(e) {
+    return '<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;">'
+      + '<input type="checkbox" value="' + e.name + '" class="person-share-cb" data-id="' + e.id + '"> '
+      + e.name + ' ' + (e.rank||'') + '</label>';
+  }).join('');
 }
 
 function onContentTypeChange(){
@@ -2018,6 +2042,7 @@ function editDiary(id){
   if(shareEl) {
     if(!r.is_shared||!r.share_target) shareEl.value='';
     else if(r.share_target==='전체') shareEl.value='all';
+    else if(r.share_type==='person') shareEl.value='person';
     else shareEl.value='dept';
     onShareTypeChange();
     if(r.share_target&&r.share_target!=='전체') {
@@ -2062,6 +2087,11 @@ async function saveDiary(){
     var checked = Array.from(document.querySelectorAll('.dept-share-cb:checked')).map(function(cb){return cb.value;});
     obj.is_shared = checked.length > 0;
     obj.share_target = checked.length > 0 ? JSON.stringify(checked) : null;
+  } else if(shareType === 'person'){
+    var pchecked = Array.from(document.querySelectorAll('.person-share-cb:checked')).map(function(cb){return cb.value;});
+    obj.is_shared = pchecked.length > 0;
+    obj.share_target = pchecked.length > 0 ? JSON.stringify(pchecked) : null;
+    obj.share_type = 'person';
   } else {
     obj.is_shared = false;
     obj.share_target = null;
@@ -2254,8 +2284,13 @@ async function loadShareView() {
     if (r.share_target === '전체') return true;
     try {
       var targets = JSON.parse(r.share_target);
-      return Array.isArray(targets) && targets.indexOf(myDept) >= 0;
-    } catch(e) { return r.share_target === myDept; }
+      if(!Array.isArray(targets)) return false;
+      // 부서공유: 본인 부서 포함 여부
+      if(targets.indexOf(myDept) >= 0) return true;
+      // 개인공유: 본인 이름 포함 여부
+      if(targets.indexOf(wfSession.name) >= 0) return true;
+      return false;
+    } catch(e) { return r.share_target === myDept || r.share_target === wfSession.name; }
   });
   count.textContent = items.length + '건';
   setTimeout(function(){ initShareResizable(); }, 100);
@@ -2275,6 +2310,11 @@ async function loadShareView() {
     var row = '<tr style="border-bottom:1.5px solid #f0ede8;cursor:pointer;" onclick="showShareDetail(' + JSON.stringify(r).replace(/</g,'&lt;') + ')">';
     row += '<td style="padding:10px 14px;font-size:12px;font-family:monospace;color:#5a5048;">' + (r.date||'') + '</td>';
     row += '<td style="padding:10px 14px;font-size:12px;font-weight:700;color:#1a4fa0;">' + empName + '</td>';
+    // 공유대상 표시
+    var shareTarget = '';
+    if(r.share_target === '전체') shareTarget = '전체';
+    else { try { var tgts = JSON.parse(r.share_target||'[]'); shareTarget = tgts.join(', '); } catch(e){ shareTarget = r.share_target||''; } }
+    row += '<td style="padding:10px 14px;font-size:11px;color:#1a4fa0;font-weight:500;">' + shareTarget + '</td>';
     row += '<td style="padding:10px 14px;font-size:12px;color:#5a5048;">' + (r.category||'') + '</td>';
     row += '<td style="padding:10px 14px;"><span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;' + ctypeColor(r.content_type) + '">' + (r.content_type||'') + '</span></td>';
     row += '<td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1a1612;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (r.title||'') + '</td>';
