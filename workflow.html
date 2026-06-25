@@ -715,17 +715,31 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 </div>
 
   <!-- 공유함 뷰 -->
-  <div id="share-view" style="display:none;padding:16px;">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+  <div id="share-view" style="display:none;">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 0;flex-wrap:wrap;">
       <select id="shareTypeFilter" onchange="loadShareView()"
-        style="height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;">
-        <option value="">전체</option>
+        style="height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;">
+        <option value="">전체 내용구분</option>
         <option value="전달사항">전달사항</option>
         <option value="지시사항">지시사항</option>
       </select>
       <span id="shareViewCount" style="font-size:12px;color:var(--text3);"></span>
     </div>
-    <div id="shareViewList" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div style="overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:10px;">
+      <table style="width:100%;border-collapse:collapse;" id="shareTable">
+        <thead>
+          <tr style="background:#f0ede8;border-bottom:2px solid var(--border);">
+            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);width:90px;">날짜</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);width:80px;">공유자</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);width:80px;">업무유형</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);width:80px;">내용구분</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);">제목</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);width:70px;">상태</th>
+          </tr>
+        </thead>
+        <tbody id="shareViewList"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- WF 설정 뷰 -->
@@ -1229,7 +1243,7 @@ function convertToWorkDiary(id){
   document.getElementById('dm-status').value='완료'; // 기본값: 완료로 전환
   document.getElementById('diary-del-btn').style.display='';
   var aiSec2 = document.getElementById('ai-memo-section');
-  if(aiSec2) aiSec2.style.display = getApiKey() ? 'block' : 'none';
+  if(aiSec2) aiSec2.style.display = (localStorage.getItem('wf_api_key') ? 'block' : 'none');
   document.getElementById('diary-modal-overlay').classList.add('open');
 }
 async function deleteFromPopup(id){
@@ -1952,7 +1966,7 @@ function openDiaryModal(date){
   onShareTypeChange();
   // AI 섹션 — API Key 있을 때만 표시
   var aiSec = document.getElementById('ai-memo-section');
-  if(aiSec) aiSec.style.display = getApiKey() ? 'block' : 'none';
+  if(aiSec) aiSec.style.display = (localStorage.getItem('wf_api_key') ? 'block' : 'none');
   document.getElementById('diary-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('dm-partner').focus(),100);
 }
@@ -2158,6 +2172,28 @@ async function wfEnterMain() {
 }
 
 
+
+function showShareDetail(r) {
+  var emp = document.createElement('div');
+  emp.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+  emp.onclick = function(e){ if(e.target===emp) document.body.removeChild(emp); };
+  var box = '<div style="background:#fff;border-radius:14px;padding:24px;width:min(500px,92vw);max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">';
+  box += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+  box += '<div style="font-size:15px;font-weight:700;color:#1a1612;">' + (r.title||'') + '</div>';
+  box += '<button id="shareDetailClose" style="background:none;border:none;font-size:18px;color:#b0a090;cursor:pointer;">&#10005;</button>';
+  box += '</div>';
+  box += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">';
+  box += '<span style="font-size:11px;padding:3px 9px;border-radius:4px;background:#f0ede8;color:#5a5048;">' + (r.date||'') + '</span>';
+  box += '<span style="font-size:11px;padding:3px 9px;border-radius:4px;background:rgba(26,79,160,.1);color:#1a4fa0;">' + (r.content_type||'') + '</span>';
+  box += '<span style="font-size:11px;padding:3px 9px;border-radius:4px;background:#f0ede8;color:#5a5048;">' + (r.category||'') + '</span>';
+  box += '<span style="font-size:11px;padding:3px 9px;border-radius:4px;background:#f0f4f0;color:#1e7a45;">' + (r.status||'') + '</span>';
+  box += '</div>';
+  if(r.content) box += '<div style="font-size:13px;color:#5a5048;line-height:1.7;white-space:pre-wrap;padding:12px;background:#fbf9f5;border-radius:8px;">' + r.content + '</div>';
+  box += '</div>';
+  emp.innerHTML = box;
+  document.body.appendChild(emp);
+}
+
 function wfDoLogout() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
   wfClearSession();
@@ -2180,7 +2216,7 @@ async function loadShareView() {
   var isAdmin = (myDept === '대표이사' || myDept === '상무이사');
   var filter = document.getElementById('shareTypeFilter').value;
   var qRes = await SB.from('work_diary')
-    .select('id,employee_id,date,title,content,content_type,is_shared,share_target')
+    .select('id,employee_id,date,title,content,content_type,category,status,is_shared,share_target')
     .eq('is_shared', true)
     .order('date', { ascending: false })
     .limit(300);
@@ -2198,18 +2234,27 @@ async function loadShareView() {
   });
   count.textContent = items.length + '건';
   if (!items.length) { list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">공유된 내용이 없습니다.</div>'; return; }
+  var statusColor = function(s) {
+    var map = {'완료':'#1e7a45','진행중':'#d97706','보류':'#6b7280','후속필요':'#c8001e','지시':'#c8001e'};
+    return map[s] || '#6b7280';
+  };
+  var ctypeColor = function(ct) {
+    if(ct==='전달사항') return 'background:rgba(26,79,160,.1);color:#1a4fa0;';
+    if(ct==='지시사항') return 'background:rgba(200,0,30,.1);color:#c8001e;';
+    return 'background:#f0ede8;color:#5a5048;';
+  };
   list.innerHTML = items.map(function(r) {
     var emp = empMap[r.employee_id] || {};
-    var html = '<div class="share-card">';
-    html += '<div class="share-card-hdr">';
-    html += '<span class="share-from">' + (emp.name||'알 수 없음') + ' ' + (emp.rank||'') + '</span>';
-    html += '<span class="share-date">' + (r.date||'') + '</span>';
-    html += '<span class="share-type-badge share-type-' + (r.content_type||'') + '">' + (r.content_type||'') + '</span>';
-    html += '</div>';
-    html += '<div class="share-card-title">' + (r.title||'') + '</div>';
-    if (r.content) html += '<div class="share-card-content">' + r.content + '</div>';
-    html += '</div>';
-    return html;
+    var empName = (emp.name||'') + ' ' + (emp.rank||'');
+    var row = '<tr style="border-bottom:1.5px solid #f0ede8;cursor:pointer;" onclick="showShareDetail(' + JSON.stringify(r).replace(/</g,'&lt;') + ')">';
+    row += '<td style="padding:10px 14px;font-size:12px;font-family:monospace;color:#5a5048;">' + (r.date||'') + '</td>';
+    row += '<td style="padding:10px 14px;font-size:12px;font-weight:700;color:#1a4fa0;">' + empName + '</td>';
+    row += '<td style="padding:10px 14px;font-size:12px;color:#5a5048;">' + (r.category||'') + '</td>';
+    row += '<td style="padding:10px 14px;"><span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;' + ctypeColor(r.content_type) + '">' + (r.content_type||'') + '</span></td>';
+    row += '<td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1a1612;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (r.title||'') + '</td>';
+    row += '<td style="padding:10px 14px;"><span style="font-size:11px;font-weight:600;color:' + statusColor(r.status) + ';">' + (r.status||'') + '</span></td>';
+    row += '</tr>';
+    return row;
   }).join('');
 }
 
