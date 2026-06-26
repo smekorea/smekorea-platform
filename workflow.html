@@ -314,6 +314,30 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .diary-table td{padding:8px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);
   vertical-align:top;color:var(--text1);font-size:13px;}
 .sort-icon{margin-left:3px;font-size:10px;color:#f0c040;}
+/* 공유확인 */
+.share-row-unread { background:#fffbea !important; }
+.share-row-done td { color:#1a4fa0 !important; }
+.share-confirm-badge {
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;
+  background:#f0f4ff;color:#1a4fa0;cursor:default;white-space:nowrap;
+}
+.share-confirm-badge.done { background:#e8f5e9;color:#1e7a45; }
+/* 공유확인 팝업 */
+.confirm-popup-overlay {
+  position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;
+}
+.confirm-popup-box {
+  background:#fff;border-radius:16px;padding:28px;
+  width:min(540px,94vw);max-height:85vh;overflow-y:auto;
+  box-shadow:0 20px 60px rgba(0,0,0,.25);
+}
+.confirm-member-row {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid #f0ede8;font-size:13px;
+}
+.confirm-member-row:last-child{border-bottom:none;}
 /* 컬럼 필터 드롭다운 */
 .col-filter-drop{
   position:fixed;z-index:999;background:#fff;border:1.5px solid #c8d8f0;
@@ -819,6 +843,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
             <th class="resizable" onclick="openColFilter(event,'share','title')" style="width:200px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;cursor:pointer;">제목<span class="col-filter-icon" id="dfi-share-title">▾</span></th>
             <th class="resizable" style="padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);position:relative;">내용</th>
             <th onclick="openColFilter(event,'share','status')" style="width:60px;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer;">상태<span class="col-filter-icon" id="dfi-share-status">▾</span></th>
+            <th style="width:80px;padding:10px 14px;text-align:center;font-size:12px;font-weight:700;color:var(--text2);">공유확인</th>
           </tr>
         </thead>
         <tbody id="shareViewList"></tbody>
@@ -2688,6 +2713,41 @@ async function loadShareView() {
     if(r.share_target === '전체') r._shareTargetStr = '전체';
     else { try { r._shareTargetStr = JSON.parse(r.share_target||'[]').join(', '); } catch(e){ r._shareTargetStr = r.share_target||''; } }
   });
+
+  // 확인 데이터 조회
+  var diaryIds = items.map(function(r){ return r.id; });
+  var confirmMap = {}; // diary_id → [{emp_name, confirmed_at}]
+  if(diaryIds.length > 0) {
+    var cRes = await SB.from('work_diary_confirm').select('diary_id,employee_id,emp_name,confirmed_at').in('diary_id', diaryIds);
+    (cRes.data||[]).forEach(function(c){
+      if(!confirmMap[c.diary_id]) confirmMap[c.diary_id] = [];
+      confirmMap[c.diary_id].push(c);
+    });
+  }
+
+  // 대상자 수 계산 (공유대상 기준)
+  items.forEach(function(r){
+    r._confirms = confirmMap[r.id] || [];
+    // 대상자 이름 목록
+    var targetNames = [];
+    if(r.share_target === '전체') {
+      targetNames = Object.values(empMap).map(function(e){ return e.name; });
+    } else {
+      try {
+        var tgts = JSON.parse(r.share_target||'[]');
+        // 부서명이면 해당 부서 직원, 이름이면 그대로
+        tgts.forEach(function(t){
+          var byDept = Object.values(empMap).filter(function(e){ return e.dept === t; }).map(function(e){ return e.name; });
+          if(byDept.length > 0) targetNames = targetNames.concat(byDept);
+          else targetNames.push(t);
+        });
+      } catch(e){ targetNames = []; }
+    }
+    r._targetNames = targetNames;
+    r._confirmTotal = targetNames.length;
+    r._confirmCount = r._confirms.length;
+    r._allDone = r._confirmTotal > 0 && r._confirmCount >= r._confirmTotal;
+  });
   _shareItems = items;
   count.textContent = items.length + '건';
   setTimeout(function(){ initShareResizable(); }, 100);
@@ -2698,7 +2758,7 @@ function renderShareTable(items) {
   var list = document.getElementById('shareViewList');
   var count = document.getElementById('shareViewCount');
   if(count) count.textContent = items.length + '건';
-  if (!items.length) { list.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af;">공유된 내용이 없습니다.</td></tr>'; return; }
+  if (!items.length) { list.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#9ca3af;">공유된 내용이 없습니다.</td></tr>'; return; }
   var statusColor = function(s) {
     var map = {'완료':'#1e7a45','진행중':'#d97706','보류':'#6b7280','후속필요':'#c8001e','지시':'#c8001e'};
     return map[s] || '#6b7280';
@@ -2709,22 +2769,106 @@ function renderShareTable(items) {
     return 'background:#f0ede8;color:#5a5048;';
   };
   list.innerHTML = items.map(function(r) {
-    var empName = (r._empName||'');
-    var row = '<tr style="border-bottom:1.5px solid #f0ede8;cursor:pointer;" onclick="showShareDetail(' + JSON.stringify(r).replace(/</g,'&lt;') + ')">';
-    row += '<td style="padding:10px 14px;font-size:12px;font-family:monospace;color:#5a5048;">' + (r.date||'') + '</td>';
-    row += '<td style="padding:10px 14px;font-size:12px;font-weight:700;color:#1a4fa0;">' + empName + '</td>';
-    var shareTarget = '';
-    if(r.share_target === '전체') shareTarget = '전체';
-    else { try { var tgts = JSON.parse(r.share_target||'[]'); shareTarget = tgts.join(', '); } catch(e){ shareTarget = r.share_target||''; } }
-    row += '<td style="padding:10px 14px;font-size:11px;color:#1a4fa0;font-weight:500;">' + shareTarget + '</td>';
-    row += '<td style="padding:10px 14px;font-size:12px;color:#5a5048;">' + (r.category||'') + '</td>';
+    var allDone = r._allDone;
+    var confirmCount = r._confirmCount || 0;
+    var confirmTotal = r._confirmTotal || 0;
+    var confirmedNames = (r._confirms||[]).map(function(c){ return c.emp_name; }).join(', ');
+    var rowBg = allDone ? '' : 'background:#fffbea;';
+    var textColor = allDone ? 'color:#1a4fa0;' : 'color:#3a3530;';
+    var rData = encodeURIComponent(JSON.stringify(r));
+    var row = '<tr style="border-bottom:1.5px solid #f0ede8;cursor:pointer;' + rowBg + '" onclick="openShareConfirmPopup(decodeURIComponent(\'' + rData + '\'))">';
+    row += '<td style="padding:10px 14px;font-size:12px;font-family:monospace;' + textColor + '">' + (r.date||'') + '</td>';
+    row += '<td style="padding:10px 14px;font-size:12px;' + textColor + '">' + (r._empName||'') + '</td>';
+    row += '<td style="padding:10px 14px;font-size:11px;' + textColor + '">' + (r._shareTargetStr||'') + '</td>';
+    row += '<td style="padding:10px 14px;font-size:12px;' + textColor + '">' + (r.category||'') + '</td>';
     row += '<td style="padding:10px 14px;"><span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;' + ctypeColor(r.content_type) + '">' + (r.content_type||'') + '</span></td>';
-    row += '<td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1a1612;">' + (r.title||'') + '</td>';
-    row += '<td style="padding:10px 14px;font-size:12px;color:#3a3530;white-space:pre-wrap;line-height:1.6;">' + (r.content||'') + '</td>';
+    row += '<td style="padding:10px 14px;font-size:13px;' + textColor + '">' + (r.title||'') + '</td>';
+    row += '<td style="padding:10px 14px;font-size:12px;' + textColor + 'white-space:pre-wrap;line-height:1.6;">' + (r.content||'') + '</td>';
     row += '<td style="padding:10px 14px;"><span style="font-size:11px;font-weight:600;color:' + statusColor(r.status) + ';">' + (r.status||'') + '</span></td>';
+    var badgeClass = allDone ? 'share-confirm-badge done' : 'share-confirm-badge';
+    var badgeTip = confirmedNames ? '확인: ' + confirmedNames : '미확인';
+    row += '<td style="padding:10px 14px;text-align:center;"><span class="' + badgeClass + '" title="' + badgeTip + '">👁 ' + confirmCount + '/' + confirmTotal + '</span></td>';
     row += '</tr>';
     return row;
   }).join('');
+}
+
+/* ═══ 공유확인 팝업 ═══ */
+function openShareConfirmPopup(rEncoded) {
+  var r = typeof rEncoded === 'string' ? JSON.parse(decodeURIComponent(rEncoded)) : rEncoded;
+  // 기존 팝업 제거
+  var old = document.getElementById('shareConfirmOverlay');
+  if(old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-popup-overlay';
+  overlay.id = 'shareConfirmOverlay';
+  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+  var ctypeLabel = {'전달사항':'전달사항','지시사항':'지시사항','일반기록':'일반기록'};
+  var targetNames = r._targetNames || [];
+  var confirms = r._confirms || [];
+  var confirmedIds = confirms.map(function(c){ return c.employee_id; });
+  var myId = wfSession.empId;
+  var isOwner = (r.employee_id === myId);
+  var alreadyConfirmed = confirmedIds.indexOf(myId) >= 0;
+
+  // 확인자 현황 HTML
+  var memberRows = '';
+  if(targetNames.length > 0) {
+    targetNames.forEach(function(name){
+      var conf = confirms.find(function(c){ return c.emp_name === name; });
+      if(conf) {
+        var dt = new Date(conf.confirmed_at).toLocaleDateString('ko-KR');
+        memberRows += '<div class="confirm-member-row"><span style="font-weight:600;color:#1a1612;">' + name + '</span><span style="color:#1e7a45;font-size:12px;">✓ 확인 ' + dt + '</span></div>';
+      } else {
+        memberRows += '<div class="confirm-member-row"><span style="color:#6b7280;">' + name + '</span><span style="color:#d1d5db;font-size:12px;">○ 미확인</span></div>';
+      }
+    });
+  }
+
+  var confirmBtn = '';
+  if(!isOwner && !alreadyConfirmed) {
+    confirmBtn = '<button onclick="confirmShare(' + r.id + ',this)" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">✓ 확인</button>';
+  } else if(alreadyConfirmed) {
+    confirmBtn = '<span style="font-size:13px;color:#1e7a45;font-weight:600;">✓ 확인완료</span>';
+  }
+
+  overlay.innerHTML = '<div class="confirm-popup-box">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">' +
+    '<div><div style="font-size:16px;font-weight:700;color:#1a1612;margin-bottom:4px;">' + (r.title||'') + '</div>' +
+    '<div style="font-size:11px;color:#9a8e82;">' + (r.date||'') + ' · ' + (r._empName||'') + ' · ' + (r.category||'') + '</div></div>' +
+    '<button onclick="document.getElementById(\'shareConfirmOverlay\').remove()" style="background:none;border:none;font-size:20px;color:#b0a090;cursor:pointer;padding:0 4px;">✕</button>' +
+    '</div>' +
+    '<div style="background:#f7f5f2;border-radius:8px;padding:14px;margin-bottom:16px;">' +
+    '<div style="font-size:11px;font-weight:700;color:#9a8e82;margin-bottom:6px;">' + (r.content_type||'') + '</div>' +
+    '<div style="font-size:13px;color:#1a1612;white-space:pre-wrap;line-height:1.7;">' + (r.content||'(내용 없음)') + '</div>' +
+    '</div>' +
+    (memberRows ? '<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;color:#9a8e82;margin-bottom:8px;">확인 현황 👁 ' + (r._confirmCount||0) + '/' + (r._confirmTotal||0) + '</div>' + memberRows + '</div>' : '') +
+    '<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid #f0ede8;">' +
+    confirmBtn +
+    '<button onclick="document.getElementById(\'shareConfirmOverlay\').remove()" style="height:42px;padding:0 20px;border:1.5px solid #e5ddd4;border-radius:8px;background:#fff;color:#5a5048;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">닫기</button>' +
+    '</div></div>';
+
+  document.body.appendChild(overlay);
+}
+
+async function confirmShare(diaryId, btn) {
+  if(!SB || !wfSession.empId) return;
+  btn.disabled = true; btn.textContent = '처리 중...';
+  try {
+    await SB.from('work_diary_confirm').insert({
+      diary_id: diaryId,
+      employee_id: wfSession.empId,
+      emp_name: wfSession.name,
+      confirmed_at: new Date().toISOString()
+    });
+    document.getElementById('shareConfirmOverlay')?.remove();
+    await loadShareView(); // 목록 갱신
+  } catch(e) {
+    console.warn('confirm 오류:', e);
+    btn.disabled = false; btn.textContent = '✓ 확인';
+  }
 }
 
 /* ═══ WF 설정 ═══ */
