@@ -2867,7 +2867,7 @@ function openShareConfirmPopup(rEncoded) {
 
   var confirmBtn = '';
   if(!isOwner && !alreadyConfirmed) {
-    confirmBtn = '<button onclick="confirmShare(' + r.id + ',this)" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">✓ 확인</button>';
+    confirmBtn = '<button id="shareConfirmBtn" onclick="confirmShare(' + r.id + ')" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">✓ 확인</button>';
   } else if(alreadyConfirmed) {
     confirmBtn = '<span style="font-size:13px;color:#1e7a45;font-weight:600;">✓ 확인완료</span>';
   }
@@ -2891,21 +2891,24 @@ function openShareConfirmPopup(rEncoded) {
   document.body.appendChild(overlay);
 }
 
-async function confirmShare(diaryId, btn) {
+async function confirmShare(diaryId) {
   if(!SB || !wfSession.empId) return;
-  btn.disabled = true; btn.textContent = '처리 중...';
+  var btn = document.getElementById('shareConfirmBtn');
+  if(btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
   try {
-    await SB.from('work_diary_confirm').insert({
+    var {error} = await SB.from('work_diary_confirm').insert({
       diary_id: diaryId,
       employee_id: wfSession.empId,
       emp_name: wfSession.name,
       confirmed_at: new Date().toISOString()
     });
+    if(error) throw error;
     document.getElementById('shareConfirmOverlay')?.remove();
-    await loadShareView(); // 목록 갱신
+    await loadShareView();
   } catch(e) {
     console.warn('confirm 오류:', e);
-    btn.disabled = false; btn.textContent = '✓ 확인';
+    alert('확인 처리 중 오류가 발생했습니다: ' + (e.message||e));
+    if(btn) { btn.disabled = false; btn.textContent = '✓ 확인'; }
   }
 }
 
