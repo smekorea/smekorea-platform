@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMERP 협업개발 · SME Korea</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Share+Tech+Mono&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --hdr:#2c2420; --hdr-bdr:rgba(255,255,255,.08);
+  --bg:#f0ede8; --surf:#ffffff; --surf2:#f7f4ef;
+  --tbl-hd:#ece8e2; --bdr:#ddd8d0; --bdr2:#c8c0b4;
+  --t1:#1a1612; --t2:#5a5048; --t3:#8a7e72;
+  --red:#c8001e; --blue:#1a4fa0; --green:#1e7a45;
+  --orange:#f87171; --accent:#f97316;
+  --hdr-h:56px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);}
+
+/* ── 헤더 ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:var(--hdr);
+  border-bottom:1px solid var(--hdr-bdr);
+  display:flex;align-items:center;
+  height:var(--hdr-h);padding:0 20px;gap:16px;
+}
+.tb-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--red);letter-spacing:-0.5px;}
+.tb-sub{font-size:12px;color:var(--orange);letter-spacing:1px;margin-top:2px;}
+.tb-title{color:rgba(255,255,255,.7);font-size:13px;margin-left:4px;}
+.tb-spacer{flex:1;}
+.tb-back{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);
+  color:rgba(255,255,255,.8);font-size:12px;padding:6px 14px;border-radius:6px;
+  cursor:pointer;text-decoration:none;font-family:'Noto Sans KR',sans-serif;
+  transition:background .15s;
+}
+.tb-back:hover{background:rgba(255,255,255,.18);}
+.tb-user{color:rgba(255,255,255,.6);font-size:12px;}
+
+/* ── 탭 ── */
+.tab-bar{
+  display:flex;gap:0;border-bottom:2px solid var(--bdr);
+  background:var(--surf);padding:0 24px;
+}
+.tab-btn{
+  padding:12px 24px;font-size:13px;font-weight:500;cursor:pointer;
+  border:none;background:none;color:var(--t3);border-bottom:2px solid transparent;
+  margin-bottom:-2px;transition:color .15s;
+  font-family:'Noto Sans KR',sans-serif;
+}
+.tab-btn:hover{color:var(--t1);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-btn.admin-tab{color:#6d28d9;}
+.tab-btn.admin-tab.active{color:#6d28d9;border-bottom-color:#6d28d9;}
+
+/* ── 메인 컨텐츠 ── */
+.main{padding:20px 24px;max-width:1400px;}
+
+/* ── 필터바 ── */
+.filter-bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+.filter-bar select,.filter-bar input{
+  height:32px;padding:0 10px;border:1px solid var(--bdr2);border-radius:6px;
+  background:var(--surf);font-size:12px;color:var(--t1);
+  font-family:'Noto Sans KR',sans-serif;
+}
+.filter-bar select{cursor:pointer;}
+.btn{
+  height:32px;padding:0 14px;border-radius:6px;border:none;
+  font-size:12px;font-family:'Noto Sans KR',sans-serif;cursor:pointer;
+  font-weight:500;transition:opacity .15s;
+}
+.btn:hover{opacity:.85;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-outline{background:var(--surf);border:1px solid var(--bdr2);color:var(--t2);}
+.btn-sm{height:26px;padding:0 10px;font-size:11px;}
+.cnt-badge{
+  margin-left:auto;font-size:12px;color:var(--t3);
+  background:var(--surf2);padding:4px 10px;border-radius:12px;
+  border:1px solid var(--bdr);
+}
+
+/* ── 테이블 ── */
+.tbl-wrap{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:auto;}
+table{width:100%;border-collapse:collapse;table-layout:fixed;}
+thead th{
+  background:var(--tbl-hd);font-size:11px;font-weight:600;color:var(--t2);
+  padding:8px 10px;text-align:left;white-space:nowrap;overflow:hidden;
+  position:relative;user-select:none;border-bottom:1px solid var(--bdr2);
+}
+thead th.sortable{cursor:pointer;}
+thead th.sortable:hover{background:#e4e0d8;}
+.sort-icon{margin-left:4px;color:var(--t3);}
+tbody td{
+  padding:8px 10px;font-size:12px;color:#111827;
+  border-bottom:1px solid var(--bdr);vertical-align:middle;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border-right:1px solid #e8edf5;
+}
+tbody td:last-child{border-right:none;}
+tbody tr:hover td{background:#f5f2ee;}
+tbody tr:last-child td{border-bottom:none;}
+
+/* 컬럼 리사이즈 */
+.col-resizer{
+  position:absolute;right:0;top:0;bottom:0;width:5px;
+  cursor:col-resize;z-index:1;
+}
+.col-resizer:hover,
+.col-resizer.dragging{background:rgba(249,115,22,.4);}
+
+/* ── 상태/우선순위 배지 ── */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:10px;
+  font-size:11px;font-weight:500;
+}
+.badge-접수{background:#e0f2fe;color:#0369a1;}
+.badge-검토중{background:#fef9c3;color:#854d0e;}
+.badge-개발중{background:#ede9fe;color:#6d28d9;}
+.badge-완료{background:#dcfce7;color:#166534;}
+.badge-보류{background:#f1f5f9;color:#64748b;}
+.badge-높음{background:#fee2e2;color:#991b1b;}
+.badge-보통{background:#f1f5f9;color:#475569;}
+.badge-낮음{background:#f0fdf4;color:#15803d;}
+
+/* ── 폼 ── */
+.form-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:28px 32px;max-width:720px;}
+.form-row{margin-bottom:18px;}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:6px;}
+.form-label span{color:var(--red);margin-left:2px;}
+.form-input,.form-select,.form-textarea{
+  width:100%;padding:9px 12px;border:1px solid var(--bdr2);border-radius:6px;
+  font-size:13px;font-family:'Noto Sans KR',sans-serif;color:var(--t1);
+  background:var(--surf);transition:border .15s;
+}
+.form-input:focus,.form-select:focus,.form-textarea:focus{
+  outline:none;border-color:var(--accent);
+}
+.form-textarea{resize:vertical;min-height:120px;line-height:1.6;}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.form-hint{font-size:11px;color:var(--t3);margin-top:4px;}
+.form-footer{display:flex;gap:10px;margin-top:24px;}
+
+/* ── 처리 관리 패널 ── */
+.manage-wrap{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start;}
+.manage-list{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;}
+.manage-item{
+  padding:14px 16px;border-bottom:1px solid var(--bdr);cursor:pointer;
+  transition:background .12s;
+}
+.manage-item:last-child{border-bottom:none;}
+.manage-item:hover{background:var(--surf2);}
+.manage-item.selected{background:#fff7ed;border-left:3px solid var(--accent);}
+.mi-top{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.mi-screen{font-size:11px;color:var(--t3);font-family:'Share Tech Mono',monospace;}
+.mi-title{font-size:13px;font-weight:500;color:var(--t1);}
+.mi-meta{font-size:11px;color:var(--t3);}
+.detail-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:20px;position:sticky;top:80px;}
+.detail-card h3{font-size:14px;font-weight:600;margin-bottom:16px;color:var(--t1);}
+.detail-row{margin-bottom:12px;}
+.detail-label{font-size:11px;color:var(--t3);margin-bottom:3px;font-weight:500;}
+.detail-value{font-size:13px;color:var(--t1);line-height:1.5;}
+.detail-content{
+  background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;
+  padding:10px 12px;font-size:12px;line-height:1.6;color:var(--t1);
+  white-space:pre-wrap;max-height:160px;overflow-y:auto;
+}
+.detail-sep{border:none;border-top:1px solid var(--bdr);margin:16px 0;}
+.detail-select{
+  width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;
+  font-size:12px;font-family:'Noto Sans KR',sans-serif;color:var(--t1);
+  background:var(--surf);margin-bottom:8px;
+}
+.detail-textarea{
+  width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;
+  font-size:12px;font-family:'Noto Sans KR',sans-serif;color:var(--t1);
+  background:var(--surf);resize:vertical;min-height:80px;line-height:1.5;
+  margin-bottom:8px;
+}
+.detail-input{
+  width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;
+  font-size:12px;font-family:'Noto Sans KR',sans-serif;color:var(--t1);
+  background:var(--surf);margin-bottom:8px;
+}
+.detail-textarea:focus,.detail-select:focus,.detail-input:focus{outline:none;border-color:#6d28d9;}
+
+/* ── 빈 상태 ── */
+.empty{text-align:center;padding:60px 20px;color:var(--t3);}
+.empty-icon{font-size:40px;margin-bottom:12px;}
+.empty-msg{font-size:13px;}
+
+/* ── 탭 패널 ── */
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* ── 토스트 ── */
+.toast{
+  position:fixed;bottom:24px;right:24px;z-index:9999;
+  background:#1a1612;color:#fff;padding:12px 20px;border-radius:8px;
+  font-size:13px;opacity:0;transform:translateY(8px);
+  transition:opacity .2s,transform .2s;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.ok{border-left:3px solid var(--green);}
+.toast.err{border-left:3px solid var(--red);}
+
+/* ── 로딩 ── */
+.loading{text-align:center;padding:40px;color:var(--t3);font-size:13px;}
+
+/* ── 반응형 ── */
+@media(max-width:900px){
+  .manage-wrap{grid-template-columns:1fr;}
+  .detail-card{position:static;}
+  .form-row-2{grid-template-columns:1fr;}
+  .main{padding:14px 14px;}
+}
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="topbar">
+  <div>
+    <div class="tb-logo">SMERP</div>
+    <div class="tb-sub">COLLABORATION</div>
+  </div>
+  <div class="tb-title">개발요청 관리</div>
+  <div class="tb-spacer"></div>
+  <span class="tb-user" id="tbUser"></span>
+  <a class="tb-back" href="index.html">← 메인으로</a>
+</div>
+
+<!-- 탭 바 -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('list')" id="tab-list">📋 요청 목록</button>
+  <button class="tab-btn" onclick="switchTab('register')" id="tab-register">✏️ 요청 등록</button>
+  <button class="tab-btn admin-tab" onclick="switchTab('manage')" id="tab-manage" style="display:none;">⚙️ 처리 관리</button>
+</div>
+
+<!-- ── 탭: 요청 목록 ── -->
+<div class="main tab-panel active" id="panel-list">
+  <div class="filter-bar">
+    <select id="fStatus" onchange="loadList()">
+      <option value="">전체 상태</option>
+      <option value="접수">접수</option>
+      <option value="검토중">검토중</option>
+      <option value="개발중">개발중</option>
+      <option value="완료">완료</option>
+      <option value="보류">보류</option>
+    </select>
+    <select id="fType" onchange="loadList()">
+      <option value="">전체 유형</option>
+      <option value="기능추가">기능추가</option>
+      <option value="버그수정">버그수정</option>
+      <option value="UI개선">UI개선</option>
+      <option value="기타">기타</option>
+    </select>
+    <select id="fPriority" onchange="loadList()">
+      <option value="">전체 우선순위</option>
+      <option value="높음">높음</option>
+      <option value="보통">보통</option>
+      <option value="낮음">낮음</option>
+    </select>
+    <input type="text" id="fSearch" placeholder="제목/내용 검색..." style="width:200px;" oninput="renderList()">
+    <button class="btn btn-outline" onclick="resetFilters()">초기화</button>
+    <span class="cnt-badge" id="listCnt">0건</span>
+  </div>
+  <div class="tbl-wrap">
+    <table id="listTable">
+      <thead>
+        <tr>
+          <th style="width:50px;" data-col="no">No</th>
+          <th style="width:100px;" class="sortable" data-col="created_at" onclick="sortBy('created_at')">등록일<span class="sort-icon" id="sort-created_at"></span><div class="col-resizer"></div></th>
+          <th style="width:80px;" class="sortable" data-col="emp_name" onclick="sortBy('emp_name')">등록자<span class="sort-icon" id="sort-emp_name"></span><div class="col-resizer"></div></th>
+          <th style="width:160px;" data-col="screen">화면<div class="col-resizer"></div></th>
+          <th style="width:90px;" class="sortable" data-col="request_type" onclick="sortBy('request_type')">요청유형<span class="sort-icon" id="sort-request_type"></span><div class="col-resizer"></div></th>
+          <th style="width:80px;" data-col="priority">우선순위<div class="col-resizer"></div></th>
+          <th style="width:80px;" class="sortable" data-col="status" onclick="sortBy('status')">상태<span class="sort-icon" id="sort-status"></span><div class="col-resizer"></div></th>
+          <th style="width:260px;" data-col="title">제목<div class="col-resizer"></div></th>
+          <th style="width:100px;" data-col="applied_date">적용일<div class="col-resizer"></div></th>
+        </tr>
+      </thead>
+      <tbody id="listBody">
+        <tr><td colspan="9" class="loading">로딩중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── 탭: 요청 등록 ── -->
+<div class="main tab-panel" id="panel-register">
+  <div class="form-card">
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">화면 (메뉴)<span>*</span></label>
+        <input class="form-input" id="regScreen" list="screenList" placeholder="화면명 입력 또는 선택..." autocomplete="off">
+        <datalist id="screenList"></datalist>
+        <div class="form-hint">기존 등록된 화면명이 자동완성으로 표시됩니다</div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">요청 유형<span>*</span></label>
+        <select class="form-select" id="regType">
+          <option value="">선택하세요</option>
+          <option value="기능추가">기능추가</option>
+          <option value="버그수정">버그수정</option>
+          <option value="UI개선">UI개선</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">제목<span>*</span></label>
+      <input class="form-input" id="regTitle" placeholder="요청 내용을 간략히 적어주세요" maxlength="100">
+    </div>
+    <div class="form-row">
+      <label class="form-label">상세 내용<span>*</span></label>
+      <textarea class="form-textarea" id="regContent" placeholder="어떤 문제가 있는지, 어떻게 개선됐으면 하는지 자세히 적어주세요" rows="6"></textarea>
+    </div>
+    <div class="form-footer">
+      <button class="btn btn-primary" onclick="submitRequest()">등록하기</button>
+      <button class="btn btn-outline" onclick="clearForm()">초기화</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 탭: 처리 관리 (empId=2 전용) ── -->
+<div class="main tab-panel" id="panel-manage">
+  <div class="filter-bar" style="margin-bottom:14px;">
+    <select id="mStatus" onchange="loadManage()">
+      <option value="">전체 상태</option>
+      <option value="접수">접수</option>
+      <option value="검토중">검토중</option>
+      <option value="개발중">개발중</option>
+      <option value="완료">완료</option>
+      <option value="보류">보류</option>
+    </select>
+    <select id="mType" onchange="loadManage()">
+      <option value="">전체 유형</option>
+      <option value="기능추가">기능추가</option>
+      <option value="버그수정">버그수정</option>
+      <option value="UI개선">UI개선</option>
+      <option value="기타">기타</option>
+    </select>
+    <span class="cnt-badge" id="manageCnt">0건</span>
+  </div>
+  <div class="manage-wrap">
+    <div class="manage-list" id="manageList">
+      <div class="loading">로딩중...</div>
+    </div>
+    <div class="detail-card" id="detailCard">
+      <div class="empty" style="padding:30px 0;">
+        <div class="empty-icon">👆</div>
+        <div class="empty-msg">왼쪽 목록에서<br>항목을 선택하세요</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+
+// 현재 사용자
+const curUser = localStorage.getItem('sme_user') || '';
+let curEmpId = 0;
+let allList = [];
+let sortKey = 'created_at', sortAsc = false;
+let selectedId = null;
+let manageData = [];
+
+/* ── Supabase fetch ── */
+async function sbGet(table, params=''){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`,{
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}
+  });
+  return r.json();
+}
+async function sbPost(table, body){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+async function sbPatch(table, id, body){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`,{
+    method:'PATCH',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+
+/* ── 초기화 ── */
+async function init(){
+  if(!curUser){
+    alert('로그인이 필요합니다. 메인 화면에서 접근해주세요.');
+    location.href='index.html';
+    return;
+  }
+  document.getElementById('tbUser').textContent = curUser + ' 님';
+
+  // empId 확인
+  try{
+    const emps = await sbGet('employees', `emp_name=eq.${encodeURIComponent(curUser)}&select=id`);
+    if(emps && emps.length > 0) curEmpId = emps[0].id;
+  }catch(e){}
+
+  // 처리관리 탭 표시 (empId=2만)
+  if(curEmpId === 2){
+    document.getElementById('tab-manage').style.display = '';
+  }
+
+  await loadScreenList();
+  await loadList();
+  initColResize();
+}
+
+/* ── 화면명 자동완성 ── */
+async function loadScreenList(){
+  try{
+    const data = await sbGet('smerp_request','select=screen&order=screen.asc');
+    const screens = [...new Set((data||[]).map(d=>d.screen).filter(Boolean))];
+    const dl = document.getElementById('screenList');
+    dl.innerHTML = screens.map(s=>`<option value="${s}">`).join('');
+  }catch(e){}
+}
+
+/* ── 탭 전환 ── */
+function switchTab(tab){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='list') loadList();
+  if(tab==='manage' && curEmpId===2) loadManage();
+}
+
+/* ── 요청 목록 로드 ── */
+async function loadList(){
+  document.getElementById('listBody').innerHTML = '<tr><td colspan="9" class="loading">로딩중...</td></tr>';
+  try{
+    let params = 'select=*&order=created_at.desc';
+    const st = document.getElementById('fStatus').value;
+    const ty = document.getElementById('fType').value;
+    const pr = document.getElementById('fPriority').value;
+    if(st) params += `&status=eq.${encodeURIComponent(st)}`;
+    if(ty) params += `&request_type=eq.${encodeURIComponent(ty)}`;
+    if(pr) params += `&priority=eq.${encodeURIComponent(pr)}`;
+    allList = await sbGet('smerp_request', params) || [];
+  }catch(e){ allList=[]; }
+  renderList();
+}
+
+/* ── 목록 렌더링 (검색+정렬 적용) ── */
+function renderList(){
+  const kw = document.getElementById('fSearch').value.trim().toLowerCase();
+  let data = kw
+    ? allList.filter(r=>(r.title||'').toLowerCase().includes(kw)||(r.content||'').toLowerCase().includes(kw))
+    : [...allList];
+
+  // 정렬
+  data.sort((a,b)=>{
+    let av=a[sortKey]||'', bv=b[sortKey]||'';
+    if(av<bv) return sortAsc?-1:1;
+    if(av>bv) return sortAsc?1:-1;
+    return 0;
+  });
+
+  document.getElementById('listCnt').textContent = data.length+'건';
+  const tbody = document.getElementById('listBody');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="9" class="empty"><div class="empty-icon">📭</div><div class="empty-msg">요청 내역이 없습니다</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((r,i)=>`
+    <tr>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${data.length-i}</td>
+      <td>${fmtDate(r.created_at)}</td>
+      <td>${r.emp_name||''}</td>
+      <td title="${r.screen||''}">${r.screen||''}</td>
+      <td>${r.request_type||''}</td>
+      <td>${r.priority?`<span class="badge badge-${r.priority}">${r.priority}</span>`:'-'}</td>
+      <td><span class="badge badge-${r.status||'접수'}">${r.status||'접수'}</span></td>
+      <td title="${r.title||''}">${r.title||''}</td>
+      <td>${r.applied_date||'-'}</td>
+    </tr>
+  `).join('');
+}
+
+/* ── 정렬 ── */
+function sortBy(key){
+  if(sortKey===key) sortAsc=!sortAsc;
+  else { sortKey=key; sortAsc=true; }
+  ['created_at','emp_name','request_type','status'].forEach(k=>{
+    document.getElementById('sort-'+k).textContent = k===sortKey?(sortAsc?'↑':'↓'):'';
+  });
+  renderList();
+}
+
+/* ── 필터 초기화 ── */
+function resetFilters(){
+  document.getElementById('fStatus').value='';
+  document.getElementById('fType').value='';
+  document.getElementById('fPriority').value='';
+  document.getElementById('fSearch').value='';
+  loadList();
+}
+
+/* ── 요청 등록 ── */
+async function submitRequest(){
+  const screen = document.getElementById('regScreen').value.trim();
+  const type   = document.getElementById('regType').value;
+  const title  = document.getElementById('regTitle').value.trim();
+  const content= document.getElementById('regContent').value.trim();
+  if(!screen){ showToast('화면명을 입력해주세요','err'); return; }
+  if(!type)  { showToast('요청 유형을 선택해주세요','err'); return; }
+  if(!title) { showToast('제목을 입력해주세요','err'); return; }
+  if(!content){ showToast('상세 내용을 입력해주세요','err'); return; }
+
+  try{
+    await sbPost('smerp_request',{
+      emp_name: curUser,
+      screen,
+      request_type: type,
+      title,
+      content,
+      status: '접수',
+      priority: '보통'
+    });
+    showToast('요청이 등록되었습니다','ok');
+    clearForm();
+    await loadScreenList(); // 자동완성 갱신
+    switchTab('list');
+  }catch(e){
+    showToast('등록 중 오류가 발생했습니다','err');
+  }
+}
+
+function clearForm(){
+  ['regScreen','regTitle','regContent'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('regType').value='';
+}
+
+/* ── 처리 관리 로드 ── */
+async function loadManage(){
+  document.getElementById('manageList').innerHTML='<div class="loading">로딩중...</div>';
+  selectedId=null;
+  document.getElementById('detailCard').innerHTML=`
+    <div class="empty" style="padding:30px 0;">
+      <div class="empty-icon">👆</div>
+      <div class="empty-msg">왼쪽 목록에서<br>항목을 선택하세요</div>
+    </div>`;
+  try{
+    let params='select=*&order=created_at.desc';
+    const st=document.getElementById('mStatus').value;
+    const ty=document.getElementById('mType').value;
+    if(st) params+=`&status=eq.${encodeURIComponent(st)}`;
+    if(ty) params+=`&request_type=eq.${encodeURIComponent(ty)}`;
+    manageData = await sbGet('smerp_request',params) || [];
+  }catch(e){ manageData=[]; }
+  renderManage();
+}
+
+function renderManage(){
+  document.getElementById('manageCnt').textContent = manageData.length+'건';
+  const wrap = document.getElementById('manageList');
+  if(!manageData.length){
+    wrap.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-msg">항목이 없습니다</div></div>';
+    return;
+  }
+  wrap.innerHTML = manageData.map(r=>`
+    <div class="manage-item${r.id===selectedId?' selected':''}" onclick="selectItem(${r.id})">
+      <div class="mi-top">
+        <span class="badge badge-${r.status||'접수'}">${r.status||'접수'}</span>
+        ${r.priority?`<span class="badge badge-${r.priority}">${r.priority}</span>`:''}
+        <span class="mi-screen">${r.screen||''}</span>
+      </div>
+      <div class="mi-title">${r.title||''}</div>
+      <div class="mi-meta">${r.emp_name||''} · ${fmtDate(r.created_at)} · ${r.request_type||''}</div>
+    </div>
+  `).join('');
+}
+
+function selectItem(id){
+  selectedId=id;
+  const r=manageData.find(x=>x.id===id);
+  if(!r) return;
+  renderManage(); // 선택 표시 갱신
+
+  document.getElementById('detailCard').innerHTML=`
+    <h3>요청 상세</h3>
+    <div class="detail-row">
+      <div class="detail-label">등록자 / 등록일</div>
+      <div class="detail-value">${r.emp_name||''} · ${fmtDate(r.created_at)}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">화면 · 유형</div>
+      <div class="detail-value">${r.screen||''} · ${r.request_type||''}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">제목</div>
+      <div class="detail-value" style="font-weight:500;">${r.title||''}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">요청 내용</div>
+      <div class="detail-content">${r.content||''}</div>
+    </div>
+    <hr class="detail-sep">
+    <div class="detail-row">
+      <div class="detail-label">우선순위</div>
+      <select class="detail-select" id="dPriority">
+        <option value="높음"${r.priority==='높음'?' selected':''}>높음</option>
+        <option value="보통"${r.priority==='보통'?' selected':''}>보통</option>
+        <option value="낮음"${r.priority==='낮음'?' selected':''}>낮음</option>
+      </select>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">상태 변경</div>
+      <select class="detail-select" id="dStatus">
+        <option value="접수"${r.status==='접수'?' selected':''}>접수</option>
+        <option value="검토중"${r.status==='검토중'?' selected':''}>검토중</option>
+        <option value="개발중"${r.status==='개발중'?' selected':''}>개발중</option>
+        <option value="완료"${r.status==='완료'?' selected':''}>완료</option>
+        <option value="보류"${r.status==='보류'?' selected':''}>보류</option>
+      </select>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">처리 내용</div>
+      <textarea class="detail-textarea" id="dResult" placeholder="처리 내용을 입력하세요">${r.result||''}</textarea>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">적용일</div>
+      <input type="date" class="detail-input" id="dApplied" value="${r.applied_date||''}">
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="saveManage(${r.id})">저장</button>
+  `;
+}
+
+async function saveManage(id){
+  const status   = document.getElementById('dStatus').value;
+  const priority = document.getElementById('dPriority').value;
+  const result   = document.getElementById('dResult').value.trim();
+  const applied  = document.getElementById('dApplied').value;
+  try{
+    await sbPatch('smerp_request', id, {
+      status,
+      priority,
+      result: result||null,
+      applied_date: applied||null
+    });
+    // 로컬 데이터 갱신
+    const idx = manageData.findIndex(x=>x.id===id);
+    if(idx>=0) Object.assign(manageData[idx],{status,priority,result,applied_date:applied||null});
+    renderManage();
+    showToast('저장되었습니다','ok');
+  }catch(e){
+    showToast('저장 중 오류가 발생했습니다','err');
+  }
+}
+
+/* ── 컬럼 리사이즈 ── */
+function initColResize(){
+  const STORAGE_KEY='collab_col_v1';
+  const table=document.getElementById('listTable');
+  const ths=[...table.querySelectorAll('thead th')];
+  const savedWidths=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+
+  // 초기폭 설정
+  const defaultWidths=[50,100,80,160,90,80,80,260,100];
+  ths.forEach((th,i)=>{
+    th.style.width=(savedWidths?savedWidths[i]:defaultWidths[i])+'px';
+  });
+  table.style.tableLayout='fixed';
+  table.style.width=ths.reduce((s,th)=>s+parseInt(th.style.width),0)+'px';
+
+  ths.forEach((th,i)=>{
+    const rz=th.querySelector('.col-resizer');
+    if(!rz) return;
+    let startX,startW;
+    rz.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      startX=e.clientX; startW=parseInt(th.style.width);
+      rz.classList.add('dragging');
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+    function onMove(e){
+      const nw=Math.max(40,startW+(e.clientX-startX));
+      th.style.width=nw+'px';
+      table.style.width=ths.reduce((s,t)=>s+parseInt(t.style.width),0)+'px';
+    }
+    function onUp(){
+      rz.classList.remove('dragging');
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(ths.map(t=>parseInt(t.style.width))));
+    }
+  });
+}
+
+/* ── 유틸 ── */
+function fmtDate(ts){
+  if(!ts) return '-';
+  const d=new Date(ts);
+  return `${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())}`;
+}
+function p2(n){return String(n).padStart(2,'0');}
+
+let toastTimer;
+function showToast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast show '+(type==='ok'?'ok':'err');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+init();
+</script>
+<script src="smerp-tweaks.js"></script>
+</body>
+</html>
