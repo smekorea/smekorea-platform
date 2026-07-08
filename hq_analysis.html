@@ -170,6 +170,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
 .col-resizer:hover{background:rgba(26,86,219,0.3);}
 .sort-icon{margin-left:3px;font-size:9px;color:var(--accent2);}
+.rt-btn{padding:0 16px;border:none;border-right:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;}
+.rt-btn:last-child{border-right:none;}
+.rt-btn.rt-active{background:var(--accent2);color:#fff;}
 </style>
 </head>
 <body>
@@ -265,8 +268,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 <!-- 탭 -->
 <div class="tab-bar">
   <div class="tab active" onclick="showTab('summary',this)">📋 경영 요약</div>
-  <div class="tab" onclick="showTab('corp',this)">🏢 법인별 현황</div>
-  <div class="tab" onclick="showTab('trend',this)">📈 추이 분석</div>
+  <div class="tab" onclick="showTab('corp',this)">🏢 법인별 공급현황</div>
   <div class="tab" onclick="showTab('trade',this)">🔍 거래·단가 분석</div>
 </div>
 
@@ -308,35 +310,11 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
       <div class="kpi-sub" id="kpi-risks">상위5사 비중</div>
     </div>
   </div>
-  <!-- 법인별 성과 카드 -->
-  <div class="corp-grid">
-    <div class="corp-card gsmein">
-      <div class="corp-name">GSMEIN · 인도</div>
-      <div class="corp-sales" id="corp-gsmein-sales">-</div>
-      <div class="corp-margin" id="corp-gsmein-margin" style="color:var(--accent3);">마진율 -</div>
-      <div class="corp-yoy" id="corp-gsmein-yoy" style="color:var(--muted);">전년비 -</div>
-      <div class="corp-bar"><div class="corp-bar-fill" id="corp-gsmein-bar" style="background:var(--accent);width:0%;"></div></div>
-    </div>
-    <div class="corp-card smecn">
-      <div class="corp-name">SMECN · 중국</div>
-      <div class="corp-sales" id="corp-smecn-sales">-</div>
-      <div class="corp-margin" id="corp-smecn-margin" style="color:var(--accent3);">마진율 -</div>
-      <div class="corp-yoy" id="corp-smecn-yoy" style="color:var(--muted);">전년비 -</div>
-      <div class="corp-bar"><div class="corp-bar-fill" id="corp-smecn-bar" style="background:var(--accent2);width:0%;"></div></div>
-    </div>
-    <div class="corp-card smeglobal">
-      <div class="corp-name">SMEGLOBAL · 태국</div>
-      <div class="corp-sales" id="corp-smeglobal-sales">-</div>
-      <div class="corp-margin" id="corp-smeglobal-margin" style="color:var(--accent3);">마진율 -</div>
-      <div class="corp-yoy" id="corp-smeglobal-yoy" style="color:var(--muted);">전년비 -</div>
-      <div class="corp-bar"><div class="corp-bar-fill" id="corp-smeglobal-bar" style="background:var(--accent3);width:0%;"></div></div>
-    </div>
-    <div class="corp-card domestic">
-      <div class="corp-name">국내 매출</div>
-      <div class="corp-sales" id="corp-domestic-sales">-</div>
-      <div class="corp-margin" id="corp-domestic-margin" style="color:var(--accent3);">마진율 -</div>
-      <div class="corp-yoy" id="corp-domestic-yoy" style="color:var(--muted);">전년비 -</div>
-      <div class="corp-bar"><div class="corp-bar-fill" id="corp-domestic-bar" style="background:var(--amber);width:0%;"></div></div>
+  <!-- SME 전체 올해 매출현황 (LG사급/직거래 구분) -->
+  <div style="padding:14px 24px 0;">
+    <div class="bx">
+      <div class="bx-header"><span class="bx-title">SME 전체 올해 매출현황</span><span class="bx-sub" id="year-summary-label">LG사급 · 직거래 구분</span></div>
+      <div class="bx-body" id="year-summary" style="padding:14px 16px;"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div>
     </div>
   </div>
   <!-- 연도별 추이 전체폭 -->
@@ -351,8 +329,8 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
       </div>
     </div>
   </div>
-  <!-- 당년 월별 + 법인비중 -->
-  <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;padding:0 24px 12px;">
+  <!-- 당년 월별 추이 -->
+  <div style="padding:0 24px 12px;">
     <div class="bx">
       <div class="bx-header">
         <span class="bx-title" id="monthly-year-label">당년도 월별 추이</span>
@@ -360,12 +338,6 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
       </div>
       <div style="padding:10px 12px;">
         <div id="monthly-chart" style="min-height:180px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
-      </div>
-    </div>
-    <div class="bx">
-      <div class="bx-header"><span class="bx-title">법인별 매출 비중</span><span class="bx-sub">기간 내</span></div>
-      <div style="padding:12px 16px;">
-        <div id="corp-donut" style="min-height:160px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
       </div>
     </div>
   </div>
@@ -393,6 +365,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 
 <!-- TAB2: 법인별 현황 -->
 <div class="tab-content" id="tab-corp">
+  <div style="margin:14px 24px 0;padding:10px 14px;background:#fffbf5;border:1px solid #f0dcc0;border-radius:8px;font-size:11px;color:#8a6d3b;">
+    ※ GSMEIN·SMECN·SMEGLOBAL 수치는 각 법인의 자체 매입·매출이 아니라, <strong>본사(SME코리아)가 해당 법인으로 공급(매출)한 실적</strong> 기준입니다. 법인별 자체 매입 자료는 별도로 관리되지 않습니다.
+  </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 24px;" id="corp-detail-grid">
     <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;overflow:hidden;">
       <div style="padding:12px 16px;border-bottom:1px solid var(--border-light);background:rgba(200,0,30,0.03);display:flex;align-items:center;justify-content:space-between;">
@@ -438,40 +413,14 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 </div>
 
 <!-- TAB3: 추이 분석 -->
-<div class="tab-content" id="tab-trend">
-  <div style="padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-    <div class="f-group"><div class="f-lbl">분석구분</div>
-      <select class="f-select" id="trend-type" style="min-width:120px;" onchange="runTrend()">
-        <option value="all">전체합산</option><option value="lg">LG사급</option><option value="dt">직거래</option>
-      </select>
-    </div>
-    <div class="f-group"><div class="f-lbl">브랜드</div>
-      <select class="f-select" id="trend-brand" style="min-width:140px;" onchange="runTrend()"><option value="">전체</option></select>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-left:auto;font-family:'Share Tech Mono',monospace;">실선=당해년 · 점선=전년동기 · ▲▼=전년비</div>
-  </div>
-  <div style="padding:16px 24px;display:flex;flex-direction:column;gap:16px;">
-    <div class="bx">
-      <div class="bx-header"><span class="bx-title">월별 매출·매입 추이 (전년 동기 비교)</span><span class="bx-sub">실선=당년 / 점선=전년</span></div>
-      <div style="padding:12px 16px;">
-        <div id="yoy-chart" style="min-height:220px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
-      </div>
-    </div>
-    <div class="bx">
-      <div class="bx-header"><span class="bx-title">브랜드별 마진구조</span><span class="bx-sub">기간 내 마진율 TOP12</span></div>
-      <div class="bx-body" id="brand-mg"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div>
-    </div>
-  </div>
-</div>
 
-<!-- TAB4: 거래·단가 분석 -->
+<!-- TAB3: 거래·단가 분석 -->
 <div class="tab-content" id="tab-trade">
   <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;gap:0;">
-    <div id="stab-trade" onclick="showSubTab('trade')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;color:var(--accent);border-bottom:2px solid var(--accent);">거래 집계</div>
-    <div id="stab-item" onclick="showSubTab('item')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;">품목상세</div>
+    <div id="stab-trade" onclick="showSubTab('trade')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;color:var(--accent);border-bottom:2px solid var(--accent);">거래분석</div>
     <div id="stab-price" onclick="showSubTab('price')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;">단가·마진</div>
   </div>
-  <!-- 거래집계 -->
+  <!-- 거래분석 (거래집계+품목상세+추이분석 통합) -->
   <div id="sub-trade">
     <div class="filter-bar">
       <div class="f-group"><div class="f-lbl">구분</div><select class="f-select hl" id="f-type" style="min-width:110px;"><option value="">전체</option><option value="LG사급">LG사급</option><option value="직거래">직거래</option></select></div>
@@ -482,16 +431,10 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
         </div>
       </div>
       <div class="f-group"><div class="f-lbl">매출처</div>
-        <div style="display:flex;gap:4px;align-items:center;">
-          <select class="f-select" id="f-seller-mode" style="min-width:110px;" onchange="onSellerModeChange()"><option value="all">전체합산</option><option value="pivot">거래처별합계</option><option value="pick">업체선택</option></select>
-          <button id="f-seller-pick-btn" onclick="openPickModal('seller')" style="display:none;height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-seller-pick-cnt">전체</span></button>
-        </div>
+        <button id="f-seller-pick-btn" onclick="openPickModal('seller')" style="height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-seller-pick-cnt">전체</span></button>
       </div>
       <div class="f-group"><div class="f-lbl">매입처</div>
-        <div style="display:flex;gap:4px;align-items:center;">
-          <select class="f-select" id="f-buyer-mode" style="min-width:110px;" onchange="onBuyerModeChange()"><option value="all">전체합산</option><option value="pivot">거래처별합계</option><option value="pick">업체선택</option></select>
-          <button id="f-buyer-pick-btn" onclick="openPickModal('buyer')" style="display:none;height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-buyer-pick-cnt">전체</span></button>
-        </div>
+        <button id="f-buyer-pick-btn" onclick="openPickModal('buyer')" style="height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-buyer-pick-cnt">전체</span></button>
       </div>
       <div class="f-group"><div class="f-lbl">품목코드</div>
         <div class="autocomplete-wrap">
@@ -513,42 +456,22 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
         </div>
       </div>
       <div style="display:flex;gap:6px;align-self:flex-end;">
-        <button class="btn-search" onclick="runTrade()">🔍 조회</button>
+        <button class="btn-search" onclick="renderResult()">🔍 조회</button>
         <button class="btn-reset" onclick="resetTrade()">↺</button>
       </div>
     </div>
+    <div style="padding:10px 24px 0;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:0;">
+      <div class="f-lbl" style="align-self:center;margin-right:10px;">결과유형</div>
+      <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:32px;margin-bottom:10px;">
+        <button id="rt-sum" onclick="setResultType('sum')" class="rt-btn rt-active">전체합계</button>
+        <button id="rt-sellerPivot" onclick="setResultType('sellerPivot')" class="rt-btn">매출처별</button>
+        <button id="rt-buyerPivot" onclick="setResultType('buyerPivot')" class="rt-btn">매입처별</button>
+        <button id="rt-item" onclick="setResultType('item')" class="rt-btn">품목별</button>
+        <button id="rt-trend" onclick="setResultType('trend')" class="rt-btn">추이그래프</button>
+      </div>
+    </div>
     <div class="result-area" id="trade-result">
-      <div class="empty-wrap"><div class="empty-icon">📊</div><div class="empty-title">조건을 선택하고 조회하세요</div><div class="empty-desc">브랜드·거래처·품목 조건 선택 후 조회하면<br>년/월별 매출·매입·마진 추이를 확인할 수 있습니다</div></div>
-    </div>
-  </div>
-  <!-- 품목상세 -->
-  <div id="sub-item" style="display:none;">
-    <div class="filter-bar">
-      <div class="f-group"><div class="f-lbl">메이커(브랜드)</div>
-        <div class="autocomplete-wrap">
-          <input class="f-input" id="f2-brand-input" placeholder="전체 (입력해서 검색)" style="width:150px;" oninput="acSearch('f2-brand-input','ac-f2-brand',_allBrands)" onblur="setTimeout(()=>hideAc('ac-f2-brand'),200)" autocomplete="off">
-          <div class="autocomplete-list" id="ac-f2-brand"></div>
-        </div>
-      </div>
-      <div class="f-group"><div class="f-lbl">매출처</div>
-        <button id="f-itemSeller-pick-btn" onclick="openPickModal('itemSeller')" style="height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-itemSeller-pick-cnt">전체</span></button>
-      </div>
-      <div class="f-group"><div class="f-lbl">매입처</div>
-        <button id="f-itemBuyer-pick-btn" onclick="openPickModal('itemBuyer')" style="height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-itemBuyer-pick-cnt">전체</span></button>
-      </div>
-      <div class="f-group"><div class="f-lbl">품목코드</div>
-        <div class="autocomplete-wrap">
-          <input class="f-input" id="f2-pcode" placeholder="전체 (입력해서 검색)" style="width:150px;" oninput="onPcode2Input()" onblur="setTimeout(()=>hideAc('ac-f2-pcode'),200)" autocomplete="off">
-          <div class="autocomplete-list" id="ac-f2-pcode"></div>
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;align-self:flex-end;">
-        <button class="btn-search" onclick="runItemDetail()">🔍 조회</button>
-        <button class="btn-reset" onclick="resetItemDetail()">↺</button>
-      </div>
-    </div>
-    <div class="result-area" id="item-result">
-      <div class="empty-wrap"><div class="empty-icon">📦</div><div class="empty-title">조건을 선택하고 조회하세요</div><div class="empty-desc">메이커·매출처·매입처·품목코드를 조합해서<br>조건에 맞는 품목별 매입·매출·마진 내역을 확인할 수 있습니다</div></div>
+      <div class="empty-wrap"><div class="empty-icon">📊</div><div class="empty-title">조건을 선택하고 조회하세요</div><div class="empty-desc">메이커·매출처·매입처·품목 조건을 선택하고<br>결과유형(전체합계/매출처별/매입처별/품목별/추이그래프)을 골라 조회하세요</div></div>
     </div>
   </div>
   <!-- 단가·마진 -->
@@ -648,7 +571,7 @@ let _priceFrom='',_priceTo='';
 let _fullLoaded=false;
 let LG_M=['GRUNDFOS','MEC-CON','Techshine','Microchip','SKYWORTH','경전산업','CUMSUMI'];
 let allSellers=[],allBuyers=[],pickTarget='';
-let _pickState={seller:[],buyer:[],itemSeller:[],itemBuyer:[]};
+let _pickState={seller:[],buyer:[]};
 let tradeUnit='amt',tradePeriodUnit='year';
 
 // ── 법인 판별 ──
@@ -775,7 +698,7 @@ async function doFullLoad(){
     rawS=_rawSAll.filter(r=>inPer(r,from,to));
     loaded=true;_fullLoaded=true;
     document.getElementById('ld-status').textContent='✅ 완료!';
-    info.textContent=`✅ 전체 로드 완료 · 매입 ${_rawPAll.length.toLocaleString()}건 / 매출 ${_rawSAll.length.toLocaleString()}건`;
+    info.textContent=`✅ 전체 로드 완료 · 현재기간(${from.slice(0,4)}.${from.slice(4)}~${to.slice(0,4)}.${to.slice(4)}) 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건 (DB전체: 매입${_rawPAll.length.toLocaleString()}·매출${_rawSAll.length.toLocaleString()})`;
     info.style.color='#059669';
     setModeBar(true);setPricePeriodInit();fillDrops();updateAll();
   }catch(e){info.textContent='로드 실패: '+e.message;console.error(e);}
@@ -842,15 +765,13 @@ function showTab(id,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   el.classList.add('active');
-  if(id==='trend'&&loaded) runTrend();
 }
 function showSubTab(id){
   document.getElementById('sub-trade').style.display=id==='trade'?'block':'none';
-  document.getElementById('sub-item').style.display=id==='item'?'block':'none';
   document.getElementById('sub-price').style.display=id==='price'?'block':'none';
-  const ts=document.getElementById('stab-trade');const is=document.getElementById('stab-item');const ps=document.getElementById('stab-price');
-  [ts,is,ps].forEach(el=>{el.style.color='var(--muted)';el.style.borderBottomColor='transparent';});
-  const active=id==='trade'?ts:id==='item'?is:ps;
+  const ts=document.getElementById('stab-trade');const ps=document.getElementById('stab-price');
+  [ts,ps].forEach(el=>{el.style.color='var(--muted)';el.style.borderBottomColor='transparent';});
+  const active=id==='trade'?ts:ps;
   active.style.color='var(--accent)';active.style.borderBottomColor='var(--accent)';
 }
 function setQ(type,el){
@@ -885,7 +806,6 @@ function fillDrops(){
   _allMkpn=[...new Set([...rawP.map(r=>r['메이커P/N']),...rawS.map(r=>r['메이커P/N'])].filter(Boolean))].sort();
   _allErpCodes=[...new Set([...rawP.map(r=>r['품목코드']),...rawS.map(r=>r['품목코드'])].filter(Boolean))].sort();
   _allDescs=[...new Set([...rawP.map(r=>r['품명 및 규격']),...rawS.map(r=>r['품명 및 규격'])].filter(Boolean))].sort();
-  ['f-brand','trend-brand'].forEach(id=>fillSel(id,br));
   fillSel('pf-buyer',allBuyers);fillSel('pf-seller',allSellers);
 }
 function fillSel(id,items){const s=document.getElementById(id);if(!s)return;s.innerHTML='<option value="">전체</option>';items.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;s.appendChild(o);});}
@@ -895,8 +815,8 @@ function updateAll(){
   const {from,to}=getFT();
   const fS=rawS.filter(r=>inPer(r,from,to));
   const fP=rawP.filter(r=>inPer(r,from,to));
-  updKPI(fS,fP);updCorpCards(fS,fP);updYearlyChart();
-  updMonthlyLine();updCorpDonut(fS);updRanks(fS,fP);
+  updKPI(fS,fP);updYearlyChart();
+  updMonthlyLine();updYearSummary();updRanks(fS,fP);
   updConcentration(fS);updSplit(fS);updAlerts(fS,fP);
   updCorpDetail(fS,fP);
 }
@@ -946,30 +866,32 @@ function updKPI(fS,fP){
 }
 
 // ── 법인별 성과 카드 ──
-function updCorpCards(fS,fP){
-  const corps={GSMEIN:{s:0},SMECN:{s:0},SMEGLOBAL:{s:0},'국내':{s:0}};
-  fS.forEach(r=>{const c=getCorp(r);if(corps[c])corps[c].s+=Number(r['공급가액'])||0;});
-  const {from,to}=getFT();
-  const prevFrom=shiftYear(from,-1),prevTo=shiftYear(to,-1);
-  const pyS=_fullLoaded?_rawSAll.filter(r=>inPer(r,prevFrom,prevTo)):[];
-  const prevCorps={GSMEIN:{s:0},SMECN:{s:0},SMEGLOBAL:{s:0},'국내':{s:0}};
-  pyS.forEach(r=>{const c=getCorp(r);if(prevCorps[c])prevCorps[c].s+=Number(r['공급가액'])||0;});
-  const totalS=Object.values(corps).reduce((a,c)=>a+c.s,0);
-  const idMap={GSMEIN:'gsmein',SMECN:'smecn',SMEGLOBAL:'smeglobal','국내':'domestic'};
-  Object.entries(corps).forEach(([name,d])=>{
-    const id=idMap[name];const pct=totalS>0?(d.s/totalS*100):0;
-    const prev=prevCorps[name]?.s||0;const yoy=prev>0?((d.s-prev)/prev*100):null;
-    document.getElementById(`corp-${id}-sales`).textContent=fmt(d.s);
-    const mgEl=document.getElementById(`corp-${id}-margin`);
-    mgEl.textContent='매출 '+fmt(d.s);
-    const yoyEl=document.getElementById(`corp-${id}-yoy`);
-    if(yoy!==null&&_fullLoaded){
-      const up=yoy>=0;
-      yoyEl.textContent=`전년비 ${up?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%`;
-      yoyEl.style.color=up?'var(--accent)':'var(--accent3)';
-    } else {yoyEl.textContent='전년비 —';yoyEl.style.color='var(--muted)';}
-    document.getElementById(`corp-${id}-bar`).style.width=Math.max(2,pct)+'%';
-  });
+// ── SME 전체 올해 매출현황 (LG사급/직거래 구분) ──
+function updYearSummary(){
+  const now=new Date();const curYear=String(now.getFullYear());
+  const src=_fullLoaded?_rawSAll:rawS;
+  const norm=y=>{const s=String(y||'').replace('년','').trim();return s.length===2?'20'+s:s;};
+  const yRows=src.filter(r=>norm(r['년'])===curYear);
+  const total=yRows.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
+  let lgAmt=0,dtAmt=0;
+  yRows.forEach(r=>{if(cls(r)==='LG사급')lgAmt+=Number(r['공급가액'])||0;else dtAmt+=Number(r['공급가액'])||0;});
+  const lgPct=total>0?(lgAmt/total*100):0,dtPct=total>0?(dtAmt/total*100):0;
+  const el=document.getElementById('year-summary');
+  if(!el)return;
+  if(!total){el.innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">'+curYear+'년 데이터 없음'+(_fullLoaded?'':' (전체 데이터 로드 후 정확한 값 표시)')+'</div>';return;}
+  el.innerHTML=`<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+    <div style="min-width:140px;"><div style="font-size:11px;color:var(--muted);">${curYear}년 누적 매출</div><div style="font-size:22px;font-weight:900;color:var(--accent);">${fmt(total)}</div><div style="font-size:10px;color:var(--muted);">${yRows.length.toLocaleString()}건</div></div>
+    <div style="flex:1;min-width:220px;">
+      <div style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:6px;">
+        <div style="width:${Math.max(lgPct,2)}%;background:var(--accent2);"></div>
+        <div style="width:${Math.max(dtPct,2)}%;background:var(--amber);"></div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;">
+        <span><span style="display:inline-block;width:9px;height:9px;background:var(--accent2);border-radius:2px;margin-right:4px;"></span>LG사급 <strong>${fmt(lgAmt)}</strong> (${lgPct.toFixed(1)}%)</span>
+        <span><span style="display:inline-block;width:9px;height:9px;background:var(--amber);border-radius:2px;margin-right:4px;"></span>직거래 <strong>${fmt(dtAmt)}</strong> (${dtPct.toFixed(1)}%)</span>
+      </div>
+    </div>
+  </div>`;
 }
 
 // ── 연도별 추이 차트 (전체폭) ──
@@ -1095,23 +1017,6 @@ function updMonthlyLine(){
 }
 
 // ── 법인별 도넛 ──
-function updCorpDonut(fS){
-  const c={};fS.forEach(r=>{const corp=getCorp(r);c[corp]=(c[corp]||0)+(Number(r['공급가액'])||0);});
-  const total=Object.values(c).reduce((a,b)=>a+b,0);
-  if(!total){document.getElementById('corp-donut').innerHTML='<div style="color:var(--muted);font-size:11px;">데이터 없음</div>';return;}
-  const colors={GSMEIN:'#c8001e',SMECN:'#1a56db',SMEGLOBAL:'#1e7e4a','국내':'#b46400'};
-  const items=Object.entries(c).sort((a,b)=>b[1]-a[1]);
-  const r=34,cx=46,cy=46,sw=15,circ=2*Math.PI*r;
-  let offset=0,circles='',leg='';
-  items.forEach(([nm,v])=>{
-    const pct=v/total,dash=pct*circ,color=colors[nm]||'#999';
-    circles+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})" opacity="0.85"/>`;
-    offset+=dash;
-    leg+=`<div style="display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:6px;"><div style="width:10px;height:10px;border-radius:50%;background:${color};opacity:0.85;flex-shrink:0;"></div><span>${nm}</span><span style="margin-left:auto;font-weight:700;color:${color};">${Math.round(pct*100)}%</span><span style="font-size:10px;color:var(--muted);min-width:36px;text-align:right;">${fmt(v)}</span></div>`;
-  });
-  document.getElementById('corp-donut').innerHTML=`<div style="display:flex;align-items:center;gap:16px;"><svg width="92" height="92" viewBox="0 0 92 92" style="flex-shrink:0;"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#e8eef6" stroke-width="${sw}"/>${circles}</svg><div style="flex:1;">${leg}</div></div>`;
-}
-
 // ── 순위 ──
 function updRanks(fS,fP){
   const sc={},pc={};
@@ -1220,18 +1125,6 @@ function updCorpDetail(fS,fP){
 }
 
 // ── TAB3: YoY 꺾은선 ──
-function runTrend(){
-  if(!loaded) return;
-  const type=document.getElementById('trend-type').value;
-  const brand=document.getElementById('trend-brand').value;
-  const {from,to}=getFT();
-  let fS=rawS.filter(r=>inPer(r,from,to));
-  let fP=rawP.filter(r=>inPer(r,from,to));
-  if(type==='lg'){fS=fS.filter(r=>cls(r)==='LG사급');}
-  else if(type==='dt'){fS=fS.filter(r=>cls(r)==='직거래');}
-  if(brand){fS=fS.filter(r=>r['브랜드명']===brand);fP=fP.filter(r=>r['브랜드명']===brand);}
-  updYoYChart(fS,fP);updBrandMg(fS,fP,'brand-mg');
-}
 function updYoYChart(fS,fP){
   const now=new Date();const curYear=String(now.getFullYear()).slice(2);const prevYear=String(now.getFullYear()-1).slice(2);
   const months=['01','02','03','04','05','06','07','08','09','10','11','12'];
@@ -1284,32 +1177,39 @@ function onPcodeInput(){
   list.innerHTML=matches.map(m=>`<div class="autocomplete-item" onmousedown="acSelect('f-pcode','ac-f-pcode','${m.replace(/'/g,"\\'")}')">${m}</div>`).join('');
   list.classList.add('show');
 }
-function onPcode2Input(){
-  const val=document.getElementById('f2-pcode').value.trim().toLowerCase();
-  const list=document.getElementById('ac-f2-pcode');
-  const brand=document.getElementById('f2-brand-input').value.trim();
-  const pool=brand?getMakerItemCodes(brand):_allErpCodes;
-  if(!val){list.classList.remove('show');list.innerHTML='';return;}
-  const matches=pool.filter(d=>d.toLowerCase().includes(val)).slice(0,30);
-  if(!matches.length){list.classList.remove('show');return;}
-  list.innerHTML=matches.map(m=>`<div class="autocomplete-item" onmousedown="acSelect('f2-pcode','ac-f2-pcode','${m.replace(/'/g,"\\'")}')">${m}</div>`).join('');
-  list.classList.add('show');
+
+let resultType='sum';
+function setResultType(t){
+  resultType=t;
+  ['sum','sellerPivot','buyerPivot','item','trend'].forEach(k=>{
+    const el=document.getElementById('rt-'+k);
+    if(el) el.classList.toggle('rt-active',k===t);
+  });
+  if(loaded) renderResult();
 }
-function runTrade(){
-  if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
+function getTradeCtx(){
   const {from,to}=getFT();
   const type=document.getElementById('f-type').value;
   const brand=document.getElementById('f-brand-input').value.trim();
   const pcode=document.getElementById('f-pcode').value.trim();
-  const sellerMode=document.getElementById('f-seller-mode').value,buyerMode=document.getElementById('f-buyer-mode').value;
+  const sellers=_pickState.seller,buyers=_pickState.buyer;
   const isAmt=tradeUnit==='amt',isYear=tradePeriodUnit==='year';
-  let fS=rawS.filter(r=>inPer(r,from,to)&&(!type||cls(r)===type)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode)));
-  let fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode)));
-  if(sellerMode==='pick'&&_pickState.seller.length>0)fS=fS.filter(r=>_pickState.seller.includes(r['판매처명']));
-  if(buyerMode==='pick'&&_pickState.buyer.length>0)fP=fP.filter(r=>_pickState.buyer.includes(r['구매처명']));
-  if(!fS.length&&!fP.length){document.getElementById('trade-result').innerHTML='<div class="empty-wrap"><div class="empty-icon">🔍</div><div class="empty-title">조회 결과 없음</div></div>';return;}
-  const isPivotSeller=(sellerMode==='pivot'||sellerMode==='pick');const isPivotBuyer=(buyerMode==='pivot'||buyerMode==='pick');
-  if(isPivotSeller||isPivotBuyer){renderTradePivot(fS,fP,from,to,isAmt,isYear,isPivotSeller,isPivotBuyer);return;}
+  let fS=rawS.filter(r=>inPer(r,from,to)&&(!type||cls(r)===type)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!sellers.length||sellers.includes(r['판매처명'])));
+  let fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명'])));
+  return {fS,fP,from,to,type,brand,pcode,sellers,buyers,isAmt,isYear};
+}
+function renderResult(){
+  if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
+  const ctx=getTradeCtx();
+  if(!ctx.fS.length&&!ctx.fP.length){document.getElementById('trade-result').innerHTML='<div class="empty-wrap"><div class="empty-icon">🔍</div><div class="empty-title">조회 결과 없음</div></div>';return;}
+  if(resultType==='sum') renderSumTable(ctx);
+  else if(resultType==='sellerPivot') renderPivotTable(ctx,true,false);
+  else if(resultType==='buyerPivot') renderPivotTable(ctx,false,true);
+  else if(resultType==='item') renderItemDetailTable(ctx);
+  else if(resultType==='trend') renderTrendPanel(ctx);
+}
+function renderSumTable(ctx){
+  const {fS,fP,from,to,isAmt,isYear}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
   const sMap={},pMap={};
   fS.forEach(r=>{const k=getPKey(r);if(!sMap[k])sMap[k]={amt:0,qty:0};sMap[k].amt+=Number(r['공급가액'])||0;sMap[k].qty+=Number(r['수량'])||0;});
@@ -1347,42 +1247,35 @@ function runTrade(){
   document.getElementById('trade-result').innerHTML=html;
   initColResize('tvSumTable','hq_tv_sum_cols');
 }
-function renderTradePivot(fS,fP,from,to,isAmt,isYear,isPivotSeller,isPivotBuyer){
+function renderPivotTable(ctx,isPivotSeller,isPivotBuyer){
+  const {fS,fP}=ctx;
   const sByC={};fS.forEach(r=>{const c=r['판매처명']||'-';if(!sByC[c])sByC[c]={amt:0,qty:0};sByC[c].amt+=Number(r['공급가액'])||0;sByC[c].qty+=Number(r['수량'])||0;});
   const pByC={};fP.forEach(r=>{const c=r['구매처명']||'-';if(!pByC[c])pByC[c]={amt:0,qty:0};pByC[c].amt+=Number(r['공급가액'])||0;pByC[c].qty+=Number(r['수량'])||0;});
   const sellers=Object.entries(sByC).sort((a,b)=>b[1].amt-a[1].amt),buyers=Object.entries(pByC).sort((a,b)=>b[1].amt-a[1].amt);
   const totSAmt=sellers.reduce((a,b)=>a+b[1].amt,0),totPAmt=buyers.reduce((a,b)=>a+b[1].amt,0);
   let html='<div style="display:flex;gap:16px;flex-wrap:wrap;">';
   const mkTbl=(title,items,totAmt,color)=>{
-    if(!items.length) return '';
+    if(!items.length) return '<div style="flex:1;min-width:300px;color:var(--muted);font-size:12px;padding:12px;">데이터 없음</div>';
     let t='<div style="flex:1;min-width:300px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+title+'</div><div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="padding:9px 12px;background:#e8edf5;text-align:left;font-size:11px;color:#3a4a6a;">거래처</th><th style="padding:9px 12px;background:#e8edf5;text-align:right;font-size:11px;color:#3a4a6a;">금액</th><th style="padding:9px 12px;background:#e8edf5;text-align:right;font-size:11px;color:#3a4a6a;">비중</th></tr></thead><tbody>';
     items.forEach(([nm,d],i)=>{const pct=totAmt>0?(d.amt/totAmt*100):0;t+='<tr style="background:'+(i%2===0?'#fff':'#f8fafc')+';border-bottom:1px solid #f0f4f9;"><td style="padding:8px 12px;font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+nm+'">'+nm+'</td><td style="padding:8px 12px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;font-weight:700;color:'+color+';">'+fmtFull(d.amt)+'</td><td style="padding:8px 12px;text-align:right;font-size:11px;color:var(--muted);">'+pct.toFixed(1)+'%</td></tr>';});
     t+='<tr style="border-top:2px solid #c0cce0;background:#f8f9fb;"><td style="padding:9px 12px;font-weight:700;color:'+color+';">합계</td><td style="padding:9px 12px;text-align:right;font-family:Share Tech Mono,monospace;font-size:12px;font-weight:800;color:'+color+';">'+fmtFull(totAmt)+'</td><td style="padding:9px 12px;text-align:right;font-size:11px;font-weight:700;color:'+color+';">100%</td></tr></tbody></table></div></div>';
     return t;
   };
-  if(isPivotSeller)html+=mkTbl('매출처별 합계',sellers,totSAmt,'#c8001e');
-  if(isPivotBuyer)html+=mkTbl('매입처별 합계',buyers,totPAmt,'#7a8baa');
+  if(isPivotSeller)html+=mkTbl('매출처별 합계 ('+sellers.length+'개사)',sellers,totSAmt,'#c8001e');
+  if(isPivotBuyer)html+=mkTbl('매입처별 합계 ('+buyers.length+'개사)',buyers,totPAmt,'#7a8baa');
   html+='</div>';
   document.getElementById('trade-result').innerHTML=html;
 }
-// ── 메이커 품번별 상세 (독립 컬럼 리사이즈 + 헤더정렬 + 틀고정) ──
-let _tvRows=[],_tvSort={key:null,asc:false},_tvTarget='trade-result',_tvMeta={};
-function runItemDetail(){
-  if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
-  const {from,to}=getFT();
-  const brand=document.getElementById('f2-brand-input').value.trim();
-  const pcode=document.getElementById('f2-pcode').value.trim();
-  const sellers=_pickState.itemSeller,buyers=_pickState.itemBuyer;
-  let fS=rawS.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!sellers.length||sellers.includes(r['판매처명'])));
-  let fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명'])));
-  if(!fS.length&&!fP.length){document.getElementById('item-result').innerHTML='<div class="empty-wrap"><div class="empty-icon">🔍</div><div class="empty-title">조회 결과 없음</div></div>';return;}
+// ── 품목별 상세 (독립 컬럼 리사이즈 + 헤더정렬 + 틀고정) ──
+let _tvRows=[],_tvSort={key:null,asc:false},_tvMeta={};
+function renderItemDetailTable(ctx){
+  const {fS,fP,from,to,brand,sellers,buyers}=ctx;
   const map={};
   fP.forEach(r=>{const k=r['품목코드']||'';if(!map[k])map[k]={code:k,desc:r['품명 및 규격']||'',mkpn:r['메이커P/N']||'',buyQty:0,buyAmt:0,sellQty:0,sellAmt:0};map[k].buyQty+=Number(r['수량'])||0;map[k].buyAmt+=Number(r['공급가액'])||0;});
   fS.forEach(r=>{const k=r['품목코드']||'';if(!map[k])map[k]={code:k,desc:r['품명 및 규격']||'',mkpn:r['메이커P/N']||'',buyQty:0,buyAmt:0,sellQty:0,sellAmt:0};if(!map[k].desc)map[k].desc=r['품명 및 규격']||'';if(!map[k].mkpn)map[k].mkpn=r['메이커P/N']||'';map[k].sellQty+=Number(r['수량'])||0;map[k].sellAmt+=Number(r['공급가액'])||0;});
   _tvRows=Object.values(map).map(m=>({...m,margin:m.sellAmt-m.buyAmt,marginRate:m.sellAmt>0?((m.sellAmt-m.buyAmt)/m.sellAmt*100):null}));
   _tvSort={key:'sellAmt',asc:false};
-  _tvTarget='item-result';
-  _tvMeta={from,to,brand,sellers:[...sellers],buyers:[...buyers],pcode};
+  _tvMeta={from,to,brand,sellers:[...sellers],buyers:[...buyers]};
   renderTvTable();
 }
 function sortTv(key){
@@ -1440,15 +1333,24 @@ function renderTvTable(){
     <button onclick='exportTradeExcel(${JSON.stringify(excelData)})' style="margin-left:auto;padding:5px 14px;border-radius:6px;border:1.5px solid var(--accent3);background:#fff;color:var(--accent3);font-size:11px;font-weight:700;cursor:pointer;">⬇ 엑셀 다운로드</button>
   </div>
   <div class="tv-wrap"><table class="tv-table" id="tvTable"><thead><tr>${thHtml}</tr></thead><tbody>${trHtml}</tbody></table></div>`;
-  document.getElementById(_tvTarget).innerHTML=html;
+  document.getElementById('trade-result').innerHTML=html;
   initColResize('tvTable','hq_tv_cols');
 }
-function resetItemDetail(){
-  document.getElementById('f2-brand-input').value='';
-  document.getElementById('f2-pcode').value='';
-  _pickState.itemSeller=[];_pickState.itemBuyer=[];
-  updatePickCnt('itemSeller');updatePickCnt('itemBuyer');
-  document.getElementById('item-result').innerHTML='<div class="empty-wrap"><div class="empty-icon">📦</div><div class="empty-title">조건을 선택하고 조회하세요</div><div class="empty-desc">메이커·매출처·매입처·품목코드를 조합해서<br>조건에 맞는 품목별 매입·매출·마진 내역을 확인할 수 있습니다</div></div>';
+// ── 추이그래프 ──
+function renderTrendPanel(ctx){
+  const html=`<div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="bx">
+      <div class="bx-header"><span class="bx-title">월별 매출·매입 추이 (전년 동기 비교)</span><span class="bx-sub">실선=당년 / 점선=전년</span></div>
+      <div style="padding:12px 16px;"><div id="yoy-chart" style="min-height:220px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">계산 중...</div></div>
+    </div>
+    <div class="bx">
+      <div class="bx-header"><span class="bx-title">브랜드별 마진구조</span><span class="bx-sub">현재 필터 조건 내 마진율 TOP12</span></div>
+      <div class="bx-body" id="brand-mg"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">계산 중...</div></div>
+    </div>
+  </div>`;
+  document.getElementById('trade-result').innerHTML=html;
+  updYoYChart(ctx.fS,ctx.fP);
+  updBrandMg(ctx.fS,ctx.fP,'brand-mg');
 }
 function initColResize(tableId,storageKey){
   const table=document.getElementById(tableId);
@@ -1480,8 +1382,6 @@ function resetTrade(){
   document.getElementById('f-type').value='';
   const fbi=document.getElementById('f-brand-input');if(fbi)fbi.value='';
   document.getElementById('f-pcode').value='';
-  document.getElementById('f-seller-mode').value='all';document.getElementById('f-buyer-mode').value='all';
-  document.getElementById('f-seller-pick-btn').style.display='none';document.getElementById('f-buyer-pick-btn').style.display='none';
   _pickState.seller=[];_pickState.buyer=[];updatePickCnt('seller');updatePickCnt('buyer');
 }
 
@@ -1544,23 +1444,21 @@ function acSelect(inputId,listId,val){document.getElementById(inputId).value=val
 function hideAc(listId){const el=document.getElementById(listId);if(el)el.classList.remove('show');}
 
 // ── 팝업 ──
-function onSellerModeChange(){const mode=document.getElementById('f-seller-mode').value;document.getElementById('f-seller-pick-btn').style.display=mode==='pick'?'flex':'none';if(mode!=='pick'){_pickState.seller=[];updatePickCnt('seller');}}
-function onBuyerModeChange(){const mode=document.getElementById('f-buyer-mode').value;document.getElementById('f-buyer-pick-btn').style.display=mode==='pick'?'flex':'none';if(mode!=='pick'){_pickState.buyer=[];updatePickCnt('buyer');}}
 function pickBtnLabel(arr){if(!arr||!arr.length)return '전체';if(arr.length===1)return arr[0];return arr[0]+' 외 '+(arr.length-1)+'개';}
 function updatePickCnt(t){const el=document.getElementById('f-'+t+'-pick-cnt');if(!el)return;el.textContent=pickBtnLabel(_pickState[t]);}
 function openPickModal(target){
   pickTarget=target;
-  const isSellerSide=(target==='seller'||target==='itemSeller');
+  const isSellerSide=(target==='seller');
   const list=isSellerSide?allSellers:allBuyers;
   document.getElementById('pickModalTitle').textContent=isSellerSide?'매출처 선택':'매입처 선택';
   document.getElementById('pickSearch').value='';document.getElementById('pickModal').style.display='flex';renderPickList(list);
 }
 function closePickModal(){document.getElementById('pickModal').style.display='none';}
-function filterPickList(){const isSellerSide=(pickTarget==='seller'||pickTarget==='itemSeller');const q=document.getElementById('pickSearch').value.toLowerCase();const list=(isSellerSide?allSellers:allBuyers).filter(v=>v.toLowerCase().includes(q));renderPickList(list);}
+function filterPickList(){const isSellerSide=(pickTarget==='seller');const q=document.getElementById('pickSearch').value.toLowerCase();const list=(isSellerSide?allSellers:allBuyers).filter(v=>v.toLowerCase().includes(q));renderPickList(list);}
 function renderPickList(list){const picked=_pickState[pickTarget]||[];document.getElementById('pickList').innerHTML=list.map(v=>'<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f0f4f9;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+v+'" '+(picked.includes(v)?'checked':'')+' onchange="onPickCheck(this)" style="width:16px;height:16px;accent-color:var(--accent2);cursor:pointer;"><span>'+v+'</span></label>').join('');updPickSelCnt();}
 function onPickCheck(el){const picked=_pickState[pickTarget];if(el.checked){if(picked.length>=10){el.checked=false;alert('최대 10개까지 선택 가능합니다.');return;}picked.push(el.value);}else{const idx=picked.indexOf(el.value);if(idx>-1)picked.splice(idx,1);}updPickSelCnt();}
 function updPickSelCnt(){document.getElementById('pickSelCnt').textContent=(_pickState[pickTarget]||[]).length;}
-function confirmPick(){updatePickCnt(pickTarget);closePickModal();if(pickTarget==='itemSeller'||pickTarget==='itemBuyer')runItemDetail();}
+function confirmPick(){updatePickCnt(pickTarget);closePickModal();if(loaded)renderResult();}
 // ── 초기화 ──
 (function(){document.getElementById('selectOverlay').classList.remove('hide');})();
 </script>
