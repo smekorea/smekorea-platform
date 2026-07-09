@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 /* 거래단가분석 — 품번별 상세 테이블 (독립 컬럼 리사이즈 + 틀고정 + 정렬) */
 .tv-wrap{overflow:auto;max-height:560px;border:1px solid var(--border);border-radius:10px;}
 .tv-table{border-collapse:separate;border-spacing:0;table-layout:fixed;white-space:nowrap;font-size:12px;}
-.tv-table th{position:relative;user-select:none;padding:8px 10px;background:#e8edf5;text-align:right;font-size:11px;color:#28344a;font-weight:700;border-bottom:2px solid #c0cce0;position:sticky;top:0;z-index:3;cursor:pointer;}
+.tv-table th{position:sticky;user-select:none;padding:8px 10px;background:#e8edf5;text-align:right;font-size:11px;color:#28344a;font-weight:700;border-bottom:2px solid #c0cce0;top:0;z-index:3;cursor:pointer;}
 .tv-table th.left{text-align:left;}
 .tv-table th:first-child{position:sticky;left:0;top:0;z-index:4;box-shadow:1px 0 0 0 #c0cce0;}
 .tv-table td{padding:7px 10px;border-right:1px solid #e8edf5;color:#111827;overflow:hidden;text-overflow:ellipsis;font-size:12px;}
@@ -167,7 +167,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .tv-table tbody tr:nth-child(even){background:#f8fafc;}
 .tv-table tbody tr:nth-child(even) td:first-child{background:#f8fafc;}
 .tv-table tbody tr:nth-child(odd) td:first-child{background:#fff;}
-.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:10;}
 .col-resizer:hover{background:rgba(26,86,219,0.3);}
 .sort-icon{margin-left:3px;font-size:9px;color:var(--accent2);}
 .period-badge{font-size:10px;color:var(--accent2);background:#eef3fc;padding:3px 9px;border-radius:10px;font-weight:700;white-space:nowrap;font-family:'Share Tech Mono',monospace;}
@@ -1370,7 +1370,10 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer){
   tableIds.forEach(id=>initColResize(id,'hq_'+id));
 }
 // ── 품목별 상세 (독립 컬럼 리사이즈 + 헤더정렬 + 틀고정) ──
-function renderItemDetailTable(ctx){
+let _itemSide='sell',_lastItemCtx=null;
+function setItemSide(side){_itemSide=side;if(_lastItemCtx)renderItemDetailTable(_lastItemCtx,true);}
+function renderItemDetailTable(ctx,skipCache){
+  if(!skipCache)_lastItemCtx=ctx;
   const {fS,fP,from,to,brand,sellers,buyers,isAmt,isYear}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
   const meta={};
@@ -1397,49 +1400,64 @@ function renderItemDetailTable(ctx){
       return '<tr><td class="left" title="'+k+'">'+k+'</td><td class="left" style="font-family:\'Share Tech Mono\',monospace;">'+(m.mkpn||'—')+'</td><td class="left" title="'+(m.desc||'')+'">'+(m.desc||'—')+'</td>'+cells+'<td class="num" style="font-weight:800;color:'+color+';background:#f8f9fb;">'+fmtFull(itemTotal(k))+'</td></tr>';
     }).join('');
     const totRowCells=allKeys.map(pk=>{const s=codes.reduce((a,k)=>a+(byItem[k][pk]?.amt||0),0);return '<td class="num" style="font-weight:800;">'+fmtFull(s)+'</td>';}).join('');
-    const html='<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:'+color+';">'+label+' ('+codes.length.toLocaleString()+'개 품목)</div>'
-      +'<div class="tv-wrap" style="max-height:380px;"><table class="tv-table" id="tvItem_'+label+'"><thead><tr><th class="left">품목코드</th><th class="left">메이커P/N</th><th class="left">품명및규격</th>'+thCols+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th></tr></thead><tbody>'
+    const html='<div class="tv-wrap" style="max-height:560px;"><table class="tv-table" id="tvItem_'+label+'"><thead><tr><th class="left">품목코드</th><th class="left">메이커P/N</th><th class="left">품명및규격</th>'+thCols+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th></tr></thead><tbody>'
       +rowsHtml
       +'<tr style="background:#f0f2f5;border-top:2px solid #c0cce0;"><td style="font-weight:800;" colspan="3">전체합계</td>'+totRowCells+'<td class="num" style="font-weight:800;">'+fmtFull(grandTotal)+'</td></tr>'
       +'</tbody></table></div>';
     const excel=[['품목코드','메이커P/N','품명및규격',...allKeys,'합계']];
     codes.forEach(k=>{const m=meta[k]||{};excel.push([k,m.mkpn||'',m.desc||'',...allKeys.map(pk=>byItem[k][pk]?.amt||0),itemTotal(k)]);});
-    return {html,excel,tableId:'tvItem_'+label};
+    return {html,excel,tableId:'tvItem_'+label,count:codes.length};
   }
-  let html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span><span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span><span>메이커 <strong style="color:var(--accent);">'+(brand||'전체')+'</strong></span><span>※ 각 표는 약 10줄까지 보이고 그 안에서 세로스크롤됩니다 (매입/매출 동시에 화면에 보이도록)</span></div>';
-  html+='<div style="display:flex;flex-direction:column;gap:20px;">';
-  const tableIds=[];
-  const rBuy=buildItemTable2(fP,'매입','#7a8baa');html+=rBuy.html;if(rBuy.tableId)tableIds.push(rBuy.tableId);
-  const rSell=buildItemTable2(fS,'매출','#c8001e');html+=rSell.html;if(rSell.tableId)tableIds.push(rSell.tableId);
-  html+='</div>';
+  const rBuy=buildItemTable2(fP,'매입','#7a8baa');
+  const rSell=buildItemTable2(fS,'매출','#c8001e');
+  const cur=_itemSide==='sell'?rSell:rBuy;
+  const label=_itemSide==='sell'?'매출':'매입';
+  let html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;">'
+    +'<span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span>'
+    +'<span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span>'
+    +'<span>메이커 <strong style="color:var(--accent);">'+(brand||'전체')+'</strong></span>'
+    +'<div style="display:flex;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;height:26px;margin-left:8px;">'
+    +'<button onclick="setItemSide(\'sell\')" style="padding:0 14px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:'+(_itemSide==='sell'?'#c8001e':'var(--surface)')+';color:'+(_itemSide==='sell'?'#fff':'var(--muted)')+';">매출</button>'
+    +'<button onclick="setItemSide(\'buy\')" style="padding:0 14px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:'+(_itemSide==='buy'?'#7a8baa':'var(--surface)')+';color:'+(_itemSide==='buy'?'#fff':'var(--muted)')+';">매입</button>'
+    +'</div>'
+    +(cur.count?'<button onclick="exportTradeExcel('+JSON.stringify(cur.excel)+')" style="margin-left:auto;padding:5px 14px;border-radius:6px;border:1.5px solid var(--accent3);background:#fff;color:var(--accent3);font-size:11px;font-weight:700;cursor:pointer;">⬇ 엑셀 다운로드</button>':'')
+    +'</div>';
+  html+='<div style="font-size:12px;font-weight:700;color:'+(_itemSide==='sell'?'#c8001e':'#7a8baa')+';margin-bottom:8px;">'+label+' 품목별 현황'+(cur.count?' ('+cur.count.toLocaleString()+'개 품목)':'')+'</div>';
+  html+=cur.html;
   document.getElementById('trade-result').innerHTML=html;
-  tableIds.forEach(id=>initColResize(id,'hq_'+id));
+  if(cur.tableId)initColResize(cur.tableId,'hq_'+cur.tableId);
 }
 // ── 추이그래프 ──
 function initColResize(tableId,storageKey){
   const table=document.getElementById(tableId);
   if(!table) return;
   const ths=table.querySelectorAll('thead th');
-  let saved={};
-  try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}');}catch(e){saved={};}
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');}catch(e){saved=null;}
   ths.forEach((th,i)=>{
-    const w=saved[i]||th.offsetWidth||120;
-    th.style.width=w+'px';
-    let resizer=th.querySelector('.col-resizer');
-    if(!resizer){resizer=document.createElement('div');resizer.className='col-resizer';th.appendChild(resizer);}
-    resizer.onmousedown=function(e){
-      e.stopPropagation();e.preventDefault();
-      const startX=e.pageX,startW=th.offsetWidth;
-      function onMove(e2){const newW=Math.max(50,startW+(e2.pageX-startX));th.style.width=newW+'px';}
-      function onUp(){
-        document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
-        const widths={};table.querySelectorAll('thead th').forEach((t,j)=>widths[j]=t.offsetWidth);
-        try{localStorage.setItem(storageKey,JSON.stringify(widths));}catch(e){}
-      }
-      document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-    };
+    const w=(saved&&saved[i])?saved[i]:(th.offsetWidth||120);
+    th.style.width=w+'px';th.style.minWidth=w+'px';
   });
-  table.style.tableLayout='fixed';
+  ths.forEach((th,i)=>{
+    if(th.querySelector('.col-resizer')) return;
+    const resizer=document.createElement('div');
+    resizer.className='col-resizer';
+    th.appendChild(resizer);
+    let startX=0,startW=0;
+    const onMove=(e)=>{const w=Math.max(40,startW+(e.clientX-startX));th.style.width=w+'px';th.style.minWidth=w+'px';};
+    const onUp=()=>{
+      const ws=Array.from(ths).map(t=>t.offsetWidth);
+      try{localStorage.setItem(storageKey,JSON.stringify(ws));}catch(e){}
+      window.removeEventListener('mousemove',onMove);
+      window.removeEventListener('mouseup',onUp);
+    };
+    resizer.addEventListener('mousedown',(e)=>{
+      e.preventDefault();e.stopPropagation();
+      startX=e.clientX;startW=th.offsetWidth;
+      window.addEventListener('mousemove',onMove);
+      window.addEventListener('mouseup',onUp);
+    });
+  });
 }
 function exportTradeExcel(data){const ws=XLSX.utils.aoa_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'거래분석');const d=new Date();XLSX.writeFile(wb,'SME_거래분석_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.xlsx');}
 function resetTrade(){
