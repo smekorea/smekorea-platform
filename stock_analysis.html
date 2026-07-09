@@ -120,12 +120,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:va
 .table-count b{color:var(--text);}
 .table-note{font-family:var(--mono);font-size:10px;color:var(--text-mute);line-height:1.7;}
 .period-label{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-bg);padding:3px 9px;border-radius:5px;letter-spacing:0.02em;}
-.tbl-scroll{overflow-x:auto;}
+.tbl-scroll{overflow:auto;max-height:65vh;}
 table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--bg);}
 th{padding:9px 10px;text-align:center;font-weight:700;font-size:11px;color:var(--text);letter-spacing:0.04em;border-bottom:2px solid var(--text-mute);white-space:nowrap;font-family:var(--mono);position:relative;user-select:none;overflow:hidden;text-overflow:ellipsis;}
 /* 틀고정(sticky header) 표준 — 메인 6개 테이블에만 적용 (드릴다운 내부 테이블 제외) */
-.sticky-thead th{position:sticky;top:0;z-index:5;background:var(--bg);}
+/* 헤더 배경을 진한 남색으로 확실히 구분 — 페이지/본문 배경(연회색·흰색)과 뒤섞이지 않게 */
+.sticky-thead th{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;border-bottom:none;}
+.sticky-thead th.sortable:hover{background:#1E293B;}
+.sticky-thead .sort-icon{color:#60A5FA;}
+.sticky-thead .col-resizer::after{background:rgba(255,255,255,.4);}
+.sticky-thead .col-resizer:hover::after{background:#fff;}
+.sticky-thead .col-resizer:hover{background:rgba(255,255,255,.15);}
 th.left{text-align:left;}
 td{padding:9px 10px;border-bottom:1px solid var(--bg);border-right:1px solid #e8edf5;vertical-align:middle;font-size:13px;color:#111827;}
 td:last-child{border-right:none;}
@@ -1530,30 +1536,9 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
   });
   const fmtA=v=>v>=1e8?(v/1e8).toFixed(1)+'억':v>=1e7?(v/1e7).toFixed(1)+'천만':Math.round(v/1e4).toLocaleString()+'만';
   const periodStr=`데이터 기간: ${months[0]} ~ ${months[months.length-1]}`;
-  // KPI 카드
-  let mkHtml='<div class="month-kpi-grid">';
-  months.forEach((m,i)=>{
-    const d=mData[m];
-    const pct=allTarget>0?d.total/allTarget*100:0;
-    const prev=i>0?mData[months[i-1]].total:null;
-    const delta=prev!==null?d.total-prev:null;
-    const deltaStr=delta===null?'':(delta>0?`+${fmtA(delta)}`:(delta<0?`-${fmtA(Math.abs(delta))}`:'보합'));
-    const deltaCls=delta===null?'eq':(delta>0?'up':(delta<0?'dn':'eq'));
-    const isLatest=i===months.length-1;
-    mkHtml+=`<div class="mkc${isLatest?' is-latest':''}">
-      ${isLatest?'<div class="mkc-badge">LATEST</div>':''}
-      <div class="mkc-month">${m}</div>
-      <div class="mkc-amt">${fmtA(d.total)}</div>
-      <div class="mkc-pct-row">
-        <div class="mkc-pct" style="color:${pctColor(pct)};">${Math.round(pct)}%</div>
-        <div class="mkc-delta ${deltaCls}" style="font-size:11px;">${deltaStr}</div>
-      </div>
-      <div class="mkc-bar-bg"><div class="mkc-bar-target" style="left:${ACH_TARGET_LEFT_PCT}%;"></div><div class="mkc-bar-fill" style="width:${achBarWidth(pct)}%;background:${barColor(pct)};"></div></div>
-      <div class="mkc-sub">목표 ${fmtA(allTarget)} 대비</div>
-    </div>`;
-  });
-  mkHtml+='</div>';
-  // 공통 SVG 막대그래프 빌더 (재고금액/달성률 3분할 차트 공용)
+  const achColor=pct=>pct>130?'#DC2626':pct>100?'#D97706':pct>=80?'#059669':'#0066FF';
+
+  // 공통 SVG 막대그래프 빌더 (달성률 3분할 차트용)
   function buildTrendBarChart(vals, targetVal, fillFn, labelFn, chartH){
     const bW=64,bGap=18,padL=44,padT=16,padB=30;
     const svgW=padL+(bW+bGap)*months.length+16;
@@ -1570,28 +1555,53 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
     if(targetVal>0&&targetVal<=maxV){
       const targetY=padT+chartH-(targetVal/maxV)*chartH;
       bars+=`<line x1="${padL}" y1="${targetY}" x2="${padL+(bW+bGap)*months.length}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
-      bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표</text>`;
+      bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표 ${fmtA(targetVal)}</text>`;
     }
     return `<svg viewBox="0 0 ${svgW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
   }
-  const achColor=pct=>pct>130?'#DC2626':pct>100?'#D97706':pct>=80?'#059669':'#0066FF';
 
-  // 월별 재고금액 (총액) 차트
+  // 월별 재고금액 차트 — 막대 위에 금액 + 달성률% + 전월대비 증감을 함께 표시 (구 KPI카드 내용 통합)
+  function buildMainAmountChart(vals, targetVal){
+    const bW=64,bGap=18,padL=48,padT=54,padB=30,chartH=110;
+    const svgW=padL+(bW+bGap)*months.length+16;
+    const maxV=Math.max(...vals,targetVal||0,1);
+    let bars='';
+    months.forEach((m,i)=>{
+      const v=vals[i];const h=maxV>0?(v/maxV)*chartH:0;
+      const x=padL+i*(bW+bGap);const y=padT+chartH-h;
+      const isLatest=i===months.length-1;
+      const pct=targetVal>0?v/targetVal*100:0;
+      const prev=i>0?vals[i-1]:null;
+      const delta=prev!==null?v-prev:null;
+      const deltaStr=delta===null?'':(delta>0?` ▲${fmtA(delta)}`:(delta<0?` ▼${fmtA(Math.abs(delta))}`:' 보합'));
+      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${isLatest?'#0066FF':'#94A3B8'}" rx="3" opacity="${isLatest?1:.75}"/>`;
+      if(isLatest){
+        bars+=`<rect x="${x+bW/2-26}" y="${y-50}" width="52" height="14" rx="7" fill="#0066FF"/>`;
+        bars+=`<text x="${x+bW/2}" y="${y-40}" text-anchor="middle" font-size="8" font-family="IBM Plex Mono" fill="#fff" font-weight="700">LATEST</text>`;
+      }
+      bars+=`<text x="${x+bW/2}" y="${y-22}" text-anchor="middle" font-size="12" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${fmtA(v)}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${y-7}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="${achColor(pct)}" font-weight="700">${Math.round(pct)}%${deltaStr}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m}</text>`;
+    });
+    if(targetVal>0&&targetVal<=maxV){
+      const targetY=padT+chartH-(targetVal/maxV)*chartH;
+      bars+=`<line x1="${padL}" y1="${targetY}" x2="${padL+(bW+bGap)*months.length}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
+      bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표 ${fmtA(targetVal)}</text>`;
+    }
+    return `<svg viewBox="0 0 ${svgW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
+  }
+
   const totalVals=months.map(m=>mData[m].total);
-  const barSvg=buildTrendBarChart(totalVals,allTarget,(v,isLatest)=>isLatest?'#0066FF':'#94A3B8',v=>fmtA(v),130);
-
-  // 월별 달성률 — 전체/LG사급/직거래 3분할 (재고금액 차트와 동일한 형태, 라벨은 달성률%)
-  const allVals=months.map(m=>mData[m].total);
   const lgVals=months.map(m=>mData[m].lg);
   const dtVals=months.map(m=>mData[m].direct);
-  const chartAll=buildTrendBarChart(allVals,allTarget,v=>achColor(allTarget>0?v/allTarget*100:0),v=>Math.round(allTarget>0?v/allTarget*100:0)+'%',105);
+  const barSvg=buildMainAmountChart(totalVals,allTarget);
+  const chartAll=buildTrendBarChart(totalVals,allTarget,v=>achColor(allTarget>0?v/allTarget*100:0),v=>Math.round(allTarget>0?v/allTarget*100:0)+'%',105);
   const chartLg=buildTrendBarChart(lgVals,lgTarget,v=>achColor(lgTarget>0?v/lgTarget*100:0),v=>Math.round(lgTarget>0?v/lgTarget*100:0)+'%',105);
   const chartDt=buildTrendBarChart(dtVals,dtTarget,v=>achColor(dtTarget>0?v/dtTarget*100:0),v=>Math.round(dtTarget>0?v/dtTarget*100:0)+'%',105);
 
   document.getElementById('goalTrendWrap').innerHTML=`
-    <div class="sec-label"><span class="sec-label-text">월별 KPI 트렌드</span><span class="period-label" style="margin-left:10px;">${periodStr}</span><div class="sec-label-line"></div></div>
-    ${mkHtml}
-    <div class="chart-card" style="margin-bottom:14px;"><div class="chart-card-title">월별 재고금액</div>${barSvg}</div>
+    <div class="sec-label"><span class="sec-label-text">월별 재고금액</span><span class="period-label" style="margin-left:10px;">${periodStr}</span><div class="sec-label-line"></div></div>
+    <div class="chart-card" style="margin-bottom:14px;"><div class="chart-card-title">막대 위: 금액 · 목표대비 달성률 · 전월대비 증감</div>${barSvg}</div>
     <div class="sec-label" style="margin-bottom:10px;"><span class="sec-label-text">월별 달성률 <small style="font-weight:500;color:var(--text-mute);">(막대 = 실적, 점선 = 목표금액)</small></span><div class="sec-label-line"></div></div>
     <div class="chart-grid-3">
       <div class="chart-card"><div class="chart-card-title" style="color:#0F172A;">전체 달성률</div>${chartAll}</div>
