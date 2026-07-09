@@ -123,7 +123,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:va
 .tbl-scroll{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--bg);}
-th{padding:9px 10px;text-align:center;font-weight:600;font-size:11px;color:var(--text-3);letter-spacing:0.04em;border-bottom:1.5px solid var(--border);white-space:nowrap;font-family:var(--mono);position:relative;user-select:none;overflow:hidden;text-overflow:ellipsis;}
+th{padding:9px 10px;text-align:center;font-weight:700;font-size:11px;color:var(--text);letter-spacing:0.04em;border-bottom:2px solid var(--text-mute);white-space:nowrap;font-family:var(--mono);position:relative;user-select:none;overflow:hidden;text-overflow:ellipsis;}
 /* 틀고정(sticky header) 표준 — 메인 6개 테이블에만 적용 (드릴다운 내부 테이블 제외) */
 .sticky-thead th{position:sticky;top:0;z-index:5;background:var(--bg);}
 th.left{text-align:left;}
@@ -134,7 +134,9 @@ td.right{text-align:right;font-family:var(--mono);font-size:12px;}
 td.center{text-align:center;}
 tr:hover td{background:#F8F9FB;}
 tr:last-child td{border-bottom:none;}
-.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:7px;cursor:col-resize;}
+.col-resizer::after{content:'';position:absolute;right:2px;top:22%;bottom:22%;width:2px;border-radius:1px;background:var(--border-2);}
+.col-resizer:hover::after{background:var(--accent);}
 .col-resizer:hover{background:var(--accent-soft);}
 /* 헤더 클릭 정렬 */
 th.sortable{cursor:pointer;}
@@ -248,6 +250,7 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
 .gsc-bar-fill{height:100%;border-radius:2px;}
 .gsc-bar-target{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.45;z-index:2;}
 .gsc-pct{font-family:var(--mono);font-size:12px;font-weight:600;min-width:40px;text-align:right;}
+.gsc-badge{margin-top:10px;font-family:var(--mono);font-size:11px;font-weight:700;display:inline-block;padding:3px 10px;border-radius:5px;}
 
 /* 세부 필터 */
 .sub-filter-bar{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
@@ -290,7 +293,16 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
 /* 위험재고 KPI */
 .risk-kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
 
-@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,1fr);}.chart-grid{grid-template-columns:1fr;}.month-kpi-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,1fr);}.chart-grid{grid-template-columns:1fr;}.chart-grid-3{grid-template-columns:1fr;}.month-kpi-grid{grid-template-columns:repeat(2,1fr);}}
+
+/* 브랜드별 집계 - 뷰 토글 */
+.view-toggle{display:flex;background:var(--bg);border-radius:20px;padding:2px;gap:2px;}
+.vt-btn{padding:6px 16px;border-radius:18px;border:none;background:transparent;font-size:12px;font-weight:700;color:var(--text-3);cursor:pointer;font-family:var(--sans);transition:all .15s;}
+.vt-btn:hover{color:var(--text);}
+.vt-btn.active{background:var(--text);color:#fff;}
+
+/* 목표대비 분석 - 달성률 3분할 차트 */
+.chart-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
 </style>
 </head>
 <body>
@@ -522,26 +534,18 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
     <div class="tab-panel" id="tab-brand">
       <div class="table-wrap">
         <div class="table-header">
-          <div class="table-count">총 <b id="br_count">0</b>개 브랜드</div>
-          <div class="table-note">재고금액 높은 순 정렬</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="table-count">총 <b id="br_count">0</b>개 브랜드</div>
+            <div class="view-toggle">
+              <button class="vt-btn active" id="br_vt_basic" onclick="setBrandView('basic')">기본 보기</button>
+              <button class="vt-btn" id="br_vt_goal" onclick="setBrandView('goal')">목표대비 보기</button>
+            </div>
+          </div>
+          <div class="table-note" id="br_table_note">재고금액 높은 순 정렬</div>
         </div>
         <div class="tbl-scroll">
           <table id="tblBrand" class="sticky-thead">
-            <thead>
-              <tr>
-                <th class="sortable" onclick="sortBrand('rank')">순위<span class="sort-icon" id="si-br-rank"></span></th>
-                <th class="left sortable" onclick="sortBrand('brand')">브랜드<span class="sort-icon" id="si-br-brand"></span></th>
-                <th class="sortable" onclick="sortBrand('type')">공급유형<span class="sort-icon" id="si-br-type"></span></th>
-                <th class="sortable" onclick="sortBrand('cnt')">품목수<span class="sort-icon" id="si-br-cnt"></span></th>
-                <th class="sortable" onclick="sortBrand('amt')">총 재고금액(원)<span class="sort-icon" id="si-br-amt"></span></th>
-                <th class="sortable" onclick="sortBrand('pct')">비중%<span class="sort-icon" id="si-br-pct"></span></th>
-                <th style="min-width:120px;">상태분포</th>
-                <th class="sortable" onclick="sortBrand('dead')">DEAD<span class="sort-icon" id="si-br-dead"></span></th>
-                <th class="sortable" onclick="sortBrand('over')">과잉<span class="sort-icon" id="si-br-over"></span></th>
-                <th class="sortable" onclick="sortBrand('good')">적정<span class="sort-icon" id="si-br-good"></span></th>
-                <th class="sortable" onclick="sortBrand('lack')">부족<span class="sort-icon" id="si-br-lack"></span></th>
-              </tr>
-            </thead>
+            <thead id="brThead"></thead>
             <tbody id="brBody">
               <tr><td colspan="11"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>
             </tbody>
@@ -590,55 +594,30 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
     <div class="tab-panel" id="tab-goal">
       <!-- 기존 목표대비 KPI (gl_* ids 유지) -->
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;" id="gl_kpi_wrap">
-        <div class="gsc"><div class="gsc-title">LG사급 목표</div>
+        <div class="gsc" id="gsc_lg"><div class="gsc-title">LG사급 목표</div>
           <div class="gsc-val" id="gl_lg_target">—</div>
           <div class="gsc-sub">실재고: <span id="gl_lg_real">—</span></div>
           <div class="gsc-bar-wrap"><div class="gsc-bar-bg"><div class="gsc-bar-target" style="left:66.7%;"></div><div class="gsc-bar-fill" id="gl_lg_bar" style="width:0%;background:var(--accent);"></div></div><div class="gsc-pct" id="gl_lg_pct">—</div></div>
+          <div class="gsc-badge" id="gl_lg_badge"></div>
         </div>
-        <div class="gsc"><div class="gsc-title">직거래 목표</div>
+        <div class="gsc" id="gsc_dt"><div class="gsc-title">직거래 목표</div>
           <div class="gsc-val" id="gl_dt_target">—</div>
           <div class="gsc-sub">실재고: <span id="gl_dt_real">—</span></div>
           <div class="gsc-bar-wrap"><div class="gsc-bar-bg"><div class="gsc-bar-target" style="left:66.7%;"></div><div class="gsc-bar-fill" id="gl_dt_bar" style="width:0%;background:var(--accent);"></div></div><div class="gsc-pct" id="gl_dt_pct">—</div></div>
+          <div class="gsc-badge" id="gl_dt_badge"></div>
         </div>
-        <div class="gsc"><div class="gsc-title">전체 목표</div>
+        <div class="gsc" id="gsc_all"><div class="gsc-title">전체 목표</div>
           <div class="gsc-val" id="gl_all_target">—</div>
           <div class="gsc-sub">실재고: <span id="gl_all_real">—</span></div>
           <div class="gsc-bar-wrap"><div class="gsc-bar-bg"><div class="gsc-bar-target" style="left:66.7%;"></div><div class="gsc-bar-fill" id="gl_all_bar" style="width:0%;background:var(--accent);"></div></div><div class="gsc-pct" id="gl_all_pct">—</div></div>
+          <div class="gsc-badge" id="gl_all_badge"></div>
         </div>
         <div style="grid-column:1/-1;font-family:var(--mono);font-size:10px;color:var(--text-mute);margin-top:-4px;">│ 회색 세로선 = 목표달성 100% 지점 (바 그래프는 150% 기준으로 표시)</div>
       </div>
 
-      <!-- 월별 트렌드 (새로 추가) -->
+      <!-- 월별 트렌드 -->
       <div id="goalTrendWrap">
         <div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div>
-      </div>
-
-      <!-- 기존 목표대비 테이블 -->
-      <div class="table-wrap" style="margin-top:14px;">
-        <div class="table-header">
-          <div class="table-count">브랜드별 목표대비: <b id="gl_count">0</b>개</div>
-          <div class="table-note">금액달성률 높은 순 정렬</div>
-        </div>
-        <div class="tbl-scroll">
-          <table id="tblGoal" class="sticky-thead">
-            <thead>
-              <tr>
-                <th class="left sortable" onclick="sortGoal('brand')">브랜드<span class="sort-icon" id="si-gl-brand"></span></th>
-                <th class="sortable" onclick="sortGoal('type')">공급유형<span class="sort-icon" id="si-gl-type"></span></th>
-                <th class="sortable" onclick="sortGoal('targetMonths')">목표개월(M)<span class="sort-icon" id="si-gl-targetMonths"></span></th>
-                <th class="sortable" onclick="sortGoal('realMonths')">실재고개월(M)<span class="sort-icon" id="si-gl-realMonths"></span></th>
-                <th class="sortable" onclick="sortGoal('monthPct')">개월달성률<span class="sort-icon" id="si-gl-monthPct"></span></th>
-                <th class="sortable" onclick="sortGoal('targetAmt')">목표금액(원)<span class="sort-icon" id="si-gl-targetAmt"></span></th>
-                <th class="sortable" onclick="sortGoal('realAmt')">실재고금액(원)<span class="sort-icon" id="si-gl-realAmt"></span></th>
-                <th class="sortable" onclick="sortGoal('amtPct')">금액달성률<span class="sort-icon" id="si-gl-amtPct"></span></th>
-                <th class="sortable" onclick="sortGoal('judge')">판정<span class="sort-icon" id="si-gl-judge"></span></th>
-              </tr>
-            </thead>
-            <tbody id="glBody">
-              <tr><td colspan="9"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
     </div><!-- /tab-goal -->
 
@@ -955,41 +934,154 @@ function sortPattern(key){
 let _brSortKey='amt', _brSortAsc=false;
 let _brData=[];
 const _brKeys=['rank','brand','type','cnt','amt','pct','dead','over','good','lack'];
+let _brView='basic'; // 'basic' | 'goal'
+let _bgData=[];
+let _bgSortKey='amtPct', _bgSortAsc=false;
+const _bgKeys=['brand','type','targetMonths','realMonths','monthPct','targetAmt','realAmt','amtPct','judge'];
+
+function setBrandView(v){
+  _brView=v;
+  document.getElementById('br_vt_basic').classList.toggle('active',v==='basic');
+  document.getElementById('br_vt_goal').classList.toggle('active',v==='goal');
+  document.getElementById('br_table_note').textContent = v==='basic' ? '재고금액 높은 순 정렬' : '금액달성률 높은 순 정렬';
+  renderBrandTable();
+}
 function sortBrand(key){
   if(_brSortKey===key) _brSortAsc=!_brSortAsc;
   else { _brSortKey=key; _brSortAsc=true; }
-  _setSortIcons('br', _brKeys, key, _brSortAsc);
   _brData=[..._brData].sort((a,b)=>_cmp(a,b,key,_brSortAsc));
   renderBrandTable();
 }
+function sortBrandGoal(key){
+  if(_bgSortKey===key) _bgSortAsc=!_bgSortAsc;
+  else { _bgSortKey=key; _bgSortAsc=true; }
+  _bgData=[..._bgData].sort((a,b)=>_cmp(a,b,key,_bgSortAsc));
+  renderBrandTable();
+}
+function _brTheadBasic(){
+  return`<tr>
+    <th class="sortable" onclick="sortBrand('rank')">순위<span class="sort-icon" id="si-br-rank"></span></th>
+    <th class="left sortable" onclick="sortBrand('brand')">브랜드<span class="sort-icon" id="si-br-brand"></span></th>
+    <th class="sortable" onclick="sortBrand('type')">공급유형<span class="sort-icon" id="si-br-type"></span></th>
+    <th class="sortable" onclick="sortBrand('cnt')">품목수<span class="sort-icon" id="si-br-cnt"></span></th>
+    <th class="sortable" onclick="sortBrand('amt')">총 재고금액(원)<span class="sort-icon" id="si-br-amt"></span></th>
+    <th class="sortable" onclick="sortBrand('pct')">비중%<span class="sort-icon" id="si-br-pct"></span></th>
+    <th style="min-width:120px;">상태분포</th>
+    <th class="sortable" onclick="sortBrand('dead')">DEAD<span class="sort-icon" id="si-br-dead"></span></th>
+    <th class="sortable" onclick="sortBrand('over')">과잉<span class="sort-icon" id="si-br-over"></span></th>
+    <th class="sortable" onclick="sortBrand('good')">적정<span class="sort-icon" id="si-br-good"></span></th>
+    <th class="sortable" onclick="sortBrand('lack')">부족<span class="sort-icon" id="si-br-lack"></span></th>
+  </tr>`;
+}
+function _brTheadGoal(){
+  return`<tr>
+    <th class="left sortable" onclick="sortBrandGoal('brand')">브랜드<span class="sort-icon" id="si-bg-brand"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('type')">공급유형<span class="sort-icon" id="si-bg-type"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('targetMonths')">목표개월(M)<span class="sort-icon" id="si-bg-targetMonths"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('realMonths')">실재고개월(M)<span class="sort-icon" id="si-bg-realMonths"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('monthPct')">개월달성률<span class="sort-icon" id="si-bg-monthPct"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('targetAmt')">목표금액(원)<span class="sort-icon" id="si-bg-targetAmt"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('realAmt')">실재고금액(원)<span class="sort-icon" id="si-bg-realAmt"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('amtPct')">금액달성률<span class="sort-icon" id="si-bg-amtPct"></span></th>
+    <th class="sortable" onclick="sortBrandGoal('judge')">판정<span class="sort-icon" id="si-bg-judge"></span></th>
+  </tr>`;
+}
 function renderBrandTable(){
-  const totalAmt=_brData.reduce((s,b)=>s+b.amt,0);
-  document.getElementById('br_count').textContent=_brData.length.toLocaleString();
-  document.getElementById('brBody').innerHTML=_brData.map((b,i)=>{
-    const pct=totalAmt>0?b.amt/totalAmt*100:0;
-    const tCls=b.type==='직거래'?'type-d':'type-l';
-    const tot=b.dead+b.over+b.good+b.lack||1;
-    const stackBar=`<div class="stack-bar-wrap">
-      ${b.dead?`<div class="stack-seg" style="width:${Math.round(b.dead/tot*100)}%;background:var(--ng);opacity:.8;"></div>`:''}
-      ${b.over?`<div class="stack-seg" style="width:${Math.round(b.over/tot*100)}%;background:var(--warn);opacity:.8;"></div>`:''}
-      ${b.good?`<div class="stack-seg" style="width:${Math.round(b.good/tot*100)}%;background:var(--ok);opacity:.8;"></div>`:''}
-      ${b.lack?`<div class="stack-seg" style="width:${Math.round(b.lack/tot*100)}%;background:var(--accent);opacity:.8;"></div>`:''}
-    </div>`;
-    return`<tr>
-      <td class="center" style="font-family:var(--mono);font-weight:600;color:#111827;font-size:12px;">${i+1}</td>
-      <td class="left" style="font-weight:700;font-size:13px;">${b.brand}</td>
-      <td class="center"><span class="${tCls}">${b.type}</span></td>
-      <td class="right" style="font-size:12px;">${b.cnt}개</td>
-      <td class="right" style="font-weight:600;">${Math.round(b.amt).toLocaleString()}</td>
-      <td class="right" style="font-family:var(--mono);font-size:12px;">${pct.toFixed(1)}%</td>
-      <td>${stackBar}</td>
-      <td class="center" style="color:var(--ng);font-weight:700;">${b.dead||'—'}</td>
-      <td class="center" style="color:var(--warn);font-weight:700;">${b.over||'—'}</td>
-      <td class="center" style="color:var(--ok);font-weight:700;">${b.good||'—'}</td>
-      <td class="center" style="color:var(--accent);font-weight:700;">${b.lack||'—'}</td>
-    </tr>`;
-  }).join('');
-  initColResize('tblBrand','sa_c3');
+  document.getElementById('brThead').innerHTML = _brView==='basic' ? _brTheadBasic() : _brTheadGoal();
+  if(_brView==='basic'){
+    _setSortIcons('br', _brKeys, _brSortKey, _brSortAsc);
+    const totalAmt=_brData.reduce((s,b)=>s+b.amt,0);
+    document.getElementById('br_count').textContent=_brData.length.toLocaleString();
+    if(!_brData.length){
+      document.getElementById('brBody').innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    } else {
+      document.getElementById('brBody').innerHTML=_brData.map((b,i)=>{
+        const pct=totalAmt>0?b.amt/totalAmt*100:0;
+        const tCls=b.type==='직거래'?'type-d':'type-l';
+        const tot=b.dead+b.over+b.good+b.lack||1;
+        const stackBar=`<div class="stack-bar-wrap">
+          ${b.dead?`<div class="stack-seg" style="width:${Math.round(b.dead/tot*100)}%;background:var(--ng);opacity:.8;"></div>`:''}
+          ${b.over?`<div class="stack-seg" style="width:${Math.round(b.over/tot*100)}%;background:var(--warn);opacity:.8;"></div>`:''}
+          ${b.good?`<div class="stack-seg" style="width:${Math.round(b.good/tot*100)}%;background:var(--ok);opacity:.8;"></div>`:''}
+          ${b.lack?`<div class="stack-seg" style="width:${Math.round(b.lack/tot*100)}%;background:var(--accent);opacity:.8;"></div>`:''}
+        </div>`;
+        return`<tr>
+          <td class="center" style="font-family:var(--mono);font-weight:600;color:#111827;font-size:12px;">${i+1}</td>
+          <td class="left" style="font-weight:700;font-size:13px;">${b.brand}</td>
+          <td class="center"><span class="${tCls}">${b.type}</span></td>
+          <td class="right" style="font-size:12px;">${b.cnt}개</td>
+          <td class="right" style="font-weight:600;">${Math.round(b.amt).toLocaleString()}</td>
+          <td class="right" style="font-family:var(--mono);font-size:12px;">${pct.toFixed(1)}%</td>
+          <td>${stackBar}</td>
+          <td class="center" style="color:var(--ng);font-weight:700;">${b.dead||'—'}</td>
+          <td class="center" style="color:var(--warn);font-weight:700;">${b.over||'—'}</td>
+          <td class="center" style="color:var(--ok);font-weight:700;">${b.good||'—'}</td>
+          <td class="center" style="color:var(--accent);font-weight:700;">${b.lack||'—'}</td>
+        </tr>`;
+      }).join('');
+    }
+    initColResize('tblBrand','sa_c3_basic');
+  } else {
+    const pctColor=p=>p>130?'var(--ng)':p>100?'var(--warn)':p>80?'var(--ok)':'var(--accent)';
+    const tCls=t=>t==='직거래품'?'type-d':'type-l';
+    _setSortIcons('bg', _bgKeys, _bgSortKey, _bgSortAsc);
+    document.getElementById('br_count').textContent=_bgData.length.toLocaleString();
+    if(!_bgData.length){
+      document.getElementById('brBody').innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">brand_stock_rule 데이터가 없습니다</div></div></td></tr>`;
+    } else {
+      document.getElementById('brBody').innerHTML=_bgData.map(({rule,real,monthPct,amtPct})=>{
+        const mColor=monthPct===null?'var(--text-mute)':pctColor(monthPct);
+        const aColor=amtPct===null?'var(--text-mute)':pctColor(amtPct);
+        let judge,jCls;
+        if(amtPct===null){judge='기준없음';jCls='ab-none';}
+        else if(amtPct>130){judge='크게초과';jCls='ab-over';}
+        else if(amtPct>100){judge='초과';jCls='ab-warn';}
+        else if(amtPct>=80){judge='적정';jCls='ab-good';}
+        else{judge='미달';jCls='ab-lack';}
+        return`<tr>
+          <td class="left" style="font-weight:700;font-size:13px;">${rule.brand}</td>
+          <td class="center"><span class="${tCls(rule.supply_type)}">${rule.supply_type||'—'}</span></td>
+          <td class="right" style="font-family:var(--mono);">${rule.target_months!==null?rule.target_months+'M':'—'}</td>
+          <td class="right" style="font-family:var(--mono);font-weight:600;color:${mColor};">${real.stockMonths!==null?real.stockMonths.toFixed(1)+'M':'—'}</td>
+          <td class="center" style="font-family:var(--mono);font-weight:600;color:${mColor};">${monthPct!==null?Math.round(monthPct)+'%':'—'}</td>
+          <td class="right">${rule.target_amount?Math.round(rule.target_amount).toLocaleString():'—'}</td>
+          <td class="right" style="font-weight:600;">${real.realAmt>0?Math.round(real.realAmt).toLocaleString():'—'}</td>
+          <td class="center" style="font-family:var(--mono);font-weight:600;color:${aColor};">${amtPct!==null?Math.round(amtPct)+'%':'—'}</td>
+          <td class="center"><span class="achieve-badge ${jCls}">${judge}</span></td>
+        </tr>`;
+      }).join('');
+    }
+    initColResize('tblBrand','sa_c3_goal');
+  }
+}
+
+// 브랜드별 목표대비 rows 계산 (탭3 목표대비 보기 + 탭5 요약카드에서 공통 사용)
+function computeGoalRows(){
+  const brandMap={};
+  _allResult.forEach(r=>{
+    if(!brandMap[r.brand])brandMap[r.brand]={realAmt:0,realQty:0,stockMonths:null,type:r.type};
+    brandMap[r.brand].realAmt+=r.amount;
+    brandMap[r.brand].realQty+=r.realQty;
+  });
+  const brandMonths={};
+  _allResult.filter(r=>r.stockMonths!==null&&r.amount>0).forEach(r=>{
+    if(!brandMonths[r.brand])brandMonths[r.brand]={sumWt:0,sumAmt:0};
+    brandMonths[r.brand].sumWt+=r.stockMonths*r.amount;
+    brandMonths[r.brand].sumAmt+=r.amount;
+  });
+  Object.keys(brandMonths).forEach(b=>{const bm=brandMonths[b];if(brandMap[b])brandMap[b].stockMonths=bm.sumAmt>0?bm.sumWt/bm.sumAmt:null;});
+  return _goalRules.filter(rule=>rule.target_months!==null||rule.target_amount!==null).map(rule=>{
+    const real=brandMap[rule.brand]||{realAmt:0,realQty:0,stockMonths:null,type:rule.supply_type};
+    const monthPct=(rule.target_months&&real.stockMonths!==null)?real.stockMonths/rule.target_months*100:null;
+    const amtPct=(rule.target_amount&&real.realAmt>0)?real.realAmt/rule.target_amount*100:null;
+    let judge='기준없음';
+    if(amtPct!==null){if(amtPct>130)judge='크게초과';else if(amtPct>100)judge='초과';else if(amtPct>=80)judge='적정';else judge='미달';}
+    return{rule,real,monthPct,amtPct,
+      brand:rule.brand, type:rule.supply_type||'',
+      targetMonths:rule.target_months??null, realMonths:real.stockMonths??null,
+      targetAmt:rule.target_amount??null, realAmt:real.realAmt,
+      judge};
+  });
 }
 
 // 탭4 위험재고 정렬
@@ -1032,43 +1124,7 @@ function renderRiskTable(){
   initColResize('tblRisk','sa_c4');
 }
 
-// 탭5 목표대비 정렬
-let _glSortKey='amtPct', _glSortAsc=false;
-let _glData=[];
-const _glKeys=['brand','type','targetMonths','realMonths','monthPct','targetAmt','realAmt','amtPct','judge'];
-function sortGoal(key){
-  if(_glSortKey===key) _glSortAsc=!_glSortAsc;
-  else { _glSortKey=key; _glSortAsc=true; }
-  _setSortIcons('gl', _glKeys, key, _glSortAsc);
-  _glData=[..._glData].sort((a,b)=>_cmp(a,b,key,_glSortAsc));
-  renderGoalTable();
-}
-function renderGoalTable(){
-  const pctColor=p=>p>130?'var(--ng)':p>100?'var(--warn)':p>80?'var(--ok)':'var(--accent)';
-  const tCls=t=>t==='직거래품'?'type-d':'type-l';
-  document.getElementById('glBody').innerHTML=_glData.map(({rule,real,monthPct,amtPct})=>{
-    const mColor=monthPct===null?'var(--text-mute)':pctColor(monthPct);
-    const aColor=amtPct===null?'var(--text-mute)':pctColor(amtPct);
-    let judge,jCls;
-    if(amtPct===null){judge='기준없음';jCls='ab-none';}
-    else if(amtPct>130){judge='크게초과';jCls='ab-over';}
-    else if(amtPct>100){judge='초과';jCls='ab-warn';}
-    else if(amtPct>=80){judge='적정';jCls='ab-good';}
-    else{judge='미달';jCls='ab-lack';}
-    return`<tr>
-      <td class="left" style="font-weight:700;font-size:13px;">${rule.brand}</td>
-      <td class="center"><span class="${tCls(rule.supply_type)}">${rule.supply_type||'—'}</span></td>
-      <td class="right" style="font-family:var(--mono);">${rule.target_months!==null?rule.target_months+'M':'—'}</td>
-      <td class="right" style="font-family:var(--mono);font-weight:600;color:${mColor};">${real.stockMonths!==null?real.stockMonths.toFixed(1)+'M':'—'}</td>
-      <td class="center" style="font-family:var(--mono);font-weight:600;color:${mColor};">${monthPct!==null?Math.round(monthPct)+'%':'—'}</td>
-      <td class="right">${rule.target_amount?Math.round(rule.target_amount).toLocaleString():'—'}</td>
-      <td class="right" style="font-weight:600;">${real.realAmt>0?Math.round(real.realAmt).toLocaleString():'—'}</td>
-      <td class="center" style="font-family:var(--mono);font-weight:600;color:${aColor};">${amtPct!==null?Math.round(amtPct)+'%':'—'}</td>
-      <td class="center"><span class="achieve-badge ${jCls}">${judge}</span></td>
-    </tr>`;
-  }).join('');
-  initColResize('tblGoal','sa_c5');
-}
+
 
 // ── 컬럼 리사이저 ──
 // ── 독립 컬럼 리사이즈 (SMERP 표준) ──
@@ -1312,9 +1368,10 @@ function renderPatternTable(allMonths){
 }
 
 // ── 브랜드별 집계 ── (원본 로직 그대로)
-function renderBrand(){
+async function renderBrand(){
   if(!_allResult.length){
-    document.getElementById('brBody').innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    _brData=[];_bgData=[];
+    renderBrandTable();
     return;
   }
   const brandMap={};
@@ -1328,11 +1385,10 @@ function renderBrand(){
     else if(r.state==='부족')b.lack++;
   });
   const brands=Object.values(brandMap).sort((a,b)=>b.amt-a.amt);
-  const totalAmt=brands.reduce((s,b)=>s+b.amt,0);
-  const maxAmt=brands[0]?.amt||1;
-  document.getElementById('br_count').textContent=brands.length.toLocaleString();
   _brData=brands; _brSortKey='amt'; _brSortAsc=false;
-  _setSortIcons('br',_brKeys,'amt',false);
+  await loadGoalRules();
+  _bgData=computeGoalRows().sort((a,b)=>(b.amtPct||0)-(a.amtPct||0));
+  _bgSortKey='amtPct'; _bgSortAsc=false;
   renderBrandTable();
 }
 
@@ -1392,43 +1448,38 @@ async function loadAllMonthsData(){
   _allMonthsLoaded=true;
 }
 
+function _goalJudge(pct){
+  if(pct===null||pct===undefined)return{label:'기준없음',cls:'ab-none',border:'var(--border)'};
+  if(pct>130)return{label:'크게초과',cls:'ab-over',border:'var(--ng)'};
+  if(pct>100)return{label:'초과',cls:'ab-warn',border:'var(--warn)'};
+  if(pct>=80)return{label:'적정',cls:'ab-good',border:'var(--ok)'};
+  return{label:'미달',cls:'ab-lack',border:'var(--accent)'};
+}
 async function renderGoal(){
   if(!_allResult.length){
-    document.getElementById('glBody').innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div></td></tr>`;
+    ['lg','dt','all'].forEach(k=>{
+      document.getElementById(`gl_${k}_target`).textContent='—';
+      document.getElementById(`gl_${k}_real`).textContent='—';
+      document.getElementById(`gl_${k}_pct`).textContent='—';
+      document.getElementById(`gl_${k}_bar`).style.width='0%';
+      document.getElementById(`gl_${k}_badge`).textContent='';
+      document.getElementById(`gsc_${k}`).style.borderTopColor='var(--border)';
+    });
+    document.getElementById('goalTrendWrap').innerHTML=`<div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div>`;
     return;
   }
   await loadGoalRules();
   if(!_goalRules.length){
-    document.getElementById('glBody').innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">brand_stock_rule 데이터가 없습니다</div></div></td></tr>`;
+    document.getElementById('goalTrendWrap').innerHTML=`<div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">brand_stock_rule 데이터가 없습니다</div></div>`;
     return;
   }
-  // 기존 KPI 로직 (원본 그대로)
+  // 목표 대비 실적 (LG/직거래/전체)
   const brandMap={};
   _allResult.forEach(r=>{
     if(!brandMap[r.brand])brandMap[r.brand]={realAmt:0,realQty:0,stockMonths:null,type:r.type};
     brandMap[r.brand].realAmt+=r.amount;
     brandMap[r.brand].realQty+=r.realQty;
-    if(r.stockMonths!==null){if(brandMap[r.brand].stockMonths===null)brandMap[r.brand].stockMonths=0;}
   });
-  const brandMonths={};
-  _allResult.filter(r=>r.stockMonths!==null&&r.amount>0).forEach(r=>{
-    if(!brandMonths[r.brand])brandMonths[r.brand]={sumWt:0,sumAmt:0};
-    brandMonths[r.brand].sumWt+=r.stockMonths*r.amount;
-    brandMonths[r.brand].sumAmt+=r.amount;
-  });
-  Object.keys(brandMonths).forEach(b=>{const bm=brandMonths[b];if(brandMap[b])brandMap[b].stockMonths=bm.sumAmt>0?bm.sumWt/bm.sumAmt:null;});
-  const rows=_goalRules.filter(rule=>rule.target_months!==null||rule.target_amount!==null).map(rule=>{
-    const real=brandMap[rule.brand]||{realAmt:0,realQty:0,stockMonths:null,type:rule.supply_type};
-    const monthPct=(rule.target_months&&real.stockMonths!==null)?real.stockMonths/rule.target_months*100:null;
-    const amtPct=(rule.target_amount&&real.realAmt>0)?real.realAmt/rule.target_amount*100:null;
-    let judge='기준없음';
-    if(amtPct!==null){if(amtPct>130)judge='크게초과';else if(amtPct>100)judge='초과';else if(amtPct>=80)judge='적정';else judge='미달';}
-    return{rule,real,monthPct,amtPct,
-      brand:rule.brand, type:rule.supply_type||'',
-      targetMonths:rule.target_months??null, realMonths:real.stockMonths??null,
-      targetAmt:rule.target_amount??null, realAmt:real.realAmt,
-      judge};
-  }).sort((a,b)=>(b.amtPct||0)-(a.amtPct||0));
   const lgRules=_goalRules.filter(r=>r.supply_type==='LG사급품'&&r.target_amount);
   const dtRules=_goalRules.filter(r=>r.supply_type==='직거래품'&&r.target_amount);
   const lgTarget=lgRules.reduce((s,r)=>s+(r.target_amount||0),0);
@@ -1443,18 +1494,17 @@ async function renderGoal(){
   const barW=p=>achBarWidth(p);
   [['lg',lgTarget,lgReal],['dt',dtTarget,dtReal],['all',allTarget,allReal]].forEach(([k,target,real])=>{
     const pct=target>0?real/target*100:0;
+    const j=_goalJudge(target>0?pct:null);
     document.getElementById(`gl_${k}_target`).textContent=fmt(target);
     document.getElementById(`gl_${k}_real`).textContent=fmt(real);
     document.getElementById(`gl_${k}_pct`).textContent=Math.round(pct)+'%';
     document.getElementById(`gl_${k}_pct`).style.color=pctColor(pct);
     document.getElementById(`gl_${k}_bar`).style.width=barW(pct)+'%';
     document.getElementById(`gl_${k}_bar`).style.background=barColor(pct);
+    document.getElementById(`gl_${k}_badge`).innerHTML=`<span class="achieve-badge ${j.cls}">${j.label}</span>`;
+    document.getElementById(`gsc_${k}`).style.borderTopColor=j.border;
   });
-  document.getElementById('gl_count').textContent=rows.length;
-  _glData=rows; _glSortKey='amtPct'; _glSortAsc=false;
-  _setSortIcons('gl',_glKeys,'amtPct',false);
-  renderGoalTable();
-  // 월별 트렌드 추가 렌더
+  // 월별 트렌드 렌더 (3분할 달성률 차트 포함)
   await renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor);
 }
 
@@ -1503,51 +1553,50 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
     </div>`;
   });
   mkHtml+='</div>';
-  // SVG 바차트
-  const maxAmt=Math.max(...months.map(m=>mData[m].total),1);
-  const bW=64,bGap=18,padL=44,padT=16,padB=30,chartH=130;
-  const svgW=padL+(bW+bGap)*months.length+16;
-  let bars='';
-  months.forEach((m,i)=>{
-    const d=mData[m];const h=maxAmt>0?(d.total/maxAmt)*chartH:0;
-    const x=padL+i*(bW+bGap);const y=padT+chartH-h;
-    const isLatest=i===months.length-1;
-    bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${isLatest?'#0066FF':'#94A3B8'}" rx="3" opacity="${isLatest?1:.7}"/>`;
-    bars+=`<text x="${x+bW/2}" y="${y-4}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#0F172A" font-weight="500">${fmtA(d.total)}</text>`;
-    bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m}</text>`;
-  });
-  if(allTarget>0&&allTarget<=maxAmt){
-    const targetY=padT+chartH-(allTarget/maxAmt)*chartH;
-    bars+=`<line x1="${padL}" y1="${targetY}" x2="${padL+(bW+bGap)*months.length}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
-    bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표</text>`;
+  // 공통 SVG 막대그래프 빌더 (재고금액/달성률 3분할 차트 공용)
+  function buildTrendBarChart(vals, targetVal, fillFn, labelFn, chartH){
+    const bW=64,bGap=18,padL=44,padT=16,padB=30;
+    const svgW=padL+(bW+bGap)*months.length+16;
+    const maxV=Math.max(...vals,targetVal||0,1);
+    let bars='';
+    months.forEach((m,i)=>{
+      const v=vals[i];const h=maxV>0?(v/maxV)*chartH:0;
+      const x=padL+i*(bW+bGap);const y=padT+chartH-h;
+      const isLatest=i===months.length-1;
+      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${fillFn(v,isLatest)}" rx="3" opacity="${isLatest?1:.75}"/>`;
+      bars+=`<text x="${x+bW/2}" y="${y-4}" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${labelFn(v)}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m}</text>`;
+    });
+    if(targetVal>0&&targetVal<=maxV){
+      const targetY=padT+chartH-(targetVal/maxV)*chartH;
+      bars+=`<line x1="${padL}" y1="${targetY}" x2="${padL+(bW+bGap)*months.length}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
+      bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표</text>`;
+    }
+    return `<svg viewBox="0 0 ${svgW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
   }
-  const barSvg=`<svg viewBox="0 0 ${svgW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
-  // 달성률 바 (150% 스케일 + 100% 목표선 마커)
-  let achHtml='';
-  months.forEach(m=>{
-    const d=mData[m];
-    const allPct=allTarget>0?d.total/allTarget*100:0;
-    const lgPct=lgTarget>0?d.lg/lgTarget*100:0;
-    const dtPct=dtTarget>0?d.direct/dtTarget*100:0;
-    achHtml+=`<div style="margin-bottom:10px;">
-      <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text-2);margin-bottom:5px;">${m}</div>
-      ${[['전체',allPct,'#0F172A'],['LG',lgPct,'#B91C1C'],['직거래',dtPct,'#0066FF']].map(([lbl,p,c])=>`
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-          <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:var(--text-2);width:36px;">${lbl}</span>
-          <div style="flex:1;height:5px;background:var(--bg);border-radius:2px;overflow:hidden;position:relative;">
-            <div style="position:absolute;left:${ACH_TARGET_LEFT_PCT}%;top:-1px;bottom:-1px;width:2px;background:#0F172A;opacity:.45;"></div>
-            <div style="height:100%;width:${achBarWidth(p)}%;background:${c};border-radius:2px;opacity:.85;"></div>
-          </div>
-          <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${p>100?'var(--ng)':p>=80?'var(--ok)':'var(--accent)'};min-width:34px;text-align:right;">${Math.round(p)}%</span>
-        </div>`).join('')}
-    </div>`;
-  });
+  const achColor=pct=>pct>130?'#DC2626':pct>100?'#D97706':pct>=80?'#059669':'#0066FF';
+
+  // 월별 재고금액 (총액) 차트
+  const totalVals=months.map(m=>mData[m].total);
+  const barSvg=buildTrendBarChart(totalVals,allTarget,(v,isLatest)=>isLatest?'#0066FF':'#94A3B8',v=>fmtA(v),130);
+
+  // 월별 달성률 — 전체/LG사급/직거래 3분할 (재고금액 차트와 동일한 형태, 라벨은 달성률%)
+  const allVals=months.map(m=>mData[m].total);
+  const lgVals=months.map(m=>mData[m].lg);
+  const dtVals=months.map(m=>mData[m].direct);
+  const chartAll=buildTrendBarChart(allVals,allTarget,v=>achColor(allTarget>0?v/allTarget*100:0),v=>Math.round(allTarget>0?v/allTarget*100:0)+'%',105);
+  const chartLg=buildTrendBarChart(lgVals,lgTarget,v=>achColor(lgTarget>0?v/lgTarget*100:0),v=>Math.round(lgTarget>0?v/lgTarget*100:0)+'%',105);
+  const chartDt=buildTrendBarChart(dtVals,dtTarget,v=>achColor(dtTarget>0?v/dtTarget*100:0),v=>Math.round(dtTarget>0?v/dtTarget*100:0)+'%',105);
+
   document.getElementById('goalTrendWrap').innerHTML=`
     <div class="sec-label"><span class="sec-label-text">월별 KPI 트렌드</span><span class="period-label" style="margin-left:10px;">${periodStr}</span><div class="sec-label-line"></div></div>
     ${mkHtml}
-    <div class="chart-grid">
-      <div class="chart-card"><div class="chart-card-title">월별 재고금액</div>${barSvg}</div>
-      <div class="chart-card"><div class="chart-card-title">월별 달성률 <small>(회색선 = 목표 100%, 150% 만위 스케일)</small></div>${achHtml}</div>
+    <div class="chart-card" style="margin-bottom:14px;"><div class="chart-card-title">월별 재고금액</div>${barSvg}</div>
+    <div class="sec-label" style="margin-bottom:10px;"><span class="sec-label-text">월별 달성률 <small style="font-weight:500;color:var(--text-mute);">(막대 = 실적, 점선 = 목표금액)</small></span><div class="sec-label-line"></div></div>
+    <div class="chart-grid-3">
+      <div class="chart-card"><div class="chart-card-title" style="color:#0F172A;">전체 달성률</div>${chartAll}</div>
+      <div class="chart-card"><div class="chart-card-title" style="color:#B91C1C;">LG사급 달성률</div>${chartLg}</div>
+      <div class="chart-card"><div class="chart-card-title" style="color:#0066FF;">직거래 달성률</div>${chartDt}</div>
     </div>
   `;
 }
