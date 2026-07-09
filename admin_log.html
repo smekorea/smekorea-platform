@@ -219,6 +219,7 @@ tr.dragging{opacity:.45;}
 <div class="tab-bar">
   <button class="tab-btn active" id="tab-items-btn"     onclick="switchTab('items')">📋 품목 마스터</button>
   <button class="tab-btn" id="tab-lg-btn"               onclick="switchTab('lg')">🏭 LG사급 기준</button>
+  <button class="tab-btn" id="tab-export-btn"           onclick="switchTab('export')">🌍 해외매출처관리</button>
   <button class="tab-btn" id="tab-master-btn"           onclick="switchTab('master')">📦 재고운영기준</button>
   <button class="tab-btn" id="tab-alias-btn"            onclick="switchTab('alias')">🏷️ 메이커 Alias</button>
   <button class="tab-btn" id="tab-maker-btn"            onclick="switchTab('maker')">🔧 메이커 납기</button>
@@ -367,6 +368,85 @@ tr.dragging{opacity:.45;}
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeLgModal()">취소</button>
       <button class="modal-btn modal-save" onclick="saveLgModal()">저장</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- 탭2-2: 해외매출처관리 (export_customers) -->
+<!-- ══════════════════════════════════════════════════ -->
+<div id="tab-export" class="content" style="display:none;">
+  <div class="up-section">
+    <div class="up-section-title">🌍 해외매출처관리 (export_customers) <span style="font-size:12px;font-weight:400;color:var(--muted);" id="export-count"></span></div>
+    <div class="up-toolbar">
+      <button class="up-btn up-btn-primary" onclick="openExportAddModal()">+ 매출처 추가</button>
+      <label class="up-btn up-btn-secondary" style="cursor:pointer;">
+        📂 엑셀 업로드 <input type="file" accept=".xlsx,.xls" id="exportFileInput" onchange="loadExportExcel(event)" style="display:none;">
+      </label>
+      <button class="up-btn up-btn-green" onclick="downloadExportData()">⬇ 현재 데이터 다운로드</button>
+      <button class="up-btn up-btn-secondary" onclick="downloadExportTemplate()">📄 양식 다운로드</button>
+    </div>
+    <div class="up-info">💡 sales_data의 매출처(customer)명과 일치하는 곳만 "해외"로 분류됩니다(3법인 제외). 미등록 매출처는 자동으로 국내 처리됩니다. 엑셀 업로드 시 매출처명 기준으로 upsert(같으면 갱신, 없으면 추가)되며 기존 목록은 삭제되지 않습니다.</div>
+  </div>
+
+  <!-- 프리뷰 -->
+  <div class="up-section" id="exportPreviewSection" style="display:none;">
+    <div class="up-section-title">📊 업로드 미리보기</div>
+    <div class="up-stat" id="exportPreviewStat"></div>
+    <div class="up-preview"><table class="up-table"><thead><tr><th>매출처명</th><th>별칭1</th><th>별칭2</th><th>별칭3</th><th>국가</th><th>비고</th></tr></thead><tbody id="exportPreviewBody"></tbody></table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="up-btn up-btn-primary" onclick="submitExportData()" id="exportSubmitBtn">✓ 등록 확인</button>
+      <button class="up-btn up-btn-secondary" onclick="clearExportPreview()">✕ 취소</button>
+    </div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="tbl-wrap">
+    <table id="export-table">
+      <thead><tr>
+        <th style="width:50px;">#</th>
+        <th style="width:200px;">매출처명</th>
+        <th>별칭(alias1~3)</th>
+        <th style="width:100px;">국가</th>
+        <th style="width:160px;">비고</th>
+        <th class="center" style="width:90px;">상태</th>
+        <th class="center" style="width:130px;">관리</th>
+      </tr></thead>
+      <tbody id="export-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 해외매출처 추가/수정 모달 -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal-box" style="width:460px;">
+    <div class="modal-hdr">
+      <div class="modal-title" id="exportModalTitle">해외매출처 추가</div>
+      <button class="modal-close" onclick="closeExportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="em-id">
+      <div class="form-group"><label>매출처명 <span class="req">*</span></label><input id="em-customer" placeholder="sales_data.customer 값과 정확히 일치해야 함"></div>
+      <div class="modal-row">
+        <div class="form-group"><label>별칭1</label><input id="em-alias1" placeholder="표기 흔들림 대응(선택)"></div>
+        <div class="form-group"><label>별칭2</label><input id="em-alias2"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>별칭3</label><input id="em-alias3"></div>
+        <div class="form-group"><label>국가</label><input id="em-country" placeholder="예) 인도/태국/중국"></div>
+      </div>
+      <div class="form-group full"><label>비고</label><input id="em-note"></div>
+      <div class="form-group"><label>상태</label>
+        <select id="em-active">
+          <option value="true">활성(거래중)</option>
+          <option value="false">비활성(거래중단)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-cancel" onclick="closeExportModal()">취소</button>
+      <button class="modal-btn modal-save" onclick="saveExportModal()">저장</button>
     </div>
   </div>
 </div>
@@ -934,12 +1014,13 @@ const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString('ko-KR');
 
 // ── 탭 전환 ──
 function switchTab(t) {
-  ['items','lg','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
+  ['items','lg','export','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
     document.getElementById('tab-'+x).style.display = x===t?'block':'none';
     document.getElementById('tab-'+x+'-btn').classList.toggle('active', x===t);
   });
   if(t==='items'     && _itemsData.length===0)     loadItemsData();
   if(t==='lg'        && _lgData.length===0)         loadLgData();
+  if(t==='export'    && _exportData.length===0)     loadExportData();
   if(t==='master'    && _bsrData.length===0)        loadBsrData();
   if(t==='alias'     && _aliasData.length===0)      loadAliasData();
   if(t==='maker'     && _makerData.length===0)      loadMakerData();
@@ -1284,6 +1365,165 @@ function downloadLgTemplate(){
   const ws=XLSX.utils.aoa_to_sheet([['판매처명','브랜드명','공급유형'],['LG전자 주식회사','GRUNDFOS','LG사급품']]);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'LG사급기준');
   XLSX.writeFile(wb,'SME_LG사급기준_양식.xlsx');
+}
+
+// ════════════════════════════════════════════════════
+// ── 탭2-2: 해외매출처관리 (export_customers) ──
+// ════════════════════════════════════════════════════
+let _exportData=[], _exportRows=[];
+
+async function loadExportData() {
+  const tbody=document.getElementById('export-tbody');
+  tbody.innerHTML='<tr><td colspan="7"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  const {data,error}=await sb.from('export_customers').select('*').order('customer');
+  if(error){tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
+  _exportData=data||[];
+  document.getElementById('export-count').textContent=`(${_exportData.length}개)`;
+  renderExportTable();
+}
+
+function renderExportTable() {
+  const tbody=document.getElementById('export-tbody');
+  if(!_exportData.length){tbody.innerHTML='<tr><td colspan="7"><div class="empty-state">등록된 해외매출처가 없습니다.</div></td></tr>';return;}
+  tbody.innerHTML=_exportData.map((r,i)=>{
+    const aliases=[r.alias1,r.alias2,r.alias3].filter(Boolean).join(', ');
+    const active=r.is_active!==false;
+    return `
+    <tr>
+      <td class="center mono">${i+1}</td>
+      <td><b>${r.customer||''}</b></td>
+      <td style="color:var(--muted);">${aliases}</td>
+      <td class="center">${r.country||''}</td>
+      <td>${r.note||''}</td>
+      <td class="center"><span class="badge ${active?'b-green':'b-gray'}" style="cursor:pointer;" onclick="toggleExportActive(${r.id},${active})">${active?'활성':'비활성'}</span></td>
+      <td class="center">
+        <button class="row-btn" onclick="openExportEditModal(${r.id})">수정</button>
+        <button class="row-btn row-btn-del" onclick="deleteExportRow(${r.id},'${(r.customer||'').replace(/'/g,"\\'")}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function toggleExportActive(id, current) {
+  const {error}=await sb.from('export_customers').update({is_active:!current,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){alert('변경 실패: '+error.message);return;}
+  const row=_exportData.find(x=>x.id===id); if(row) row.is_active=!current;
+  renderExportTable();
+}
+
+async function deleteExportRow(id, customer) {
+  if(!confirm(`[${customer}] 매출처를 삭제하시겠습니까?`)) return;
+  const {error}=await sb.from('export_customers').delete().eq('id',id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  _exportData=_exportData.filter(x=>x.id!==id);
+  document.getElementById('export-count').textContent=`(${_exportData.length}개)`;
+  renderExportTable();
+}
+
+function openExportAddModal(){
+  document.getElementById('em-id').value='';
+  document.getElementById('exportModalTitle').textContent='해외매출처 추가';
+  document.getElementById('em-customer').value='';
+  document.getElementById('em-alias1').value='';
+  document.getElementById('em-alias2').value='';
+  document.getElementById('em-alias3').value='';
+  document.getElementById('em-country').value='';
+  document.getElementById('em-note').value='';
+  document.getElementById('em-active').value='true';
+  document.getElementById('exportModal').classList.add('show');
+}
+function openExportEditModal(id){
+  const r=_exportData.find(x=>x.id===id); if(!r) return;
+  document.getElementById('em-id').value=r.id;
+  document.getElementById('exportModalTitle').textContent='해외매출처 수정';
+  document.getElementById('em-customer').value=r.customer||'';
+  document.getElementById('em-alias1').value=r.alias1||'';
+  document.getElementById('em-alias2').value=r.alias2||'';
+  document.getElementById('em-alias3').value=r.alias3||'';
+  document.getElementById('em-country').value=r.country||'';
+  document.getElementById('em-note').value=r.note||'';
+  document.getElementById('em-active').value=(r.is_active!==false)?'true':'false';
+  document.getElementById('exportModal').classList.add('show');
+}
+function closeExportModal(){document.getElementById('exportModal').classList.remove('show');}
+
+async function saveExportModal() {
+  const id=document.getElementById('em-id').value;
+  const customer=document.getElementById('em-customer').value.trim();
+  if(!customer){alert('매출처명은 필수입니다.');return;}
+  const payload={
+    customer,
+    alias1:document.getElementById('em-alias1').value.trim()||null,
+    alias2:document.getElementById('em-alias2').value.trim()||null,
+    alias3:document.getElementById('em-alias3').value.trim()||null,
+    country:document.getElementById('em-country').value.trim()||null,
+    note:document.getElementById('em-note').value.trim()||null,
+    is_active:document.getElementById('em-active').value==='true',
+    updated_at:new Date().toISOString(),
+  };
+  let error;
+  if(id){ ({error}=await sb.from('export_customers').update(payload).eq('id',id)); }
+  else { ({error}=await sb.from('export_customers').insert(payload)); }
+  if(error){alert('저장 실패: '+error.message);return;}
+  closeExportModal(); _exportData=[]; await loadExportData();
+}
+
+function loadExportExcel(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const wb=XLSX.read(ev.target.result,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+    _exportRows=raw.map(r=>({
+      customer:String(r['매출처명(customer)']||r['매출처명']||r['customer']||'').trim(),
+      alias1:String(r['별칭1']||r['alias1']||'').trim()||null,
+      alias2:String(r['별칭2']||r['alias2']||'').trim()||null,
+      alias3:String(r['별칭3']||r['alias3']||'').trim()||null,
+      country:String(r['국가(country)']||r['국가']||r['country']||'').trim()||null,
+      note:String(r['비고(note)']||r['비고']||r['note']||'').trim()||null,
+      is_active:true,
+      updated_at:new Date().toISOString(),
+    })).filter(r=>r.customer);
+    const stat=document.getElementById('exportPreviewStat');
+    stat.innerHTML=`<div class="up-stat-card"><b>${_exportRows.length}</b>건</div>`;
+    const tbody=document.getElementById('exportPreviewBody');
+    tbody.innerHTML=_exportRows.map(r=>`<tr><td>${r.customer}</td><td>${r.alias1||''}</td><td>${r.alias2||''}</td><td>${r.alias3||''}</td><td>${r.country||''}</td><td>${r.note||''}</td></tr>`).join('');
+    document.getElementById('exportPreviewSection').style.display='block';
+  };
+  reader.readAsArrayBuffer(file); e.target.value='';
+}
+
+async function submitExportData(){
+  if(!_exportRows.length){alert('데이터가 없습니다.');return;}
+  if(!confirm(`해외매출처 ${_exportRows.length}건을 등록합니다.\n매출처명이 같으면 갱신, 없으면 추가됩니다. (기존 목록 삭제 없음)`)) return;
+  const btn=document.getElementById('exportSubmitBtn'); btn.disabled=true; btn.textContent='처리 중...';
+  try{
+    const {error}=await sb.from('export_customers').upsert(_exportRows,{onConflict:'customer'});
+    if(error) throw error;
+    alert(`✓ ${_exportRows.length}건 등록 완료`);
+    clearExportPreview(); _exportData=[]; await loadExportData();
+  }catch(e){alert('등록 실패: '+e.message);}
+  btn.disabled=false; btn.textContent='✓ 등록 확인';
+}
+function clearExportPreview(){document.getElementById('exportPreviewSection').style.display='none';_exportRows=[];}
+
+async function downloadExportData(){
+  const {data}=await sb.from('export_customers').select('*').order('customer');
+  const ws=XLSX.utils.json_to_sheet((data||[]).map(r=>({
+    '매출처명(customer)':r.customer,'별칭1':r.alias1||'','별칭2':r.alias2||'','별칭3':r.alias3||'',
+    '국가(country)':r.country||'','비고(note)':r.note||'','상태':(r.is_active!==false)?'활성':'비활성'
+  })));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'해외매출처관리');
+  XLSX.writeFile(wb,'SME_해외매출처관리.xlsx');
+}
+function downloadExportTemplate(){
+  const ws=XLSX.utils.aoa_to_sheet([
+    ['매출처명(customer)','별칭1','별칭2','별칭3','국가(country)','비고(note)'],
+    ['㈜ABC상사(예시-실제매출처명 그대로)','','','','미국','직수출']
+  ]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'해외매출처관리');
+  XLSX.writeFile(wb,'SME_해외매출처관리_양식.xlsx');
 }
 
 // ── brand_stock_rule 관리 ──
