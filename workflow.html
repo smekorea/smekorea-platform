@@ -139,6 +139,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;line-height:1.4;
   border-left:2px solid transparent;color:#111 !important;}
 .more-chip{font-size:9px;color:var(--text2);padding:0 3px;font-weight:600;}
+.event-chip.shared-chip{font-weight:600;}
 @media(min-width:768px){
   .calendar-wrap{padding:0 12px 20px;}
   .day-hdr{padding:8px 0;font-size:14px;}
@@ -442,6 +443,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .dp-item-btn.convert{background:#E3F0FF;border-color:#378ADD;color:#185FA5;}
 .dp-item-btn.convert:hover{background:#378ADD;color:#fff;}
 .dp-item.dp-item-schedule{border-left:none;background:#FAFCFF;}
+.dp-item.dp-item-shared{border-left:none;background:#FAF5FF;}
 /* 가로 모드 대응 */
 @media(orientation:landscape) and (max-width:1024px){
   .nav-bar{padding:6px 12px;}
@@ -1267,7 +1269,8 @@ function renderLegend(){
   if(el) el.innerHTML=`
     <div class="cat-item"><div class="cat-dot" style="background:#378ADD"></div>일정</div>
     <div class="cat-item"><div class="cat-dot" style="background:#E2772E"></div>진행중</div>
-    <div class="cat-item"><div class="cat-dot" style="background:#E24B4A"></div>지시/후속</div>`;
+    <div class="cat-item"><div class="cat-dot" style="background:#E24B4A"></div>지시/후속</div>
+    <div class="cat-item"><div class="cat-dot" style="background:#8E5FC7"></div>📢 공유</div>`;
 }
 
 function renderCal(){
@@ -1290,6 +1293,7 @@ function renderCal(){
     if(!isThis) dayDisplay=`<span class="other-label">${dm+1}/${dd}</span>`;
     // work_diary 기반: 일정/진행중/지시/후속필요 (날짜 앞 10자리 비교)
     const dayAll=diaryRecords.filter(r=>(r.date||'').slice(0,10)===ds);
+    const daySharedAll=sharedCalRecords.filter(r=>(r.date||'').slice(0,10)===ds);
     const dayTodos=getTodoForDate(ds);
     const chips=dayAll.map(r=>{
       const isFuture=(r.date||'').slice(0,10)>=todayStr;
@@ -1298,6 +1302,10 @@ function renderCal(){
       const bar=isFuture?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
       return `<div class="event-chip" style="background:${bg};border-left-color:${bar}"
         onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}</div>`;
+    }).join('');
+    const sharedChips=daySharedAll.map(r=>{
+      return `<div class="event-chip shared-chip" style="background:#F3E9FF;border-left-color:#8E5FC7;color:#5A3286 !important;"
+        onclick="event.stopPropagation();openDayPopup('${ds}')">📢 ${escapeHtml(r.title||'')}</div>`;
     }).join('');
     const todoChips=dayTodos.map(t=>
       `<div class="event-chip" style="background:#FFF3E0;border-left-color:#E2772E;color:#111;"
@@ -1309,7 +1317,7 @@ function renderCal(){
         ${isThis
           ? `<div class="day-num${isSun?' sun-num':''}${isSat?' sat-num':''}${isT?' today-num':''}">${dd}</div>`
           : dayDisplay}
-      </div>${chips}${todoChips}${more}</div>`;
+      </div>${chips}${sharedChips}${todoChips}${more}</div>`;
   }
   document.getElementById('days').innerHTML=html;
 }
@@ -1331,8 +1339,19 @@ function closeDayPopup(){
 function renderDayPopupList(){
   // work_diary에서 해당 날짜 항목
   const list=diaryRecords.filter(r=>r.date===dpDate);
+  const shared=sharedCalRecords.filter(r=>(r.date||'').slice(0,10)===dpDate);
   const el=document.getElementById('dp-list');
-  if(!list.length){el.innerHTML='<div class="dp-empty">이 날짜에 등록된 일정이 없어요<br><small style="color:var(--text3)">아래 추가 버튼으로 일정을 등록하세요</small></div>';return;}
+  if(!list.length && !shared.length){el.innerHTML='<div class="dp-empty">이 날짜에 등록된 일정이 없어요<br><small style="color:var(--text3)">아래 추가 버튼으로 일정을 등록하세요</small></div>';return;}
+  const sharedHtml=shared.map(r=>{
+    return `<div class="dp-item dp-item-shared">
+      <div class="dp-cat-bar" style="background:#8E5FC7"></div>
+      <div class="dp-item-body">
+        <div class="dp-item-title">📢 ${escapeHtml(r.title||'')}</div>
+        <div class="dp-item-cat">${r.category||''} · 공유자: ${escapeHtml(r._empName||'')}</div>
+        ${r.content?`<div class="dp-item-memo">${escapeHtml(r.content.slice(0,80))}${r.content.length>80?'...':''}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
   el.innerHTML=list.map(r=>{
     const status=r.status||'완료';
     // 오늘 이후 날짜면 일정, 이전이면 업무일지
@@ -1356,7 +1375,7 @@ function renderDayPopupList(){
         <button class="dp-item-btn del" onclick="deleteFromPopup('${r.id}')"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + sharedHtml;
 }
 function escapeHtml(s){
   const d=document.createElement('div');d.textContent=s;return d.innerHTML;
@@ -1556,7 +1575,7 @@ function switchTab(tab){
     if(addBtn) addBtn.style.display='';
   }
   if(tab==='diary') renderDiary();
-  else if(tab==='cal') renderCal();
+  else if(tab==='cal'){ renderCal(); loadSharedCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); }
   else if(tab==='list') renderList();
   else if(tab==='share') loadShareView();
   else if(tab==='wfsettings') initWfSettingsView();
@@ -1845,6 +1864,39 @@ async function delTodo(id){
    업무일지 (work_diary)
 ═══════════════════════════════════════ */
 let diaryRecords=[];
+let sharedCalRecords=[]; // 달력 표시용: 타인이 나에게 공유한 항목
+async function loadSharedCalRecords(){
+  if(!SB) return;
+  try{
+    var empRes = await SB.from('employees').select('id,name,dept');
+    var empMap = {};
+    (empRes.data||[]).forEach(function(e){ empMap[e.id]=e; });
+    var myDept = wfSession.dept || '';
+    var isAdmin = (myDept === '대표이사' || myDept === '상무이사');
+    var myName = (wfSession.name||'').trim();
+    var qRes = await SB.from('work_diary')
+      .select('id,employee_id,date,title,content,category,status,is_shared,share_target,share_type')
+      .eq('is_shared', true)
+      .neq('employee_id', wfSession.empId)
+      .order('date',{ascending:false})
+      .limit(300);
+    if(qRes.error){ console.warn('[SharedCal] load error:', qRes.error); return; }
+    var items = (qRes.data||[]).filter(function(r){
+      if(isAdmin) return true;
+      if(!r.share_target) return false;
+      if(r.share_target === '전체') return true;
+      try{
+        var targets = JSON.parse(r.share_target);
+        if(!Array.isArray(targets)) return false;
+        if(myDept && targets.indexOf(myDept) >= 0) return true;
+        return targets.some(function(t){ return t.trim() === myName; });
+      }catch(e){ return r.share_target === myDept || r.share_target === myName; }
+    });
+    items.forEach(function(r){ r._empName = ((empMap[r.employee_id]||{}).name||''); });
+    sharedCalRecords = items;
+    console.log('[SharedCal] 총 '+sharedCalRecords.length+'건 로드');
+  }catch(e){ console.warn('[SharedCal] error:', e); }
+}
 let diaryPage=1;
 const DIARY_PER_PAGE=30;
 let diaryEditId=null;
@@ -2705,6 +2757,7 @@ async function wfEnterMain() {
   if (SB) {
     await loadFromSb();
     await loadDiary();
+    await loadSharedCalRecords();
     await loadUserCategories();
     renderAll();
   }
