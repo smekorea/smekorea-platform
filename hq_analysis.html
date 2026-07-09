@@ -741,7 +741,9 @@ async function loadFromSupabase(){
     rawS=await fetchAll('sales_data',from,to);
     loaded=true;
     const f=`${from.slice(0,4)}.${from.slice(4,6)}`,t=`${to.slice(0,4)}.${to.slice(4,6)}`;
-    info.textContent=`📅 기간조회(${f}~${t}) · 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+    const pPct=_dbTotalP?(rawP.length/_dbTotalP*100).toFixed(1):null;
+    const sPct=_dbTotalS?(rawS.length/_dbTotalS*100).toFixed(1):null;
+    info.textContent=`📅 기간조회(${f}~${t}) · 매입 ${rawP.length.toLocaleString()}건${pPct?'('+pPct+'%)':''} / 매출 ${rawS.length.toLocaleString()}건${sPct?'('+sPct+'%)':''}`;
     info.style.color='#ea580c';
     setModeBar(false);setPricePeriodInit();fillDrops();updateAll();
   }catch(e){info.textContent='로드 실패: '+e.message;console.error(e);}
@@ -976,7 +978,7 @@ function updYearlyChart(){
     rateDots+=`<circle cx="${p.x}" cy="${p.y}" r="5" fill="#1e7e4a" opacity="0.9"/>`;
     rateLabels+=`<text x="${p.x}" y="${p.y-10}" text-anchor="middle" font-size="10" font-weight="700" fill="${rateColor}">${p.rate.toFixed(1)}%</text>`;
   });
-  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible;">
+  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+chartH}" stroke="#d0daea" stroke-width="1"/>
     <line x1="${padL}" y1="${padT+chartH}" x2="${W-padR}" y2="${padT+chartH}" stroke="#d0daea" stroke-width="1"/>
@@ -1033,7 +1035,7 @@ function updMonthlyLine(){
   };
   const drawLabels=(map,color)=>months.map((m,i)=>{const v=map[m]||0;if(!v)return '';return `<text x="${getX(i)}" y="${getY(v)-9}" text-anchor="middle" font-size="8" fill="${color}" font-weight="700">${v>=100000000?(v/100000000).toFixed(1)+'억':''}</text>`;}).join('');
   let mLbls='';months.forEach((m,i)=>{if(i%2===0||i===11)mLbls+=`<text x="${getX(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="#7a8baa">${parseInt(m)}월</text>`;});
-  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible;">
+  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
     ${drawLine(pS,'#c8001e','4,3',0.3)}
     ${drawLine(cS,'#c8001e','',0.9)}
@@ -1154,7 +1156,7 @@ function updCorpDetail(fS,fP){
       if(p.v>0){dots+=`<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" opacity="0.85"/>`;lbls+=`<text x="${p.x}" y="${p.y-8}" text-anchor="middle" font-size="8" fill="${color}" font-weight="700">${p.v>=100000000?(p.v/100000000).toFixed(1)+'억':p.v>0?Math.round(p.v/10000)+'만':''}</text>`;}
       if(i%3===0||i===11)mLbls+=`<text x="${p.x}" y="${H-4}" text-anchor="middle" font-size="8" fill="#7a8baa">${parseInt(months[i])}월</text>`;
     });
-    const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible;"><line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#e8eef6" stroke-width="1"/><path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" opacity="0.8" stroke-linejoin="round"/>${dots}${lbls}${mLbls}</svg>`;
+    const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;"><line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#e8eef6" stroke-width="1"/><path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" opacity="0.8" stroke-linejoin="round"/>${dots}${lbls}${mLbls}</svg>`;
     document.getElementById(`corp-${id}-trend`).innerHTML=svg;
     const itemMap={};
     rows.forEach(r=>{const k=r['브랜드명']||'-';itemMap[k]=(itemMap[k]||0)+(Number(r['공급가액'])||0);});
@@ -1320,7 +1322,7 @@ function buildSumChart(allKeys,sMap,pMap,isAmt){
     xlabels+=`<text x="${x0}" y="${H-10}" text-anchor="middle" font-size="9" fill="#7a8baa">${k}</text>`;
   });
   let grid='';[0,0.5,1].forEach(t=>{const y=pT+cH*(1-t);const v=maxV*t;grid+=`<line x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}" stroke="#e8eef6" stroke-width="1"/><text x="${pL-6}" y="${y+4}" text-anchor="end" font-size="8" fill="#7a8baa">${v>=100000000?(v/100000000).toFixed(1)+'억':Math.round(v/10000)+'만'}</text>`;});
-  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible;">${grid}${bars}${labels}${xlabels}</svg>`;
+  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">${grid}${bars}${labels}${xlabels}</svg>`;
   const legend=`<div style="display:flex;gap:16px;font-size:10px;color:var(--muted);margin-top:6px;"><span style="color:#c8001e;font-weight:700;">■ 매출</span><span style="color:#1a56db;font-weight:700;">■ 매입</span></div>`;
   return `<div class="tv-wrap" style="overflow-x:auto;padding:12px;">${svg}${legend}</div>`;
 }
@@ -1396,7 +1398,7 @@ function renderItemDetailTable(ctx){
     }).join('');
     const totRowCells=allKeys.map(pk=>{const s=codes.reduce((a,k)=>a+(byItem[k][pk]?.amt||0),0);return '<td class="num" style="font-weight:800;">'+fmtFull(s)+'</td>';}).join('');
     const html='<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:'+color+';">'+label+' ('+codes.length.toLocaleString()+'개 품목)</div>'
-      +'<div class="tv-wrap"><table class="tv-table" id="tvItem_'+label+'"><thead><tr><th class="left">품목코드</th><th class="left">메이커P/N</th><th class="left">품명및규격</th>'+thCols+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th></tr></thead><tbody>'
+      +'<div class="tv-wrap" style="max-height:380px;"><table class="tv-table" id="tvItem_'+label+'"><thead><tr><th class="left">품목코드</th><th class="left">메이커P/N</th><th class="left">품명및규격</th>'+thCols+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th></tr></thead><tbody>'
       +rowsHtml
       +'<tr style="background:#f0f2f5;border-top:2px solid #c0cce0;"><td style="font-weight:800;" colspan="3">전체합계</td>'+totRowCells+'<td class="num" style="font-weight:800;">'+fmtFull(grandTotal)+'</td></tr>'
       +'</tbody></table></div>';
@@ -1404,7 +1406,7 @@ function renderItemDetailTable(ctx){
     codes.forEach(k=>{const m=meta[k]||{};excel.push([k,m.mkpn||'',m.desc||'',...allKeys.map(pk=>byItem[k][pk]?.amt||0),itemTotal(k)]);});
     return {html,excel,tableId:'tvItem_'+label};
   }
-  let html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span><span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span><span>메이커 <strong style="color:var(--accent);">'+(brand||'전체')+'</strong></span></div>';
+  let html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span><span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span><span>메이커 <strong style="color:var(--accent);">'+(brand||'전체')+'</strong></span><span>※ 각 표는 약 10줄까지 보이고 그 안에서 세로스크롤됩니다 (매입/매출 동시에 화면에 보이도록)</span></div>';
   html+='<div style="display:flex;flex-direction:column;gap:20px;">';
   const tableIds=[];
   const rBuy=buildItemTable2(fP,'매입','#7a8baa');html+=rBuy.html;if(rBuy.tableId)tableIds.push(rBuy.tableId);
@@ -1522,14 +1524,36 @@ function onPickCheck(el){const picked=_pickState[pickTarget];if(el.checked){if(p
 function updPickSelCnt(){document.getElementById('pickSelCnt').textContent=(_pickState[pickTarget]||[]).length;}
 function confirmPick(){updatePickCnt(pickTarget);closePickModal();if(loaded)renderResult();}
 // ── 초기화 ──
+let _dbTotalP=null,_dbTotalS=null;
 (function(){document.getElementById('selectOverlay').classList.remove('hide');})();
 (async function(){
   try{
     const {count:pc}=await sb.from('purchase_data').select('*',{count:'exact',head:true});
     const {count:sc}=await sb.from('sales_data').select('*',{count:'exact',head:true});
+    _dbTotalP=pc;_dbTotalS=sc;
     const el=document.getElementById('fullLoadCountText');
     if(el&&pc!=null&&sc!=null)el.innerHTML=`매입 ${pc.toLocaleString()}건 + 매출 ${sc.toLocaleString()}건 전체 로드<br>기간 변경 시 즉시 반영 (재조회 없음)`;
   }catch(e){console.error('건수 조회 실패',e);}
+  try{
+    // 실제 DB에 있는 최소/최대 연월로 기간선택 기본값 자동 설정
+    const {data:minRow}=await sb.from('sales_data_v').select('year,month,trade_date').order('trade_date',{ascending:true}).limit(1);
+    const {data:maxRowS}=await sb.from('sales_data_v').select('year,month,trade_date').order('trade_date',{ascending:false}).limit(1);
+    const {data:maxRowP}=await sb.from('purchase_data_v').select('year,month,trade_date').order('trade_date',{ascending:false}).limit(1);
+    if(minRow&&minRow.length){
+      const minY=parseInt(String(minRow[0].year).replace('년','').trim());
+      const minYFull=minY<100?2000+minY:minY;
+      const minM=String(minRow[0].month).replace('월','').trim().padStart(2,'0');
+      const cands=[maxRowS?.[0],maxRowP?.[0]].filter(Boolean);
+      let maxYFull=minYFull,maxM='01';
+      cands.forEach(r=>{const y=parseInt(String(r.year).replace('년','').trim());const yFull=y<100?2000+y:y;const m=String(r.month).replace('월','').trim().padStart(2,'0');if(yFull>maxYFull||(yFull===maxYFull&&m>maxM)){maxYFull=yFull;maxM=m;}});
+      // 년도 옵션 범위를 실제 데이터에 맞게 재생성
+      const buildYearOpts=(sel)=>{let h='';for(let y=minYFull;y<=maxYFull;y++)h+=`<option${y===sel?' selected':''}>${y}</option>`;return h;};
+      document.getElementById('fromYear').innerHTML=buildYearOpts(minYFull);
+      document.getElementById('toYear').innerHTML=buildYearOpts(maxYFull);
+      document.getElementById('fromMonth').value=minM;
+      document.getElementById('toMonth').value=maxM;
+    }
+  }catch(e){console.error('기간 기본값 자동설정 실패',e);}
 })();
 </script>
 </body>
