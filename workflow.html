@@ -2908,6 +2908,10 @@ function renderShareTable(items) {
   var count = document.getElementById('shareViewCount');
   if(count) count.textContent = items.length + '건';
   if (!items.length) { list.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#9ca3af;">공유된 내용이 없습니다.</td></tr>'; return; }
+  // 오늘 날짜 항목을 최상단으로 고정 (정렬/필터 결과와 무관하게 항상 적용)
+  var todayItems = items.filter(function(r){ return (r.date||'').slice(0,10) === todayStr; });
+  var restItems = items.filter(function(r){ return (r.date||'').slice(0,10) !== todayStr; });
+  items = todayItems.concat(restItems);
   var statusColor = function(s) {
     var map = {'완료':'#1e7a45','진행중':'#d97706','보류':'#6b7280','후속필요':'#c8001e','지시':'#c8001e'};
     return map[s] || '#6b7280';
@@ -2922,13 +2926,14 @@ function renderShareTable(items) {
     var confirmCount = r._confirmCount || 0;
     var confirmTotal = r._confirmTotal || 0;
     var confirmedNames = (r._confirms||[]).map(function(c){ return c.emp_name; }).join(', ');
-    // 미확인: 연한 아이보리, 전체확인: 흰색 + 파란색 텍스트
-    var rowBg = allDone ? '' : 'background:#fdf8ee;';
-    var tc = allDone ? 'color:#1a4fa0;' : 'color:#3a3530;';
+    var isToday = (r.date||'').slice(0,10) === todayStr;
+    // 미확인: 연한 아이보리, 전체확인: 흰색 + 파란색 텍스트 / 오늘 날짜: 노란 배경 + 굵은 글씨(최우선 적용)
+    var rowBg = isToday ? 'background:#FFF3B0;' : (allDone ? '' : 'background:#fdf8ee;');
+    var tc = (isToday ? 'font-weight:700;' : '') + (allDone ? 'color:#1a4fa0;' : 'color:#3a3530;');
     var border = 'border-right:1px solid #e8edf5;';
     var rData = encodeURIComponent(JSON.stringify(r));
     var row = '<tr style="border-bottom:1px solid #e8edf5;cursor:pointer;' + rowBg + '" onclick="openShareConfirmPopup(decodeURIComponent(\'' + rData + '\'))">';
-    row += '<td style="padding:8px 10px;font-size:12px;font-family:monospace;' + tc + border + '">' + (r.date||'') + '</td>';
+    row += '<td style="padding:8px 10px;font-size:12px;font-family:monospace;' + tc + border + '">' + (isToday?'🔔 ':'') + (r.date||'') + '</td>';
     row += '<td style="padding:8px 10px;font-size:12px;' + tc + border + '">' + (r._empName||'') + '</td>';
     row += '<td style="padding:8px 10px;font-size:11px;' + tc + border + '">' + (r._shareTargetStr||'') + '</td>';
     row += '<td style="padding:8px 10px;font-size:12px;' + tc + border + '">' + (r.category||'') + '</td>';
