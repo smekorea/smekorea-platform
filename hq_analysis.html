@@ -409,7 +409,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
     <div class="bx">
       <div class="bx-header"><span class="bx-title">국내 vs 해외매출 비중</span><span class="period-badge" id="pb-corp-split"></span></div>
       <div class="bx-body" id="corp-domestic-split" style="padding:14px 16px;"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div>
-      <div style="font-size:10px;color:var(--muted);padding:0 16px 10px;border-top:1px dashed var(--border);padding-top:8px;">※ "해외"는 GSMEIN·SMECN·SMEGLOBAL 3개 법인 공급분 기준입니다. 3개 법인을 거치지 않고 직접 수출되는 건이 있다면 현재 자료 구조상 구분 필드가 없어 국내로 집계될 수 있습니다 — 별도 구분이 필요하면 판매처명에 국가/거래유형 표기 규칙을 알려주세요.</div>
+      <div style="font-size:10px;color:var(--muted);padding:0 16px 10px;border-top:1px dashed var(--border);padding-top:8px;">※ "해외"는 ① GSMEIN·SMECN·SMEGLOBAL 3개 법인 공급분 + ② 관리자설정 &gt; 해외매출처관리(export_customers)에 등록된 기타 직접수출 거래처 기준입니다. 둘 다 해당하지 않는 매출처는 국내로 집계됩니다. 신규 해외 거래처는 admin_log.html "해외매출처관리" 탭에서 등록하면 바로 반영됩니다.</div>
     </div>
   </div>
 </div>
@@ -582,6 +582,23 @@ function getCorp(r){
   if(sel.includes('SME GLOBAL')||sel.includes('SMEGLOBAL')||sel.includes('SMEG')||sel.includes('THAI')) return 'SMEGLOBAL';
   if(sel.includes('TIANJIN')||sel.includes('SMECN')||sel.includes('SME CN')) return 'SMECN';
   return '국내';
+}
+
+// ── 해외매출처관리(export_customers) 매칭 — 3법인 외 기타 직접수출 거래처 ──
+let _exportCustomerSet=new Set();
+async function loadExportCustomerSet(){
+  try{
+    const {data,error}=await sb.from('export_customers').select('customer,alias1,alias2,alias3').eq('is_active',true);
+    if(error){console.error('[export_customers] load error',error);return;}
+    const set=new Set();
+    (data||[]).forEach(r=>{
+      [r.customer,r.alias1,r.alias2,r.alias3].forEach(v=>{ if(v) set.add(String(v).trim()); });
+    });
+    _exportCustomerSet=set;
+  }catch(e){console.error('[export_customers] load exception',e);}
+}
+function isExportMatch(sellerName){
+  return _exportCustomerSet.has(String(sellerName||'').trim());
 }
 
 // ── 헬퍼 ──
@@ -1172,21 +1189,34 @@ function updCorpDetail(fS,fP){
 function updCorpSplit(fS){
   const {from,to}=getFT();
   document.getElementById('pb-corp-split').textContent=pbText(from,to);
-  let overseasAmt=0,domesticAmt=0,overseasCnt=0,domesticCnt=0;
-  fS.forEach(r=>{const c=getCorp(r);const amt=Number(r['공급가액'])||0;if(c==='국내'){domesticAmt+=amt;domesticCnt++;}else{overseasAmt+=amt;overseasCnt++;}});
+  let corp3Amt=0,corp3Cnt=0,etcAmt=0,etcCnt=0,domesticAmt=0,domesticCnt=0;
+  fS.forEach(r=>{
+    const c=getCorp(r);
+    const amt=Number(r['공급가액'])||0;
+    if(c!=='국내'){ corp3Amt+=amt; corp3Cnt++; }
+    else if(isExportMatch(r['판매처명'])){ etcAmt+=amt; etcCnt++; }
+    else { domesticAmt+=amt; domesticCnt++; }
+  });
+  const overseasAmt=corp3Amt+etcAmt, overseasCnt=corp3Cnt+etcCnt;
   const total=overseasAmt+domesticAmt;
   const el=document.getElementById('corp-domestic-split');
   if(!total){el.innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 없음</div>';return;}
-  const dP=(domesticAmt/total*100),oP=(overseasAmt/total*100);
+  const dP=(domesticAmt/total*100);
+  const c3P=(corp3Amt/total*100);
+  const etcP=(etcAmt/total*100);
+  const oP=(overseasAmt/total*100);
+  const etcBarHtml=etcAmt>0?`<div style="width:${Math.max(etcP,2)}%;background:#8E5FC7;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">기타수출 ${etcP.toFixed(1)}%</div>`:'';
+  const etcSummaryHtml=etcAmt>0?` <span style="color:var(--muted);">(3법인 ${fmt(corp3Amt)}·${corp3Cnt.toLocaleString()}건 + 기타수출 ${fmt(etcAmt)}·${etcCnt.toLocaleString()}건)</span>`:'';
   el.innerHTML=`<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
     <div style="flex:1;min-width:260px;">
       <div style="display:flex;height:26px;border-radius:6px;overflow:hidden;">
         <div style="width:${Math.max(dP,2)}%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">국내 ${dP.toFixed(1)}%</div>
-        <div style="width:${Math.max(oP,2)}%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">해외(3법인) ${oP.toFixed(1)}%</div>
+        <div style="width:${Math.max(c3P,2)}%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">해외(3법인) ${c3P.toFixed(1)}%</div>
+        ${etcBarHtml}
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;">
         <span><strong style="color:var(--amber);">${fmt(domesticAmt)}</strong> <span style="color:var(--muted);font-size:10px;">(${domesticCnt.toLocaleString()}건)</span></span>
-        <span><strong style="color:var(--accent);">${fmt(overseasAmt)}</strong> <span style="color:var(--muted);font-size:10px;">(${overseasCnt.toLocaleString()}건)</span></span>
+        <span><strong style="color:var(--accent);">${fmt(overseasAmt)}</strong> <span style="color:var(--muted);font-size:10px;">(${overseasCnt.toLocaleString()}건)</span>${etcSummaryHtml}</span>
       </div>
     </div>
   </div>`;
@@ -1545,6 +1575,9 @@ function confirmPick(){updatePickCnt(pickTarget);closePickModal();if(loaded)rend
 let _dbTotalP=null,_dbTotalS=null;
 (function(){document.getElementById('selectOverlay').classList.remove('hide');})();
 (async function(){
+  try{
+    await loadExportCustomerSet();
+  }catch(e){console.error('해외매출처 목록 로드 실패',e);}
   try{
     const {count:pc}=await sb.from('purchase_data').select('*',{count:'exact',head:true});
     const {count:sc}=await sb.from('sales_data').select('*',{count:'exact',head:true});
