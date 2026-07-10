@@ -219,8 +219,8 @@ tr.dragging{opacity:.45;}
 <div class="tab-bar">
   <button class="tab-btn active" id="tab-items-btn"     onclick="switchTab('items')">📋 품목 마스터</button>
   <button class="tab-btn" id="tab-lg-btn"               onclick="switchTab('lg')">🏭 LG사급 기준</button>
-  <button class="tab-btn" id="tab-export-btn"           onclick="switchTab('export')">🌍 해외매출처관리</button>
-  <button class="tab-btn" id="tab-partners-btn"         onclick="switchTab('partners')">🤝 매입매출처 기본정보</button>
+  <button class="tab-btn" id="tab-export-btn"           onclick="switchTab('export')">🌍 해외매출처</button>
+  <button class="tab-btn" id="tab-partners-btn"         onclick="switchTab('partners')">🤝 매입매출처</button>
   <button class="tab-btn" id="tab-master-btn"           onclick="switchTab('master')">📦 재고운영기준</button>
   <button class="tab-btn" id="tab-alias-btn"            onclick="switchTab('alias')">🏷️ 메이커 Alias</button>
   <button class="tab-btn" id="tab-maker-btn"            onclick="switchTab('maker')">🔧 메이커 납기</button>
@@ -467,7 +467,7 @@ tr.dragging{opacity:.45;}
       <button class="up-btn up-btn-green" onclick="downloadPartnersData()">⬇ 현재 데이터 다운로드</button>
       <button class="up-btn up-btn-secondary" onclick="downloadPartnersTemplate()">📄 양식 다운로드</button>
     </div>
-    <div class="up-info">💡 이름(name)은 stock_inventory의 브랜드명(brand_std)과 정확히 일치해야 매칭됩니다. <b>마감기준(closing_basis)</b>에 "LG공급수량정산"으로 등록된 브랜드는 stock_analysis.html 목표대비분석에서 LG사급 실적 계산 시 제외됩니다(재고 미보유·LG마감정산 매입처). 엑셀 업로드 시 이름 기준으로 upsert(같으면 갱신, 없으면 추가)되며 기존 목록은 삭제되지 않습니다.</div>
+    <div class="up-info">💡 이름(name)은 stock_inventory의 브랜드명(brand_std)과 정확히 일치해야 매칭됩니다. <b>마감기준(closing_basis)</b>에 "LG마감기준"으로 등록된 브랜드는 stock_analysis.html 목표대비분석에서 LG사급 실적 계산 시 제외됩니다(재고 미보유·LG마감정산 매입처). 엑셀 업로드 시 이름 기준으로 upsert(같으면 갱신, 없으면 추가)되며 기존 목록은 삭제되지 않습니다.</div>
   </div>
 
   <!-- 프리뷰 -->
@@ -479,6 +479,27 @@ tr.dragging{opacity:.45;}
       <button class="up-btn up-btn-primary" onclick="submitPartnersData()" id="partnersSubmitBtn">✓ 등록 확인</button>
       <button class="up-btn up-btn-secondary" onclick="clearPartnersPreview()">✕ 취소</button>
     </div>
+  </div>
+
+  <!-- 검색/필터 -->
+  <div class="up-section" style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <input type="text" id="pf-keyword" placeholder="🔍 이름/별칭 검색" oninput="renderPartnersTable()" style="flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:'Noto Sans KR',sans-serif;font-size:13px;">
+    <select id="pf-type" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:6px;font-size:13px;">
+      <option value="">구분 전체</option>
+      <option value="매입처">매입처</option>
+      <option value="매출처">매출처</option>
+      <option value="매입매출처">매입매출처</option>
+    </select>
+    <select id="pf-closing" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:6px;font-size:13px;">
+      <option value="">마감기준 전체</option>
+      <option value="LG마감기준">LG마감기준만</option>
+      <option value="basic">일반(실재고보유)만</option>
+    </select>
+    <select id="pf-active" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:6px;font-size:13px;">
+      <option value="">상태 전체</option>
+      <option value="true">활성만</option>
+      <option value="false">비활성만</option>
+    </select>
   </div>
 
   <!-- 목록 -->
@@ -528,7 +549,7 @@ tr.dragging{opacity:.45;}
       <div class="form-group full"><label>마감기준</label>
         <select id="pm-closing">
           <option value="">실재고보유 (기본, SME 재고 소유)</option>
-          <option value="LG공급수량정산">LG공급수량정산 (재고 미보유 — LG마감기준 제외 대상)</option>
+          <option value="LG마감기준">LG마감기준 (재고 미보유 — LG사급 실적 제외 대상)</option>
         </select>
       </div>
       <div class="form-group full"><label>결제조건</label><input id="pm-terms" placeholder="예) 월말마감 익월30일 (선택, 향후 사용예정)"></div>
@@ -1636,11 +1657,22 @@ async function loadPartnersData() {
 
 function renderPartnersTable() {
   const tbody=document.getElementById('partners-tbody');
+  const kw=(document.getElementById('pf-keyword')?.value||'').trim().toLowerCase();
+  const fType=document.getElementById('pf-type')?.value||'';
+  const fClosing=document.getElementById('pf-closing')?.value||'';
+  const fActive=document.getElementById('pf-active')?.value||'';
+  let rows=_partnersData;
+  if(kw) rows=rows.filter(r=>(r.name||'').toLowerCase().includes(kw)||(r.alias1||'').toLowerCase().includes(kw)||(r.alias2||'').toLowerCase().includes(kw));
+  if(fType) rows=rows.filter(r=>r.type===fType);
+  if(fClosing==='LG마감기준') rows=rows.filter(r=>r.closing_basis==='LG마감기준');
+  if(fClosing==='basic') rows=rows.filter(r=>r.closing_basis!=='LG마감기준');
+  if(fActive) rows=rows.filter(r=>(r.is_active!==false)===(fActive==='true'));
   if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="10"><div class="empty-state">등록된 매입매출처가 없습니다.</div></td></tr>';return;}
-  tbody.innerHTML=_partnersData.map((r,i)=>{
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="10"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
+  tbody.innerHTML=rows.map((r,i)=>{
     const aliases=[r.alias1,r.alias2].filter(Boolean).join(', ');
     const active=r.is_active!==false;
-    const closingBadge=r.closing_basis==='LG공급수량정산'?'<span class="badge b-gray" style="background:#FEE2E2;color:#B91C1C;">LG마감기준</span>':(r.closing_basis||'');
+    const closingBadge=r.closing_basis==='LG마감기준'?'<span class="badge b-gray" style="background:#FEE2E2;color:#B91C1C;">LG마감기준</span>':(r.closing_basis||'');
     return `
     <tr>
       <td class="center mono">${i+1}</td>
@@ -1784,9 +1816,9 @@ async function downloadPartnersData(){
 function downloadPartnersTemplate(){
   const ws=XLSX.utils.aoa_to_sheet([
     ['name(매입처명)','alias1','alias2','type','country','closing_basis','payment_terms','note'],
-    ['Glory Faith','','','매입처','','LG공급수량정산','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
-    ['ZPO','','','매입처','','LG공급수량정산','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
-    ['베이스원','','','매입처','','LG공급수량정산','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
+    ['Glory Faith','','','매입처','','LG마감기준','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
+    ['ZPO','','','매입처','','LG마감기준','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
+    ['베이스원','','','매입처','','LG마감기준','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
     ['㈜예시상사(일반 브랜드는 closing_basis 비워두세요)','','','매입처','','','','']
   ]);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'매입매출처기본정보');
