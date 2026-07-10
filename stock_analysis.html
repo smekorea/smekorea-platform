@@ -110,7 +110,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:va
 
 /* ── 섹션 라벨 ── */
 .sec-label{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
-.sec-label-text{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:0.1em;white-space:nowrap;}
+.sec-label-text{font-family:var(--mono);font-size:12px;font-weight:800;color:var(--text);letter-spacing:0.08em;white-space:nowrap;}
 .sec-label-line{flex:1;height:1px;background:var(--border);}
 
 /* ── 테이블 ── */
@@ -243,7 +243,7 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
 .mkc-sub{font-size:11px;color:var(--text-2);margin-top:6px;}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;}
-.chart-card-title{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:0.06em;margin-bottom:16px;}
+.chart-card-title{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--text);letter-spacing:0.06em;margin-bottom:16px;}
 .chart-card-title small{font-weight:500;color:var(--text-mute);letter-spacing:0;}
 .svg-chart{width:100%;overflow:visible;}
 .goal-sum-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
@@ -1480,19 +1480,15 @@ async function renderGoal(){
     return;
   }
   // 목표 대비 실적 (LG/직거래/전체)
-  const brandMap={};
-  _allResult.forEach(r=>{
-    if(!brandMap[r.brand])brandMap[r.brand]={realAmt:0,realQty:0,stockMonths:null,type:r.type};
-    brandMap[r.brand].realAmt+=r.amount;
-    brandMap[r.brand].realQty+=r.realQty;
-  });
   const lgRules=_goalRules.filter(r=>r.supply_type==='LG사급품'&&r.target_amount);
   const dtRules=_goalRules.filter(r=>r.supply_type==='직거래품'&&r.target_amount);
   const lgTarget=lgRules.reduce((s,r)=>s+(r.target_amount||0),0);
   const dtTarget=dtRules.reduce((s,r)=>s+(r.target_amount||0),0);
   const allTarget=lgTarget+dtTarget;
-  const lgReal=lgRules.reduce((s,r)=>s+(brandMap[r.brand]?.realAmt||0),0);
-  const dtReal=dtRules.reduce((s,r)=>s+(brandMap[r.brand]?.realAmt||0),0);
+  // 실재고는 "목표가 설정된 브랜드"로 제한하지 않고, 해당 공급유형의 전체 실재고 합계로 계산한다.
+  // (월별 재고금액 차트의 최신월 수치와 정확히 일치시키기 위함 — 이전에는 목표 설정 브랜드만 합산해 수치가 어긋났음)
+  const lgReal=_allResult.filter(r=>r.type==='LG사급').reduce((s,r)=>s+r.amount,0);
+  const dtReal=_allResult.filter(r=>r.type==='직거래').reduce((s,r)=>s+r.amount,0);
   const allReal=lgReal+dtReal;
   const fmt=v=>v>=100000000?(Math.round(v/100000000*10)/10).toLocaleString()+'억':v>=10000000?Math.round(v/10000000).toLocaleString()+'천만':Math.round(v).toLocaleString()+'원';
   const pctColor=p=>p>130?'var(--ng)':p>100?'var(--warn)':p>80?'var(--ok)':'var(--accent)';
@@ -1538,70 +1534,87 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
   const periodStr=`데이터 기간: ${months[0]} ~ ${months[months.length-1]}`;
   const achColor=pct=>pct>130?'#DC2626':pct>100?'#D97706':pct>=80?'#059669':'#0066FF';
 
-  // 공통 SVG 막대그래프 빌더 (달성률 3분할 차트용)
+  // 공통 SVG 막대그래프 빌더 (달성률 3분할 차트용) — 고정 전체폭 기준, 월 개수(최대 12개월)에 따라 막대폭 자동 축소
   function buildTrendBarChart(vals, targetVal, fillFn, labelFn, chartH){
-    const bW=64,bGap=18,padL=44,padT=16,padB=30;
-    const svgW=padL+(bW+bGap)*months.length+16;
-    const maxV=Math.max(...vals,targetVal||0,1);
+    const totalW=520,padL=42,padR=14,padT=16,padB=28;
+    const n=months.length;
+    const slotW=(totalW-padL-padR)/Math.max(n,1);
+    const bW=Math.min(40,slotW*0.6);
     let bars='';
+    const maxV=Math.max(...vals,targetVal||0,1);
     months.forEach((m,i)=>{
       const v=vals[i];const h=maxV>0?(v/maxV)*chartH:0;
-      const x=padL+i*(bW+bGap);const y=padT+chartH-h;
+      const x=padL+i*slotW+(slotW-bW)/2;const y=padT+chartH-h;
       const isLatest=i===months.length-1;
-      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${fillFn(v,isLatest)}" rx="3" opacity="${isLatest?1:.75}"/>`;
-      bars+=`<text x="${x+bW/2}" y="${y-4}" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${labelFn(v)}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m}</text>`;
+      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${fillFn(v,isLatest)}" rx="2" opacity="${isLatest?1:.75}"/>`;
+      bars+=`<text x="${x+bW/2}" y="${y-4}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${labelFn(v)}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${padT+chartH+15}" text-anchor="middle" font-size="9" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m.slice(2)}</text>`;
     });
     if(targetVal>0&&targetVal<=maxV){
       const targetY=padT+chartH-(targetVal/maxV)*chartH;
-      bars+=`<line x1="${padL}" y1="${targetY}" x2="${padL+(bW+bGap)*months.length}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
-      bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표 ${fmtA(targetVal)}</text>`;
+      bars+=`<line x1="${padL}" y1="${targetY}" x2="${totalW-padR}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
+      bars+=`<text x="${padL-3}" y="${targetY+4}" text-anchor="end" font-size="8" font-family="IBM Plex Mono" fill="#B91C1C">목표 ${fmtA(targetVal)}</text>`;
     }
-    return `<svg viewBox="0 0 ${svgW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
+    return `<svg viewBox="0 0 ${totalW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
   }
 
-  // 월별 재고금액 차트 — 막대 위에 금액 + 달성률% + 전월대비 증감을 함께 표시 (구 KPI카드 내용 통합)
-  function buildMainAmountChart(vals, targetVal){
-    const bW=64,bGap=18,padL=48,padT=54,padB=30,chartH=110;
-    const svgW=padL+(bW+bGap)*months.length+16;
-    const maxV=Math.max(...vals,targetVal||0,1);
+  // 월별 재고금액 차트 — LG사급/직거래 실적을 누적막대로 분리 표시 + 막대 위 금액·달성률·전월대비 통합
+  // 고정 전체폭(슬롯기반) 사용: 6개월이든 12개월이든 차트 면적이 늘어나지 않고 막대폭만 자동으로 얇아짐
+  function buildMainAmountChart(lgVals, dtVals, targetVal){
+    const totalW=680,padL=46,padR=14,padT=58,padB=28,chartH=86;
+    const n=months.length;
+    const slotW=(totalW-padL-padR)/Math.max(n,1);
+    const bW=Math.min(44,slotW*0.62);
+    const totalVals=months.map((m,i)=>lgVals[i]+dtVals[i]);
+    const maxV=Math.max(...totalVals,targetVal||0,1);
     let bars='';
     months.forEach((m,i)=>{
-      const v=vals[i];const h=maxV>0?(v/maxV)*chartH:0;
-      const x=padL+i*(bW+bGap);const y=padT+chartH-h;
-      const isLatest=i===months.length-1;
-      const pct=targetVal>0?v/targetVal*100:0;
-      const prev=i>0?vals[i-1]:null;
-      const delta=prev!==null?v-prev:null;
-      const deltaStr=delta===null?'':(delta>0?` ▲${fmtA(delta)}`:(delta<0?` ▼${fmtA(Math.abs(delta))}`:' 보합'));
-      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${isLatest?'#0066FF':'#94A3B8'}" rx="3" opacity="${isLatest?1:.75}"/>`;
+      const lg=lgVals[i],dt=dtVals[i],total=lg+dt;
+      const totalH=maxV>0?(total/maxV)*chartH:0;
+      const lgH=maxV>0?(lg/maxV)*chartH:0;
+      const dtH=totalH-lgH;
+      const x=padL+i*slotW+(slotW-bW)/2;
+      const yTop=padT+chartH-totalH;
+      const isLatest=i===n-1;
+      bars+=`<rect x="${x}" y="${padT+chartH-lgH}" width="${bW}" height="${lgH}" fill="#B91C1C" opacity="${isLatest?.9:.55}"/>`;
+      bars+=`<rect x="${x}" y="${yTop}" width="${bW}" height="${dtH}" fill="#0066FF" opacity="${isLatest?.9:.55}" rx="2"/>`;
       if(isLatest){
-        bars+=`<rect x="${x+bW/2-26}" y="${y-50}" width="52" height="14" rx="7" fill="#0066FF"/>`;
-        bars+=`<text x="${x+bW/2}" y="${y-40}" text-anchor="middle" font-size="8" font-family="IBM Plex Mono" fill="#fff" font-weight="700">LATEST</text>`;
+        bars+=`<rect x="${x+bW/2-24}" y="${yTop-38}" width="48" height="13" rx="6.5" fill="#0066FF"/>`;
+        bars+=`<text x="${x+bW/2}" y="${yTop-29}" text-anchor="middle" font-size="7.5" font-family="IBM Plex Mono" fill="#fff" font-weight="700">LATEST</text>`;
       }
-      bars+=`<text x="${x+bW/2}" y="${y-22}" text-anchor="middle" font-size="12" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${fmtA(v)}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${y-7}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="${achColor(pct)}" font-weight="700">${Math.round(pct)}%${deltaStr}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m}</text>`;
+      const pct=targetVal>0?total/targetVal*100:0;
+      const prev=i>0?totalVals[i-1]:null;
+      const delta=prev!==null?total-prev:null;
+      const deltaStr=delta===null?'':(delta>0?` ▲${fmtA(delta)}`:(delta<0?` ▼${fmtA(Math.abs(delta))}`:' 보합'));
+      bars+=`<text x="${x+bW/2}" y="${yTop-20}" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${fmtA(total)}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${yTop-7}" text-anchor="middle" font-size="9" font-family="IBM Plex Mono" fill="${achColor(pct)}" font-weight="700">${Math.round(pct)}%${deltaStr}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${padT+chartH+15}" text-anchor="middle" font-size="9" font-family="IBM Plex Mono" fill="#475569" font-weight="500">${m}</text>`;
     });
     if(targetVal>0&&targetVal<=maxV){
       const targetY=padT+chartH-(targetVal/maxV)*chartH;
-      bars+=`<line x1="${padL}" y1="${targetY}" x2="${padL+(bW+bGap)*months.length}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
-      bars+=`<text x="${padL-4}" y="${targetY+4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" fill="#B91C1C">목표 ${fmtA(targetVal)}</text>`;
+      bars+=`<line x1="${padL}" y1="${targetY}" x2="${totalW-padR}" y2="${targetY}" stroke="#B91C1C" stroke-dasharray="4,3" stroke-width="1.5"/>`;
+      bars+=`<text x="${padL-3}" y="${targetY+4}" text-anchor="end" font-size="8" font-family="IBM Plex Mono" fill="#B91C1C">목표 ${fmtA(targetVal)}</text>`;
     }
-    return `<svg viewBox="0 0 ${svgW} ${padT+chartH+padB}" class="svg-chart">${bars}</svg>`;
+    return `<svg viewBox="0 0 ${totalW} ${padT+chartH+padB}" class="svg-chart" style="max-width:560px;display:block;margin:0 auto;">${bars}</svg>`;
   }
 
   const totalVals=months.map(m=>mData[m].total);
   const lgVals=months.map(m=>mData[m].lg);
   const dtVals=months.map(m=>mData[m].direct);
-  const barSvg=buildMainAmountChart(totalVals,allTarget);
-  const chartAll=buildTrendBarChart(totalVals,allTarget,v=>achColor(allTarget>0?v/allTarget*100:0),v=>Math.round(allTarget>0?v/allTarget*100:0)+'%',105);
-  const chartLg=buildTrendBarChart(lgVals,lgTarget,v=>achColor(lgTarget>0?v/lgTarget*100:0),v=>Math.round(lgTarget>0?v/lgTarget*100:0)+'%',105);
-  const chartDt=buildTrendBarChart(dtVals,dtTarget,v=>achColor(dtTarget>0?v/dtTarget*100:0),v=>Math.round(dtTarget>0?v/dtTarget*100:0)+'%',105);
+  const barSvg=buildMainAmountChart(lgVals,dtVals,allTarget);
+  const chartAll=buildTrendBarChart(totalVals,allTarget,v=>achColor(allTarget>0?v/allTarget*100:0),v=>Math.round(allTarget>0?v/allTarget*100:0)+'%',90);
+  const chartLg=buildTrendBarChart(lgVals,lgTarget,v=>achColor(lgTarget>0?v/lgTarget*100:0),v=>Math.round(lgTarget>0?v/lgTarget*100:0)+'%',90);
+  const chartDt=buildTrendBarChart(dtVals,dtTarget,v=>achColor(dtTarget>0?v/dtTarget*100:0),v=>Math.round(dtTarget>0?v/dtTarget*100:0)+'%',90);
 
   document.getElementById('goalTrendWrap').innerHTML=`
     <div class="sec-label"><span class="sec-label-text">월별 재고금액</span><span class="period-label" style="margin-left:10px;">${periodStr}</span><div class="sec-label-line"></div></div>
-    <div class="chart-card" style="margin-bottom:14px;"><div class="chart-card-title">막대 위: 금액 · 목표대비 달성률 · 전월대비 증감</div>${barSvg}</div>
+    <div class="chart-card" style="margin-bottom:14px;padding:16px 20px;">
+      <div class="chart-card-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+        <span>막대 위: 금액 · 목표대비 달성률 · 전월대비 증감</span>
+        <span style="font-weight:600;font-size:10px;"><span style="display:inline-block;width:8px;height:8px;background:#B91C1C;border-radius:2px;margin-right:3px;"></span>LG사급<span style="display:inline-block;width:8px;height:8px;background:#0066FF;border-radius:2px;margin:0 3px 0 10px;"></span>직거래</span>
+      </div>
+      ${barSvg}
+    </div>
     <div class="sec-label" style="margin-bottom:10px;"><span class="sec-label-text">월별 달성률 <small style="font-weight:500;color:var(--text-mute);">(막대 = 실적, 점선 = 목표금액)</small></span><div class="sec-label-line"></div></div>
     <div class="chart-grid-3">
       <div class="chart-card"><div class="chart-card-title" style="color:#0F172A;">전체 달성률</div>${chartAll}</div>
