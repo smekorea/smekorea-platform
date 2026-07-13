@@ -326,8 +326,8 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
     <div style="display:flex;gap:12px;min-width:900px;">
       <div class="bx" style="flex:1 1 0;min-width:440px;">
         <div class="bx-header">
-          <span class="bx-title">연도별 매출·매입·마진율 추이</span>
-          <span class="bx-sub">2020~현재 · 단위:억원 / 수치위=전년비증감 / 점=마진율</span>
+          <span class="bx-title">연도별 매출·매입 추이</span>
+          <span class="bx-sub">2020~현재 · 단위:억원 / 수치위=전년비증감</span>
         </div>
         <div style="padding:16px;">
           <div id="yearly-chart" style="min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
@@ -962,12 +962,11 @@ function updYearlyChart(){
   const data=years.map(y=>({label:y+'년',sales:ySales[y]||0,purch:yPurch[y]||0,margin:(ySales[y]||0)-(yPurch[y]||0),rate:(ySales[y]||0)>0?((ySales[y]||0)-(yPurch[y]||0))/(ySales[y]||0)*100:0}));
   const hasAny=data.some(d=>d.sales>0||d.purch>0);
   if(!hasAny){elY.innerHTML='<div style="color:#111827;font-size:11px;">데이터 없음</div>';return;}
-  const W=560,H=230,padL=48,padR=20,padT=36,padB=52;
+  const W=560,H=210,padL=48,padR=20,padT=36,padB=44;
   const chartW=W-padL-padR,chartH=H-padT-padB;
   const maxVal=Math.max(...data.map(d=>Math.max(d.sales,d.purch)),1);
   const colW=chartW/data.length,barW=Math.min(20,colW*0.3);
-  let grid='',saleBars='',purchBars='',rateLine='',rateDots='',rateLabels='',barLabels='',yoyBadge='';
-  const ratePathPts=[];
+  let grid='',saleBars='',purchBars='',barLabels='',yoyBadge='';
   [0,0.25,0.5,0.75,1].forEach(t=>{
     const y=padT+chartH*(1-t);const val=maxVal*t;
     grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e8eef6" stroke-width="1"/>`;
@@ -978,43 +977,30 @@ function updYearlyChart(){
     const cx=padL+colW*i+colW/2;
     const sH=Math.max(2,d.sales/maxVal*chartH),pH=Math.max(2,d.purch/maxVal*chartH);
     const sY=padT+chartH-sH,pY=padT+chartH-pH;
-    const maxRate=Math.max(...data.map(x=>Math.abs(x.rate)),0.1);
-    const rateNorm=Math.min(1,Math.max(0,d.rate/maxRate));
-    const rY=padT+chartH*0.9-rateNorm*chartH*0.75;
-    ratePathPts.push({x:cx,y:rY,rate:d.rate});
     saleBars+=`<rect x="${cx-barW-1}" y="${sY}" width="${barW}" height="${sH}" fill="#c8001e" opacity="0.8" rx="2"/>`;
     purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barW}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
-    barLabels+=`<text x="${cx-barW/2-1}" y="${sY-6}" text-anchor="middle" font-size="10" font-weight="700" fill="#c8001e">${fmtB(d.sales)}</text>`;
-    barLabels+=`<text x="${cx+barW/2+1}" y="${pY-6}" text-anchor="middle" font-size="10" fill="#1a56db">${fmtB(d.purch)}</text>`;
-    const rateColor=d.rate>=10?'#1e7e4a':d.rate>=5?'#1a56db':d.rate>=0?'#b46400':'#c8001e';
-    barLabels+=`<text x="${cx}" y="${padT+chartH+28}" text-anchor="middle" font-size="10" fill="${rateColor}">마진 ${fmtB(d.margin)} (${d.rate.toFixed(1)}%)</text>`;
+    barLabels+=`<text x="${cx-barW-1}" y="${sY-6}" text-anchor="middle" font-size="8.5" font-weight="700" fill="#c8001e">${fmtB(d.sales)}</text>`;
+    barLabels+=`<text x="${cx+barW+1}" y="${pY-6}" text-anchor="middle" font-size="8.5" fill="#1a56db">${fmtB(d.purch)}</text>`;
+    barLabels+=`<text x="${cx}" y="${padT+chartH+26}" text-anchor="middle" font-size="9" fill="#7a8baa">마진 ${fmtB(d.margin)}</text>`;
     const prevD=i>0?data[i-1]:null;
     if(prevD&&prevD.sales>0){
       const yoy=((d.sales-prevD.sales)/prevD.sales*100);const up=yoy>=0;
-      yoyBadge+=`<text x="${cx-barW/2-1}" y="${sY-19}" text-anchor="middle" font-size="10" font-weight="700" fill="${up?'#c8001e':'#1e7e4a'}">${up?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%</text>`;
+      yoyBadge+=`<text x="${cx-barW-1}" y="${sY-18}" text-anchor="middle" font-size="9" font-weight="700" fill="${up?'#c8001e':'#1e7e4a'}">${up?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%</text>`;
     }
   });
   data.forEach((d,i)=>{
     const cx=padL+colW*i+colW/2;
     barLabels+=`<text x="${cx}" y="${padT+chartH+14}" text-anchor="middle" font-size="11" font-weight="700" fill="#111827">${d.label}</text>`;
   });
-  const linePath=ratePathPts.map((p,i)=>(i===0?'M':'L')+p.x+','+p.y).join(' ');
-  rateLine=ratePathPts.length?`<path d="${linePath}" fill="none" stroke="#1e7e4a" stroke-width="2" opacity="0.9" stroke-linejoin="round"/>`:'';
-  ratePathPts.forEach(p=>{
-    const rateColor=p.rate>=10?'#1e7e4a':p.rate>=5?'#1a56db':p.rate>=0?'#b46400':'#c8001e';
-    rateDots+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="#1e7e4a" opacity="0.9"/>`;
-    rateLabels+=`<text x="${p.x}" y="${p.y-9}" text-anchor="middle" font-size="10" font-weight="700" fill="${rateColor}">${p.rate.toFixed(1)}%</text>`;
-  });
   const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+chartH}" stroke="#d0daea" stroke-width="1"/>
     <line x1="${padL}" y1="${padT+chartH}" x2="${W-padR}" y2="${padT+chartH}" stroke="#d0daea" stroke-width="1"/>
-    ${saleBars}${purchBars}${rateLine}${rateDots}${rateLabels}${barLabels}${yoyBadge}
+    ${saleBars}${purchBars}${barLabels}${yoyBadge}
   </svg>`;
   const legend=`<div style="display:flex;justify-content:flex-end;gap:14px;padding:0 4px 8px;font-size:11px;color:#111827;flex-wrap:wrap;">
     <span><span style="display:inline-block;width:10px;height:10px;background:#c8001e;opacity:0.8;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매출</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#1a56db;opacity:0.45;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매입</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#1e7e4a;border-radius:50%;margin-right:3px;vertical-align:middle;"></span>마진율(%)</span>
     <span style="color:var(--accent);">▲▼전년대비</span>
   </div>`;
   elY.innerHTML=`${legend}<div style="overflow-x:auto;">${svg}</div>`;
@@ -1062,7 +1048,7 @@ function updMonthlyLine(){
     let dots='';pts.forEach(p=>{dots+=`<circle cx="${p.x}" cy="${p.y}" r="${dash?2.5:4}" fill="${color}" opacity="${opa}"/>`;});
     return `<path d="${path}" fill="none" stroke="${color}" stroke-width="${dash?1.5:2.5}" stroke-dasharray="${dash}" opacity="${opa}" stroke-linejoin="round"/>`+dots;
   };
-  const drawLabels=(map,color)=>months.map((m,i)=>{const v=map[m]||0;if(!v)return '';return `<text x="${getX(i)}" y="${getY(v)-10}" text-anchor="middle" font-size="10" fill="${color}" font-weight="700">${v>=100000000?(v/100000000).toFixed(1)+'억':''}</text>`;}).join('');
+  const drawLabels=(map,color)=>months.map((m,i)=>{const v=map[m]||0;if(!v)return '';return `<text x="${getX(i)}" y="${getY(v)-10}" text-anchor="${i===0?'start':'middle'}" font-size="8.5" fill="${color}" font-weight="700">${v>=100000000?(v/100000000).toFixed(1)+'억':''}</text>`;}).join('');
   let mLbls='';months.forEach((m,i)=>{if(i%2===0||i===11)mLbls+=`<text x="${getX(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#111827">${parseInt(m)}월</text>`;});
   const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
