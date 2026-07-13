@@ -57,7 +57,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .kpi-card.amber{border-top-color:var(--amber);}
 .kpi-card.gray{border-top-color:var(--muted);}
 .kpi-label{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;margin-bottom:6px;font-weight:600;}
-.kpi-value{font-size:22px;font-weight:900;color:var(--text);line-height:1;margin-bottom:4px;}
+.kpi-value{font-size:19px;font-weight:900;color:var(--text);line-height:1.15;margin-bottom:4px;white-space:nowrap;overflow-x:auto;}
 .kpi-value.red{color:var(--accent);}
 .kpi-value.blue{color:var(--accent2);}
 .kpi-value.green{color:var(--accent3);}
@@ -866,12 +866,12 @@ function updKPI(fS,fP){
   const pyTs=pyS.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
   const pyTp=pyP.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
   const pyMg=pyTs-pyTp;const pyMgRate=pyTs>0?(pyMg/pyTs*100):0;
-  document.getElementById('kpi-s').textContent=fmt(ts);
+  document.getElementById('kpi-s').textContent=fmtFull(ts);
   document.getElementById('kpi-ss').textContent=fS.length.toLocaleString()+'건';
-  document.getElementById('kpi-p').textContent=fmt(tp);
+  document.getElementById('kpi-p').textContent=fmtFull(tp);
   document.getElementById('kpi-ps').textContent=fP.length.toLocaleString()+'건';
-  document.getElementById('kpi-m').textContent=fmt(mg);
-  document.getElementById('kpi-ms').textContent='GAP율 '+mgRate.toFixed(1)+'%';
+  document.getElementById('kpi-m').textContent=fmtFull(mg);
+  document.getElementById('kpi-ms').textContent='GAP율 '+mgRate.toFixed(3)+'%';
   const sc={};fS.forEach(r=>{const k=String(r['판매처명']||'-');sc[k]=(sc[k]||0)+(Number(r['공급가액'])||0);});
   const sorted=Object.values(sc).sort((a,b)=>b-a);
   const top5pct=ts>0?(sorted.slice(0,5).reduce((a,b)=>a+b,0)/ts*100):0;
@@ -949,6 +949,62 @@ function updYearSummary(){
 }
 
 // ── 연도별 추이 차트 (전체폭) ──
+// ── GAP(매입매출 차액) 미니차트 공통 헬퍼 — 막대그래프 하단에 별도 패널로 표시 ──
+function buildGapAmtPanel(slots,padL,padR,W){
+  const H=50,padT=14,padB=8,cH=H-padT-padB;
+  const n=slots.length,colW=(W-padL-padR)/n;
+  const has=slots.filter(s=>s.has);
+  const maxAbs=Math.max(...has.map(s=>Math.abs(s.amt)),1,0.0001);
+  const getY=v=>padT+cH*(1-(v+maxAbs)/(2*maxAbs));
+  const zeroY=getY(0);
+  const pts=[];
+  slots.forEach((s,i)=>{if(!s.has)return;pts.push({x:padL+colW*i+colW/2,y:getY(s.amt),amt:s.amt});});
+  let path='',dots='',labels='';
+  if(pts.length){
+    path=`<path d="${pts.map((p,i)=>(i===0?'M':'L')+p.x+','+p.y).join(' ')}" fill="none" stroke="#5b6b85" stroke-width="1.8" opacity="0.85"/>`;
+    pts.forEach(p=>{
+      const color=p.amt>=0?'#1e7e4a':'#c8001e';
+      dots+=`<circle cx="${p.x}" cy="${p.y}" r="2.6" fill="${color}"/>`;
+      labels+=`<text x="${p.x}" y="${p.y+(p.amt>=0?-6:12)}" text-anchor="middle" font-size="7" font-weight="700" fill="${color}">${p.amt>=0?'+':''}${fmtB(p.amt)}</text>`;
+    });
+  }
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+cH}" stroke="#d1d5db" stroke-width="1"/>
+    <line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3,3"/>
+    <text x="${padL-6}" y="${padT+4}" text-anchor="end" font-size="8" fill="#111827">GAP금액</text>
+    ${path}${dots}${labels}
+  </svg>`;
+}
+function buildGapPctPanel(slots,padL,padR,W){
+  const H=68,padT=14,padB=26,cH=H-padT-padB;
+  const n=slots.length,colW=(W-padL-padR)/n;
+  const has=slots.filter(s=>s.has);
+  const maxAbs=Math.max(...has.map(s=>Math.abs(s.pct)),1,0.0001);
+  const getY=v=>padT+cH*(1-(v+maxAbs)/(2*maxAbs));
+  const zeroY=getY(0);
+  const pts=[];let catLabels='';
+  slots.forEach((s,i)=>{
+    const cx=padL+colW*i+colW/2;
+    catLabels+=`<text x="${cx}" y="${H-8}" text-anchor="middle" font-size="10" font-weight="700" fill="#111827">${s.label}</text>`;
+    if(!s.has)return;
+    pts.push({x:cx,y:getY(s.pct),pct:s.pct});
+  });
+  let path='',dots='',labels='';
+  if(pts.length){
+    path=`<path d="${pts.map((p,i)=>(i===0?'M':'L')+p.x+','+p.y).join(' ')}" fill="none" stroke="#8a5cf6" stroke-width="1.8" opacity="0.85"/>`;
+    pts.forEach(p=>{
+      const color=p.pct>=0?'#1e7e4a':'#c8001e';
+      dots+=`<circle cx="${p.x}" cy="${p.y}" r="2.6" fill="${color}"/>`;
+      labels+=`<text x="${p.x}" y="${p.y+(p.pct>=0?-6:12)}" text-anchor="middle" font-size="7" font-weight="700" fill="${color}">${p.pct>=0?'+':''}${p.pct.toFixed(3)}%</text>`;
+    });
+  }
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+cH}" stroke="#d1d5db" stroke-width="1"/>
+    <line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3,3"/>
+    <text x="${padL-6}" y="${padT+4}" text-anchor="end" font-size="8" fill="#111827">GAP%</text>
+    ${path}${dots}${labels}${catLabels}
+  </svg>`;
+}
 function updYearlyChart(){
   const src=_fullLoaded?_rawSAll:rawS;
   const srcp=_fullLoaded?_rawPAll:rawP;
@@ -962,8 +1018,9 @@ function updYearlyChart(){
   const data=years.map(y=>({label:y+'년',sales:ySales[y]||0,purch:yPurch[y]||0,margin:(ySales[y]||0)-(yPurch[y]||0),rate:(ySales[y]||0)>0?((ySales[y]||0)-(yPurch[y]||0))/(ySales[y]||0)*100:0}));
   const hasAny=data.some(d=>d.sales>0||d.purch>0);
   if(!hasAny){elY.innerHTML='<div style="color:#111827;font-size:11px;">데이터 없음</div>';return;}
-  const W=560,H=220,padL=46,padR=18,padT=30,padB=38;
-  const chartW=W-padL-padR,chartH=H-padT-padB;
+  const W=560,padL=46,padR=18;
+  const H=150,padT=18,padB=10,chartH=H-padT-padB;
+  const chartW=W-padL-padR;
   const maxVal=Math.max(...data.map(d=>Math.max(d.sales,d.purch)),1);
   const colW=chartW/data.length,barW=Math.min(20,colW*0.3);
   let grid='',saleBars='',purchBars='',barLabels='',yoyBadge='';
@@ -987,29 +1044,28 @@ function updYearlyChart(){
       yoyBadge+=`<text x="${cx-barW-1}" y="${sY-18}" text-anchor="middle" font-size="9" font-weight="700" fill="${up?'#c8001e':'#1e7e4a'}">${up?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%</text>`;
     }
   });
-  data.forEach((d,i)=>{
-    const cx=padL+colW*i+colW/2;
-    barLabels+=`<text x="${cx}" y="${padT+chartH+14}" text-anchor="middle" font-size="10" font-weight="700" fill="#111827">${d.label}</text>`;
-  });
-  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
+  const svgA=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+chartH}" stroke="#d1d5db" stroke-width="1"/>
     <line x1="${padL}" y1="${padT+chartH}" x2="${W-padR}" y2="${padT+chartH}" stroke="#d1d5db" stroke-width="1"/>
     ${saleBars}${purchBars}${barLabels}${yoyBadge}
   </svg>`;
+  const slots=data.map(d=>({label:d.label,amt:d.margin,pct:d.rate,has:d.sales>0||d.purch>0}));
+  const svgB=buildGapAmtPanel(slots,padL,padR,W);
+  const svgC=buildGapPctPanel(slots,padL,padR,W);
   const legend=`<div style="display:flex;justify-content:flex-end;gap:14px;padding:0 4px 8px;font-size:11px;color:#111827;flex-wrap:wrap;">
     <span><span style="display:inline-block;width:10px;height:10px;background:#c8001e;opacity:0.8;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매출</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#1a56db;opacity:0.45;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매입</span>
     <span style="color:var(--accent);">▲▼전년대비</span>
+    <span style="color:#5b6b85;">— 매입매출 GAP</span>
   </div>`;
-  elY.innerHTML=`${legend}<div style="overflow-x:auto;">${svg}</div>`;
+  elY.innerHTML=`${legend}<div style="overflow-x:auto;">${svgA}</div><div style="overflow-x:auto;margin-top:2px;">${svgB}</div><div style="overflow-x:auto;">${svgC}</div>`;
 }
 
-// ── 당년도 월별 꺾은선 ──
+// ── 당년도 월별 (막대그래프 + GAP 서브패널) ──
 function updMonthlyLine(){
   const now=new Date();
   const curYear=String(now.getFullYear()).slice(2);
-  const prevYear=String(now.getFullYear()-1).slice(2);
   const months=['01','02','03','04','05','06','07','08','09','10','11','12'];
   const buildMap=(rows,yKey)=>{
     const m={};
@@ -1021,50 +1077,47 @@ function updMonthlyLine(){
   };
   const allS=_fullLoaded?_rawSAll:rawS;const allP=_fullLoaded?_rawPAll:rawP;
   const cS=buildMap(allS,curYear),cP=buildMap(allP,curYear);
-  const pS=_fullLoaded?buildMap(allS,prevYear):{};
   const elM=document.getElementById('monthly-chart');
   elM.style.cssText='display:block;text-align:left;';
   const hasCur=months.some(m=>cS[m]||cP[m]);
   if(!hasCur){elM.innerHTML='<div style="color:#111827;font-size:11px;">당년도 데이터 없음</div>';return;}
-  const W=560,H=220,pL=46,pR=18,pT=30,pB=38;
-  const cW=W-pL-pR,cH=H-pT-pB;
-  const allVals=[...months.map(m=>cS[m]||0),...months.map(m=>cP[m]||0),...months.map(m=>pS[m]||0)].filter(v=>v>0);
-  const maxVal=Math.max(...allVals,1);
-  const colW=cW/(months.length-1);
-  const getX=i=>pL+i*colW,getY=v=>pT+cH*(1-Math.max(0,v)/maxVal);
-  let grid='';
-  [0,0.5,1].forEach(t=>{
-    const y=pT+cH*(1-t);const v=maxVal*t;
-    grid+=`<line x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}" stroke="#eef1f5" stroke-width="1"/>`;
-    grid+=`<text x="${pL-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#111827">${v>=100000000?(v/100000000).toFixed(1)+'억':'0'}</text>`;
+  const W=560,padL=46,padR=18;
+  const H=150,padT=18,padB=10,chartH=H-padT-padB;
+  const chartW=W-padL-padR;
+  const maxVal=Math.max(...months.map(m=>Math.max(cS[m]||0,cP[m]||0)),1);
+  const n=months.length,colW=chartW/n,barW=Math.min(16,colW*0.3);
+  let grid='',saleBars='',purchBars='',barLabels='';
+  [0,0.25,0.5,0.75,1].forEach(t=>{
+    const y=padT+chartH*(1-t);const v=maxVal*t;
+    grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#eef1f5" stroke-width="1"/>`;
+    grid+=`<text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#111827">${v>=100000000?(v/100000000).toFixed(1)+'억':'0'}</text>`;
   });
-  const curMi=now.getMonth();
-  if(curMi>=0)grid+=`<line x1="${getX(curMi)}" y1="${pT}" x2="${getX(curMi)}" y2="${pT+cH}" stroke="#c8001e" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>`;
-  const drawLine=(map,color,dash,opa)=>{
-    const pts=months.map((m,i)=>({x:getX(i),y:getY(map[m]||0),v:map[m]||0})).filter(p=>p.v>0);
-    if(!pts.length) return '';
-    const path=pts.map((p,j)=>(j===0?'M':'L')+p.x+','+p.y).join(' ');
-    let dots='';pts.forEach(p=>{dots+=`<circle cx="${p.x}" cy="${p.y}" r="${dash?2.5:4}" fill="${color}" opacity="${opa}"/>`;});
-    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="${dash?1.5:2.5}" stroke-dasharray="${dash}" opacity="${opa}" stroke-linejoin="round"/>`+dots;
-  };
-  const drawLabels=(map,color)=>months.map((m,i)=>{const v=map[m]||0;if(!v)return '';return `<text x="${getX(i)}" y="${getY(v)-10}" text-anchor="${i===0?'start':'middle'}" font-size="7" fill="${color}" font-weight="700">${v>=100000000?(v/100000000).toFixed(1)+'억':''}</text>`;}).join('');
-  let mLbls='';months.forEach((m,i)=>{if(i%2===0||i===11)mLbls+=`<text x="${getX(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#111827">${parseInt(m)}월</text>`;});
-  const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
+  months.forEach((m,i)=>{
+    const sV=cS[m]||0,pV=cP[m]||0;
+    if(sV===0&&pV===0)return;
+    const cx=padL+colW*i+colW/2;
+    const sH=Math.max(2,sV/maxVal*chartH),pH=Math.max(2,pV/maxVal*chartH);
+    const sY=padT+chartH-sH,pY=padT+chartH-pH;
+    saleBars+=`<rect x="${cx-barW-1}" y="${sY}" width="${barW}" height="${sH}" fill="#c8001e" opacity="0.8" rx="2"/>`;
+    purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barW}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
+    if(sV>0)barLabels+=`<text x="${cx-barW-1}" y="${sY-6}" text-anchor="${i===0?'start':'middle'}" font-size="7" font-weight="700" fill="#c8001e">${fmtB(sV)}</text>`;
+    if(pV>0)barLabels+=`<text x="${cx+barW+1}" y="${pY-6}" text-anchor="middle" font-size="7" fill="#1a56db">${fmtB(pV)}</text>`;
+  });
+  const svgA=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
-    <line x1="${pL}" y1="${pT}" x2="${pL}" y2="${pT+cH}" stroke="#d1d5db" stroke-width="1"/>
-    <line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#d1d5db" stroke-width="1"/>
-    ${drawLine(pS,'#c8001e','4,3',0.3)}
-    ${drawLine(cS,'#c8001e','',0.9)}
-    ${drawLine(cP,'#1a56db','',0.7)}
-    ${drawLabels(cS,'#c8001e')}
-    ${mLbls}
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+chartH}" stroke="#d1d5db" stroke-width="1"/>
+    <line x1="${padL}" y1="${padT+chartH}" x2="${W-padR}" y2="${padT+chartH}" stroke="#d1d5db" stroke-width="1"/>
+    ${saleBars}${purchBars}${barLabels}
   </svg>`;
+  const slots=months.map(m=>{const sV=cS[m]||0,pV=cP[m]||0;const amt=sV-pV;const pct=sV>0?(amt/sV*100):0;return{label:parseInt(m)+'월',amt,pct,has:sV>0||pV>0};});
+  const svgB=buildGapAmtPanel(slots,padL,padR,W);
+  const svgC=buildGapPctPanel(slots,padL,padR,W);
   const legend=`<div style="display:flex;justify-content:flex-end;gap:12px;font-size:11px;color:#111827;padding:0 4px 8px;">
-    <span style="color:#c8001e;font-weight:700;">── 매출(당년)</span>
-    <span style="color:#1a56db;font-weight:700;">── 매입(당년)</span>
-    ${_fullLoaded?'<span style="color:#c8001e;opacity:0.5;">- - 매출(전년)</span>':''}
+    <span><span style="display:inline-block;width:10px;height:10px;background:#c8001e;opacity:0.8;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매출</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#1a56db;opacity:0.45;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매입</span>
+    <span style="color:#5b6b85;">— 매입매출 GAP</span>
   </div>`;
-  elM.innerHTML=`${legend}<div style="overflow-x:auto;">${svg}</div>`;
+  elM.innerHTML=`${legend}<div style="overflow-x:auto;">${svgA}</div><div style="overflow-x:auto;margin-top:2px;">${svgB}</div><div style="overflow-x:auto;">${svgC}</div>`;
   document.getElementById('monthly-year-label').textContent=`20${curYear}년 월별 추이`;
 }
 
