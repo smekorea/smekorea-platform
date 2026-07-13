@@ -605,20 +605,23 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
           <div class="gsc-sub">실적: <span id="gl_lg_real">—</span></div>
           <div class="gsc-bar-wrap"><div class="gsc-bar-bg"><div class="gsc-bar-target" style="left:66.7%;"></div><div class="gsc-bar-fill" id="gl_lg_bar" style="width:0%;background:var(--accent);"></div></div><div class="gsc-pct" id="gl_lg_pct">—</div></div>
           <div class="gsc-badge" id="gl_lg_badge"></div>
-          <div style="font-size:9px;color:var(--text-mute);margin-top:4px;" id="gl_lg_full"></div>
+          <div style="font-size:12px;font-weight:700;margin-top:4px;" id="gl_lg_diff"></div>
+          <div style="font-size:13px;color:#DC2626;font-weight:700;margin-top:4px;" id="gl_lg_full"></div>
         </div>
         <div class="gsc" id="gsc_dt"><div class="gsc-title" style="color:#0066FF;">직거래 목표</div>
           <div class="gsc-val" id="gl_dt_target">—</div>
           <div class="gsc-sub">실재고: <span id="gl_dt_real">—</span></div>
           <div class="gsc-bar-wrap"><div class="gsc-bar-bg"><div class="gsc-bar-target" style="left:66.7%;"></div><div class="gsc-bar-fill" id="gl_dt_bar" style="width:0%;background:var(--accent);"></div></div><div class="gsc-pct" id="gl_dt_pct">—</div></div>
           <div class="gsc-badge" id="gl_dt_badge"></div>
+          <div style="font-size:12px;font-weight:700;margin-top:4px;" id="gl_dt_diff"></div>
         </div>
         <div class="gsc" id="gsc_all"><div class="gsc-title" style="color:#0F172A;">전체 목표 <span style="font-weight:500;font-size:9px;color:var(--text-mute);">(마감기준)</span></div>
           <div class="gsc-val" id="gl_all_target">—</div>
           <div class="gsc-sub">실적: <span id="gl_all_real">—</span></div>
           <div class="gsc-bar-wrap"><div class="gsc-bar-bg"><div class="gsc-bar-target" style="left:66.7%;"></div><div class="gsc-bar-fill" id="gl_all_bar" style="width:0%;background:var(--accent);"></div></div><div class="gsc-pct" id="gl_all_pct">—</div></div>
           <div class="gsc-badge" id="gl_all_badge"></div>
-          <div style="font-size:9px;color:var(--text-mute);margin-top:4px;" id="gl_all_full"></div>
+          <div style="font-size:12px;font-weight:700;margin-top:4px;" id="gl_all_diff"></div>
+          <div style="font-size:13px;color:#DC2626;font-weight:700;margin-top:4px;" id="gl_all_full"></div>
         </div>
         <div style="grid-column:1/-1;font-family:var(--mono);font-size:10px;color:var(--text-mute);margin-top:-4px;">│ 회색 세로선 = 목표달성 100% 지점 (바 그래프는 150% 기준으로 표시) · LG사급/전체는 LG마감기준(재고부담 없는 매입처 제외) 실적</div>
       </div>
@@ -1540,8 +1543,18 @@ async function renderGoal(){
     document.getElementById(`gl_${k}_bar`).style.background=barColor(pct);
     document.getElementById(`gl_${k}_badge`).innerHTML=`<span class="achieve-badge ${j.cls}">${j.label}</span>`;
     document.getElementById(`gsc_${k}`).style.borderTopColor=j.border;
+    const diffEl=document.getElementById(`gl_${k}_diff`);
+    if(diffEl){
+      if(target>0){
+        const diff=real-target;
+        diffEl.textContent=(diff>=0?'목표대비 +':'목표대비 -')+fmt(Math.abs(diff));
+        diffEl.style.color=pctColor(pct);
+      }else{
+        diffEl.textContent='';
+      }
+    }
     const fullEl=document.getElementById(`gl_${k}_full`);
-    if(fullEl)fullEl.textContent=(hasExclude&&(k==='lg'||k==='all')&&realFull!==real)?`전체 재고금액(마감제외분 포함): ${fmt(realFull)}`:'';
+    if(fullEl)fullEl.textContent=(hasExclude&&(k==='lg'||k==='all')&&realFull!==real)?`LG마감기준 매입처 재고금액: ${fmt(realFull-real)} (전체 ${fmt(realFull)} 중 포함, 실적 제외)`:'';
   });
   // 월별 트렌드 렌더 (3분할 달성률 차트 포함) — 마감기준(제외브랜드 반영)으로 통일
   await renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor);
