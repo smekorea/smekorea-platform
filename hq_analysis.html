@@ -321,30 +321,31 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
       <div class="bx-body" id="year-summary" style="padding:14px 16px;"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div>
     </div>
   </div>
-  <!-- 연도별 추이 전체폭 -->
-  <div style="padding:12px 24px;">
-    <div class="bx">
-      <div class="bx-header">
-        <span class="bx-title">연도별 매출·매입·마진율 추이</span>
-        <span class="bx-sub">2020~현재 · 단위:억원 / 수치위=전년비증감 / 점=마진율</span>
+  <!-- 연도별 추이 + 당년 월별 추이 : 좌우 2단 배치, 카드 늘어나면 가로스크롤 -->
+  <div style="padding:12px 24px;overflow-x:auto;">
+    <div style="display:flex;gap:12px;min-width:900px;">
+      <div class="bx" style="flex:1 1 0;min-width:440px;">
+        <div class="bx-header">
+          <span class="bx-title">연도별 매출·매입·마진율 추이</span>
+          <span class="bx-sub">2020~현재 · 단위:억원 / 수치위=전년비증감 / 점=마진율</span>
+        </div>
+        <div style="padding:16px;">
+          <div id="yearly-chart" style="min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
+        </div>
       </div>
-      <div style="padding:16px;">
-        <div id="yearly-chart" style="min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
+      <div class="bx" style="flex:1 1 0;min-width:440px;">
+        <div class="bx-header">
+          <span class="bx-title" id="monthly-year-label">당년도 월별 추이</span>
+          <span class="bx-sub">매출(빨강) vs 매입(파랑) · 점선=전년</span>
+        </div>
+        <div style="padding:10px 12px;">
+          <div id="monthly-chart" style="min-height:180px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
+        </div>
       </div>
     </div>
   </div>
-  <!-- 당년 월별 추이 -->
-  <div style="padding:0 24px 12px;">
-    <div class="bx">
-      <div class="bx-header">
-        <span class="bx-title" id="monthly-year-label">당년도 월별 추이</span>
-        <span class="bx-sub">매출(빨강) vs 매입(파랑) · 점선=전년</span>
-      </div>
-      <div style="padding:10px 12px;">
-        <div id="monthly-chart" style="min-height:180px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">데이터 로드 후 표시</div>
-      </div>
-    </div>
-  </div>
+  <!-- ⚠️ 카드를 추가로 늘릴 경우: 위 flex 컨테이너 안에 .bx 블록을 추가하면 min-width 900px+카드폭만큼 가로 스크롤이 자동으로 늘어남 -->
+
   <!-- 순위 4개 -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 24px 12px;">
     <div class="bx"><div class="bx-header"><span class="bx-title">매출처 TOP5</span><span class="period-badge" id="pb-rank1"></span></div><div class="bx-body" id="sales-rank"><div style="color:var(--muted);font-size:11px;text-align:center;padding:12px 0;">데이터 로드 후 표시</div></div></div>
@@ -955,20 +956,23 @@ function updYearlyChart(){
   const ySales={},yPurch={};
   src.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(years.includes(y)){ySales[y]=(ySales[y]||0)+(Number(r['공급가액'])||0);}});
   srcp.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(years.includes(y)){yPurch[y]=(yPurch[y]||0)+(Number(r['공급가액'])||0);}});
-  const data=years.map(y=>({label:y+'년',sales:ySales[y]||0,purch:yPurch[y]||0,margin:(ySales[y]||0)-(yPurch[y]||0),rate:(ySales[y]||0)>0?((ySales[y]||0)-(yPurch[y]||0))/(ySales[y]||0)*100:0})).filter(d=>d.sales>0||d.purch>0);
-  if(!data.length){document.getElementById('yearly-chart').innerHTML='<div style="color:var(--muted);font-size:11px;">데이터 없음</div>';return;}
-  const W=900,H=260,padL=44,padR=20,padT=42,padB=52;
+  // ⚠️ (v15.19) 데이터 없는 연도를 제거하지 않고 항상 7개 고정 슬롯 유지 — 연도가 1~2개만 있어도 슬롯폭이 비정상적으로 커지는 버그 방지
+  const data=years.map(y=>({label:y+'년',sales:ySales[y]||0,purch:yPurch[y]||0,margin:(ySales[y]||0)-(yPurch[y]||0),rate:(ySales[y]||0)>0?((ySales[y]||0)-(yPurch[y]||0))/(ySales[y]||0)*100:0}));
+  const hasAny=data.some(d=>d.sales>0||d.purch>0);
+  if(!hasAny){document.getElementById('yearly-chart').innerHTML='<div style="color:var(--muted);font-size:11px;">데이터 없음</div>';return;}
+  const W=480,H=200,padL=40,padR=16,padT=34,padB=48;
   const chartW=W-padL-padR,chartH=H-padT-padB;
   const maxVal=Math.max(...data.map(d=>Math.max(d.sales,d.purch)),1);
-  const colW=chartW/data.length,barW=colW*0.28;
+  const colW=chartW/data.length,barW=Math.min(16,colW*0.28);
   let grid='',saleBars='',purchBars='',rateLine='',rateDots='',rateLabels='',barLabels='',yoyBadge='';
   const ratePathPts=[];
   [0,0.25,0.5,0.75,1].forEach(t=>{
     const y=padT+chartH*(1-t);const val=maxVal*t;
     grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e8eef6" stroke-width="1"/>`;
-    grid+=`<text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="9" fill="#7a8baa">${val>=100000000?(val/100000000).toFixed(0)+'억':val>0?Math.round(val/10000)+'만':''}</text>`;
+    grid+=`<text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="8" fill="#7a8baa">${val>=100000000?(val/100000000).toFixed(0)+'억':val>0?Math.round(val/10000)+'만':''}</text>`;
   });
   data.forEach((d,i)=>{
+    if(d.sales===0&&d.purch===0)return; // 빈 슬롯은 자리만 차지하고 막대는 그리지 않음
     const cx=padL+colW*i+colW/2;
     const sH=Math.max(2,d.sales/maxVal*chartH),pH=Math.max(2,d.purch/maxVal*chartH);
     const sY=padT+chartH-sH,pY=padT+chartH-pH;
@@ -978,22 +982,26 @@ function updYearlyChart(){
     ratePathPts.push({x:cx,y:rY,rate:d.rate});
     saleBars+=`<rect x="${cx-barW-1}" y="${sY}" width="${barW}" height="${sH}" fill="#c8001e" opacity="0.8" rx="2"/>`;
     purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barW}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
-    barLabels+=`<text x="${cx-barW/2-1}" y="${sY-6}" text-anchor="middle" font-size="10" font-weight="700" fill="#c8001e">${fmtB(d.sales)}</text>`;
-    barLabels+=`<text x="${cx+barW/2+1}" y="${pY-6}" text-anchor="middle" font-size="9" fill="#1a56db">${fmtB(d.purch)}</text>`;
-    barLabels+=`<text x="${cx}" y="${padT+chartH+16}" text-anchor="middle" font-size="11" font-weight="700" fill="#1a2233">${d.label}</text>`;
+    barLabels+=`<text x="${cx-barW/2-1}" y="${sY-5}" text-anchor="middle" font-size="8" font-weight="700" fill="#c8001e">${fmtB(d.sales)}</text>`;
+    barLabels+=`<text x="${cx+barW/2+1}" y="${pY-5}" text-anchor="middle" font-size="8" fill="#1a56db">${fmtB(d.purch)}</text>`;
     const rateColor=d.rate>=10?'#1e7e4a':d.rate>=5?'#1a56db':d.rate>=0?'#b46400':'#c8001e';
-    barLabels+=`<text x="${cx}" y="${padT+chartH+30}" text-anchor="middle" font-size="10" fill="${rateColor}">마진 ${fmtB(d.margin)} (${d.rate.toFixed(1)}%)</text>`;
-    if(i>0){
-      const prev=data[i-1].sales;const yoy=prev>0?((d.sales-prev)/prev*100):0;const up=yoy>=0;
-      yoyBadge+=`<text x="${cx-barW/2-1}" y="${sY-19}" text-anchor="middle" font-size="9" font-weight="700" fill="${up?'#c8001e':'#1e7e4a'}">${up?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%</text>`;
+    barLabels+=`<text x="${cx}" y="${padT+chartH+24}" text-anchor="middle" font-size="9" fill="${rateColor}">마진 ${fmtB(d.margin)} (${d.rate.toFixed(1)}%)</text>`;
+    const prevD=i>0?data[i-1]:null;
+    if(prevD&&prevD.sales>0){
+      const yoy=((d.sales-prevD.sales)/prevD.sales*100);const up=yoy>=0;
+      yoyBadge+=`<text x="${cx-barW/2-1}" y="${sY-16}" text-anchor="middle" font-size="8" font-weight="700" fill="${up?'#c8001e':'#1e7e4a'}">${up?'▲':'▼'}${Math.abs(yoy).toFixed(1)}%</text>`;
     }
   });
+  data.forEach((d,i)=>{
+    const cx=padL+colW*i+colW/2;
+    barLabels+=`<text x="${cx}" y="${padT+chartH+12}" text-anchor="middle" font-size="10" font-weight="700" fill="#1a2233">${d.label}</text>`;
+  });
   const linePath=ratePathPts.map((p,i)=>(i===0?'M':'L')+p.x+','+p.y).join(' ');
-  rateLine=`<path d="${linePath}" fill="none" stroke="#1e7e4a" stroke-width="2.5" opacity="0.9" stroke-linejoin="round"/>`;
+  rateLine=ratePathPts.length?`<path d="${linePath}" fill="none" stroke="#1e7e4a" stroke-width="2" opacity="0.9" stroke-linejoin="round"/>`:'';
   ratePathPts.forEach(p=>{
     const rateColor=p.rate>=10?'#1e7e4a':p.rate>=5?'#1a56db':p.rate>=0?'#b46400':'#c8001e';
-    rateDots+=`<circle cx="${p.x}" cy="${p.y}" r="5" fill="#1e7e4a" opacity="0.9"/>`;
-    rateLabels+=`<text x="${p.x}" y="${p.y-10}" text-anchor="middle" font-size="10" font-weight="700" fill="${rateColor}">${p.rate.toFixed(1)}%</text>`;
+    rateDots+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="#1e7e4a" opacity="0.9"/>`;
+    rateLabels+=`<text x="${p.x}" y="${p.y-8}" text-anchor="middle" font-size="9" font-weight="700" fill="${rateColor}">${p.rate.toFixed(1)}%</text>`;
   });
   const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
@@ -1001,13 +1009,13 @@ function updYearlyChart(){
     <line x1="${padL}" y1="${padT+chartH}" x2="${W-padR}" y2="${padT+chartH}" stroke="#d0daea" stroke-width="1"/>
     ${saleBars}${purchBars}${rateLine}${rateDots}${rateLabels}${barLabels}${yoyBadge}
   </svg>`;
-  const legend=`<div style="display:flex;gap:16px;padding:4px 8px;font-size:11px;color:var(--muted);margin-top:4px;flex-wrap:wrap;">
-    <span><span style="display:inline-block;width:12px;height:12px;background:#c8001e;opacity:0.8;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>매출</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:#1a56db;opacity:0.45;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>매입</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:#1e7e4a;border-radius:50%;margin-right:4px;vertical-align:middle;"></span>마진율(%)</span>
-    <span style="margin-left:auto;font-size:10px;color:var(--accent);">▲▼ = 전년 대비 매출 증감</span>
+  const legend=`<div style="display:flex;justify-content:flex-end;gap:14px;padding:0 4px 6px;font-size:10px;color:var(--muted);flex-wrap:wrap;">
+    <span><span style="display:inline-block;width:10px;height:10px;background:#c8001e;opacity:0.8;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매출</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#1a56db;opacity:0.45;border-radius:2px;margin-right:3px;vertical-align:middle;"></span>매입</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#1e7e4a;border-radius:50%;margin-right:3px;vertical-align:middle;"></span>마진율(%)</span>
+    <span style="color:var(--accent);">▲▼전년대비</span>
   </div>`;
-  document.getElementById('yearly-chart').innerHTML=`<div style="overflow-x:auto;">${svg}</div>${legend}`;
+  document.getElementById('yearly-chart').innerHTML=`${legend}<div style="overflow-x:auto;">${svg}</div>`;
 }
 
 // ── 당년도 월별 꺾은선 ──
@@ -1060,12 +1068,12 @@ function updMonthlyLine(){
     ${drawLabels(cS,'#c8001e')}
     ${mLbls}
   </svg>`;
-  const legend=`<div style="display:flex;gap:12px;font-size:10px;color:var(--muted);margin-top:6px;">
+  const legend=`<div style="display:flex;justify-content:flex-end;gap:12px;font-size:10px;color:var(--muted);padding:0 4px 6px;">
     <span style="color:#c8001e;font-weight:700;">── 매출(당년)</span>
     <span style="color:#1a56db;font-weight:700;">── 매입(당년)</span>
     ${_fullLoaded?'<span style="color:#c8001e;opacity:0.5;">- - 매출(전년)</span>':''}
   </div>`;
-  document.getElementById('monthly-chart').innerHTML=`<div style="overflow-x:auto;">${svg}</div>${legend}`;
+  document.getElementById('monthly-chart').innerHTML=`${legend}<div style="overflow-x:auto;">${svg}</div>`;
   document.getElementById('monthly-year-label').textContent=`20${curYear}년 월별 추이`;
 }
 
@@ -1318,7 +1326,7 @@ function renderSumTable(ctx){
     +'</div>'
     +'<button onclick="exportTradeExcel('+JSON.stringify(excelData)+')" style="margin-left:auto;padding:5px 14px;border-radius:6px;border:1.5px solid var(--accent3);background:#fff;color:var(--accent3);font-size:11px;font-weight:700;cursor:pointer;">⬇ 엑셀 다운로드</button></div>';
   if(_sumViewMode==='chart'){
-    document.getElementById('trade-result').innerHTML=html+'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;">※ 이 그래프는 왼쪽 필터(구분·메이커·매출처·매입처·품목코드)로 좁힌 현재 조회 결과를, 상단에서 고른 기간단위(년/월)로 집계한 것입니다 — 즉 위 "표"와 100% 같은 데이터를 그래프로만 다르게 표현한 것입니다.</div>'+buildSumChart(allKeys,sMap,pMap,isAmt);
+    document.getElementById('trade-result').innerHTML=html+'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;"><div style="font-size:10px;color:var(--muted);">※ 이 그래프는 왼쪽 필터(구분·메이커·매출처·매입처·품목코드)로 좁힌 현재 조회 결과를, 상단에서 고른 기간단위(년/월)로 집계한 것입니다 — 즉 위 "표"와 100% 같은 데이터를 그래프로만 다르게 표현한 것입니다.</div><div style="display:flex;gap:16px;font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:#c8001e;font-weight:700;">■ 매출</span><span style="color:#1a56db;font-weight:700;">■ 매입</span></div></div>'+buildSumChart(allKeys,sMap,pMap,isAmt,isYear);
     return;
   }
   document.getElementById('trade-result').innerHTML=html
@@ -1333,28 +1341,35 @@ function renderSumTable(ctx){
     +'</tbody></table></div>';
   initColResize('tvSumTable','hq_tv_sum_cols');
 }
-function buildSumChart(allKeys,sMap,pMap,isAmt){
+function buildSumChart(allKeys,sMap,pMap,isAmt,isYear){
+  // ⚠️ (v15.19) 월별 모드에서는 실제 조회기간과 무관하게 항상 1~12월 고정슬롯 사용 — 왼쪽부터 채우고 나머지는 빈칸
+  let dispKeys=allKeys,xLabelFn=k=>k;
+  if(!isYear&&allKeys.length){
+    const yr=allKeys[0].split('.')[0];
+    dispKeys=Array.from({length:12},(_,i)=>yr+'.'+String(i+1).padStart(2,'0'));
+    xLabelFn=k=>parseInt(k.split('.')[1])+'월';
+  }
   const getVal=(map,k)=>isAmt?(map[k]?.amt||0):(map[k]?.qty||0);
-  const vals=allKeys.map(k=>getVal(sMap,k)).concat(allKeys.map(k=>getVal(pMap,k)));
+  const vals=dispKeys.map(k=>getVal(sMap,k)).concat(dispKeys.map(k=>getVal(pMap,k)));
   const maxV=Math.max(...vals,1);
-  const W=Math.max(600,allKeys.length*70),H=260,pL=50,pR=16,pT=20,pB=36;
+  const W=Math.max(600,dispKeys.length*56),H=170,pL=46,pR=16,pT=14,pB=30;
   const cW=W-pL-pR,cH=H-pT-pB;
-  const n=allKeys.length,slot=cW/n,barW=Math.min(22,slot*0.32);
+  const n=dispKeys.length,slot=cW/n,barW=Math.min(18,slot*0.32);
   const getY=v=>pT+cH*(1-v/maxV);
   let bars='',labels='',xlabels='';
-  allKeys.forEach((k,i)=>{
+  dispKeys.forEach((k,i)=>{
     const x0=pL+i*slot+slot/2;
     const sV=getVal(sMap,k),pV=getVal(pMap,k);
     const sY=getY(sV),pY=getY(pV);
-    bars+=`<rect x="${x0-barW-1}" y="${sY}" width="${barW}" height="${pT+cH-sY}" fill="#c8001e" opacity="0.85" rx="2"/>`;
-    bars+=`<rect x="${x0+1}" y="${pY}" width="${barW}" height="${pT+cH-pY}" fill="#1a56db" opacity="0.7" rx="2"/>`;
-    if(sV>0)labels+=`<text x="${x0-barW/2-1}" y="${sY-5}" text-anchor="middle" font-size="8" fill="#c8001e" font-weight="700">${fmtFull(sV).length>7?(sV/100000000).toFixed(1)+'억':fmtFull(sV)}</text>`;
-    xlabels+=`<text x="${x0}" y="${H-10}" text-anchor="middle" font-size="9" fill="#7a8baa">${k}</text>`;
+    if(sV>0)bars+=`<rect x="${x0-barW-1}" y="${sY}" width="${barW}" height="${pT+cH-sY}" fill="#c8001e" opacity="0.85" rx="2"/>`;
+    if(pV>0)bars+=`<rect x="${x0+1}" y="${pY}" width="${barW}" height="${pT+cH-pY}" fill="#1a56db" opacity="0.7" rx="2"/>`;
+    if(sV>0)labels+=`<text x="${x0-barW/2-1}" y="${sY-4}" text-anchor="middle" font-size="7.5" fill="#c8001e" font-weight="700">${fmtFull(sV).length>7?(sV/100000000).toFixed(1)+'억':fmtFull(sV)}</text>`;
+    if(pV>0)labels+=`<text x="${x0+barW/2+1}" y="${pY-4}" text-anchor="middle" font-size="7.5" fill="#1a56db" font-weight="700">${fmtFull(pV).length>7?(pV/100000000).toFixed(1)+'억':fmtFull(pV)}</text>`;
+    xlabels+=`<text x="${x0}" y="${H-8}" text-anchor="middle" font-size="9" fill="#7a8baa">${xLabelFn(k)}</text>`;
   });
   let grid='';[0,0.5,1].forEach(t=>{const y=pT+cH*(1-t);const v=maxV*t;grid+=`<line x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}" stroke="#e8eef6" stroke-width="1"/><text x="${pL-6}" y="${y+4}" text-anchor="end" font-size="8" fill="#7a8baa">${v>=100000000?(v/100000000).toFixed(1)+'억':Math.round(v/10000)+'만'}</text>`;});
   const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">${grid}${bars}${labels}${xlabels}</svg>`;
-  const legend=`<div style="display:flex;gap:16px;font-size:10px;color:var(--muted);margin-top:6px;"><span style="color:#c8001e;font-weight:700;">■ 매출</span><span style="color:#1a56db;font-weight:700;">■ 매입</span></div>`;
-  return `<div class="tv-wrap" style="overflow-x:auto;padding:12px;">${svg}${legend}</div>`;
+  return `<div class="tv-wrap" style="overflow-x:auto;padding:12px;">${svg}</div>`;
 }
 function renderPivotTable(ctx,isPivotSeller,isPivotBuyer){
   const {fS,fP,from,to,isAmt,isYear}=ctx;
