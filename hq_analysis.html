@@ -1333,13 +1333,13 @@ function renderSumTable(ctx){
   const thCols=allKeys.map(k=>'<th class="num">'+k+'</th>').join('');
   const rowS=allKeys.map(k=>'<td class="num" style="font-weight:600;color:#c8001e;">'+getV(sMap,k)+'</td>').join('');
   const rowP=allKeys.map(k=>'<td class="num" style="color:#7a8baa;">'+getV(pMap,k)+'</td>').join('');
-  const rowM=allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0,mg=sA-pA;const color=mg>=0?'#1e7e4a':'#c8001e';return'<td class="num" style="font-weight:700;color:'+color+';">'+(isAmt?fmtFull(mg):((sMap[k]?.qty||0)-(pMap[k]?.qty||0)).toLocaleString())+'</td>';}).join('');
+  const rowM=allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0,mg=sA-pA;const sQ=sMap[k]?.qty||0,pQ=pMap[k]?.qty||0,mgQ=sQ-pQ;const color=(isAmt?mg:mgQ)>=0?'#1e7e4a':'#c8001e';return'<td class="num" style="font-weight:700;color:'+color+';">'+(isAmt?fmtFull(mg):mgQ.toLocaleString())+'</td>';}).join('');
   const rowR=isAmt?allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0;const rate=sA>0?((sA-pA)/sA*100):0;const color=rate>=10?'#1e7e4a':rate>=5?'#1a56db':rate>=0?'#b46400':'#c8001e';return'<td class="num" style="font-weight:700;color:'+color+';">'+rate.toFixed(1)+'%</td>';}).join(''):'';
   let excelData=condExcelRows(ctx).concat([['구분',...allKeys,'합계']]);
   excelData.push(['매출(원)',...allKeys.map(k=>sMap[k]?.amt||0),totS.amt]);
   excelData.push(['매입(원)',...allKeys.map(k=>pMap[k]?.amt||0),totP.amt]);
-  excelData.push(['마진(원)',...allKeys.map(k=>(sMap[k]?.amt||0)-(pMap[k]?.amt||0)),totMg]);
-  if(isAmt)excelData.push(['마진율(%)',...allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0;return sA>0?((sA-pA)/sA*100).toFixed(1)+'%':'0%';}),totMgR.toFixed(1)+'%']);
+  if(isAmt)excelData.push(['매입매출GAP(원)',...allKeys.map(k=>(sMap[k]?.amt||0)-(pMap[k]?.amt||0)),totMg]);
+  if(isAmt)excelData.push(['GAP율(%)',...allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0;return sA>0?((sA-pA)/sA*100).toFixed(1)+'%':'0%';}),totMgR.toFixed(1)+'%']);
   const filterNote=sellers.length?`<div style="font-size:11px;color:var(--accent2);background:#eef3fc;border-radius:6px;padding:6px 10px;margin-bottom:8px;">ℹ️ 매출처 필터(${sellers.join(', ')}) 적용중 — 매입 수치는 <strong>이 매출처에 실제 판매된 품목코드와 동일한 품목</strong>만 집계된 것입니다(매입 레코드엔 매출처 정보가 없어 품목코드로 간접 연결).</div>`:'';
   const html=filterNote+'<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span>'
     +'<span>집계 <strong style="color:var(--accent2);">'+(isAmt?'금액':'수량')+'</strong></span>'
@@ -1360,8 +1360,8 @@ function renderSumTable(ctx){
     +'</tr></thead><tbody>'
     +'<tr style="background:#fff8f8;"><td style="font-weight:700;color:#c8001e;">매출 ('+unit+')</td>'+rowS+'<td class="num" style="font-weight:800;color:#c8001e;background:#fef0f0;">'+getTot(totS)+'</td></tr>'
     +'<tr style="background:#f8f9fb;"><td style="font-weight:700;color:#7a8baa;">매입 ('+unit+')</td>'+rowP+'<td class="num" style="font-weight:800;color:#7a8baa;background:#f0f2f5;">'+getTot(totP)+'</td></tr>'
-    +'<tr style="background:#f0fdf4;"><td style="font-weight:700;color:#1e7e4a;">마진 ('+unit+')</td>'+rowM+'<td class="num" style="font-weight:800;color:'+(totMg>=0?'#1e7e4a':'#c8001e')+';background:#e8f5ed;">'+fmtFull(totMg)+'</td></tr>'
-    +(isAmt?'<tr style="background:#fafbff;"><td style="font-weight:700;color:#1a56db;">마진율 (%)</td>'+rowR+'<td class="num" style="font-weight:800;color:'+(totMgR>=0?'#1e7e4a':'#c8001e')+';background:#eef3fc;">'+totMgR.toFixed(1)+'%</td></tr>':'')
+    +(isAmt?'<tr style="background:#f0fdf4;"><td style="font-weight:700;color:#1e7e4a;">매입매출GAP ('+unit+')</td>'+rowM+'<td class="num" style="font-weight:800;color:'+(totMg>=0?'#1e7e4a':'#c8001e')+';background:#e8f5ed;">'+fmtFull(totMg)+'</td></tr>':'')
+    +(isAmt?'<tr style="background:#fafbff;"><td style="font-weight:700;color:#1a56db;">GAP율 (%)</td>'+rowR+'<td class="num" style="font-weight:800;color:'+(totMgR>=0?'#1e7e4a':'#c8001e')+';background:#eef3fc;">'+totMgR.toFixed(1)+'%</td></tr>':'')
     +'</tbody></table></div>';
   initColResize('tvSumTable','hq_tv_sum_cols');
 }
