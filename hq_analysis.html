@@ -99,7 +99,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 /* 필터 */
 .filter-bar{padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
 .f-group{display:flex;flex-direction:column;gap:4px;}
-.f-lbl{font-size:9px;font-family:'Share Tech Mono',monospace;color:var(--muted);letter-spacing:1px;}
+.f-lbl{font-size:9px;font-family:'Share Tech Mono',monospace;color:#111827;font-weight:700;letter-spacing:1px;}
 .f-select{border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);background:var(--light);font-family:'Noto Sans KR',sans-serif;height:34px;transition:border-color 0.15s;}
 .f-select:focus{outline:none;border-color:var(--accent);}
 .f-select.hl{border-color:var(--accent);border-width:1.5px;}
@@ -1287,7 +1287,11 @@ function getTradeCtx(){
   const sellers=_pickState.seller,buyers=_pickState.buyer;
   const isAmt=tradeUnit==='amt',isYear=tradePeriodUnit==='year';
   let fS=rawS.filter(r=>inPer(r,from,to)&&(!type||cls(r)===type)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!sellers.length||sellers.includes(r['판매처명'])));
-  let fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명'])));
+  // ⚠️ (v15.22) 매입 레코드에는 '판매처명(매출처)' 필드가 없어 직접 필터링이 불가능함 — 매출처 필터가 걸려있으면
+  // "그 매출처에 실제로 판매된 품목코드" 집합으로 매입 데이터를 간접 필터링(품목코드 교집합)해서
+  // "이 매출처에 파는 품목은 어느 매입처에서 사오는가"를 볼 수 있도록 함. 매출처 필터가 없으면 기존과 동일하게 전체.
+  const sellerItemCodes=sellers.length?new Set(fS.map(r=>r['품목코드'])):null;
+  let fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명']))&&(!sellerItemCodes||sellerItemCodes.has(r['품목코드'])));
   return {fS,fP,from,to,type,brand,pcode,sellers,buyers,isAmt,isYear};
 }
 function renderResult(){
@@ -1301,8 +1305,20 @@ function renderResult(){
 }
 let _sumViewMode='table';
 function setSumViewMode(m){_sumViewMode=m;renderResult();}
+function condExcelRows(ctx){
+  const {from,to,type,brand,pcode,sellers,buyers}=ctx;
+  return [
+    ['조회기간', from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)],
+    ['구분', type||'전체'],
+    ['메이커(브랜드)', brand||'전체'],
+    ['매출처', (sellers&&sellers.length)?sellers.join(', '):'전체'],
+    ['매입처', (buyers&&buyers.length)?buyers.join(', '):'전체'],
+    ['품목코드', pcode||'전체'],
+    []
+  ];
+}
 function renderSumTable(ctx){
-  const {fS,fP,from,to,isAmt,isYear}=ctx;
+  const {fS,fP,from,to,isAmt,isYear,sellers,buyers}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
   const sMap={},pMap={};
   fS.forEach(r=>{const k=getPKey(r);if(!sMap[k])sMap[k]={amt:0,qty:0};sMap[k].amt+=Number(r['공급가액'])||0;sMap[k].qty+=Number(r['수량'])||0;});
@@ -1319,12 +1335,13 @@ function renderSumTable(ctx){
   const rowP=allKeys.map(k=>'<td class="num" style="color:#7a8baa;">'+getV(pMap,k)+'</td>').join('');
   const rowM=allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0,mg=sA-pA;const color=mg>=0?'#1e7e4a':'#c8001e';return'<td class="num" style="font-weight:700;color:'+color+';">'+(isAmt?fmtFull(mg):((sMap[k]?.qty||0)-(pMap[k]?.qty||0)).toLocaleString())+'</td>';}).join('');
   const rowR=isAmt?allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0;const rate=sA>0?((sA-pA)/sA*100):0;const color=rate>=10?'#1e7e4a':rate>=5?'#1a56db':rate>=0?'#b46400':'#c8001e';return'<td class="num" style="font-weight:700;color:'+color+';">'+rate.toFixed(1)+'%</td>';}).join(''):'';
-  let excelData=[['구분',...allKeys,'합계']];
+  let excelData=condExcelRows(ctx).concat([['구분',...allKeys,'합계']]);
   excelData.push(['매출(원)',...allKeys.map(k=>sMap[k]?.amt||0),totS.amt]);
   excelData.push(['매입(원)',...allKeys.map(k=>pMap[k]?.amt||0),totP.amt]);
   excelData.push(['마진(원)',...allKeys.map(k=>(sMap[k]?.amt||0)-(pMap[k]?.amt||0)),totMg]);
   if(isAmt)excelData.push(['마진율(%)',...allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0;return sA>0?((sA-pA)/sA*100).toFixed(1)+'%':'0%';}),totMgR.toFixed(1)+'%']);
-  const html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span>'
+  const filterNote=sellers.length?`<div style="font-size:11px;color:var(--accent2);background:#eef3fc;border-radius:6px;padding:6px 10px;margin-bottom:8px;">ℹ️ 매출처 필터(${sellers.join(', ')}) 적용중 — 매입 수치는 <strong>이 매출처에 실제 판매된 품목코드와 동일한 품목</strong>만 집계된 것입니다(매입 레코드엔 매출처 정보가 없어 품목코드로 간접 연결).</div>`:'';
+  const html=filterNote+'<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span>'
     +'<span>집계 <strong style="color:var(--accent2);">'+(isAmt?'금액':'수량')+'</strong></span>'
     +'<span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span>'
     +'<div style="display:flex;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;height:26px;">'
@@ -1379,7 +1396,7 @@ function buildSumChart(allKeys,sMap,pMap,isAmt,isYear){
   return `<div class="tv-wrap" style="overflow-x:auto;padding:12px;">${svg}</div>`;
 }
 function renderPivotTable(ctx,isPivotSeller,isPivotBuyer){
-  const {fS,fP,from,to,isAmt,isYear}=ctx;
+  const {fS,fP,from,to,isAmt,isYear,type,brand,pcode,sellers,buyers}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
   const unit=isAmt?'원':'개';
   const getV=(d)=>isAmt?fmtFull(d.amt):d.qty.toLocaleString();
@@ -1408,7 +1425,7 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer){
       +rowsHtml
       +'<tr style="background:#f0f2f5;border-top:2px solid #c0cce0;"><td style="font-weight:800;">전체합계</td>'+totRowCells+'<td class="num" style="font-weight:800;">'+fmtFull(grandTotal)+'</td></tr>'
       +'</tbody></table></div>';
-    const excel=[['거래처',...allKeys,'합계']];
+    const excel=condExcelRows(ctx).concat([['거래처',...allKeys,'합계']]);
     entities.forEach(nm=>excel.push([nm,...allKeys.map(k=>byEntity[nm][k]?.amt||0),entityTotal(nm)]));
     return {html,excel,tableId:'tvPivot_'+nameField};
   };
@@ -1426,11 +1443,11 @@ let _itemSide='sell',_lastItemCtx=null;
 function setItemSide(side){_itemSide=side;if(_lastItemCtx)renderItemDetailTable(_lastItemCtx,true);}
 function renderItemDetailTable(ctx,skipCache){
   if(!skipCache)_lastItemCtx=ctx;
-  const {fS,fP,from,to,brand,sellers,buyers,isAmt,isYear}=ctx;
+  const {fS,fP,from,to,type,brand,pcode,sellers,buyers,isAmt,isYear}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
   const meta={};
-  fP.forEach(r=>{const k=r['품목코드']||'';if(!meta[k])meta[k]={desc:r['품명 및 규격']||'',mkpn:r['메이커P/N']||''};});
-  fS.forEach(r=>{const k=r['품목코드']||'';if(!meta[k])meta[k]={desc:r['품명 및 규격']||'',mkpn:r['메이커P/N']||''};if(!meta[k].desc)meta[k].desc=r['품명 및 규격']||'';if(!meta[k].mkpn)meta[k].mkpn=r['메이커P/N']||'';});
+  fP.forEach(r=>{const k=r['품목코드']||'';if(!meta[k])meta[k]={desc:r['품명 및 규격']||'',mkpn:r['메이커P/N']||'',brand:r['브랜드명']||''};});
+  fS.forEach(r=>{const k=r['품목코드']||'';if(!meta[k])meta[k]={desc:r['품명 및 규격']||'',mkpn:r['메이커P/N']||'',brand:r['브랜드명']||''};if(!meta[k].desc)meta[k].desc=r['품명 및 규격']||'';if(!meta[k].mkpn)meta[k].mkpn=r['메이커P/N']||'';if(!meta[k].brand)meta[k].brand=r['브랜드명']||'';});
   const getV=(map,k)=>isAmt?fmtFull(map[k]?.amt||0):(map[k]?.qty||0).toLocaleString();
   function buildItemTable2(rows,label,color){
     if(!rows.length) return {html:'<div style="color:var(--muted);font-size:12px;padding:16px;">데이터 없음</div>',excel:[]};
@@ -1447,17 +1464,17 @@ function renderItemDetailTable(ctx,skipCache){
     const grandTotal=codes.reduce((a,k)=>a+itemTotal(k),0);
     const thCols=allKeys.map(pk=>'<th class="num">'+pk+'</th>').join('');
     const rowsHtml=codes.map(k=>{
-      const m=meta[k]||{desc:'',mkpn:''};
+      const m=meta[k]||{desc:'',mkpn:'',brand:''};
       const cells=allKeys.map(pk=>'<td class="num">'+(byItem[k][pk]?getV(byItem[k],pk):'-')+'</td>').join('');
-      return '<tr><td class="left" title="'+k+'">'+k+'</td><td class="left" style="font-family:\'Share Tech Mono\',monospace;">'+(m.mkpn||'—')+'</td><td class="left" title="'+(m.desc||'')+'">'+(m.desc||'—')+'</td>'+cells+'<td class="num" style="font-weight:800;color:'+color+';background:#f8f9fb;">'+fmtFull(itemTotal(k))+'</td></tr>';
+      return '<tr><td class="left" title="'+k+'">'+k+'</td><td class="left">'+(m.brand||'—')+'</td><td class="left" style="font-family:\'Share Tech Mono\',monospace;">'+(m.mkpn||'—')+'</td><td class="left" title="'+(m.desc||'')+'">'+(m.desc||'—')+'</td>'+cells+'<td class="num" style="font-weight:800;color:'+color+';background:#f8f9fb;">'+fmtFull(itemTotal(k))+'</td></tr>';
     }).join('');
     const totRowCells=allKeys.map(pk=>{const s=codes.reduce((a,k)=>a+(byItem[k][pk]?.amt||0),0);return '<td class="num" style="font-weight:800;">'+fmtFull(s)+'</td>';}).join('');
-    const html='<div class="tv-wrap" style="max-height:560px;"><table class="tv-table" id="tvItem_'+label+'"><thead><tr><th class="left">품목코드</th><th class="left">메이커P/N</th><th class="left">품명및규격</th>'+thCols+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th></tr></thead><tbody>'
+    const html='<div class="tv-wrap" style="max-height:560px;"><table class="tv-table" id="tvItem_'+label+'"><thead><tr><th class="left">품목코드</th><th class="left">브랜드</th><th class="left">메이커P/N</th><th class="left">품명및규격</th>'+thCols+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th></tr></thead><tbody>'
       +rowsHtml
-      +'<tr style="background:#f0f2f5;border-top:2px solid #c0cce0;"><td style="font-weight:800;" colspan="3">전체합계</td>'+totRowCells+'<td class="num" style="font-weight:800;">'+fmtFull(grandTotal)+'</td></tr>'
+      +'<tr style="background:#f0f2f5;border-top:2px solid #c0cce0;"><td style="font-weight:800;" colspan="4">전체합계</td>'+totRowCells+'<td class="num" style="font-weight:800;">'+fmtFull(grandTotal)+'</td></tr>'
       +'</tbody></table></div>';
-    const excel=[['품목코드','메이커P/N','품명및규격',...allKeys,'합계']];
-    codes.forEach(k=>{const m=meta[k]||{};excel.push([k,m.mkpn||'',m.desc||'',...allKeys.map(pk=>byItem[k][pk]?.amt||0),itemTotal(k)]);});
+    const excel=condExcelRows(ctx).concat([['품목코드','브랜드','메이커P/N','품명및규격',...allKeys,'합계']]);
+    codes.forEach(k=>{const m=meta[k]||{};excel.push([k,m.brand||'',m.mkpn||'',m.desc||'',...allKeys.map(pk=>byItem[k][pk]?.amt||0),itemTotal(k)]);});
     return {html,excel,tableId:'tvItem_'+label,count:codes.length};
   }
   const rBuy=buildItemTable2(fP,'매입','#7a8baa');
