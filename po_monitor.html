@@ -1188,6 +1188,45 @@ function loadAir(){
 // 구조: 가로=주차/월, 세로=메이커+품번(병합), 각 품목 3행(P/S/I)
 let psiData=[], psiPeriods=[], psiMode='week', psiEntity='';
 
+// ── PSI 고정열(메이커~합계) 독립 리사이즈 — CSS 변수 기반 ──
+const PSI_COLS=['maker','lgpn','mkpn','gubun','total'];
+const PSI_COLW_KEY='pm_psi_fixcol_v1';
+let psiFixW=null;
+function loadPsiFixW(){
+  const def={maker:80,lgpn:91,mkpn:91,gubun:50,total:95};
+  try{ const saved=JSON.parse(localStorage.getItem(PSI_COLW_KEY)||'{}'); return Object.assign({},def,saved); }
+  catch(e){ return def; }
+}
+function initPsiFixColResize(){
+  const wrap=document.getElementById('psiTableWrap');
+  const table=wrap&&wrap.querySelector('table.psi-table');
+  if(!table) return;
+  wrap.querySelectorAll('.col-resizer[data-pcol]').forEach(rsz=>{
+    const k=rsz.getAttribute('data-pcol');
+    rsz.addEventListener('mousedown', e=>{
+      const sx=e.clientX, startW=psiFixW[k];
+      const onMove=e=>{
+        const nw=Math.max(40,Math.min(300,startW+(e.clientX-sx)));
+        psiFixW[k]=nw;
+        let acc=0;
+        PSI_COLS.forEach(kk=>{
+          table.style.setProperty('--pw-'+kk, psiFixW[kk]+'px');
+          table.style.setProperty('--pl-'+kk, acc+'px');
+          acc+=psiFixW[kk];
+        });
+      };
+      const onUp=()=>{
+        window.removeEventListener('mousemove',onMove);
+        window.removeEventListener('mouseup',onUp);
+        localStorage.setItem(PSI_COLW_KEY, JSON.stringify(psiFixW));
+      };
+      window.addEventListener('mousemove',onMove);
+      window.addEventListener('mouseup',onUp);
+      e.preventDefault(); e.stopPropagation();
+    });
+  });
+}
+
 function setPSIMode(mode){
   psiMode=mode;
   const onStyle='height:36px;padding:0 14px;border-radius:8px;border:1.5px solid var(--accent2);background:var(--accent2);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'Noto Sans KR\',sans-serif;';
@@ -1332,9 +1371,15 @@ function renderPSI(){
   }
 
   // ── 고정열 폭/좌측 오프셋 (명시 고정 — 스크롤시 밀림 방지)
-  const FIX_W={maker:80,lgpn:91,mkpn:91,gubun:50,total:95};
-  const FIX_L={maker:0,lgpn:80,mkpn:171,gubun:262,total:312};
+  if(!psiFixW) psiFixW=loadPsiFixW();
+  const FIX_W=psiFixW;
+  const FIX_L={}; let _acc=0; PSI_COLS.forEach(k=>{ FIX_L[k]=_acc; _acc+=FIX_W[k]; });
+  const PW=k=>`var(--pw-${k})`;
+  const PL=k=>`var(--pl-${k})`;
+  const psiCssVars=PSI_COLS.map(k=>`--pw-${k}:${FIX_W[k]}px;--pl-${k}:${FIX_L[k]}px;`).join('');
   const fixHeadBase='background:#123f9e;color:#fff;border:1px solid #0d2f7a;text-align:center;font-family:\'Noto Sans KR\',sans-serif;font-weight:800;position:sticky;';
+  const thFixCellTop=(k,label,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${PW(k)};min-width:${PW(k)};max-width:${PW(k)};overflow:hidden;text-overflow:ellipsis;left:${PL(k)};top:0;z-index:10;border-bottom:none;${extra}">${label}<div class="col-resizer" data-pcol="${k}"></div></th>`;
+  const thFixCellBot=(k,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${PW(k)};min-width:${PW(k)};max-width:${PW(k)};overflow:hidden;left:${PL(k)};top:37px;z-index:10;border-top:none;border-bottom:2px solid #0d2f7a;${extra}"></th>`;
 
   // ── 헤더 생성 (월별: 단순 1행 / 주차별: 월 병합 + 주차 2행)
   let thead='';
@@ -1346,11 +1391,11 @@ function renderPSI(){
       return`<th style="background:#1a56db;color:#fff;padding:8px 10px;text-align:center;border:1px solid #0d2f7a;border-left:2px solid #0d2f7a;font-size:12px;font-weight:800;min-width:80px;position:sticky;top:0;z-index:2;">${lbl}</th>`;
     }).join('');
     thead=`<thead><tr>
-      <th style="${fixHeadBase}font-size:12px;width:${FIX_W.maker}px;min-width:${FIX_W.maker}px;max-width:${FIX_W.maker}px;overflow:hidden;text-overflow:ellipsis;left:${FIX_L.maker}px;top:0;z-index:10;border-right:none;">메이커</th>
-      <th style="${fixHeadBase}font-size:12px;width:${FIX_W.lgpn}px;min-width:${FIX_W.lgpn}px;max-width:${FIX_W.lgpn}px;overflow:hidden;text-overflow:ellipsis;left:${FIX_L.lgpn}px;top:0;z-index:10;">LG P/N</th>
-      <th style="${fixHeadBase}font-size:12px;width:${FIX_W.mkpn}px;min-width:${FIX_W.mkpn}px;max-width:${FIX_W.mkpn}px;overflow:hidden;text-overflow:ellipsis;left:${FIX_L.mkpn}px;top:0;z-index:10;">Maker P/N</th>
-      <th style="${fixHeadBase}font-size:12px;width:${FIX_W.gubun}px;min-width:${FIX_W.gubun}px;max-width:${FIX_W.gubun}px;overflow:hidden;left:${FIX_L.gubun}px;top:0;z-index:10;">구분</th>
-      <th style="${fixHeadBase}font-size:12px;width:${FIX_W.total}px;min-width:${FIX_W.total}px;max-width:${FIX_W.total}px;overflow:hidden;left:${FIX_L.total}px;top:0;z-index:10;border-bottom:2px solid #0d2f7a;box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);">합계</th>
+      ${thFixCellTop('maker','메이커','border-right:none;')}
+      ${thFixCellTop('lgpn','LG P/N','')}
+      ${thFixCellTop('mkpn','Maker P/N','')}
+      ${thFixCellTop('gubun','구분','')}
+      ${thFixCellTop('total','합계','border-bottom:2px solid #0d2f7a;box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
       ${thPeriods}
     </tr></thead>`;
   } else {
@@ -1384,23 +1429,21 @@ function renderPSI(){
       const m2=pk.match(/W(\d)/);
       return`<th style="background:${weekBgMap[pk]};color:#fff;padding:6px 10px;text-align:center;border:1px solid #0d2f7a;border-left:2px solid #0d2f7a;border-bottom:2px solid #0d2f7a;font-size:11px;font-weight:700;min-width:66px;position:sticky;top:37px;z-index:2;">${m2?m2[1]+'주차':'?'}</th>`;
     }).join('');
-    const thFixCellTop=(w,l,label,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${w}px;min-width:${w}px;max-width:${w}px;overflow:hidden;text-overflow:ellipsis;left:${l}px;top:0;z-index:10;border-bottom:none;${extra}">${label}</th>`;
-    const thFixCellBot=(w,l,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${w}px;min-width:${w}px;max-width:${w}px;overflow:hidden;left:${l}px;top:37px;z-index:10;border-top:none;border-bottom:2px solid #0d2f7a;${extra}"></th>`;
     thead=`<thead>
       <tr>
-        ${thFixCellTop(FIX_W.maker,FIX_L.maker,'메이커','border-right:none;')}
-        ${thFixCellTop(FIX_W.lgpn,FIX_L.lgpn,'LG P/N','')}
-        ${thFixCellTop(FIX_W.mkpn,FIX_L.mkpn,'Maker P/N','')}
-        ${thFixCellTop(FIX_W.gubun,FIX_L.gubun,'구분','')}
-        ${thFixCellTop(FIX_W.total,FIX_L.total,'합계','box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
+        ${thFixCellTop('maker','메이커','border-right:none;')}
+        ${thFixCellTop('lgpn','LG P/N','')}
+        ${thFixCellTop('mkpn','Maker P/N','')}
+        ${thFixCellTop('gubun','구분','')}
+        ${thFixCellTop('total','합계','box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
         ${thMonths}
       </tr>
       <tr>
-        ${thFixCellBot(FIX_W.maker,FIX_L.maker,'border-right:none;')}
-        ${thFixCellBot(FIX_W.lgpn,FIX_L.lgpn,'')}
-        ${thFixCellBot(FIX_W.mkpn,FIX_L.mkpn,'')}
-        ${thFixCellBot(FIX_W.gubun,FIX_L.gubun,'')}
-        ${thFixCellBot(FIX_W.total,FIX_L.total,'box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
+        ${thFixCellBot('maker','border-right:none;')}
+        ${thFixCellBot('lgpn','')}
+        ${thFixCellBot('mkpn','')}
+        ${thFixCellBot('gubun','')}
+        ${thFixCellBot('total','box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
         ${thWeeks}
       </tr>
     </thead>`;
@@ -1414,7 +1457,7 @@ function renderPSI(){
     const sumP=psiPeriods.reduce((a,pk)=>a+(row.p[pk]||0),0);
     const sumS=psiPeriods.reduce((a,pk)=>a+(row.s[pk]||0),0);
     const sumI=psiPeriods.reduce((a,pk)=>a+(row.i[pk]||0),0);
-    const totalCellStyle=(bg,color)=>`padding:6px 8px;text-align:right;border:1px solid #e8edf5;font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:800;color:${color};background:${bg};position:sticky;width:${FIX_W.total}px;max-width:${FIX_W.total}px;overflow:hidden;left:${FIX_L.total}px;z-index:4;box-shadow:2px 0 4px 0 rgba(0,0,0,0.08);`;
+    const totalCellStyle=(bg,color)=>`padding:6px 8px;text-align:right;border:1px solid #e8edf5;font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:800;color:${color};background:${bg};position:sticky;width:${PW('total')};max-width:${PW('total')};overflow:hidden;left:${PL('total')};z-index:4;box-shadow:2px 0 4px 0 rgba(0,0,0,0.08);`;
 
     const pCells=psiPeriods.map((pk,idx)=>{
       const v=row.p[pk]||0;
@@ -1443,32 +1486,32 @@ function renderPSI(){
     const cBg=idx%2===0?'#ffffff':'#f8fafc';
     // rowspan 대신 3행 각각 개별 셀 (sticky+rowspan 조합 브라우저 버그 회피)
     // P행: 굵게 표시 / S,I행: 동일값을 옅게 표시해 그룹감 유지
-    const fixColCell=(w,l,content,extra)=>`<td style="padding:5px 8px;border:1px solid #e8edf5;text-align:center;position:sticky;width:${w}px;left:${l}px;max-width:${w}px;overflow:hidden;text-overflow:ellipsis;z-index:3;background:${cBg};${extra}">${content}</td>`;
-    const makerTop=fixColCell(FIX_W.maker,FIX_L.maker,`<span style="font-size:13px;font-weight:700;color:#1a2233;">${row.maker||'—'}</span>`,`${borderTop}border-bottom:none;`);
-    const makerMid=fixColCell(FIX_W.maker,FIX_L.maker,'',`border-top:none;border-bottom:none;`);
-    const makerBot=fixColCell(FIX_W.maker,FIX_L.maker,'',`border-top:none;border-bottom:2px solid #c0cce0;`);
-    const lgpnTop=fixColCell(FIX_W.lgpn,FIX_L.lgpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:600;color:#1a2233;">${row.lgpn||'—'}</span>`,`${borderTop}border-bottom:none;`);
-    const lgpnMid=fixColCell(FIX_W.lgpn,FIX_L.lgpn,'',`border-top:none;border-bottom:none;`);
-    const lgpnBot=fixColCell(FIX_W.lgpn,FIX_L.lgpn,'',`border-top:none;border-bottom:2px solid #c0cce0;`);
-    const mkpnTop=fixColCell(FIX_W.mkpn,FIX_L.mkpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:600;color:#1a2233;">${row.mkpn||'—'}</span>`,`${borderTop}border-bottom:none;`);
-    const mkpnMid=fixColCell(FIX_W.mkpn,FIX_L.mkpn,'',`border-top:none;border-bottom:none;`);
-    const mkpnBot=fixColCell(FIX_W.mkpn,FIX_L.mkpn,'',`border-top:none;border-bottom:2px solid #c0cce0;`);
+    const fixColCell=(k,content,extra)=>`<td style="padding:5px 8px;border:1px solid #e8edf5;text-align:center;position:sticky;width:${PW(k)};left:${PL(k)};max-width:${PW(k)};overflow:hidden;text-overflow:ellipsis;z-index:3;background:${cBg};${extra}">${content}</td>`;
+    const makerTop=fixColCell('maker',`<span style="font-size:13px;font-weight:700;color:#1a2233;">${row.maker||'—'}</span>`,`${borderTop}border-bottom:none;`);
+    const makerMid=fixColCell('maker','',`border-top:none;border-bottom:none;`);
+    const makerBot=fixColCell('maker','',`border-top:none;border-bottom:2px solid #c0cce0;`);
+    const lgpnTop=fixColCell('lgpn',`<span style="font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:600;color:#1a2233;">${row.lgpn||'—'}</span>`,`${borderTop}border-bottom:none;`);
+    const lgpnMid=fixColCell('lgpn','',`border-top:none;border-bottom:none;`);
+    const lgpnBot=fixColCell('lgpn','',`border-top:none;border-bottom:2px solid #c0cce0;`);
+    const mkpnTop=fixColCell('mkpn',`<span style="font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:600;color:#1a2233;">${row.mkpn||'—'}</span>`,`${borderTop}border-bottom:none;`);
+    const mkpnMid=fixColCell('mkpn','',`border-top:none;border-bottom:none;`);
+    const mkpnBot=fixColCell('mkpn','',`border-top:none;border-bottom:2px solid #c0cce0;`);
     return`
       <tr>
         ${makerTop}${lgpnTop}${mkpnTop}
-        <td style="padding:6px 8px;border:1px solid #e8edf5;font-size:12px;font-weight:700;color:#1a56db;background:#EEF3FC;position:sticky;width:${FIX_W.gubun}px;max-width:${FIX_W.gubun}px;overflow:hidden;left:${FIX_L.gubun}px;z-index:4;">P</td>
+        <td style="padding:6px 8px;border:1px solid #e8edf5;font-size:12px;font-weight:700;color:#1a56db;background:#EEF3FC;position:sticky;width:${PW('gubun')};max-width:${PW('gubun')};overflow:hidden;left:${PL('gubun')};z-index:4;">P</td>
         <td style="${totalCellStyle('#EEF3FC','#1a56db')}">${sumP?sumP.toLocaleString():'—'}</td>
         ${pCells}
       </tr>
       <tr>
         ${makerMid}${lgpnMid}${mkpnMid}
-        <td style="padding:6px 8px;border:1px solid #e8edf5;font-size:12px;font-weight:700;color:#0e9f6e;background:#EEF9F4;position:sticky;width:${FIX_W.gubun}px;max-width:${FIX_W.gubun}px;overflow:hidden;left:${FIX_L.gubun}px;z-index:4;">S</td>
+        <td style="padding:6px 8px;border:1px solid #e8edf5;font-size:12px;font-weight:700;color:#0e9f6e;background:#EEF9F4;position:sticky;width:${PW('gubun')};max-width:${PW('gubun')};overflow:hidden;left:${PL('gubun')};z-index:4;">S</td>
         <td style="${totalCellStyle('#EEF9F4','#0e9f6e')}">${sumS?sumS.toLocaleString():'—'}</td>
         ${sCells}
       </tr>
       <tr>
         ${makerBot}${lgpnBot}${mkpnBot}
-        <td style="padding:6px 8px;border:1px solid #e8edf5;border-bottom:2px solid #c0cce0;font-size:12px;font-weight:700;color:#d97706;background:#FEF9EC;position:sticky;width:${FIX_W.gubun}px;max-width:${FIX_W.gubun}px;overflow:hidden;left:${FIX_L.gubun}px;z-index:4;">I</td>
+        <td style="padding:6px 8px;border:1px solid #e8edf5;border-bottom:2px solid #c0cce0;font-size:12px;font-weight:700;color:#d97706;background:#FEF9EC;position:sticky;width:${PW('gubun')};max-width:${PW('gubun')};overflow:hidden;left:${PL('gubun')};z-index:4;">I</td>
         <td style="${totalCellStyle('#FEF9EC','#d97706')}border-bottom:2px solid #c0cce0;">${sumI?(sumI<0?sumI.toLocaleString():'+'+sumI.toLocaleString()):'0'}</td>
         ${iCells}
       </tr>`;
@@ -1476,17 +1519,18 @@ function renderPSI(){
 
   const periodCols = psiPeriods.map(()=>'<col style="width:70px;min-width:66px;">').join('');
   document.getElementById('psiTableWrap').innerHTML=`
-    <table class="psi-table" style="width:auto;border-collapse:separate;border-spacing:0;white-space:nowrap;table-layout:fixed;">
+    <table class="psi-table" style="width:auto;border-collapse:separate;border-spacing:0;white-space:nowrap;table-layout:fixed;${psiCssVars}">
       <colgroup>
-        <col style="width:${FIX_W.maker}px;min-width:${FIX_W.maker}px;max-width:${FIX_W.maker}px;">
-        <col style="width:${FIX_W.lgpn}px;min-width:${FIX_W.lgpn}px;max-width:${FIX_W.lgpn}px;">
-        <col style="width:${FIX_W.mkpn}px;min-width:${FIX_W.mkpn}px;max-width:${FIX_W.mkpn}px;">
-        <col style="width:${FIX_W.gubun}px;min-width:${FIX_W.gubun}px;max-width:${FIX_W.gubun}px;">
-        <col style="width:${FIX_W.total}px;min-width:${FIX_W.total}px;max-width:${FIX_W.total}px;">
+        <col style="width:${PW('maker')};min-width:${PW('maker')};max-width:${PW('maker')};">
+        <col style="width:${PW('lgpn')};min-width:${PW('lgpn')};max-width:${PW('lgpn')};">
+        <col style="width:${PW('mkpn')};min-width:${PW('mkpn')};max-width:${PW('mkpn')};">
+        <col style="width:${PW('gubun')};min-width:${PW('gubun')};max-width:${PW('gubun')};">
+        <col style="width:${PW('total')};min-width:${PW('total')};max-width:${PW('total')};">
         ${periodCols}
       </colgroup>
       ${thead}<tbody>${tbody}</tbody>
     </table>`;
+  initPsiFixColResize();
 }
 
 function exportPSI(){
