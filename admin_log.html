@@ -104,6 +104,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .b-lg{background:rgba(200,0,30,.08);color:#c8001e;border:1px solid rgba(200,0,30,.2);}
 .b-dt{background:rgba(26,86,219,.08);color:#1a56db;border:1px solid rgba(26,86,219,.2);}
 .b-green{background:rgba(14,159,110,.08);color:#0e9f6e;border:1px solid rgba(14,159,110,.2);}
+.b-red{background:rgba(220,38,38,.08);color:#dc2626;border:1px solid rgba(220,38,38,.2);}
+.b-amber{background:rgba(217,119,6,.08);color:#d97706;border:1px solid rgba(217,119,6,.2);}
+.b-purple{background:rgba(124,58,237,.08);color:#7c3aed;border:1px solid rgba(124,58,237,.2);}
 .b-gray{background:var(--bg);color:var(--muted);border:1px solid var(--border);}
 
 /* 필터 */
@@ -1009,6 +1012,7 @@ tr.dragging{opacity:.45;}
         <button class="q-btn" id="q-all" onclick="setQ('all',this)">전체</button>
       </div>
     </div>
+    <div class="f-group"><div class="f-label">법인</div><select class="f-select" id="f-entity" style="width:110px;"><option value="">전체</option><option value="KOREA">SMEKR(본사)</option><option value="SMECN">SMECN(중국)</option><option value="SMEGLOBAL">SMETH(태국)</option><option value="GSMEIN">SMEIN(인도)</option></select></div>
     <div class="f-group"><div class="f-label">이름</div><select class="f-select" id="f-name" style="width:120px;"><option value="">전체</option></select></div>
     <div class="f-group"><div class="f-label">화면</div><select class="f-select" id="f-screen" style="width:150px;"><option value="">전체</option></select></div>
     <div class="f-group"><div class="f-label">기기</div><select class="f-select" id="f-device" style="width:110px;"><option value="">전체</option><option value="PC">PC</option><option value="모바일">모바일</option><option value="태블릿">태블릿</option></select></div>
@@ -1020,8 +1024,8 @@ tr.dragging{opacity:.45;}
   </div>
   <div class="tbl-wrap">
     <table id="log-table">
-      <thead><tr><th style="width:50px;">#</th><th style="width:100px;">이름</th><th>화면</th><th style="width:80px;">기기</th><th style="width:140px;">IP 주소</th><th style="width:160px;">접속 일시</th></tr></thead>
-      <tbody id="logBody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div> 데이터 로딩 중...</div></td></tr></tbody>
+      <thead><tr><th style="width:50px;">#</th><th style="width:80px;">법인</th><th style="width:100px;">이름</th><th>화면</th><th style="width:80px;">기기</th><th style="width:140px;">IP 주소</th><th style="width:160px;">접속 일시</th></tr></thead>
+      <tbody id="logBody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div> 데이터 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -2038,7 +2042,7 @@ function setQ(type, el) {
 
 // ── 로그 조회 ──
 async function loadLog() {
-  document.getElementById('logBody').innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div> 조회 중...</div></td></tr>';
+  document.getElementById('logBody').innerHTML = '<tr><td colspan="7"><div class="loading"><div class="spinner"></div> 조회 중...</div></td></tr>';
 
   try {
     let q = sb.from('access_log').select('*').order('accessed_at', {ascending: false}).limit(1000);
@@ -2048,9 +2052,11 @@ async function loadLog() {
     const name   = document.getElementById('f-name').value;
     const screen = document.getElementById('f-screen').value;
     const device = document.getElementById('f-device').value;
+    const entity = document.getElementById('f-entity').value;
     if(name)   q = q.eq('user_name', name);
     if(screen) q = q.eq('screen', screen);
     if(device) q = q.eq('device', device);
+    if(entity) q = q.eq('entity', entity);
 
     const {data, error} = await q;
     if(error) throw error;
@@ -2060,14 +2066,14 @@ async function loadLog() {
     loadRank();
     setTimeout(()=>initColResize('log-table','al_log'),50);
   } catch(e) {
-    document.getElementById('logBody').innerHTML = `<tr><td colspan="6"><div class="empty-state">조회 실패: ${e.message}</div></td></tr>`;
+    document.getElementById('logBody').innerHTML = `<tr><td colspan="7"><div class="empty-state">조회 실패: ${e.message}</div></td></tr>`;
   }
 }
 
 function renderLog(data) {
   document.getElementById('logCount').textContent = `— ${data.length.toLocaleString()}건`;
   if(!data.length) {
-    document.getElementById('logBody').innerHTML = '<tr><td colspan="6"><div class="empty-state">📭 조회 결과가 없습니다</div></td></tr>';
+    document.getElementById('logBody').innerHTML = '<tr><td colspan="7"><div class="empty-state">📭 조회 결과가 없습니다</div></td></tr>';
     return;
   }
   document.getElementById('logBody').innerHTML = data.map((r, i) => {
@@ -2077,8 +2083,11 @@ function renderLog(data) {
       : r.device === '모바일' ? '<span class="badge b-mobile">모바일</span>'
       : r.device === '태블릿' ? '<span class="badge b-tablet">태블릿</span>'
       : `<span class="badge">${r.device||'—'}</span>`;
+    const entBadgeCls = ({KOREA:'b-green',SMECN:'b-red',SMEGLOBAL:'b-amber',GSMEIN:'b-purple'})[r.entity]||'b-gray';
+    const entBadge = r.entity ? `<span class="badge ${entBadgeCls}">${r.entity}</span>` : '<span style="color:var(--muted);font-size:11px;">—</span>';
     return `<tr>
       <td style="color:var(--muted);font-family:'Share Tech Mono',monospace;">${i+1}</td>
+      <td>${entBadge}</td>
       <td style="font-weight:700;">${r.user_name||'—'}</td>
       <td>${r.screen||'—'}</td>
       <td>${devBadge}</td>
@@ -3037,7 +3046,7 @@ function renderEmpTable() {
     <tr class="${r.active===false?'opacity:0.45;':''}">
       <td class="center mono">${r.emp_no||''}</td>
       <td><span class="badge b-gray">${r.emp_type||''}</span></td>
-      <td><span class="badge b-green">${r.entity||''}</span></td>
+      <td><span class="badge ${({KOREA:'b-green',SMECN:'b-red',SMEGLOBAL:'b-amber',GSMEIN:'b-purple'})[r.entity]||'b-gray'}">${r.entity||''}</span></td>
       <td style="font-weight:700;">${r.name||''}</td>
       <td><span class="badge b-gray">${r.rank||''}</span></td>
       <td><span class="badge b-dt">${r.dept||''}</span></td>

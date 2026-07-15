@@ -691,19 +691,18 @@ body{background:var(--bg);color:var(--t1);font-family:'Noto Sans KR',sans-serif;
     <div class="popup-icon">🔐</div>
     <div class="popup-title">SMERP 로그인</div>
     <div class="popup-sub">이름과 비밀번호를 입력해주세요</div>
-    <div class="popup-lbl">이름</div>
-    <select class="popup-sel" id="nameSelect" onchange="onNameSelect()">
-      <option value="">— 선택해주세요 —</option>
-      <option>곽선효</option><option>박정용</option><option>김근복</option>
-      <option>이서연</option><option>김봉승</option><option>배병대</option>
-      <option>조승연</option><option>곽경민</option><option>박영주</option>
-      <option>김종길</option><option>최성빈</option><option>최세진</option>
-      <option>박형호</option><option>김재옥</option><option>최혜영</option>
-      <option>송윤석</option><option>박현길</option><option>문상호</option>
-      <option>장우승</option><option>김기훈</option><option>김아현</option>
-      <option>윤선정</option><option>공수지</option>
+    <div class="popup-lbl">법인</div>
+    <select class="popup-sel" id="corpSelect" onchange="onCorpSelect()">
+      <option value="">— 법인을 선택해주세요 —</option>
+      <option value="SMEKR">SMEKR (본사)</option>
+      <option value="SMEIN">SMEIN (인도)</option>
+      <option value="SMETH">SMETH (태국)</option>
+      <option value="SMECN">SMECN (중국)</option>
     </select>
-    <input class="popup-inp" id="nameDirectInput" type="text" placeholder="또는 이름 직접 입력" oninput="onNameDirectInput()">
+    <div class="popup-lbl">이름</div>
+    <select class="popup-sel" id="nameSelect" disabled>
+      <option value="">— 법인을 먼저 선택해주세요 —</option>
+    </select>
     <div class="popup-lbl">비밀번호</div>
     <input class="popup-inp" id="pwInput" type="password" maxlength="10" placeholder="••••" onkeydown="if(event.key==='Enter')checkPW()">
     <div class="popup-err" id="pwError"></div>
@@ -744,14 +743,14 @@ function showSection(key){
   filterMenu('');
 }
 
-async function writeLog(u,s){
+async function writeLog(u,s,entity){
   try{
     let ip='';try{ip=(await(await fetch('https://api.ipify.org?format=json')).json()).ip||'';}catch(e){}
     const ua=navigator.userAgent;
     const dev=/Mobile|Android|iPhone|iPad/i.test(ua)?(/iPad/i.test(ua)?'태블릿':'모바일'):'PC';
     await fetch(`${SB_URL}/rest/v1/access_log`,{method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({user_name:u,screen:s,ip_address:ip,device:dev})});
+      body:JSON.stringify({user_name:u,screen:s,ip_address:ip,device:dev,entity:entity||localStorage.getItem('sme_entity')||null})});
   }catch(e){}
 }
 
@@ -801,33 +800,55 @@ initAuth();
 
 function doLogout(){
   if(!confirm('로그아웃 하시겠습니까?'))return;
-  ['sme_user','sme_auth','sme_hq_auth'].forEach(k=>localStorage.removeItem(k));
+  ['sme_user','sme_auth','sme_hq_auth','sme_entity'].forEach(k=>localStorage.removeItem(k));
   ['po_auth','hq_auth'].forEach(k=>sessionStorage.removeItem(k));
   document.getElementById('tbUser').style.display='none';
 }
 
-function onNameSelect(){const s=document.getElementById('nameSelect');if(s.value)document.getElementById('nameDirectInput').value=s.value;}
-function onNameDirectInput(){if(document.getElementById('nameDirectInput').value.trim())document.getElementById('nameSelect').value='';}
-function getName(){return document.getElementById('nameDirectInput').value.trim()||document.getElementById('nameSelect').value;}
+const CORP_ENTITY_MAP={SMEKR:'KOREA',SMEIN:'GSMEIN',SMETH:'SMEGLOBAL',SMECN:'SMECN'};
+let pendingEntity='';
+
+async function onCorpSelect(){
+  const corp=document.getElementById('corpSelect').value;
+  const sel=document.getElementById('nameSelect');
+  pendingEntity=CORP_ENTITY_MAP[corp]||'';
+  if(!corp){ sel.innerHTML='<option value="">— 법인을 먼저 선택해주세요 —</option>'; sel.disabled=true; return; }
+  sel.innerHTML='<option value="">불러오는 중...</option>'; sel.disabled=true;
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/employees?select=name,rank&active=eq.true&entity=eq.${pendingEntity}&order=emp_no`,
+      {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    const data=await res.json();
+    sel.innerHTML='<option value="">— 선택해주세요 —</option>'+
+      (data||[]).map(e=>`<option value="${e.name}">${e.name}${e.rank?' ('+e.rank+')':''}</option>`).join('');
+  }catch(e){
+    sel.innerHTML='<option value="">불러오기 실패 (새로고침 후 재시도)</option>';
+  }
+  sel.disabled=false;
+}
+function getName(){return document.getElementById('nameSelect').value;}
 
 function openWithPW(t){
   pendingTarget=t;
   const n=localStorage.getItem('sme_user');
   if(n&&localStorage.getItem('sme_auth')==='1'){sessionStorage.setItem('po_auth','1');handleTarget(t,n);return;}
-  ['nameSelect','nameDirectInput','pwInput'].forEach(id=>document.getElementById(id).value='');
+  ['corpSelect','pwInput'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('nameSelect').innerHTML='<option value="">— 법인을 먼저 선택해주세요 —</option>';
+  document.getElementById('nameSelect').disabled=true;
+  pendingEntity='';
   document.getElementById('pwError').textContent='';
   document.getElementById('pwOverlay').style.display='flex';
-  setTimeout(()=>document.getElementById('nameSelect').focus(),100);
+  setTimeout(()=>document.getElementById('corpSelect').focus(),100);
 }
 
 function checkPW(){
   const n=getName(),pw=document.getElementById('pwInput').value,err=document.getElementById('pwError');
-  if(!n){err.textContent='⚠ 이름을 선택하거나 직접 입력해주세요';return;}
+  if(!document.getElementById('corpSelect').value){err.textContent='⚠ 법인을 선택해주세요';return;}
+  if(!n){err.textContent='⚠ 이름을 선택해주세요';return;}
   if(pw!==PW_MAIN){err.textContent='⚠ 비밀번호가 올바르지 않습니다';document.getElementById('pwInput').value='';return;}
-  localStorage.setItem('sme_user',n);localStorage.setItem('sme_auth','1');sessionStorage.setItem('po_auth','1');
+  localStorage.setItem('sme_user',n);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',pendingEntity);sessionStorage.setItem('po_auth','1');
   document.getElementById('tbUser').style.display='flex';
   document.getElementById('tbUserName').textContent=n+' 님';
-  closePW();writeLog(n,'SMERP 로그인');handleTarget(pendingTarget,n);
+  closePW();writeLog(n,'SMERP 로그인',pendingEntity);handleTarget(pendingTarget,n);
 }
 
 function handleTarget(t,n){
