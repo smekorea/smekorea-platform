@@ -892,7 +892,7 @@ tr.dragging{opacity:.45;}
       <option value="">전체 법인</option><option value="KOREA">KOREA</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (태국)</option><option value="SMECN">SMECN (중국)</option>
     </select>
     <select id="emp-f-dept" onchange="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;color:var(--text);background:#f8fafc;outline:none;">
-      <option value="">전체 부서</option><option value="대표이사">대표이사</option><option value="상무이사">상무이사</option><option value="재경팀">재경팀</option><option value="개발기획팀">개발기획팀</option><option value="자재구매팀">자재구매팀</option><option value="개발구매팀">개발구매팀</option><option value="출하팀">출하팀</option><option value="제조팀">제조팀</option>
+      <option value="">전체 부서</option><option value="대표이사">대표이사</option><option value="상무이사">상무이사</option><option value="재경팀">재경팀</option><option value="개발기획팀">개발기획팀</option><option value="자재구매팀">자재구매팀</option><option value="개발구매팀">개발구매팀</option><option value="출하팀">출하팀</option><option value="제조팀">제조팀</option><option value="총경리">총경리</option><option value="구매영업">구매영업</option><option value="재무">재무</option>
     </select>
     <select id="emp-f-active" onchange="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;color:var(--text);background:#f8fafc;outline:none;">
       <option value="true">재직중</option><option value="">전체</option><option value="false">퇴직자</option>
@@ -940,10 +940,10 @@ tr.dragging{opacity:.45;}
       </div>
       <div class="modal-row">
         <div class="form-group"><label>성명 <span class="req">*</span></label><input id="emp-in-name" placeholder="이름 입력"></div>
-        <div class="form-group"><label>직급 <span class="req">*</span></label><select id="emp-in-rank"><option value="대표이사">대표이사</option><option value="상무">상무</option><option value="이사">이사</option><option value="책임">책임</option><option value="선임">선임</option><option value="사원">사원</option><option value="인턴">인턴</option></select></div>
+        <div class="form-group"><label>직급 <span class="req">*</span></label><select id="emp-in-rank"><option value="대표이사">대표이사</option><option value="상무">상무</option><option value="이사">이사</option><option value="책임">책임</option><option value="선임">선임</option><option value="사원">사원</option><option value="인턴">인턴</option><option value="총경리">총경리</option><option value="부총경리">부총경리</option><option value="팀장">팀장</option><option value="과장">과장</option></select></div>
       </div>
       <div class="modal-row">
-        <div class="form-group"><label>부서 <span class="req">*</span></label><select id="emp-in-dept"><option value="대표이사">대표이사</option><option value="상무이사">상무이사</option><option value="재경팀">재경팀</option><option value="개발기획팀">개발기획팀</option><option value="자재구매팀">자재구매팀</option><option value="개발구매팀">개발구매팀</option><option value="출하팀">출하팀</option><option value="제조팀">제조팀</option></select></div>
+        <div class="form-group"><label>부서 <span class="req">*</span></label><select id="emp-in-dept"><option value="대표이사">대표이사</option><option value="상무이사">상무이사</option><option value="재경팀">재경팀</option><option value="개발기획팀">개발기획팀</option><option value="자재구매팀">자재구매팀</option><option value="개발구매팀">개발구매팀</option><option value="출하팀">출하팀</option><option value="제조팀">제조팀</option><option value="총경리">총경리</option><option value="구매영업">구매영업</option><option value="재무">재무</option></select></div>
         <div class="form-group"><label>연락처</label><input id="emp-in-phone" placeholder="010-0000-0000"></div>
       </div>
       <div class="modal-row">
@@ -2199,7 +2199,7 @@ function addTradeDirectRow() {
   if(!date || !qty || !partner) { alert('거래일자, 수량, 거래처는 필수입니다.'); return; }
 
   const row = {
-    year, month,
+    year: year.slice(-2)+'년', month: parseInt(month)+'월',
     trade_date:  date,
     slip_no:     document.getElementById('td-slip').value.trim() || null,
     item_code:   document.getElementById('td-item').value.trim() || null,
@@ -2233,7 +2233,7 @@ function loadTradeExcel(e) {
     const rows = XLSX.utils.sheet_to_json(ws, {defval:null});
     _tradeRows = rows.map(r => {
       const base = {
-        year, month,
+        year: year.slice(-2)+'년', month: parseInt(month)+'월',
         trade_date:  r['거래일자']||r['trade_date']||null,
         slip_no:     r['전표번호']||r['slip_no']||null,
         item_code:   r['품목코드']||r['item_code']||null,
@@ -2315,8 +2315,8 @@ async function submitTradeData() {
   btn.disabled = true; btn.textContent = '처리 중...';
 
   try {
-    // 해당 월 삭제
-    await sb.from(table).delete().eq('year', year).eq('month', month);
+    // 해당 월 삭제 (DB 실제 포맷: "YY년"/"M월")
+    await sb.from(table).delete().eq('year', year.slice(-2)+'년').eq('month', parseInt(month)+'월');
     // 청크 단위 insert (500건)
     const CHUNK = 500;
     for(let i=0; i<_tradeRows.length; i+=CHUNK) {
@@ -2348,7 +2348,10 @@ async function downloadTradeData() {
   const year  = document.getElementById('trade-year').value;
   const month = document.getElementById('trade-month').value;
   const table = type === 'purchase' ? 'purchase_data' : 'sales_data';
-  const {data, error} = await sb.from(table).select('*').eq('year',year).eq('month',month).order('trade_date');
+  const startDate = `${year}-${month}-01`;
+  const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+  const endDate = `${year}-${month}-${String(lastDay).padStart(2,'0')}`;
+  const {data, error} = await sb.from(table).select('*').gte('trade_date',startDate).lte('trade_date',endDate).order('trade_date');
   if(error||!data?.length) { alert('데이터가 없습니다.'); return; }
   const partnerKey = type==='purchase'?'supplier':'customer';
   const rows = data.map(r => ({
@@ -3002,7 +3005,7 @@ function openEmpModal(id) {
   document.getElementById('emp-in-entity').value   = r?.entity     || 'KOREA';
   document.getElementById('emp-in-gender').value   = r?.gender     || '남';
   document.getElementById('emp-in-name').value     = r?.name       || '';
-  document.getElementById('emp-in-rank').value     = r?.rank       || '사원';
+  document.getElementById('emp-in-rank').value      = r?.rank       || '사원';
   document.getElementById('emp-in-dept').value     = r?.dept       || '자재구매팀';
   document.getElementById('emp-in-phone').value    = r?.phone      || '';
   document.getElementById('emp-in-joindate').value = r?.join_date  || '';
@@ -3246,14 +3249,14 @@ function initColResize(tableId, storageKey) {
   ths.forEach((th,i) => {
     if(!th.querySelector('.col-resizer')){
       const r=document.createElement('div'); r.className='col-resizer'; th.appendChild(r);
+      r.addEventListener('mousedown', e => {
+        const sx=e.clientX, sw=th.offsetWidth;
+        const mv=e=>{const w=Math.max(50,sw+e.clientX-sx);th.style.width=w+'px';th.style.minWidth=w+'px';upd();};
+        const up=()=>{const ws={};ths.forEach((t,j)=>{ws[j]=t.offsetWidth;});localStorage.setItem(storageKey,JSON.stringify(ws));document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+        document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+        e.preventDefault(); e.stopPropagation();
+      });
     }
-    th.querySelector('.col-resizer').addEventListener('mousedown', e => {
-      const sx=e.clientX, sw=th.offsetWidth;
-      const mv=e=>{const w=Math.max(50,sw+e.clientX-sx);th.style.width=w+'px';th.style.minWidth=w+'px';upd();};
-      const up=()=>{const ws={};ths.forEach((t,j)=>{ws[j]=t.offsetWidth;});localStorage.setItem(storageKey,JSON.stringify(ws));document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
-      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
-      e.preventDefault(); e.stopPropagation();
-    });
   });
 }
 
