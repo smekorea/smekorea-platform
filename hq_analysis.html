@@ -418,17 +418,23 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   <div id="sub-trade">
     <div class="filter-bar">
       <div class="f-group"><div class="f-lbl">구분</div><select class="f-select hl" id="f-type" style="min-width:110px;"><option value="">전체</option><option value="LG사급">LG사급</option><option value="직거래">직거래</option></select></div>
+      <div class="f-group"><div class="f-lbl">매출처</div>
+        <div class="autocomplete-wrap">
+          <input class="f-input" id="f-seller-input" placeholder="전체 (입력해서 검색)" style="width:150px;" oninput="acSearch('f-seller-input','ac-f-seller',allSellers)" onblur="setTimeout(()=>hideAc('ac-f-seller'),200)" autocomplete="off">
+          <div class="autocomplete-list" id="ac-f-seller"></div>
+        </div>
+      </div>
+      <div class="f-group"><div class="f-lbl">매입처</div>
+        <div class="autocomplete-wrap">
+          <input class="f-input" id="f-buyer-input" placeholder="전체 (입력해서 검색)" style="width:150px;" oninput="acSearch('f-buyer-input','ac-f-buyer',allBuyers)" onblur="setTimeout(()=>hideAc('ac-f-buyer'),200)" autocomplete="off">
+          <div class="autocomplete-list" id="ac-f-buyer"></div>
+        </div>
+      </div>
       <div class="f-group"><div class="f-lbl">메이커(브랜드)</div>
         <div class="autocomplete-wrap">
           <input class="f-input" id="f-brand-input" placeholder="전체 (입력해서 검색)" style="width:150px;" oninput="acSearch('f-brand-input','ac-f-brand',_allBrands)" onblur="setTimeout(()=>hideAc('ac-f-brand'),200)" autocomplete="off">
           <div class="autocomplete-list" id="ac-f-brand"></div>
         </div>
-      </div>
-      <div class="f-group"><div class="f-lbl">매출처</div>
-        <button id="f-seller-pick-btn" onclick="openPickModal('seller')" style="height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-seller-pick-cnt">전체</span></button>
-      </div>
-      <div class="f-group"><div class="f-lbl">매입처</div>
-        <button id="f-buyer-pick-btn" onclick="openPickModal('buyer')" style="height:34px;padding:0 12px;border:1.5px solid var(--accent2);border-radius:6px;background:rgba(26,86,219,0.06);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;">📋 <span id="f-buyer-pick-cnt">전체</span></button>
       </div>
       <div class="f-group"><div class="f-lbl">품목코드</div>
         <div class="autocomplete-wrap">
@@ -985,7 +991,7 @@ function updYearlyChart(){
   const H=150,padT=34,padB=10,chartH=H-padT-padB;
   const chartW=W-padL-padR;
   const maxVal=Math.max(...data.map(d=>Math.max(d.sales,d.purch)),1);
-  const colW=chartW/data.length,barW=Math.min(20,colW*0.3);
+  const colW=chartW/data.length,barW=Math.min(20,colW*0.3),barWP=barW*0.8;
   let grid='',saleBars='',purchBars='',barLabels='',yoyBadge='';
   [0,0.25,0.5,0.75,1].forEach(t=>{
     const y=padT+chartH*(1-t);const val=maxVal*t;
@@ -998,9 +1004,9 @@ function updYearlyChart(){
     const sH=Math.max(2,d.sales/maxVal*chartH),pH=Math.max(2,d.purch/maxVal*chartH);
     const sY=padT+chartH-sH,pY=padT+chartH-pH;
     saleBars+=`<rect x="${cx-barW-1}" y="${sY}" width="${barW}" height="${sH}" fill="#c8001e" opacity="0.8" rx="2"/>`;
-    purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barW}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
+    purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barWP}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
     barLabels+=`<text x="${cx-barW-1}" y="${sY-6}" text-anchor="middle" font-size="5.5" font-weight="700" fill="#c8001e">${fmtB(d.sales)}</text>`;
-    barLabels+=`<text x="${cx+barW+1}" y="${pY-6}" text-anchor="middle" font-size="5.5" fill="#1a56db">${fmtB(d.purch)}</text>`;
+    barLabels+=`<text x="${cx+1+barWP}" y="${pY-6}" text-anchor="middle" font-size="5.5" fill="#1a56db">${fmtB(d.purch)}</text>`;
     const prevD=i>0?data[i-1]:null;
     if(prevD&&prevD.sales>0){
       const yoy=((d.sales-prevD.sales)/prevD.sales*100);const up=yoy>=0;
@@ -1047,7 +1053,7 @@ function updMonthlyLine(){
   const H=150,padT=18,padB=10,chartH=H-padT-padB;
   const chartW=W-padL-padR;
   const maxVal=Math.max(...months.map(m=>Math.max(cS[m]||0,cP[m]||0)),1);
-  const n=months.length,colW=chartW/n,barW=Math.min(16,colW*0.3);
+  const n=months.length,colW=chartW/n,barW=Math.min(16,colW*0.3),barWP=barW*0.8;
   let grid='',saleBars='',purchBars='',barLabels='';
   [0,0.25,0.5,0.75,1].forEach(t=>{
     const y=padT+chartH*(1-t);const v=maxVal*t;
@@ -1061,9 +1067,9 @@ function updMonthlyLine(){
     const sH=Math.max(2,sV/maxVal*chartH),pH=Math.max(2,pV/maxVal*chartH);
     const sY=padT+chartH-sH,pY=padT+chartH-pH;
     saleBars+=`<rect x="${cx-barW-1}" y="${sY}" width="${barW}" height="${sH}" fill="#c8001e" opacity="0.8" rx="2"/>`;
-    purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barW}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
+    purchBars+=`<rect x="${cx+1}" y="${pY}" width="${barWP}" height="${pH}" fill="#1a56db" opacity="0.45" rx="2"/>`;
     if(sV>0)barLabels+=`<text x="${cx-barW-1}" y="${sY-6}" text-anchor="${i===0?'start':'middle'}" font-size="5.5" font-weight="700" fill="#c8001e">${fmtB(sV)}</text>`;
-    if(pV>0)barLabels+=`<text x="${cx+barW+1}" y="${pY-6}" text-anchor="middle" font-size="5.5" fill="#1a56db">${fmtB(pV)}</text>`;
+    if(pV>0)barLabels+=`<text x="${cx+1+barWP}" y="${pY-6}" text-anchor="middle" font-size="5.5" fill="#1a56db">${fmtB(pV)}</text>`;
   });
   const svgA=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">
     ${grid}
@@ -1280,20 +1286,59 @@ function setResultType(t){
   });
   if(loaded) renderResult();
 }
+function estimatePurchaseForSellers(fS,rawP,from,to,brand,pcode,buyers){
+  // ⚠️ (v15.23) 매출처 필터 시 매입을 추정하는 로직 — "품목코드가 겹치는 매입 전체"를 그대로 가져오면
+  // 그 품목의 회사 전체 매입량이 다 잡혀서 실제 매출처 몫보다 훨씬 부풀려지는 문제가 있었음(실측 확인됨:
+  // 매출 19억인데 매입이 120억으로 표시).
+  // → 품목코드별 "평균 매입단가"(회사 전체, 같은 기간 기준)를 구해서, 매출처에 판매된 수량만큼만
+  // 매입금액을 추정 계산. 매입처별로 쪼갤 때는 그 품목을 사입해온 매입처들의 수량비중대로 비례배분.
+  const pAll=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명'])));
+  const itemAgg={};//{code:{amt,qty}}
+  const itemSupplier={};//{code:{supplier:{amt,qty}}}
+  pAll.forEach(r=>{
+    const code=r['품목코드']||'';const amt=Number(r['공급가액'])||0;const qty=Number(r['수량'])||0;const sup=r['구매처명']||'(매입처미상)';
+    if(!itemAgg[code])itemAgg[code]={amt:0,qty:0};
+    itemAgg[code].amt+=amt;itemAgg[code].qty+=qty;
+    if(!itemSupplier[code])itemSupplier[code]={};
+    if(!itemSupplier[code][sup])itemSupplier[code][sup]={amt:0,qty:0};
+    itemSupplier[code][sup].amt+=amt;itemSupplier[code][sup].qty+=qty;
+  });
+  const synth=[];
+  fS.forEach(r=>{
+    const code=r['품목코드']||'';const soldQty=Number(r['수량'])||0;if(soldQty<=0)return;
+    const agg=itemAgg[code];
+    if(!agg||agg.qty<=0){
+      synth.push({...r,'구매처명':'(매입이력없음)','공급가액':0,'수량':soldQty});
+      return;
+    }
+    const avgPrice=agg.amt/agg.qty;
+    const suppliers=itemSupplier[code];
+    Object.keys(suppliers).forEach(sup=>{
+      const ratio=suppliers[sup].qty/agg.qty;
+      const sQty=soldQty*ratio;
+      synth.push({...r,'구매처명':sup,'공급가액':sQty*avgPrice,'수량':sQty});
+    });
+  });
+  return synth;
+}
 function getTradeCtx(){
   const {from,to}=getFT();
   const type=document.getElementById('f-type').value;
   const brand=document.getElementById('f-brand-input').value.trim();
   const pcode=document.getElementById('f-pcode').value.trim();
-  const sellers=_pickState.seller,buyers=_pickState.buyer;
+  const sellerVal=document.getElementById('f-seller-input').value.trim();
+  const buyerVal=document.getElementById('f-buyer-input').value.trim();
+  const sellers=sellerVal?[sellerVal]:[],buyers=buyerVal?[buyerVal]:[];
   const isAmt=tradeUnit==='amt',isYear=tradePeriodUnit==='year';
   let fS=rawS.filter(r=>inPer(r,from,to)&&(!type||cls(r)===type)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!sellers.length||sellers.includes(r['판매처명'])));
-  // ⚠️ (v15.22) 매입 레코드에는 '판매처명(매출처)' 필드가 없어 직접 필터링이 불가능함 — 매출처 필터가 걸려있으면
-  // "그 매출처에 실제로 판매된 품목코드" 집합으로 매입 데이터를 간접 필터링(품목코드 교집합)해서
-  // "이 매출처에 파는 품목은 어느 매입처에서 사오는가"를 볼 수 있도록 함. 매출처 필터가 없으면 기존과 동일하게 전체.
-  const sellerItemCodes=sellers.length?new Set(fS.map(r=>r['품목코드'])):null;
-  let fP=rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명']))&&(!sellerItemCodes||sellerItemCodes.has(r['품목코드'])));
-  return {fS,fP,from,to,type,brand,pcode,sellers,buyers,isAmt,isYear};
+  // ⚠️ (v15.23) 매입 레코드에는 '판매처명(매출처)' 필드가 없어 직접 필터링이 불가능함 — 매출처 필터가 걸려있으면
+  // "그 매출처에 판매된 수량만큼"만 반영되도록 품목별 평균단가 기반 추정 계산(estimatePurchaseForSellers)으로
+  // 매입을 산출한다. 매출처 필터가 없으면 기존과 동일하게 실제 매입 데이터 그대로 사용.
+  const isEstimated=sellers.length>0;
+  let fP=isEstimated
+    ? estimatePurchaseForSellers(fS,rawP,from,to,brand,pcode,buyers)
+    : rawP.filter(r=>inPer(r,from,to)&&(!brand||r['브랜드명']===brand)&&(!pcode||(r['품목코드']||'').includes(pcode))&&(!buyers.length||buyers.includes(r['구매처명'])));
+  return {fS,fP,from,to,type,brand,pcode,sellers,buyers,isAmt,isYear,isEstimated};
 }
 function renderResult(){
   if(!loaded){alert('먼저 데이터 로드 버튼을 눌러주세요.');return;}
@@ -1342,7 +1387,7 @@ function renderSumTable(ctx){
   excelData.push(['매입(원)',...allKeys.map(k=>pMap[k]?.amt||0),totP.amt]);
   if(isAmt)excelData.push(['매입매출GAP(원)',...allKeys.map(k=>(sMap[k]?.amt||0)-(pMap[k]?.amt||0)),totMg]);
   if(isAmt)excelData.push(['GAP율(%)',...allKeys.map(k=>{const sA=sMap[k]?.amt||0,pA=pMap[k]?.amt||0;return sA>0?((sA-pA)/sA*100).toFixed(1)+'%':'0%';}),totMgR.toFixed(1)+'%']);
-  const filterNote=sellers.length?`<div style="font-size:11px;color:var(--accent2);background:#eef3fc;border-radius:6px;padding:6px 10px;margin-bottom:8px;">ℹ️ 매출처 필터(${sellers.join(', ')}) 적용중 — 매입 수치는 <strong>이 매출처에 실제 판매된 품목코드와 동일한 품목</strong>만 집계된 것입니다(매입 레코드엔 매출처 정보가 없어 품목코드로 간접 연결).</div>`:'';
+  const filterNote=sellers.length?`<div style="font-size:11px;color:var(--accent2);background:#eef3fc;border-radius:6px;padding:6px 10px;margin-bottom:8px;">⚠️ <strong>추정치</strong> — 매출처 필터(${sellers.join(', ')}) 적용중. 매입 레코드엔 매출처 정보가 없어, <strong>품목별 회사 전체 평균매입단가 × 이 매출처에 판매된 수량</strong>으로 매입을 추정 계산한 값입니다(실제 매입 전표와 다를 수 있음).</div>`:'';
   const html=filterNote+'<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span>'
     +'<span>집계 <strong style="color:var(--accent2);">'+(isAmt?'금액':'수량')+'</strong></span>'
     +'<span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span>'
@@ -1398,10 +1443,11 @@ function buildSumChart(allKeys,sMap,pMap,isAmt,isYear){
   return `<div class="tv-wrap" style="overflow-x:auto;padding:12px;">${svg}</div>`;
 }
 function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
-  const {fS,fP,from,to,isAmt,isYear,type,brand,pcode,sellers,buyers}=ctx;
+  const {fS,fP,from,to,isAmt,isYear,type,brand,pcode,sellers,buyers,isEstimated}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
   const unit=isAmt?'원':'개';
   const getV=(d)=>isAmt?fmtFull(d.amt):d.qty.toLocaleString();
+  const estBadge=' <span style="font-size:10px;font-weight:700;color:var(--accent2);background:#eef3fc;border-radius:4px;padding:1px 6px;">⚠️ 추정치</span>';
   const buildTable=(rows,nameField,label,color,idSuffix)=>{
     if(!rows.length) return {html:'<div style="color:var(--muted);font-size:12px;padding:16px;">데이터 없음</div>',excel:[]};
     const byEntity={};
@@ -1435,10 +1481,10 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
   html+='<div style="display:flex;flex-direction:column;gap:20px;">';
   const tableIds=[];
   if(isPivotSeller){const r=buildTable(fS,'판매처명','매출처별 '+unit+' 추이','#c8001e');html+=r.html;if(r.tableId)tableIds.push(r.tableId);}
-  if(isPivotBuyer){const r=buildTable(fP,'구매처명','매입처별 '+unit+' 추이','#7a8baa');html+=r.html;if(r.tableId)tableIds.push(r.tableId);}
+  if(isPivotBuyer){const r=buildTable(fP,'구매처명','매입처별 '+unit+' 추이'+(isEstimated?estBadge:''),'#7a8baa');html+=r.html;if(r.tableId)tableIds.push(r.tableId);}
   if(isPivotBrand){
     const r1=buildTable(fS,'브랜드명','매출 메이커별 '+unit+' 추이','#c8001e','브랜드명_매출');html+=r1.html;if(r1.tableId)tableIds.push(r1.tableId);
-    const r2=buildTable(fP,'브랜드명','매입 메이커별 '+unit+' 추이','#7a8baa','브랜드명_매입');html+=r2.html;if(r2.tableId)tableIds.push(r2.tableId);
+    const r2=buildTable(fP,'브랜드명','매입 메이커별 '+unit+' 추이'+(isEstimated?estBadge:''),'#7a8baa','브랜드명_매입');html+=r2.html;if(r2.tableId)tableIds.push(r2.tableId);
   }
   html+='</div>';
   document.getElementById('trade-result').innerHTML=html;
@@ -1497,7 +1543,7 @@ function renderItemDetailTable(ctx,skipCache){
     +'</div>'
     +(cur.count?'<button onclick="exportTradeExcel('+JSON.stringify(cur.excel)+')" style="margin-left:auto;padding:5px 14px;border-radius:6px;border:1.5px solid var(--accent3);background:#fff;color:var(--accent3);font-size:11px;font-weight:700;cursor:pointer;">⬇ 엑셀 다운로드</button>':'')
     +'</div>';
-  html+='<div style="font-size:12px;font-weight:700;color:'+(_itemSide==='sell'?'#c8001e':'#7a8baa')+';margin-bottom:8px;">'+label+' 품목별 현황'+(cur.count?' ('+cur.count.toLocaleString()+'개 품목)':'')+'</div>';
+  html+='<div style="font-size:12px;font-weight:700;color:'+(_itemSide==='sell'?'#c8001e':'#7a8baa')+';margin-bottom:8px;">'+label+' 품목별 현황'+(cur.count?' ('+cur.count.toLocaleString()+'개 품목)':'')+(_itemSide==='buy'&&sellers.length?' <span style="font-size:10px;font-weight:700;color:var(--accent2);background:#eef3fc;border-radius:4px;padding:1px 6px;">⚠️ 추정치</span>':'')+'</div>';
   html+=cur.html;
   document.getElementById('trade-result').innerHTML=html;
   if(cur.tableId)initColResize(cur.tableId,'hq_'+cur.tableId);
@@ -1539,7 +1585,8 @@ function resetTrade(){
   document.getElementById('f-type').value='';
   const fbi=document.getElementById('f-brand-input');if(fbi)fbi.value='';
   document.getElementById('f-pcode').value='';
-  _pickState.seller=[];_pickState.buyer=[];updatePickCnt('seller');updatePickCnt('buyer');
+  const fsi=document.getElementById('f-seller-input');if(fsi)fsi.value='';
+  const fby=document.getElementById('f-buyer-input');if(fby)fby.value='';
 }
 
 // ── 단가마진 ──
