@@ -3058,7 +3058,10 @@ async function saveEmp() {
   if(_empEditId){
     ({error}=await sb.from('employees').update(payload).eq('id',_empEditId));
   } else {
-    const maxNo = _empData.reduce((m,r)=>Math.max(m,r.emp_no||0),0);
+    const EMP_NO_BANDS = { KOREA:[1,99], SMECN:[100,199], SMEGLOBAL:[200,299], GSMEIN:[300,399] };
+    const band = EMP_NO_BANDS[payload.entity] || [1,9999];
+    const maxNo = _empData.filter(r=>r.entity===payload.entity)
+      .reduce((m,r)=>Math.max(m,r.emp_no||0), band[0]-1);
     payload.emp_no = maxNo+1; payload.active=true;
     ({error}=await sb.from('employees').insert(payload));
   }
