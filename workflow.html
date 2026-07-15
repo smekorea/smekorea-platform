@@ -1062,6 +1062,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="개발구매팀" class="dept-share-cb"> 개발구매팀</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="출하팀" class="dept-share-cb"> 출하팀</label>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="제조팀" class="dept-share-cb"> 제조팀</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="법인장" class="dept-share-cb"> 법인장(SMECN)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="구매영업" class="dept-share-cb"> 구매영업(SMECN)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="재무" class="dept-share-cb"> 재무(SMECN)</label>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;" id="dm-person-checks" style="display:none;"></div>
     </div>
@@ -2430,13 +2433,22 @@ function onShareTypeChange() {
 async function loadPersonShareList() {
   var personChecks = document.getElementById('dm-person-checks');
   if (!personChecks || !SB) return;
-  var { data } = await SB.from('employees').select('id,name,rank,dept').eq('active', true).order('emp_no');
+  var { data } = await SB.from('employees').select('id,name,rank,dept,entity').eq('active', true).order('emp_no');
   if (!data) return;
-  personChecks.innerHTML = data.map(function(e) {
-    return '<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;">'
-      + '<input type="checkbox" value="' + e.name + '" class="person-share-cb" data-id="' + e.id + '"> '
-      + e.name + ' ' + (e.rank||'') + '</label>';
-  }).join('');
+  var corpLabels = { KOREA:'SMEKR (본사)', GSMEIN:'SMEIN (인도)', SMEGLOBAL:'SMETH (태국)', SMECN:'SMECN (중국)' };
+  var corpOrder = ['KOREA','SMECN','SMEGLOBAL','GSMEIN'];
+  var html = '';
+  corpOrder.forEach(function(ent) {
+    var group = data.filter(function(e){ return (e.entity||'KOREA') === ent; });
+    if (!group.length) return;
+    html += '<div style="width:100%;font-size:11px;font-weight:700;color:#6d28d9;margin:6px 0 3px;">' + (corpLabels[ent]||ent) + '</div>';
+    html += group.map(function(e) {
+      return '<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;">'
+        + '<input type="checkbox" value="' + e.name + '" class="person-share-cb" data-id="' + e.id + '"> '
+        + e.name + ' ' + (e.rank||'') + '</label>';
+    }).join('');
+  });
+  personChecks.innerHTML = html;
 }
 
 function onContentTypeChange(){
