@@ -1384,24 +1384,30 @@ function renderPSI(){
       const m2=pk.match(/W(\d)/);
       return`<th style="background:${weekBgMap[pk]};color:#fff;padding:6px 10px;text-align:center;border:1px solid #0d2f7a;border-left:2px solid #0d2f7a;border-bottom:2px solid #0d2f7a;font-size:11px;font-weight:700;min-width:66px;position:sticky;top:37px;z-index:2;">${m2?m2[1]+'주차':'?'}</th>`;
     }).join('');
+    const thFixCellTop=(w,l,label,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${w}px;min-width:${w}px;left:${l}px;top:0;z-index:10;border-bottom:none;${extra}">${label}</th>`;
+    const thFixCellBot=(w,l,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${w}px;min-width:${w}px;left:${l}px;top:37px;z-index:10;border-top:none;border-bottom:2px solid #0d2f7a;${extra}"></th>`;
     thead=`<thead>
       <tr>
-        <th rowspan="2" style="${fixHeadBase}font-size:12px;width:${FIX_W.maker}px;min-width:${FIX_W.maker}px;left:${FIX_L.maker}px;top:0;z-index:10;border-right:none;border-bottom:2px solid #0d2f7a;">메이커</th>
-        <th rowspan="2" style="${fixHeadBase}font-size:12px;width:${FIX_W.lgpn}px;min-width:${FIX_W.lgpn}px;left:${FIX_L.lgpn}px;top:0;z-index:10;border-bottom:2px solid #0d2f7a;">LG P/N</th>
-        <th rowspan="2" style="${fixHeadBase}font-size:12px;width:${FIX_W.mkpn}px;min-width:${FIX_W.mkpn}px;left:${FIX_L.mkpn}px;top:0;z-index:10;border-bottom:2px solid #0d2f7a;">Maker P/N</th>
-        <th rowspan="2" style="${fixHeadBase}font-size:12px;width:${FIX_W.gubun}px;min-width:${FIX_W.gubun}px;left:${FIX_L.gubun}px;top:0;z-index:10;border-bottom:2px solid #0d2f7a;">구분</th>
-        <th rowspan="2" style="${fixHeadBase}font-size:12px;width:${FIX_W.total}px;min-width:${FIX_W.total}px;left:${FIX_L.total}px;top:0;z-index:10;border-bottom:2px solid #0d2f7a;box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);">합계</th>
+        ${thFixCellTop(FIX_W.maker,FIX_L.maker,'메이커','border-right:none;')}
+        ${thFixCellTop(FIX_W.lgpn,FIX_L.lgpn,'LG P/N','')}
+        ${thFixCellTop(FIX_W.mkpn,FIX_L.mkpn,'Maker P/N','')}
+        ${thFixCellTop(FIX_W.gubun,FIX_L.gubun,'구분','')}
+        ${thFixCellTop(FIX_W.total,FIX_L.total,'합계','box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
         ${thMonths}
       </tr>
-      <tr>${thWeeks}</tr>
+      <tr>
+        ${thFixCellBot(FIX_W.maker,FIX_L.maker,'border-right:none;')}
+        ${thFixCellBot(FIX_W.lgpn,FIX_L.lgpn,'')}
+        ${thFixCellBot(FIX_W.mkpn,FIX_L.mkpn,'')}
+        ${thFixCellBot(FIX_W.gubun,FIX_L.gubun,'')}
+        ${thFixCellBot(FIX_W.total,FIX_L.total,'box-shadow:2px 0 4px 0 rgba(0,0,0,0.15);')}
+        ${thWeeks}
+      </tr>
     </thead>`;
   }
 
-  // ── 바디: 품목마다 P/S/I 3행, 메이커+품번 rowspan=3
+  // ── 바디: 품목마다 P/S/I 3행, 메이커+품번은 P행에만 표시(S,I는 공백)
   const tbody=psiData.map((row,idx)=>{
-    const modeB=(row.mode||'').toUpperCase()==='AIR'
-      ?'<span class="badge b-air" style="font-size:10px;">AIR</span>'
-      :'<span class="badge b-vsl" style="font-size:10px;">VSL</span>';
     const rowBg=idx%2===0?'':'background:#f8fafc;';
 
     // 조회기간 전체 합산 (P/S/I 각각)
@@ -1438,15 +1444,15 @@ function renderPSI(){
     // rowspan 대신 3행 각각 개별 셀 (sticky+rowspan 조합 브라우저 버그 회피)
     // P행: 굵게 표시 / S,I행: 동일값을 옅게 표시해 그룹감 유지
     const fixColCell=(w,l,content,extra)=>`<td style="padding:5px 8px;border:1px solid #c0cce0;text-align:center;position:sticky;width:${w}px;left:${l}px;z-index:3;background:${cBg};${extra}">${content}</td>`;
-    const makerTop=fixColCell(FIX_W.maker,FIX_L.maker,`<span style="font-size:14px;font-weight:700;color:#1a2233;">${row.maker||'—'}</span><br><small style="font-size:10px;font-weight:400;color:var(--muted);">${modeB}</small>`,`${borderTop}border-bottom:none;`);
-    const makerMid=fixColCell(FIX_W.maker,FIX_L.maker,`<span style="font-size:11px;color:var(--muted);">${row.maker||'—'}</span>`,`border-top:none;border-bottom:none;`);
-    const makerBot=fixColCell(FIX_W.maker,FIX_L.maker,`<span style="font-size:11px;color:var(--muted);">${row.maker||'—'}</span>`,`border-top:none;border-bottom:2px solid #c0cce0;`);
+    const makerTop=fixColCell(FIX_W.maker,FIX_L.maker,`<span style="font-size:13px;font-weight:700;color:#1a2233;">${row.maker||'—'}</span>`,`${borderTop}border-bottom:none;`);
+    const makerMid=fixColCell(FIX_W.maker,FIX_L.maker,'',`border-top:none;border-bottom:none;`);
+    const makerBot=fixColCell(FIX_W.maker,FIX_L.maker,'',`border-top:none;border-bottom:2px solid #c0cce0;`);
     const lgpnTop=fixColCell(FIX_W.lgpn,FIX_L.lgpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:600;color:#1a2233;">${row.lgpn||'—'}</span>`,`${borderTop}border-bottom:none;`);
-    const lgpnMid=fixColCell(FIX_W.lgpn,FIX_L.lgpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:11px;color:var(--muted);">${row.lgpn||'—'}</span>`,`border-top:none;border-bottom:none;`);
-    const lgpnBot=fixColCell(FIX_W.lgpn,FIX_L.lgpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:11px;color:var(--muted);">${row.lgpn||'—'}</span>`,`border-top:none;border-bottom:2px solid #c0cce0;`);
+    const lgpnMid=fixColCell(FIX_W.lgpn,FIX_L.lgpn,'',`border-top:none;border-bottom:none;`);
+    const lgpnBot=fixColCell(FIX_W.lgpn,FIX_L.lgpn,'',`border-top:none;border-bottom:2px solid #c0cce0;`);
     const mkpnTop=fixColCell(FIX_W.mkpn,FIX_L.mkpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:13px;font-weight:600;color:#1a2233;">${row.mkpn||'—'}</span>`,`${borderTop}border-bottom:none;`);
-    const mkpnMid=fixColCell(FIX_W.mkpn,FIX_L.mkpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:11px;color:var(--muted);">${row.mkpn||'—'}</span>`,`border-top:none;border-bottom:none;`);
-    const mkpnBot=fixColCell(FIX_W.mkpn,FIX_L.mkpn,`<span style="font-family:'Courier New',Courier,monospace;font-size:11px;color:var(--muted);">${row.mkpn||'—'}</span>`,`border-top:none;border-bottom:2px solid #c0cce0;`);
+    const mkpnMid=fixColCell(FIX_W.mkpn,FIX_L.mkpn,'',`border-top:none;border-bottom:none;`);
+    const mkpnBot=fixColCell(FIX_W.mkpn,FIX_L.mkpn,'',`border-top:none;border-bottom:2px solid #c0cce0;`);
     return`
       <tr>
         ${makerTop}${lgpnTop}${mkpnTop}
