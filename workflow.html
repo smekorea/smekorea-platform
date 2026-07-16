@@ -37,8 +37,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   padding:10px 16px;border-bottom:1px solid var(--border);
   background:var(--app-bg);position:sticky;top:0;z-index:20;gap:8px;flex-wrap:wrap;}
 .nav-month{display:flex;align-items:center;gap:4px;flex-shrink:0;}
-.nav-title{display:flex;flex-direction:column;}
-.nav-sub{font-size:11px;color:#111;font-weight:700;letter-spacing:.3px;line-height:1;margin-bottom:3px;}
+.nav-title{display:flex;flex-direction:row;align-items:baseline;gap:8px;}
+.nav-sub{font-size:11px;color:#111;font-weight:700;letter-spacing:.3px;line-height:1;white-space:nowrap;}
 .nav-month h2{font-size:var(--fs-lg);font-weight:800;color:var(--text1);white-space:nowrap;}
 @media(min-width:768px){
   .nav-sub{font-size:13px;letter-spacing:.5px;}
@@ -544,17 +544,17 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     <div class="nav-month">
       <button class="icon-btn" onclick="changeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
       <div class="nav-title">
-        <div class="nav-sub" data-i18n="PJY 업무관리">PJY 업무관리</div>
+        <div class="nav-sub">PJY 업무관리</div>
         <h2 id="month-label"></h2>
       </div>
       <button class="icon-btn" onclick="changeMonth(1)"><i class="ti ti-chevron-right"></i></button>
       <button class="icon-btn" onclick="goToday()"><i class="ti ti-calendar-event"></i></button>
     </div>
     <div class="tabs">
-      <button class="tab active" id="tab-cal" onclick="switchTab('cal')"><span data-i18n="월간">월간</span></button>
+      <button class="tab active" id="tab-cal" onclick="switchTab('cal')"><span data-i18n="달력">달력</span></button>
       <button class="tab" id="tab-list" onclick="switchTab('list')"><span data-i18n="일정">일정</span></button>
       <button class="tab" id="tab-diary" onclick="switchTab('diary')"><span data-i18n="업무일지">업무일지</span></button>
-      <button class="tab" id="tab-share" onclick="switchTab('share')">📢 <span data-i18n="공유함">공유함</span></button>
+      <button class="tab" id="tab-share" onclick="switchTab('share')">📢 <span data-i18n="업무공유">업무공유</span></button>
       <button class="tab" id="tab-wfsettings" onclick="switchTab('wfsettings')">⚙ <span data-i18n="설정">설정</span></button>
     </div>
     <div class="right-btns">
@@ -1622,6 +1622,16 @@ function renderAll(){
 }
 
 /* ═══ 탭/월 ═══ */
+function tabDisplayName(tab){
+  const map = {cal:'달력', list:'일정', diary:'업무일지', share:'업무공유', wfsettings:'설정'};
+  return t(map[tab] || map.cal);
+}
+function updateNavSub(){
+  const navSub = document.querySelector('.nav-sub');
+  if(!navSub || !wfSession) return;
+  const name = wfSession.name, tabName = tabDisplayName(currentTab);
+  navSub.textContent = name + ' · ' + tabName;
+}
 function switchTab(tab){
   currentTab=tab;
   ['cal','list','todo','diary','share','wfsettings'].forEach(t=>{
@@ -1630,12 +1640,10 @@ function switchTab(tab){
     const btn=document.getElementById('tab-'+t);
     if(btn) btn.classList.toggle('active',t===tab);
   });
-  // 상단 제목 업데이트
+  // 상단 제목 업데이트: nav-sub="이름님의 탭", month-label은 달력 탭에서만(년월) 표시
   const label=document.getElementById('month-label');
-  if(tab==='diary') label.textContent=t('업무일지');
-  else if(tab==='list') label.textContent=t('일정');
-  else if(tab==='share') label.textContent=t('공유함');
-  else if(tab==='wfsettings') label.textContent=t('설정');
+  if(tab!=='cal' && label) label.textContent='';
+  updateNavSub();
   var addBtn = document.querySelector('.add-btn');
   if(tab==='share'||tab==='wfsettings'){
     if(addBtn) addBtn.style.display='none';
@@ -2786,6 +2794,7 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"우선도":{zh:"优先级",en:"Priority"},
 "건":{zh:"件",en:" items"},
 "공유된 내용이 없습니다.":{zh:"没有共享的内容。",en:"No shared items."},
 "확인":{zh:"已确认",en:"Confirmed by"},
@@ -2829,7 +2838,8 @@ const I18N_T = {
 "24시간":{zh:"24小时",en:"24 hours"},
 "PJY 업무관리":{zh:"PJY 业务管理",en:"PJY Work Management"},
 // 탭 메뉴
-"월간":{zh:"月历",en:"Calendar"},
+"달력":{zh:"日历",en:"Calendar"},
+"업무공유":{zh:"业务共享",en:"Task Sharing"},
 "일정":{zh:"日程",en:"Schedule"},
 "업무일지":{zh:"工作日志",en:"Work Log"},
 "공유함":{zh:"共享箱",en:"Shared"},
@@ -3004,6 +3014,7 @@ function setWfLang(lang){
   WF_LANG = lang;
   localStorage.setItem('wf_lang', lang);
   applyI18n();
+  updateNavSub();
   // 언어에 따라 달라지는 동적 렌더링 화면들 재렌더
   try{ renderCal(); }catch(e){}
   try{ renderList(); }catch(e){}
@@ -3080,7 +3091,7 @@ async function wfEnterMain() {
   if(aiSetting) aiSetting.style.display = isAiUser ? '' : 'none';
   // 상단바에 이름 표시
   const navSub = document.querySelector('.nav-sub');
-  if (navSub) navSub.textContent = wfSession.name + ' ' + wfSession.rank + '님';
+  updateNavSub();
   loadLocal(); renderLegend(); renderCal();
   if (SB) {
     await loadFromSb();
