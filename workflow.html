@@ -1063,6 +1063,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <option value="" data-i18n="공유안함">공유안함</option>
           <option value="dept" data-i18n="부서공유">부서공유</option>
           <option value="person" data-i18n="개인공유">개인공유</option>
+          <option value="corp" data-i18n="법인공유">법인공유</option>
           <option value="all" data-i18n="전체공유">전체공유</option>
         </select>
       </div>
@@ -1084,6 +1085,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="재무" class="dept-share-cb"> <span data-i18n="재무">재무</span>(SMECN)</label>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;" id="dm-person-checks" style="display:none;"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;display:none;" id="dm-corp-checks">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="KOREA" class="corp-share-cb"> SMEKR (본사)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="GSMEIN" class="corp-share-cb"> SMEIN (인도)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="SMEGLOBAL" class="corp-share-cb"> SMETH (태국)</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" value="SMECN" class="corp-share-cb"> SMECN (중국)</label>
+      </div>
     </div>
     <!-- AI 메모 변환 -->
     <div id="ai-memo-section" style="margin-top:12px;background:linear-gradient(135deg,rgba(26,79,160,.05),rgba(109,40,217,.05));border:1.5px solid rgba(26,79,160,.2);border-radius:10px;padding:14px;">
@@ -1951,6 +1958,7 @@ async function loadSharedCalRecords(){
     var myDept = wfSession.dept || '';
     var isAdmin = (myDept === '대표이사' || myDept === '상무이사');
     var myName = (wfSession.name||'').trim();
+    var myEntity = wfSession.entity || '';
     var qRes = await SB.from('work_diary')
       .select('id,employee_id,date,title,content,category,status,is_shared,share_target,share_type')
       .eq('is_shared', true)
@@ -1965,6 +1973,7 @@ async function loadSharedCalRecords(){
       try{
         var targets = JSON.parse(r.share_target);
         if(!Array.isArray(targets)) return false;
+        if(r.share_type === 'corp') return myEntity && targets.indexOf(myEntity) >= 0;
         if(myDept && targets.indexOf(myDept) >= 0) return true;
         return targets.some(function(t){ return t.trim() === myName; });
       }catch(e){ return r.share_target === myDept || r.share_target === myName; }
@@ -2479,19 +2488,22 @@ function onShareTypeChange() {
   var row = document.getElementById('dm-dept-share-row');
   var deptChecks = document.getElementById('dm-dept-checks');
   var personChecks = document.getElementById('dm-person-checks');
+  var corpChecks = document.getElementById('dm-corp-checks');
   var rowTitle = document.getElementById('dm-share-row-title');
   if (!shareTypeSel || !row) return;
   var v = shareTypeSel.value;
-  row.style.display = (v === 'dept' || v === 'person') ? 'block' : 'none';
+  row.style.display = (v === 'dept' || v === 'person' || v === 'corp') ? 'block' : 'none';
   if (deptChecks) deptChecks.style.display = v === 'dept' ? 'flex' : 'none';
   if (personChecks) personChecks.style.display = v === 'person' ? 'flex' : 'none';
+  if (corpChecks) corpChecks.style.display = v === 'corp' ? 'flex' : 'none';
   if (rowTitle) {
-    const key = v === 'dept' ? '공유할 부서 선택 (복수 선택 가능)' : '공유할 직원 선택 (복수 선택 가능)';
+    const key = v === 'dept' ? '공유할 부서 선택 (복수 선택 가능)' : v === 'corp' ? '공유할 법인 선택 (복수 선택 가능)' : '공유할 직원 선택 (복수 선택 가능)';
     rowTitle.setAttribute('data-i18n', key);
     rowTitle.textContent = t(key);
   }
   document.querySelectorAll('.dept-share-cb').forEach(function(cb){ cb.checked = false; });
   document.querySelectorAll('.person-share-cb').forEach(function(cb){ cb.checked = false; });
+  document.querySelectorAll('.corp-share-cb').forEach(function(cb){ cb.checked = false; });
   // 개인공유 선택 시 직원 목록 동적 로드
   if (v === 'person' && personChecks && personChecks.children.length === 0) {
     loadPersonShareList();
@@ -2607,12 +2619,14 @@ function editDiary(id){
     if(!r.is_shared||!r.share_target) shareEl.value='';
     else if(r.share_target==='전체') shareEl.value='all';
     else if(r.share_type==='person') shareEl.value='person';
+    else if(r.share_type==='corp') shareEl.value='corp';
     else shareEl.value='dept';
     onShareTypeChange();
     if(r.share_target&&r.share_target!=='전체') {
       try {
         var tgts=JSON.parse(r.share_target);
         document.querySelectorAll('.dept-share-cb').forEach(function(cb){cb.checked=tgts.indexOf(cb.value)>=0;});
+        document.querySelectorAll('.corp-share-cb').forEach(function(cb){cb.checked=tgts.indexOf(cb.value)>=0;});
         loadPersonShareList().then(function(){
           document.querySelectorAll('.person-share-cb').forEach(function(cb){cb.checked=tgts.indexOf(cb.value)>=0;});
         });
@@ -2661,6 +2675,11 @@ async function saveDiary(){
     obj.is_shared = pchecked.length > 0;
     obj.share_target = pchecked.length > 0 ? JSON.stringify(pchecked) : null;
     obj.share_type = 'person';
+  } else if(shareType === 'corp'){
+    var ccheck = Array.from(document.querySelectorAll('.corp-share-cb:checked')).map(function(cb){return cb.value;});
+    obj.is_shared = ccheck.length > 0;
+    obj.share_target = ccheck.length > 0 ? JSON.stringify(ccheck) : null;
+    obj.share_type = 'corp';
   } else {
     obj.is_shared = false;
     obj.share_target = null;
@@ -2769,7 +2788,7 @@ async function deleteDiary(){
 </script>
 <script>
 /* ═══ WF 세션 ═══ */
-var wfSession = wfSession || { empId:null, empNo:null, name:'', dept:'', rank:'', sessH:8, expire:0 };
+var wfSession = wfSession || { empId:null, empNo:null, name:'', dept:'', rank:'', entity:'', sessH:8, expire:0 };
 let _wfSessH = 8;
 
 function wfLoadSession() {
@@ -2781,13 +2800,13 @@ function wfLoadSession() {
 }
 function wfSaveSession(emp) {
   const expire = Date.now() + _wfSessH * 3600000;
-  wfSession = { empId: emp.id, empNo: emp.emp_no, name: emp.name, dept: emp.dept||'', rank: emp.rank||'', sessH: _wfSessH, expire };
+  wfSession = { empId: emp.id, empNo: emp.emp_no, name: emp.name, dept: emp.dept||'', rank: emp.rank||'', entity: emp.entity||'', sessH: _wfSessH, expire };
   localStorage.setItem('wf_session', JSON.stringify(wfSession));
 }
 function wfClearSession() {
   localStorage.removeItem('wf_session');
   sessionStorage.removeItem('smerp_user_name');
-  wfSession = { empId:null, empNo:null, name:'', dept:'', rank:'', sessH:8, expire:0 };
+  wfSession = { empId:null, empNo:null, name:'', dept:'', rank:'', entity:'', sessH:8, expire:0 };
 }
 
 function wfSelSess(btn) {
@@ -2811,6 +2830,8 @@ const I18N_T = {
 "근무/휴무":{zh:"出勤/休假",en:"Attendance/Leave"},
 "영업/거래처관리":{zh:"营业/客户管理",en:"Sales/Client Mgmt"},
 "설비/투자":{zh:"设备/投资",en:"Equipment/Investment"},
+"법인공유":{zh:"公司共享",en:"Company Share"},
+"공유할 법인 선택 (복수 선택 가능)":{zh:"选择共享公司（可多选）",en:"Select company(s) to share (multi-select)"},
 "공유할 직원 선택 (복수 선택 가능)":{zh:"选择共享员工（可多选）",en:"Select employee(s) to share (multi-select)"},
 "업무일지 전환 (일정 → 기록)":{zh:"转为工作日志（日程 → 记录）",en:"Convert to Work Log (Schedule → Record)"},
 "우선도":{zh:"优先级",en:"Priority"},
@@ -3045,6 +3066,7 @@ function setWfLang(lang){
 }
 
 const WF_CORP_ENTITY_MAP = { SMEKR: 'KOREA', SMEIN: 'GSMEIN', SMETH: 'SMEGLOBAL', SMECN: 'SMECN' };
+const CORP_DISPLAY_LABEL = { KOREA: 'SMEKR (본사)', GSMEIN: 'SMEIN (인도)', SMEGLOBAL: 'SMETH (태국)', SMECN: 'SMECN (중국)' };
 
 async function wfLoadEmployees() {
   if (!SB) return;
@@ -3090,7 +3112,7 @@ async function wfDoLogin() {
   err.textContent = '';
   if (!empId) { err.textContent = '⚠ ' + t('이름을 선택해주세요'); return; }
   if (!pw) { err.textContent = '⚠ ' + t('비밀번호를 입력해주세요'); return; }
-  const { data, error } = await SB.from('employees').select('id,emp_no,name,dept,rank,wf_password').eq('id', empId).single();
+  const { data, error } = await SB.from('employees').select('id,emp_no,name,dept,rank,wf_password,entity').eq('id', empId).single();
   if (error || !data) { err.textContent = '⚠ ' + t('직원 정보를 찾을 수 없습니다'); return; }
   const correct = data.wf_password || '1111';
   if (pw !== correct) { err.textContent = '⚠ ' + t('비밀번호가 올바르지 않습니다'); document.getElementById('wfLoginPw').value = ''; return; }
@@ -3165,7 +3187,7 @@ async function loadShareView() {
   if (!SB) { list.innerHTML = '<div style="padding:20px;color:var(--text3);">연결 오류</div>'; return; }
 
   // 직원 정보 별도 조회
-  var empRes = await SB.from('employees').select('id,name,rank,dept');
+  var empRes = await SB.from('employees').select('id,name,rank,dept,entity');
   var empMap = {};
   (empRes.data || []).forEach(function(e){ empMap[e.id] = e; });
 
@@ -3201,6 +3223,8 @@ async function loadShareView() {
     try {
       var targets = JSON.parse(r.share_target);
       if(!Array.isArray(targets)) return false;
+      // 법인공유: 본인 법인 포함 여부
+      if(r.share_type === 'corp') return !!(wfSession.entity && targets.indexOf(wfSession.entity) >= 0);
       // 부서공유: 본인 부서 포함 여부
       if(myDept && targets.indexOf(myDept) >= 0) return true;
       // 개인공유: 본인 이름 포함 여부 (trim 적용)
@@ -3214,6 +3238,10 @@ async function loadShareView() {
     r._empName = ((empMap[r.employee_id]||{}).name||'');
     // 공유대상 텍스트 (필터용)
     if(r.share_target === '전체') r._shareTargetStr = '전체';
+    else if(r.share_type === 'corp') {
+      try { r._shareTargetStr = JSON.parse(r.share_target||'[]').map(function(en){ return CORP_DISPLAY_LABEL[en]||en; }).join(', '); }
+      catch(e){ r._shareTargetStr = r.share_target||''; }
+    }
     else { try { r._shareTargetStr = JSON.parse(r.share_target||'[]').join(', '); } catch(e){ r._shareTargetStr = r.share_target||''; } }
   });
 
@@ -3235,6 +3263,14 @@ async function loadShareView() {
     var targetNames = [];
     if(r.share_target === '전체') {
       targetNames = Object.values(empMap).map(function(e){ return e.name; });
+    } else if(r.share_type === 'corp') {
+      try {
+        var ctgts = JSON.parse(r.share_target||'[]');
+        ctgts.forEach(function(en){
+          var byEntity = Object.values(empMap).filter(function(e){ return e.entity === en; }).map(function(e){ return e.name; });
+          targetNames = targetNames.concat(byEntity);
+        });
+      } catch(e){ targetNames = []; }
     } else {
       try {
         var tgts = JSON.parse(r.share_target||'[]');
