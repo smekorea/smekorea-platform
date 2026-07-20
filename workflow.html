@@ -793,6 +793,21 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   </div>
 </div>
 
+<!-- 추가항목 삭제 시 대체항목 선택 모달 -->
+<div class="modal-overlay" id="cat-manage-modal-overlay" onclick="if(event.target===this)closeCatManageModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 data-i18n="항목 삭제">항목 삭제</h3>
+    <p id="cat-manage-msg" style="font-size:13px;color:var(--text2);margin:8px 0 14px;line-height:1.6;"></p>
+    <div class="dm-label" data-i18n="대체할 항목 선택">대체할 항목 선택</div>
+    <select id="cat-replace-select" class="dm-input" style="margin-bottom:16px;"></select>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-cancel" onclick="closeCatManageModal()" data-i18n="취소">취소</button>
+      <button class="btn-save" onclick="confirmCatDelete()" data-i18n="삭제">삭제</button>
+    </div>
+  </div>
+</div>
+
 <!-- 할 일 추가/수정 모달 -->
 <div class="modal-overlay" id="todo-modal-overlay" onclick="if(event.target===this)closeTodoModal()">
   <div class="modal">
@@ -925,6 +940,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <div class="wf-sess-btn" data-h="24" onclick="wfChangeSess(this)" data-i18n="24시간">24시간</div>
         </div>
         <div id="wfSessInfo" style="margin-top:10px;font-size:12px;color:var(--text3);"></div>
+      </div>
+
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px;">
+        <div style="font-size:15px;font-weight:700;color:var(--text1);margin-bottom:6px;">🏷️ <span data-i18n="추가항목 관리">추가항목 관리</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:14px;" data-i18n="＋항목추가로 등록한 업무유형/활동유형/내용구분만 관리할 수 있습니다 (기본 항목은 대상 아님). 유형별 최대 20개.">＋항목추가로 등록한 업무유형/활동유형/내용구분만 관리할 수 있습니다 (기본 항목은 대상 아님). 유형별 최대 20개.</div>
+        <div id="catManagerBody" style="display:flex;flex-direction:column;gap:14px;"></div>
       </div>
 
       <div id="wfAiSettingSection" style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px;">
@@ -2400,6 +2421,132 @@ function diaryGoPage(p){diaryPage=p;renderDiary();}
 /* 업무일지 모달 */
 /* ═══ 사용자 정의 유형 관리 ═══ */
 let userCategories={category:[],action_type:[],content_type:[]};
+const CAT_DEFAULT_OPTS = {
+  category: ['매출처','매입처','개발','품질','사내관리','인사','조직','출장','개인업무'],
+  action_type: ['방문','미팅','회의','식사','접대','라운딩','계약','협의','점검','정비','교육','심사','행사','행정처리'],
+  content_type: ['일반기록','전달사항','지시사항']
+};
+const CAT_TYPE_COLUMN = { category:'category', action_type:'action_type', content_type:'content_type' };
+const CAT_TYPE_LABEL_KEY = { category:'업무유형', action_type:'활동유형', content_type:'내용구분' };
+
+async function countCategoryUsage(column){
+  // Supabase 1,000행 제한 대응 — 전체 페이지네이션으로 값만 가져와서 클라이언트에서 집계
+  const counts={};
+  let from=0; const pageSize=1000;
+  while(true){
+    const {data,error} = await SB.from('work_diary').select(column).range(from, from+pageSize-1);
+    if(error || !data || data.length===0) break;
+    data.forEach(r=>{ const v=r[column]; if(v) counts[v]=(counts[v]||0)+1; });
+    if(data.length<pageSize) break;
+    from+=pageSize;
+  }
+  return counts;
+}
+
+async function renderCategoryManager(){
+  const body=document.getElementById('catManagerBody');
+  if(!body || !SB) return;
+  body.innerHTML='<div style="font-size:12px;color:var(--text3);">불러오는 중...</div>';
+  const types=['category','action_type','content_type'];
+  const countsByType={};
+  for(const type of types){ countsByType[type]=await countCategoryUsage(CAT_TYPE_COLUMN[type]); }
+  let html='';
+  types.forEach(type=>{
+    const label=t(CAT_TYPE_LABEL_KEY[type]);
+    const items=userCategories[type]||[];
+    html+=`<div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;">${label} <span style="color:var(--text3);font-weight:400;">(${items.length}/20)</span></div>`;
+    if(!items.length){
+      html+=`<div style="font-size:12px;color:var(--text3);">${t('추가된 항목이 없습니다.')}</div>`;
+    } else {
+      html+='<div style="display:flex;flex-direction:column;gap:6px;">';
+      items.forEach(v=>{
+        const cnt=(countsByType[type]||{})[v]||0;
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;">
+          <div style="flex:1;font-size:13px;">${escapeHtml(v)} <span style="color:var(--text3);font-size:11px;">(${cnt}${t('건')})</span></div>
+          <button onclick="editCategoryItem('${type}','${encodeURIComponent(v)}')" style="width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">✏️</button>
+          <button onclick="startDeleteCategoryItem('${type}','${encodeURIComponent(v)}',${cnt})" style="width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:12px;color:#c8001e;">🗑</button>
+        </div>`;
+      });
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+
+async function editCategoryItem(type, encodedOld){
+  const oldVal=decodeURIComponent(encodedOld);
+  const label=t(CAT_TYPE_LABEL_KEY[type]);
+  const newVal=prompt(`"${oldVal}" ${label==='업무유형'?'':''}${label} ${t('항목의 새 이름을 입력하세요:')}`, oldVal);
+  if(!newVal||!newVal.trim()||newVal.trim()===oldVal) return;
+  const v=newVal.trim();
+  const column=CAT_TYPE_COLUMN[type];
+  try{
+    await SB.from('user_categories').update({value:v}).eq('type',type).eq('value',oldVal);
+    await SB.from('work_diary').update({[column]:v}).eq(column, oldVal);
+  }catch(e){ alert(t('수정 중 오류가 발생했습니다.')+' '+(e.message||e)); return; }
+  const idx=userCategories[type].indexOf(oldVal);
+  if(idx>=0) userCategories[type][idx]=v;
+  ['dm-cat','dm-action','dm-content-type'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(!sel) return;
+    const opt=sel.querySelector(`option[value="${CSS.escape(oldVal)}"]`);
+    if(opt){ opt.value=v; opt.textContent=v; }
+  });
+  renderCategoryManager();
+  renderDiary();
+}
+
+let _pendingCatDelete=null;
+function startDeleteCategoryItem(type, encodedVal, count){
+  const val=decodeURIComponent(encodedVal);
+  _pendingCatDelete={type,val,count};
+  const label=t(CAT_TYPE_LABEL_KEY[type]);
+  const msgEl=document.getElementById('cat-manage-msg');
+  const sel=document.getElementById('cat-replace-select');
+  if(count>0){
+    msgEl.textContent = `"${val}" ${label} ${t('항목을 사용 중인 기존 기록이')} ${count}${t('건')} ${t('있습니다. 대체할 항목을 선택하세요.')}`;
+  } else {
+    msgEl.textContent = `"${val}" ${label} ${t('항목을 삭제하시겠습니까? (사용 중인 기록 없음)')}`;
+  }
+  const candidates=[...(CAT_DEFAULT_OPTS[type]||[]), ...(userCategories[type]||[])].filter(v=>v!==val);
+  const uniq=[...new Set(candidates)];
+  sel.innerHTML = uniq.map(v=>`<option value="${escapeHtml(v)}"${v==='기타'?' selected':''}>${escapeHtml(v)}</option>`).join('');
+  if(!uniq.includes('기타')){
+    sel.innerHTML = `<option value="기타" selected>기타</option>` + sel.innerHTML;
+  }
+  sel.style.display = count>0 ? '' : 'none';
+  document.querySelector('#cat-manage-modal-overlay .dm-label').style.display = count>0 ? '' : 'none';
+  document.getElementById('cat-manage-modal-overlay').classList.add('open');
+}
+function closeCatManageModal(){
+  document.getElementById('cat-manage-modal-overlay').classList.remove('open');
+  _pendingCatDelete=null;
+}
+async function confirmCatDelete(){
+  if(!_pendingCatDelete) return;
+  const {type,val,count}=_pendingCatDelete;
+  const column=CAT_TYPE_COLUMN[type];
+  const replacement=document.getElementById('cat-replace-select').value;
+  try{
+    if(count>0){
+      await SB.from('work_diary').update({[column]:replacement}).eq(column, val);
+    }
+    await SB.from('user_categories').delete().eq('type',type).eq('value',val);
+  }catch(e){ alert(t('삭제 중 오류가 발생했습니다.')+' '+(e.message||e)); return; }
+  const idx=userCategories[type].indexOf(val);
+  if(idx>=0) userCategories[type].splice(idx,1);
+  ['dm-cat','dm-action','dm-content-type'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(!sel) return;
+    const opt=sel.querySelector(`option[value="${CSS.escape(val)}"]`);
+    if(opt) opt.remove();
+  });
+  closeCatManageModal();
+  renderCategoryManager();
+  renderDiary();
+}
 
 async function loadUserCategories(){
   if(!SB) return;
@@ -2457,6 +2604,10 @@ function applyUserCategories(){
 async function onSelectAddNew(sel, type){
   if(sel.value!=='__add__') return;
   const label=type==='category'?'업무유형':type==='action_type'?'활동유형':'내용구분';
+  if((userCategories[type]||[]).length >= 20){
+    alert(`${label}은(는) 추가 항목을 최대 20개까지만 등록할 수 있습니다. 설정 탭에서 안 쓰는 항목을 정리한 후 다시 추가해주세요.`);
+    sel.selectedIndex=0;return;
+  }
   const newVal=prompt(`새 ${label} 항목을 입력하세요:`);
   if(!newVal||!newVal.trim()){
     sel.selectedIndex=0;return;
@@ -2818,6 +2969,17 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"추가항목 관리":{zh:"添加项目管理",en:"Manage Added Items"},
+"＋항목추가로 등록한 업무유형/활동유형/내용구분만 관리할 수 있습니다 (기본 항목은 대상 아님). 유형별 최대 20개.":{zh:"仅可管理通过「＋添加项目」注册的业务类型/活动类型/内容类别（不含基本项目）。每类最多20个。",en:"Only items added via \"＋ Add item\" can be managed here (default items excluded). Max 20 per category."},
+"항목 삭제":{zh:"删除项目",en:"Delete Item"},
+"대체할 항목 선택":{zh:"选择替代项目",en:"Select replacement item"},
+"추가된 항목이 없습니다.":{zh:"没有已添加的项目。",en:"No items added yet."},
+"항목의 새 이름을 입력하세요:":{zh:"请输入项目的新名称：",en:"Enter a new name for this item:"},
+"수정 중 오류가 발생했습니다.":{zh:"修改时发生错误。",en:"An error occurred while saving."},
+"삭제 중 오류가 발생했습니다.":{zh:"删除时发生错误。",en:"An error occurred while deleting."},
+"항목을 사용 중인 기존 기록이":{zh:"个已有记录正在使用该项目 —",en:"existing record(s) use this item —"},
+"있습니다. 대체할 항목을 선택하세요.":{zh:"请选择替代项目。",en:"please select a replacement."},
+"항목을 삭제하시겠습니까? (사용 중인 기록 없음)":{zh:"要删除该项目吗？（无使用记录）",en:"Delete this item? (not used by any record)"},
 "일정 수정":{zh:"编辑日程",en:"Edit Schedule"},
 "할 일 수정":{zh:"编辑待办",en:"Edit To-do"},
 "업무일지 수정":{zh:"编辑工作日志",en:"Edit Work Log"},
@@ -3433,6 +3595,7 @@ async function confirmShare(diaryId) {
 function initWfSettingsView() {
   const h = wfSession.sessH || 8;
   initWfAiStatus();
+  renderCategoryManager();
   document.querySelectorAll('#wfSessOptsMain .wf-sess-btn').forEach(el => {
     el.classList.toggle('wf-sess-on', +el.dataset.h === h);
   });
