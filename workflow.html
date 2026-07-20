@@ -866,6 +866,15 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       </select>
       <input id="shareKwFilter" type="text" data-i18n-ph="키워드 검색" placeholder="키워드 검색" oninput="loadShareView()"
         style="height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;width:120px;">
+      <input id="shareAuthorFilter" type="text" list="shareAuthorList" data-i18n-ph="공유자 검색" placeholder="공유자 검색" oninput="loadShareView()"
+        style="height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;width:110px;">
+      <datalist id="shareAuthorList"></datalist>
+      <input id="shareTargetTextFilter" type="text" list="shareTargetList" data-i18n-ph="공유대상 검색" placeholder="공유대상 검색" oninput="loadShareView()"
+        style="height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;width:110px;">
+      <datalist id="shareTargetList"></datalist>
+      <input id="shareTitleFilter" type="text" list="shareTitleList" data-i18n-ph="제목 검색" placeholder="제목 검색" oninput="loadShareView()"
+        style="height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;width:130px;">
+      <datalist id="shareTitleList"></datalist>
       <select id="shareConfirmFilter" onchange="loadShareView()"
         style="height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 10px;font-size:13px;background:#fff;outline:none;font-family:inherit;">
         <option value="" data-i18n="전체 공유확인">전체 공유확인</option>
@@ -3031,6 +3040,9 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"공유자 검색":{zh:"搜索共享人",en:"Search shared by"},
+"공유대상 검색":{zh:"搜索共享对象",en:"Search shared with"},
+"제목 검색":{zh:"搜索标题",en:"Search title"},
 "기본":{zh:"默认",en:"Default"},
 "추가":{zh:"新增",en:"Added"},
 "추가항목 관리":{zh:"添加项目管理",en:"Manage Added Items"},
@@ -3431,6 +3443,9 @@ async function loadShareView() {
   var shareCatF = (document.getElementById('shareCatFilter')?.value||'');
   var shareStatusF = (document.getElementById('shareStatusFilter')?.value||'');
   var shareKwF = (document.getElementById('shareKwFilter')?.value||'').trim().toLowerCase();
+  var shareAuthorF = (document.getElementById('shareAuthorFilter')?.value||'').trim().toLowerCase();
+  var shareTargetTextF = (document.getElementById('shareTargetTextFilter')?.value||'').trim().toLowerCase();
+  var shareTitleF = (document.getElementById('shareTitleFilter')?.value||'').trim().toLowerCase();
   var shareConfirmF = (document.getElementById('shareConfirmFilter')?.value||'');
   var items = (qRes.data || []).filter(function(r) {
     if (filter && r.content_type !== filter) return false;
@@ -3471,6 +3486,22 @@ async function loadShareView() {
     }
     else { try { r._shareTargetStr = JSON.parse(r.share_target||'[]').join(', '); } catch(e){ r._shareTargetStr = r.share_target||''; } }
   });
+
+  // 자동완성 목록 갱신 (텍스트 필터 적용 전, 권한범위 내 전체 기준)
+  var authorSet=new Set(), targetSet=new Set(), titleSet=new Set();
+  items.forEach(function(r){
+    if(r._empName) authorSet.add(r._empName);
+    if(r._shareTargetStr) targetSet.add(r._shareTargetStr);
+    if(r.title) titleSet.add(r.title);
+  });
+  document.getElementById('shareAuthorList').innerHTML = [...authorSet].map(function(v){return '<option value="'+escapeHtml(v)+'">';}).join('');
+  document.getElementById('shareTargetList').innerHTML = [...targetSet].map(function(v){return '<option value="'+escapeHtml(v)+'">';}).join('');
+  document.getElementById('shareTitleList').innerHTML = [...titleSet].map(function(v){return '<option value="'+escapeHtml(v)+'">';}).join('');
+
+  // 공유자/공유대상/제목 텍스트 필터 적용 (자동완성 검색)
+  if(shareAuthorF) items = items.filter(function(r){ return (r._empName||'').toLowerCase().includes(shareAuthorF); });
+  if(shareTargetTextF) items = items.filter(function(r){ return (r._shareTargetStr||'').toLowerCase().includes(shareTargetTextF); });
+  if(shareTitleF) items = items.filter(function(r){ return (r.title||'').toLowerCase().includes(shareTitleF); });
 
   // 확인 데이터 조회
   var diaryIds = items.map(function(r){ return r.id; });
