@@ -1169,8 +1169,22 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 
     <div class="modal-btns" style="margin-top:14px;">
       <button class="btn-cancel" onclick="closeDiaryModal()" data-i18n="취소">취소</button>
+      <button id="diary-copy-btn" class="btn-cancel" style="display:none;border-color:var(--accent);color:var(--accent);" onclick="openMoveCopyDate()" data-i18n="이동복사">이동복사</button>
       <button id="diary-del-btn" class="btn-del" style="display:none" onclick="deleteDiary()" data-i18n="삭제">삭제</button>
       <button class="btn-save" onclick="saveDiary()" data-i18n="저장">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="movecopy-modal-overlay" style="z-index:400;" onclick="if(event.target===this)closeMoveCopyModal()">
+  <div class="modal" style="max-width:320px;">
+    <div class="modal-handle"></div>
+    <h3 data-i18n="이동복사 - 날짜 선택">이동복사 - 날짜 선택</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px;" data-i18n="선택한 날짜로 현재 내용이 복사됩니다 (원본 유지)">선택한 날짜로 현재 내용이 복사됩니다 (원본 유지)</p>
+    <input type="date" id="movecopy-date">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeMoveCopyModal()" data-i18n="취소">취소</button>
+      <button class="btn-save" onclick="confirmMoveCopy()" data-i18n="복사">복사</button>
     </div>
   </div>
 </div>
@@ -1400,9 +1414,11 @@ function renderCal(){
     const chips=dayAll.map(r=>{
       const isFuture=(r.date||'').slice(0,10)>=todayStr;
       const status=r.status||'완료';
-      const bg=isFuture?'#E3F0FF':status==='진행중'?'#FFF3E0':status==='지시'||status==='후속필요'?'#FFEBEE':'#F0F4F0';
-      const bar=isFuture?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
-      return `<div class="event-chip" style="background:${bg};border-left-color:${bar}"
+      const isHighImp=r.importance==='상';
+      const bg=isHighImp?'#FFF9C4':isFuture?'#E3F0FF':status==='진행중'?'#FFF3E0':status==='지시'||status==='후속필요'?'#FFEBEE':'#F0F4F0';
+      const bar=isHighImp?'#E24B4A':isFuture?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
+      const txt=isHighImp?'color:#E24B4A;font-weight:700;':'';
+      return `<div class="event-chip" style="background:${bg};border-left-color:${bar};${txt}"
         onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}</div>`;
     }).join('');
     const sharedChips=daySharedAll.map(r=>{
@@ -2764,6 +2780,7 @@ function openDiaryModal(date){
   document.getElementById('dm-imp').value='중';
   document.getElementById('dm-status').value='완료';
   document.getElementById('diary-del-btn').style.display='none';
+  document.getElementById('diary-copy-btn').style.display='none';
   // 반복설정 — 신규 시 표시, 초기화
   var repSec = document.getElementById('dm-repeat-section');
   if(repSec) {
@@ -2845,6 +2862,7 @@ function editDiary(id){
     }
   }
   document.getElementById('diary-del-btn').style.display='';
+  document.getElementById('diary-copy-btn').style.display='';
   document.getElementById('diary-modal-overlay').classList.add('open');
 }
 
@@ -2992,6 +3010,77 @@ async function deleteDiaryById(id){
 async function deleteDiary(){
   await deleteDiaryById(diaryEditId);
   closeDiaryModal();
+}
+
+/* ═══ 이동복사 (원본 유지 + 선택 날짜로 복사) ═══ */
+function openMoveCopyDate(){
+  if(!diaryEditId) return;
+  document.getElementById('movecopy-date').value=document.getElementById('dm-date').value||todayStr;
+  document.getElementById('movecopy-modal-overlay').classList.add('open');
+}
+function closeMoveCopyModal(){
+  document.getElementById('movecopy-modal-overlay').classList.remove('open');
+}
+async function confirmMoveCopy(){
+  const newDate=document.getElementById('movecopy-date').value;
+  if(!newDate){ alert('날짜를 선택해주세요.'); return; }
+
+  // 공유 대상 계산 (saveDiary와 동일 로직)
+  var shareEl = document.getElementById('dm-share-type');
+  var shareType = shareEl ? shareEl.value : '';
+  var is_shared=false, share_target=null, share_type_val=undefined;
+  if(shareType === 'all'){ is_shared=true; share_target='전체'; }
+  else if(shareType === 'dept'){
+    var checked = Array.from(document.querySelectorAll('.dept-share-cb:checked')).map(function(cb){return cb.value;});
+    is_shared = checked.length > 0; share_target = checked.length > 0 ? JSON.stringify(checked) : null;
+  } else if(shareType === 'person'){
+    var pchecked = Array.from(document.querySelectorAll('.person-share-cb:checked')).map(function(cb){return cb.value;});
+    is_shared = pchecked.length > 0; share_target = pchecked.length > 0 ? JSON.stringify(pchecked) : null; share_type_val='person';
+  } else if(shareType === 'corp'){
+    var ccheck = Array.from(document.querySelectorAll('.corp-share-cb:checked')).map(function(cb){return cb.value;});
+    is_shared = ccheck.length > 0; share_target = ccheck.length > 0 ? JSON.stringify(ccheck) : null; share_type_val='corp';
+  }
+
+  const obj={
+    date: newDate,
+    category: document.getElementById('dm-cat').value,
+    action_type: document.getElementById('dm-action').value,
+    partner: document.getElementById('dm-partner').value.trim(),
+    dept_contact: document.getElementById('dm-dept').value.trim(),
+    content_type: document.getElementById('dm-content-type').value,
+    title: document.getElementById('dm-title').value.trim(),
+    content: document.getElementById('dm-content').value.trim(),
+    follow_up: document.getElementById('dm-followup').value.trim(),
+    importance: document.getElementById('dm-imp').value,
+    status: document.getElementById('dm-status').value,
+    is_work_log: false,
+    is_shared: is_shared,
+    share_target: share_target,
+    employee_id: wfSession.empId,
+    emp_name: wfSession.name,
+  };
+  if(share_type_val) obj.share_type = share_type_val;
+
+  let newRec=null;
+  if(SB){
+    try{
+      const {data,error}=await SB.from('work_diary').insert(obj).select().single();
+      if(error){ alert('복사 실패: '+error.message); return; }
+      newRec=data;
+    }catch(e){ alert('복사 실패: '+e.message); return; }
+  } else {
+    newRec={id:Date.now(),...obj};
+  }
+  diaryRecords.unshift(newRec);
+
+  // 원본은 그대로 두고, 현재 수정창은 새로 복사된 건을 계속 편집하도록 전환
+  diaryEditId=newRec.id;
+  document.getElementById('dm-date').value=newDate;
+  document.getElementById('diary-modal-title').textContent=t('업무일지 수정');
+  closeMoveCopyModal();
+  renderDiary();
+  renderAll();
+  alert('✅ '+newDate+' 날짜로 복사되었습니다. 필요한 부분을 수정한 후 저장해주세요.');
 }
 </script>
 <script>
