@@ -3,30 +3,62 @@
 <head>
 <meta charset="UTF-8">
 <script>
-/* ═══ 최초 진입 시 주소창 없는 별도 창으로 자동 전환 ═══ */
+/* ═══ 최초 진입 시 "전용 창으로 열기" 배너 표시 (자동 window.open은 팝업차단으로 대부분 실패하여 클릭 유도 방식 사용) ═══ */
 (function(){
   try{
-    if(window.name==='wf_main') return; // 이미 전환된 창
+    if(window.name==='wf_main') return; // 이미 전용창으로 전환된 상태
     var params=new URLSearchParams(location.search);
     if(params.has('popped')) { window.name='wf_main'; return; }
-    params.set('popped','1');
-    var targetUrl=location.pathname+'?'+params.toString()+location.hash;
-    var w=Math.min(1280, screen.availWidth-40);
-    var h=Math.min(860, screen.availHeight-80);
-    var left=Math.round(((screen.availLeft||0)+(screen.availWidth-w))/2);
-    var top=Math.round(((screen.availTop||0)+(screen.availHeight-h))/2);
-    var features='width='+w+',height='+h+',left='+left+',top='+top+
-      ',menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
-    var newWin=window.open(targetUrl,'wf_main',features);
-    if(newWin){
-      window.open('','_self');
-      window.close();
-      setTimeout(function(){
-        if(!window.closed){
-          document.documentElement.innerHTML='<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f4f4f2;color:#333;font-size:15px;">새 창이 열렸습니다. 이 탭은 닫아주세요.</body>';
-        }
-      },600);
+
+    function buildTargetUrl(){
+      var p=new URLSearchParams(location.search);
+      p.set('popped','1');
+      return location.pathname+'?'+p.toString()+location.hash;
     }
+    function openPoppedWindow(){
+      var w=Math.min(1280, screen.availWidth-40);
+      var h=Math.min(860, screen.availHeight-80);
+      var left=Math.round(((screen.availLeft||0)+(screen.availWidth-w))/2);
+      var top=Math.round(((screen.availTop||0)+(screen.availHeight-h))/2);
+      var features='width='+w+',height='+h+',left='+left+',top='+top+
+        ',menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+      return window.open(buildTargetUrl(),'wf_main',features);
+    }
+
+    window.addEventListener('DOMContentLoaded', function(){
+      var bar=document.createElement('div');
+      bar.id='wf-popout-bar';
+      bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:100000;background:#378ADD;'+
+        'color:#fff;padding:8px 14px;display:flex;align-items:center;justify-content:center;'+
+        'gap:10px;font-size:13px;font-family:sans-serif;flex-wrap:wrap;';
+      bar.innerHTML=
+        '<span id="wf-popout-msg">📌 이 화면을 주소창 없는 전용 창으로 열까요? (듀얼모니터 고정 사용 가능)</span>'+
+        '<button id="wf-popout-yes" style="background:#fff;color:#185FA5;border:none;border-radius:6px;'+
+        'padding:4px 12px;cursor:pointer;font-weight:600;">전용 창 열기</button>'+
+        '<button id="wf-popout-no" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);'+
+        'border-radius:6px;padding:4px 12px;cursor:pointer;">닫기</button>';
+      document.body.prepend(bar);
+      document.body.style.paddingTop=bar.offsetHeight+'px';
+
+      document.getElementById('wf-popout-yes').onclick=function(){
+        var newWin=openPoppedWindow();
+        if(newWin){
+          window.close();
+          setTimeout(function(){
+            if(!window.closed){
+              document.getElementById('wf-popout-msg').textContent='새 창이 열렸습니다. 이 탭은 닫아주세요.';
+              document.getElementById('wf-popout-yes').style.display='none';
+            }
+          },500);
+        } else {
+          alert('팝업이 차단되었습니다. 주소창 오른쪽의 팝업 차단 아이콘을 눌러 허용한 후 다시 시도해주세요.');
+        }
+      };
+      document.getElementById('wf-popout-no').onclick=function(){
+        bar.remove();
+        document.body.style.paddingTop='';
+      };
+    });
   }catch(e){}
 })();
 </script>
