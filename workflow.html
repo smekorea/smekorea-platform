@@ -59,6 +59,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .settings-btn{background:none;border:1px solid var(--border);border-radius:8px;width:34px;height:34px;
   font-size:17px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center;}
 .settings-btn:hover,.settings-btn.active-btn{background:var(--surface);color:var(--text1);}
+#pin-btn.pinned{background:var(--accent);color:#fff;border-color:var(--accent);}
 
 /* ── 언어 선택 ── */
 .wf-lang-btn.wf-lang-on{background:#c8001e!important;color:#fff!important;border-color:#c8001e!important;}
@@ -561,6 +562,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     </div>
     <div class="right-btns">
       <button class="add-btn" onclick="onAddBtnClick()"><i class="ti ti-plus"></i> <span data-i18n="입력">입력</span></button>
+      <button class="settings-btn" id="pin-btn" onclick="togglePinWindow()" title="화면고정 (듀얼모니터)"><i class="ti ti-pin"></i></button>
       <button class="settings-btn" id="settings-btn" onclick="toggleSettings()"><i class="ti ti-settings"></i></button>
     </div>
   </div>
@@ -2907,6 +2909,36 @@ function closeDiaryModal(){
   window.addEventListener('mouseup',endDrag);
   window.addEventListener('touchend',endDrag);
 })();
+
+/* ═══ 화면고정 (듀얼모니터용 별도 창) ═══ */
+let pinnedWin=null, pinnedWinCheckTimer=null;
+function togglePinWindow(){
+  const btn=document.getElementById('pin-btn');
+  if(pinnedWin && !pinnedWin.closed){
+    pinnedWin.close();
+    pinnedWin=null;
+    btn.classList.remove('pinned');
+    if(pinnedWinCheckTimer){ clearInterval(pinnedWinCheckTimer); pinnedWinCheckTimer=null; }
+    return;
+  }
+  const w=1280,h=800;
+  const features=`width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+  pinnedWin=window.open(location.href,'workflow_pinned',features);
+  if(!pinnedWin){
+    alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 후 다시 시도해주세요.');
+    return;
+  }
+  btn.classList.add('pinned');
+  pinnedWinCheckTimer=setInterval(()=>{
+    if(!pinnedWin || pinnedWin.closed){
+      btn.classList.remove('pinned');
+      pinnedWin=null;
+      clearInterval(pinnedWinCheckTimer);
+      pinnedWinCheckTimer=null;
+    }
+  },800);
+}
+window.addEventListener('beforeunload',()=>{ if(pinnedWin && !pinnedWin.closed) pinnedWin.close(); });
 
 async function saveDiary(){
   const obj={
