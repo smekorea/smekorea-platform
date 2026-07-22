@@ -2,6 +2,35 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<script>
+/* ═══ 최초 진입 시 주소창 없는 별도 창으로 자동 전환 ═══ */
+(function(){
+  try{
+    if(window.name==='wf_main') return; // 이미 전환된 창
+    var params=new URLSearchParams(location.search);
+    if(params.has('popped')) { window.name='wf_main'; return; }
+    params.set('popped','1');
+    var targetUrl=location.pathname+'?'+params.toString()+location.hash;
+    var w=Math.min(1280, screen.availWidth-40);
+    var h=Math.min(860, screen.availHeight-80);
+    var left=Math.round(((screen.availLeft||0)+(screen.availWidth-w))/2);
+    var top=Math.round(((screen.availTop||0)+(screen.availHeight-h))/2);
+    var features='width='+w+',height='+h+',left='+left+',top='+top+
+      ',menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+    var newWin=window.open(targetUrl,'wf_main',features);
+    if(newWin){
+      window.open('','_self');
+      window.close();
+      setTimeout(function(){
+        if(!window.closed){
+          document.documentElement.innerHTML='<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f4f4f2;color:#333;font-size:15px;">새 창이 열렸습니다. 이 탭은 닫아주세요.</body>';
+        }
+      },600);
+    }
+  }catch(e){}
+})();
+</script>
+
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2910,35 +2939,34 @@ function closeDiaryModal(){
   window.addEventListener('touchend',endDrag);
 })();
 
-/* ═══ 화면고정 (듀얼모니터용 별도 창) ═══ */
-let pinnedWin=null, pinnedWinCheckTimer=null;
+/* ═══ 화면고정 (듀얼모니터: 현재 창을 해당 모니터 전체 크기로 고정/해제) ═══ */
+let pinPrevRect=null;
 function togglePinWindow(){
   const btn=document.getElementById('pin-btn');
-  if(pinnedWin && !pinnedWin.closed){
-    pinnedWin.close();
-    pinnedWin=null;
+  if(pinPrevRect){
+    try{
+      window.moveTo(pinPrevRect.x, pinPrevRect.y);
+      window.resizeTo(pinPrevRect.w, pinPrevRect.h);
+    }catch(e){}
+    pinPrevRect=null;
     btn.classList.remove('pinned');
-    if(pinnedWinCheckTimer){ clearInterval(pinnedWinCheckTimer); pinnedWinCheckTimer=null; }
     return;
   }
-  const w=1280,h=800;
-  const features=`width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
-  pinnedWin=window.open(location.href,'workflow_pinned',features);
-  if(!pinnedWin){
-    alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 후 다시 시도해주세요.');
+  if(window.name!=='wf_main'){
+    alert('화면고정은 별도 창(주소창 없는 창)에서만 사용 가능합니다.');
+    return;
+  }
+  pinPrevRect={x:window.screenX, y:window.screenY, w:window.outerWidth, h:window.outerHeight};
+  try{
+    window.moveTo(screen.availLeft||0, screen.availTop||0);
+    window.resizeTo(screen.availWidth, screen.availHeight);
+  }catch(e){
+    alert('이 브라우저에서는 창 크기 자동 조정이 제한되어 있습니다. 수동으로 창을 옮기고 최대화해주세요.');
+    pinPrevRect=null;
     return;
   }
   btn.classList.add('pinned');
-  pinnedWinCheckTimer=setInterval(()=>{
-    if(!pinnedWin || pinnedWin.closed){
-      btn.classList.remove('pinned');
-      pinnedWin=null;
-      clearInterval(pinnedWinCheckTimer);
-      pinnedWinCheckTimer=null;
-    }
-  },800);
 }
-window.addEventListener('beforeunload',()=>{ if(pinnedWin && !pinnedWin.closed) pinnedWin.close(); });
 
 async function saveDiary(){
   const obj={
