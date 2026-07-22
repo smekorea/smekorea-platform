@@ -435,6 +435,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 }
 @media(min-width:521px){
   .diary-modal{border-radius:14px;width:min(720px,95vw);border:1px solid var(--border);}
+  #diary-modal-title{cursor:move;user-select:none;}
 }
 .dm-row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
 .dm-field{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px;}
@@ -998,7 +999,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 
 <!-- 업무일지 추가/수정 모달 -->
 <div class="modal-overlay" id="diary-modal-overlay">
-  <div class="diary-modal">
+  <div class="diary-modal" id="diary-modal-box">
     <div class="modal-handle"></div>
     <h3 id="diary-modal-title" data-i18n="업무일지 작성">업무일지 작성</h3>
     <div class="dm-row">
@@ -2868,7 +2869,44 @@ function editDiary(id){
 
 function closeDiaryModal(){
   document.getElementById('diary-modal-overlay').classList.remove('open');
+  const box=document.getElementById('diary-modal-box');
+  box.style.position='';box.style.left='';box.style.top='';box.style.margin='';
 }
+
+/* ═══ 일정입력창(diary-modal) 위치 이동(드래그) — PC 전용 ═══ */
+(function(){
+  const box=document.getElementById('diary-modal-box');
+  const handle=document.getElementById('diary-modal-title');
+  if(!box||!handle) return;
+  let dragging=false, offX=0, offY=0;
+  function startDrag(e){
+    if(window.innerWidth<521) return; // 모바일은 바텀시트 유지, 드래그 비활성
+    const p=e.touches?e.touches[0]:e;
+    const rect=box.getBoundingClientRect();
+    offX=p.clientX-rect.left; offY=p.clientY-rect.top;
+    box.style.position='fixed';
+    box.style.margin='0';
+    box.style.left=rect.left+'px';
+    box.style.top=rect.top+'px';
+    dragging=true;
+    e.preventDefault();
+  }
+  function moveDrag(e){
+    if(!dragging) return;
+    const p=e.touches?e.touches[0]:e;
+    let nx=p.clientX-offX, ny=p.clientY-offY;
+    const maxX=window.innerWidth-box.offsetWidth, maxY=window.innerHeight-box.offsetHeight;
+    nx=Math.max(0,Math.min(nx,maxX)); ny=Math.max(0,Math.min(ny,maxY));
+    box.style.left=nx+'px'; box.style.top=ny+'px';
+  }
+  function endDrag(){ dragging=false; }
+  handle.addEventListener('mousedown',startDrag);
+  handle.addEventListener('touchstart',startDrag,{passive:false});
+  window.addEventListener('mousemove',moveDrag);
+  window.addEventListener('touchmove',moveDrag,{passive:false});
+  window.addEventListener('mouseup',endDrag);
+  window.addEventListener('touchend',endDrag);
+})();
 
 async function saveDiary(){
   const obj={
