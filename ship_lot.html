@@ -135,7 +135,20 @@
 
 <!-- ══ 목록화면 ══ -->
 <div id="listView">
-  <div class="sec-label"><div class="dot" style="background:var(--accent2)"></div>LOT관리 지정건 목록 · 클릭하면 작업화면으로 이동</div>
+  <div class="sec-label" style="justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:8px;"><div class="dot" style="background:var(--accent2)"></div>LOT관리 지정건 목록 · 클릭하면 작업화면으로 이동</div>
+    <div onclick="toggleMakerSettings()" style="cursor:pointer;color:var(--accent2);text-transform:none;letter-spacing:0;font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:700;">⚙ 스캔대상 메이커 설정</div>
+  </div>
+  <div id="makerSettingsPanel" style="display:none;padding:12px 24px;background:var(--surface);border-bottom:2px solid var(--border);">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;">
+      여기에 등록된 메이커(items 마스터의 브랜드명과 일치)만 거래명세표 업로드 시 "바코드검수 대상"으로 분류되고, 그 외 메이커는 자동으로 "수기확인 대상"이 됩니다.
+    </div>
+    <div id="makerTagList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="newMakerInput" placeholder="예: SMART" style="flex:1;max-width:220px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">
+      <button class="btn btn-primary" style="padding:7px 16px;" onclick="addScanMaker()">+ 추가</button>
+    </div>
+  </div>
   <div class="filter-tabs" style="margin-top:12px;">
     <div class="filter-tab active" data-f="all" onclick="setFilter('all')">전체</div>
     <div class="filter-tab" data-f="대기" onclick="setFilter('대기')">대기</div>
@@ -254,6 +267,46 @@
     const t = document.getElementById('toast');
     t.textContent = msg; t.className = 'toast show' + (isError?' error':'');
     setTimeout(()=>t.classList.remove('show'), 2600);
+  }
+
+  // ══ 스캔대상 메이커 설정 패널 ══
+  let scanMakersList = [];
+  async function toggleMakerSettings() {
+    const panel = document.getElementById('makerSettingsPanel');
+    const show = panel.style.display === 'none';
+    panel.style.display = show ? 'block' : 'none';
+    if (show) await loadScanMakers();
+  }
+  async function loadScanMakers() {
+    const rows = await sbGet('scan_required_makers', 'is_active=eq.true&order=maker');
+    scanMakersList = Array.isArray(rows) ? rows : [];
+    renderMakerTags();
+  }
+  function renderMakerTags() {
+    document.getElementById('makerTagList').innerHTML = scanMakersList.length === 0
+      ? '<span style="font-size:11px;color:var(--muted);">등록된 메이커가 없습니다</span>'
+      : scanMakersList.map(m => `<span class="tag-scan tag-b1" style="font-size:12px;padding:5px 10px;display:inline-flex;align-items:center;gap:6px;">
+          ${m.maker}
+          <span style="cursor:pointer;font-weight:900;" onclick="removeScanMaker(${m.id})">✕</span>
+        </span>`).join('');
+  }
+  async function addScanMaker() {
+    const input = document.getElementById('newMakerInput');
+    const val = input.value.trim();
+    if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
+    if (scanMakersList.some(m => m.maker === val)) { showToast('⚠ 이미 등록된 메이커입니다', true); return; }
+    try {
+      await sbPost('scan_required_makers', { maker: val, is_active: true });
+      input.value = '';
+      showToast(`✓ "${val}" 스캔대상 메이커로 등록되었습니다`);
+      loadScanMakers();
+    } catch(e) { showToast('⚠ 등록 실패 (이미 존재하는 메이커일 수 있습니다)', true); }
+  }
+  async function removeScanMaker(id) {
+    if (!confirm('이 메이커를 스캔대상에서 제외하시겠습니까?')) return;
+    await sbPatch('scan_required_makers', id, { is_active: false });
+    showToast('제외되었습니다');
+    loadScanMakers();
   }
 
   // ══ 전역 상태 ══
@@ -375,7 +428,19 @@
     document.getElementById('itemCount').textContent = itemRows.length + '건';
     document.getElementById('itemTbody').innerHTML = itemRows.map(r => {
       const done = r.is_done;
+      const isManual = r.check_type === 'manual';
       const cls = done ? 'row-done' : (r.qty_scanned>0 ? 'row-progress' : '');
+      if (isManual) {
+        return `<tr class="${cls}">
+          <td class="mono">${r.item_code}</td>
+          <td>${r.description||''} <span class="tag-scan tag-b2" style="margin-left:4px;">수기확인</span></td>
+          <td class="mono" style="text-align:right;">${(r.qty_required||0).toLocaleString()}</td>
+          <td colspan="1">${done
+            ? `<span style="font-size:10px;color:var(--accent3);">✓ ${r.checked_by||''}</span>`
+            : `<button class="btn btn-ghost" style="padding:3px 9px;font-size:10px;" onclick="manualConfirm(${r.id})">확인완료</button>`}</td>
+          <td><span class="badge-dot ${done?'done':'wait'}"></span></td>
+        </tr>`;
+      }
       return `<tr class="${cls}">
         <td class="mono">${r.item_code}</td>
         <td>${r.description||''}</td>
@@ -384,6 +449,19 @@
         <td><span class="badge-dot ${done?'done':'wait'}"></span></td>
       </tr>`;
     }).join('');
+  }
+
+  async function manualConfirm(itemId) {
+    const name = prompt('확인자 이름을 입력해주세요:');
+    if (!name || !name.trim()) return;
+    const row = itemRows.find(r => r.id === itemId);
+    if (!row) return;
+    const now = new Date().toISOString();
+    await sbPatch('ship_lot_item', itemId, { is_done: true, checked_by: name.trim(), checked_at: now, qty_scanned: row.qty_required });
+    row.is_done = true; row.checked_by = name.trim(); row.qty_scanned = row.qty_required;
+    showToast(`✓ ${row.item_code} 수기확인 완료 (${name.trim()})`);
+    renderItemTable();
+    updateProgress();
   }
 
   function renderLogTable() {
@@ -549,6 +627,7 @@
   async function accumulateQty(itemCode, qty) {
     const row = itemRows.find(r => r.item_code === itemCode);
     if (!row) { showToast(`⚠ 거래명세표에 없는 품목입니다 (${itemCode})`, true); return; }
+    if (row.check_type === 'manual') { showToast(`⚠ ${itemCode}는 수기확인 대상 품목입니다 (바코드 스캔 불필요)`, true); return; }
     row.qty_scanned = (row.qty_scanned||0) + qty;
     row.is_done = row.qty_scanned >= row.qty_required;
     await sbPatch('ship_lot_item', row.id, { qty_scanned: row.qty_scanned, is_done: row.is_done });

@@ -170,6 +170,8 @@
   .form-group{display:flex;flex-direction:column;gap:3px;}
   .form-group.full{grid-column:1/-1;}
   .form-label{font-size:10px;font-weight:600;color:var(--muted);}
+  #inputModal .form-label{font-size:13px;font-weight:800;color:var(--accent);letter-spacing:0.2px;}
+  #inputModal .modal-header{cursor:move;}
   .form-label .req{color:var(--accent);}
   .form-input,.form-select,.form-textarea{padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);transition:border-color 0.2s;}
   .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent2);background:var(--surface);}
@@ -315,7 +317,8 @@
       <div class="form-row">
         <div class="form-group">
           <div class="form-label">매출처명 <span class="req">*</span></div>
-          <input type="text" class="form-input" id="inCustomer" placeholder="예: LG전자 창원공장">
+          <input type="text" class="form-input" id="inCustomer" list="customerMasterList" placeholder="목록에서 선택 또는 직접 입력" autocomplete="off">
+          <datalist id="customerMasterList"></datalist>
         </div>
         <div class="form-group">
           <div class="form-label">도착시간</div>
@@ -852,8 +855,57 @@
     document.getElementById('inLotFile').value = '';
     document.getElementById('lotFilePreview').textContent = '';
     toggleLotFileArea();
+    resetInputModalPosition();
     document.getElementById('inputModal').classList.add('show');
   }
+
+  // ── 매출처명 마스터(partners) 자동완성 ──
+  let customerMasterLoaded = false;
+  async function loadCustomerMasterList() {
+    if (customerMasterLoaded) return;
+    try {
+      const rows = await sbGet('partners', "select=name,type,is_active&order=name&limit=1000");
+      const list = (Array.isArray(rows) ? rows : [])
+        .filter(r => r.is_active !== false && (r.type === '매출처' || r.type === '매입매출처'));
+      document.getElementById('customerMasterList').innerHTML =
+        list.map(r => `<option value="${(r.name||'').replace(/"/g,'&quot;')}">`).join('');
+      customerMasterLoaded = true;
+    } catch(e) { /* 마스터 로드 실패해도 직접입력은 계속 가능 */ }
+  }
+  loadCustomerMasterList();
+
+  // ── 출하지시 입력창 드래그 이동 ──
+  function resetInputModalPosition() {
+    const modal = document.querySelector('#inputModal .modal');
+    modal.style.position = '';
+    modal.style.left = '';
+    modal.style.top = '';
+    modal.style.margin = '';
+  }
+  (function initInputModalDrag() {
+    const header = document.querySelector('#inputModal .modal-header');
+    const modal = document.querySelector('#inputModal .modal');
+    if (!header || !modal) return;
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.modal-close')) return;
+      const rect = modal.getBoundingClientRect();
+      modal.style.position = 'fixed';
+      modal.style.margin = '0';
+      modal.style.left = rect.left + 'px';
+      modal.style.top = rect.top + 'px';
+      origLeft = rect.left; origTop = rect.top;
+      startX = e.clientX; startY = e.clientY;
+      dragging = true;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      modal.style.left = (origLeft + e.clientX - startX) + 'px';
+      modal.style.top = (origTop + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  })();
 
   function toggleLotFileArea() {
     const checked = document.getElementById('inLotRequired').checked;
@@ -908,6 +960,32 @@
     else             { el.className = 'pack-result'; }
   }
 
+  // ── 품목별 check_type 판별 (items 마스터 maker + scan_required_makers 대조) ──
+  async function enrichCheckType(items) {
+    if (items.length === 0) return items;
+    const codes = items.map(it => it.item_code);
+    let itemsMasterRows = [];
+    const chunkSize = 100;
+    for (let i = 0; i < codes.length; i += chunkSize) {
+      const chunk = codes.slice(i, i + chunkSize);
+      const inList = chunk.map(c => `"${c.replace(/"/g,'')}"`).join(',');
+      const q = 'item_code=in.(' + inList + ')&select=item_code,maker';
+      const rows = await sbGet('items', q);
+      if (Array.isArray(rows)) itemsMasterRows = itemsMasterRows.concat(rows);
+    }
+    const makerMap = {};
+    itemsMasterRows.forEach(r => { makerMap[r.item_code] = r.maker; });
+
+    const makerRows = await sbGet('scan_required_makers', 'is_active=eq.true&select=maker');
+    const scanMakers = new Set((Array.isArray(makerRows) ? makerRows : []).map(r => r.maker));
+
+    return items.map(it => {
+      const maker = makerMap[it.item_code];
+      const checkType = (maker && scanMakers.has(maker)) ? 'barcode' : 'manual';
+      return { ...it, check_type: checkType };
+    });
+  }
+
   async function submitInput() {
     const dept = document.querySelector('input[name="inputDept"]:checked');
     const unit = document.querySelector('input[name="inputUnit"]:checked');
@@ -943,6 +1021,7 @@
           btn.disabled = false; btn.textContent = '출하지시 등록';
           return;
         }
+        lotItems = await enrichCheckType(lotItems);
       } catch(e) {
         showToast('⚠ 엑셀 파싱 실패', true);
         btn.disabled = false; btn.textContent = '출하지시 등록';
@@ -975,11 +1054,16 @@
             description: it.description,
             qty_required: it.qty_required,
             qty_scanned: 0,
-            is_done: false
+            is_done: false,
+            check_type: it.check_type
           }));
           await sbPost('ship_lot_item', itemBody);
+          const barcodeCnt = lotItems.filter(it=>it.check_type==='barcode').length;
+          const manualCnt = lotItems.length - barcodeCnt;
+          showToast(`✓ 출하지시 등록 완료 (바코드검수 ${barcodeCnt}건, 수기확인 ${manualCnt}건)`);
+        } else {
+          showToast('✓ 출하지시가 등록되었습니다');
         }
-        showToast(lotRequired ? '✓ 출하지시 등록 + LOT관리 항목 ' + lotItems.length + '건 등록완료' : '✓ 출하지시가 등록되었습니다');
         closeInputModal();
         loadData();
       } else {
