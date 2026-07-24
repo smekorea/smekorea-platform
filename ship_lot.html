@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMEKOREA 출하LOT관리 프로세스</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#f0f4f9;--surface:#fff;--surface2:#e8eef6;--surface3:#d8e4f0;
+    --border:#cdd8ea;--border2:#b0c4de;
+    --accent:#c8001e;--accent2:#1a56db;--accent3:#0e9f6e;
+    --text:#1a2233;--muted:#7a8baa;--warn:#d97706;
+    --today-bg:rgba(200,0,30,0.05);--week-bg:rgba(26,86,219,0.05);
+    --shadow:0 2px 8px rgba(0,0,0,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;display:flex;flex-direction:column;}
+
+  /* 상단바 */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:11px 24px;background:var(--surface);border-bottom:2px solid var(--border);box-shadow:var(--shadow);position:sticky;top:0;z-index:20;}
+  .logo-area{display:flex;align-items:center;gap:12px;}
+  .logo-box{width:40px;height:40px;background:var(--accent2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:900;color:#fff;letter-spacing:-1px;box-shadow:0 3px 10px rgba(26,86,219,0.3);}
+  .logo-title{font-size:15px;font-weight:700;}
+  .logo-sub{font-size:9px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;margin-top:1px;}
+  .back-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;background:var(--surface2);color:var(--muted);border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;transition:all 0.2s;}
+  .back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .clock{font-family:'Share Tech Mono',monospace;font-size:20px;color:var(--accent2);letter-spacing:1px;}
+
+  .sec-label{display:flex;align-items:center;gap:8px;padding:6px 24px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:9px;font-family:'Share Tech Mono',monospace;letter-spacing:3px;color:var(--muted);text-transform:uppercase;}
+  .sec-label .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+
+  /* ══ 목록 화면 ══ */
+  #listView{padding:16px 24px;}
+  .filter-tabs{display:flex;gap:6px;margin-bottom:12px;}
+  .filter-tab{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
+  .filter-tab.active{border-color:var(--accent2);color:var(--accent2);background:rgba(26,86,219,0.07);}
+  .batch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;}
+  .batch-card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;cursor:pointer;transition:all 0.15s;border-left:4px solid var(--muted);}
+  .batch-card:hover{box-shadow:var(--shadow);transform:translateY(-1px);}
+  .batch-card.st-대기{border-left-color:var(--warn);}
+  .batch-card.st-진행중{border-left-color:var(--accent2);}
+  .batch-card.st-완료{border-left-color:var(--accent3);opacity:0.75;}
+  .bc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .bc-customer{font-size:14px;font-weight:700;}
+  .bc-badge{font-size:9px;font-family:'Share Tech Mono',monospace;padding:3px 8px;border-radius:20px;font-weight:700;}
+  .bc-badge.대기{background:rgba(217,119,6,0.12);color:var(--warn);}
+  .bc-badge.진행중{background:rgba(26,86,219,0.12);color:var(--accent2);}
+  .bc-badge.완료{background:rgba(14,159,110,0.12);color:var(--accent3);}
+  .bc-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 10px;color:var(--muted);gap:6px;}
+
+  /* ══ 작업화면 ══ */
+  #workView{display:none;flex-direction:column;flex:1;}
+  .work-infobar{display:flex;align-items:center;gap:18px;padding:10px 24px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;font-size:12px;}
+  .wib-item{display:flex;flex-direction:column;gap:1px;}
+  .wib-label{font-size:9px;color:var(--muted);}
+  .wib-val{font-weight:700;}
+  .status-pill{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
+  .status-pill.대기{background:rgba(217,119,6,0.12);color:var(--warn);}
+  .status-pill.진행중{background:rgba(26,86,219,0.12);color:var(--accent2);}
+  .status-pill.완료{background:rgba(14,159,110,0.12);color:var(--accent3);}
+
+  .progress-wrap{padding:10px 24px;background:var(--surface);border-bottom:2px solid var(--border);}
+  .progress-top{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px;font-family:'Share Tech Mono',monospace;}
+  .progress-bar-bg{height:9px;background:var(--surface2);border-radius:5px;overflow:hidden;}
+  .progress-bar-fg{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent3));transition:width 0.3s;}
+
+  .scan-wrap{padding:9px 24px;background:rgba(26,86,219,0.05);border-bottom:2px solid var(--border);display:flex;gap:8px;align-items:center;}
+  .scan-input{flex:1;padding:10px 14px;border:2px solid var(--accent2);border-radius:8px;font-family:'Share Tech Mono',monospace;font-size:15px;background:var(--surface);color:var(--text);}
+  .scan-input:focus{outline:none;box-shadow:0 0 0 3px rgba(26,86,219,0.15);}
+  .scan-hint{font-size:10px;color:var(--muted);white-space:nowrap;}
+
+  .main-split{display:grid;grid-template-columns:1fr 1fr;flex:1;overflow:hidden;}
+  .panel{display:flex;flex-direction:column;overflow:hidden;}
+  .panel:first-child{border-right:1px solid var(--border);}
+  .panel-hd{padding:8px 14px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;}
+  .panel-body{flex:1;overflow:auto;}
+
+  table.dtab{width:100%;border-collapse:collapse;table-layout:fixed;}
+  table.dtab th{position:relative;user-select:none;background:var(--surface2);padding:7px 8px;font-size:10px;font-weight:700;color:var(--muted);text-align:left;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap;overflow:hidden;}
+  table.dtab td{padding:6px 8px;font-size:12px;border-right:1px solid var(--border);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  table.dtab td:last-child{border-right:none;}
+  table.dtab tbody tr{border-bottom:1px solid var(--border);}
+  table.dtab tbody tr.row-done{background:rgba(14,159,110,0.06);color:var(--muted);}
+  table.dtab tbody tr.row-progress{background:rgba(26,86,219,0.04);}
+  table.dtab tbody tr.row-mismatch{background:rgba(200,0,30,0.08);}
+  table.dtab tbody tr.row-waiting{background:rgba(217,119,6,0.08);}
+  .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+  .mono{font-family:'Share Tech Mono',monospace;}
+  .badge-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .badge-dot.done{background:var(--accent3);}
+  .badge-dot.wait{background:var(--border2);}
+  .badge-red{color:var(--accent);font-weight:700;}
+  .tag-scan{font-size:9px;font-family:'Share Tech Mono',monospace;padding:2px 6px;border-radius:4px;font-weight:700;}
+  .tag-qr{background:rgba(14,159,110,0.12);color:var(--accent3);}
+  .tag-b1{background:rgba(26,86,219,0.12);color:var(--accent2);}
+  .tag-b2{background:rgba(217,119,6,0.12);color:var(--warn);}
+
+  .bottom-bar{padding:10px 24px;background:var(--surface);border-top:2px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+  .btn{padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid;transition:all 0.2s;}
+  .btn-primary{background:var(--accent3);border-color:var(--accent3);color:#fff;}
+  .btn-primary:hover{background:#0b8a5f;}
+  .btn-ghost{background:var(--surface2);border-color:var(--border);color:var(--muted);}
+
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--surface);border-radius:12px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+  .modal-header{padding:14px 18px;border-bottom:2px solid var(--border);font-size:15px;font-weight:700;}
+  .modal-body{padding:16px 18px;font-size:13px;line-height:1.7;}
+  .modal-footer{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--border);justify-content:flex-end;}
+  .form-input,.form-textarea{width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;background:var(--surface2);margin-top:6px;}
+
+  .toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--accent3);color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:50px;transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);z-index:200;white-space:nowrap;}
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .toast.error{background:#e02424;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-box">LOT</div>
+    <div>
+      <div class="logo-title">출하LOT관리 프로세스</div>
+      <div class="logo-sub">SHIPPING LOT VERIFICATION</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <a class="back-btn" href="shipment.html">← 출하관리로</a>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- ══ 목록화면 ══ -->
+<div id="listView">
+  <div class="sec-label"><div class="dot" style="background:var(--accent2)"></div>LOT관리 지정건 목록 · 클릭하면 작업화면으로 이동</div>
+  <div class="filter-tabs" style="margin-top:12px;">
+    <div class="filter-tab active" data-f="all" onclick="setFilter('all')">전체</div>
+    <div class="filter-tab" data-f="대기" onclick="setFilter('대기')">대기</div>
+    <div class="filter-tab" data-f="진행중" onclick="setFilter('진행중')">진행중</div>
+    <div class="filter-tab" data-f="완료" onclick="setFilter('완료')">완료</div>
+  </div>
+  <div class="batch-grid" id="batchGrid"><div class="empty-state">불러오는 중...</div></div>
+</div>
+
+<!-- ══ 작업화면 ══ -->
+<div id="workView">
+  <div class="work-infobar">
+    <div class="wib-item"><div class="wib-label">매출처명</div><div class="wib-val" id="wCustomer">-</div></div>
+    <div class="wib-item"><div class="wib-label">출하예정일</div><div class="wib-val" id="wShipDate">-</div></div>
+    <div class="wib-item"><div class="wib-label">작업지시자</div><div class="wib-val" id="wInstructBy">-</div></div>
+    <div class="wib-item"><div class="wib-label">출하담당자</div><div class="wib-val" id="wWorker">- (스캔 시작시 자동기록)</div></div>
+    <div style="flex:1;"></div>
+    <div class="status-pill" id="wStatusPill">대기</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-top">
+      <span>검수 진행률</span>
+      <span id="progressText">0 / 0 (0%)</span>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar-fg" id="progressBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="scan-wrap">
+    <input type="text" class="scan-input" id="scanInput" placeholder="여기에 스캐너로 바코드/QR 리딩 → Enter" autocomplete="off">
+    <div class="scan-hint">QR(!포함)=1회완결 · 스마트 자체라벨(바코드2개)=품번+LOT 순서무관 스캔</div>
+  </div>
+
+  <div class="main-split">
+    <div class="panel">
+      <div class="panel-hd"><span>📋 거래명세표 항목</span><span id="itemCount">0건</span></div>
+      <div class="panel-body">
+        <table class="dtab" id="itemTable">
+          <thead><tr>
+            <th style="width:110px;">품번<div class="col-resizer"></div></th>
+            <th>품명<div class="col-resizer"></div></th>
+            <th style="width:75px;">필요수량<div class="col-resizer"></div></th>
+            <th style="width:75px;">진행수량<div class="col-resizer"></div></th>
+            <th style="width:50px;">상태</th>
+          </tr></thead>
+          <tbody id="itemTbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-hd"><span>📡 바코드 리딩 로그</span><span id="logCount">0건</span></div>
+      <div class="panel-body">
+        <table class="dtab" id="logTable">
+          <thead><tr>
+            <th style="width:36px;">#<div class="col-resizer"></div></th>
+            <th style="width:60px;">타입<div class="col-resizer"></div></th>
+            <th>원본값<div class="col-resizer"></div></th>
+            <th style="width:90px;">매칭품번<div class="col-resizer"></div></th>
+            <th style="width:60px;">시각<div class="col-resizer"></div></th>
+          </tr></thead>
+          <tbody id="logTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <button class="btn btn-ghost" onclick="backToList()">목록으로</button>
+    <button class="btn btn-primary" id="completeBtn" onclick="tryCompleteScan()">✓ 출고검수 완료 확정</button>
+  </div>
+</div>
+
+<!-- 강제완료 확인 모달 -->
+<div class="modal-overlay" id="forceModal">
+  <div class="modal">
+    <div class="modal-header" style="color:var(--accent);">⚠ 미완료 품목이 있습니다</div>
+    <div class="modal-body">
+      미완료 품목이 <b id="forceCount">0</b>건 있습니다. 그래도 완료 처리하시겠습니까?
+      <input type="text" class="form-input" id="forceReason" placeholder="강제완료 사유 입력 (필수)">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeForceModal()">취소</button>
+      <button class="btn btn-primary" style="background:var(--accent);border-color:var(--accent);" onclick="confirmForceComplete()">강제 완료 처리</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SB_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11eHVocmJzYnJzdG1ycnZsdXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNDIwMzMsImV4cCI6MjA5MDgxODAzM30.3Ehqr4l-wcaTXkZNpjHs7K_nr7i8M7gel5DcOG-PPRU';
+  const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+  async function sbGet(table, params) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table + '?' + params, { headers: SB_HEADERS });
+    return res.json();
+  }
+  async function sbPost(table, body) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table, { method:'POST', headers: SB_HEADERS, body: JSON.stringify(body) });
+    return res.json();
+  }
+  async function sbPatch(table, id, body) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table + '?id=eq.' + id, { method:'PATCH', headers: SB_HEADERS, body: JSON.stringify(body) });
+    return res.json();
+  }
+
+  function updateClock(){
+    const n = new Date();
+    document.getElementById('clock').textContent =
+      String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
+  }
+  setInterval(updateClock,1000); updateClock();
+
+  function showToast(msg, isError){
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = 'toast show' + (isError?' error':'');
+    setTimeout(()=>t.classList.remove('show'), 2600);
+  }
+
+  // ══ 전역 상태 ══
+  let allBatches = [];
+  let currentFilter = 'all';
+  let currentSid = null;
+  let currentSchedule = null;
+  let itemRows = [];      // ship_lot_item
+  let logRows = [];       // ship_lot_log
+  let itemsMaster = [];   // items 테이블 캐시 (lg_pn -> item_code)
+  let pendingPN = null;   // {logId, pn, qty, raw}
+  let pendingLOT = null;  // {logId, raw}
+  let workerName = null;
+
+  // ══ URL 파라미터 확인 ══
+  const params = new URLSearchParams(location.search);
+  const sidParam = params.get('sid');
+
+  window.addEventListener('DOMContentLoaded', () => {
+    if (sidParam) { openBatch(parseInt(sidParam,10)); }
+    else { loadList(); }
+  });
+
+  // ══ 목록화면 ══
+  async function loadList() {
+    document.getElementById('listView').style.display = 'block';
+    document.getElementById('workView').style.display = 'none';
+    try {
+      const rows = await sbGet('ship_schedule', 'lot_required=eq.true&order=ship_date.desc&limit=500');
+      allBatches = Array.isArray(rows) ? rows : [];
+      renderBatchGrid();
+    } catch(e) {
+      document.getElementById('batchGrid').innerHTML = '<div class="empty-state">데이터 로딩 실패</div>';
+    }
+  }
+
+  function setFilter(f) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-tab').forEach(el=>el.classList.remove('active'));
+    document.querySelector(`.filter-tab[data-f="${f}"]`).classList.add('active');
+    renderBatchGrid();
+  }
+
+  function renderBatchGrid() {
+    let rows = allBatches;
+    if (currentFilter !== 'all') rows = rows.filter(r => (r.lot_status||'대기') === currentFilter);
+    if (rows.length === 0) {
+      document.getElementById('batchGrid').innerHTML = '<div class="empty-state">📭 해당 건이 없습니다</div>';
+      return;
+    }
+    document.getElementById('batchGrid').innerHTML = rows.map(r => {
+      const st = r.lot_status || '대기';
+      return `<div class="batch-card st-${st}" onclick="location.href='ship_lot.html?sid=${r.id}'">
+        <div class="bc-top">
+          <div class="bc-customer">${r.customer||'-'}</div>
+          <div class="bc-badge ${st}">${st}</div>
+        </div>
+        <div class="bc-meta">
+          <span>📅 ${r.ship_date||'-'}</span>
+          <span>✍ ${r.manager||'-'}</span>
+          ${r.lot_started_by?`<span>👤 ${r.lot_started_by}</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function backToList() {
+    history.pushState({}, '', 'ship_lot.html');
+    currentSid = null;
+    loadList();
+  }
+
+  // ══ 작업화면 진입 ══
+  async function openBatch(sid) {
+    currentSid = sid;
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('workView').style.display = 'flex';
+
+    const rows = await sbGet('ship_schedule', 'id=eq.' + sid);
+    if (!Array.isArray(rows) || rows.length === 0) { showToast('작업지시를 찾을 수 없습니다', true); backToList(); return; }
+    currentSchedule = rows[0];
+
+    document.getElementById('wCustomer').textContent = currentSchedule.customer || '-';
+    document.getElementById('wShipDate').textContent = currentSchedule.ship_date || '-';
+    document.getElementById('wInstructBy').textContent = currentSchedule.manager || '-';
+    document.getElementById('wWorker').textContent = currentSchedule.lot_started_by || '- (스캔 시작시 자동기록)';
+    const st = currentSchedule.lot_status || '대기';
+    document.getElementById('wStatusPill').textContent = st;
+    document.getElementById('wStatusPill').className = 'status-pill ' + st;
+
+    // items 마스터 캐시 로드 (lg_pn 매칭용, 1000행 제한 페이지네이션)
+    if (itemsMaster.length === 0) {
+      let pg = 0, all = [];
+      while (true) {
+        const chunk = await sbGet('items', `select=item_code,lg_pn,description&order=id&limit=1000&offset=${pg*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        all = all.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg++;
+      }
+      itemsMaster = all;
+    }
+
+    const items = await sbGet('ship_lot_item', 'ship_schedule_id=eq.' + sid + '&order=id');
+    itemRows = Array.isArray(items) ? items : [];
+    const logs = await sbGet('ship_lot_log', 'ship_schedule_id=eq.' + sid + '&order=id.desc&limit=1000');
+    logRows = Array.isArray(logs) ? logs : [];
+
+    renderItemTable();
+    renderLogTable();
+    updateProgress();
+    initColResize();
+
+    document.getElementById('scanInput').value = '';
+    document.getElementById('scanInput').focus();
+  }
+
+  function renderItemTable() {
+    document.getElementById('itemCount').textContent = itemRows.length + '건';
+    document.getElementById('itemTbody').innerHTML = itemRows.map(r => {
+      const done = r.is_done;
+      const cls = done ? 'row-done' : (r.qty_scanned>0 ? 'row-progress' : '');
+      return `<tr class="${cls}">
+        <td class="mono">${r.item_code}</td>
+        <td>${r.description||''}</td>
+        <td class="mono" style="text-align:right;">${(r.qty_required||0).toLocaleString()}</td>
+        <td class="mono" style="text-align:right;">${(r.qty_scanned||0).toLocaleString()}</td>
+        <td><span class="badge-dot ${done?'done':'wait'}"></span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderLogTable() {
+    document.getElementById('logCount').textContent = logRows.length + '건';
+    document.getElementById('logTbody').innerHTML = logRows.map((r,i) => {
+      const typeTag = r.scan_type==='QR' ? '<span class="tag-scan tag-qr">QR</span>'
+        : r.scan_type==='바코드1_품번' ? '<span class="tag-scan tag-b1">품번</span>'
+        : '<span class="tag-scan tag-b2">LOT</span>';
+      const rowCls = r.pair_status && r.pair_status.indexOf('미완결')>=0 ? 'row-waiting'
+        : (!r.item_code ? 'row-mismatch' : '');
+      const matched = r.item_code ? r.item_code : '<span class="badge-red">미매칭</span>';
+      const t = r.scanned_at ? new Date(r.scanned_at) : null;
+      const timeStr = t ? String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+':'+String(t.getSeconds()).padStart(2,'0') : '-';
+      return `<tr class="${rowCls}">
+        <td class="mono">${logRows.length-i}</td>
+        <td>${typeTag}</td>
+        <td class="mono" title="${r.raw_scan||''}">${r.raw_scan||''}</td>
+        <td class="mono">${matched}</td>
+        <td class="mono">${timeStr}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function updateProgress() {
+    const totalReq = itemRows.reduce((s,r)=>s+(r.qty_required||0),0);
+    const totalScan = itemRows.reduce((s,r)=>s+Math.min(r.qty_scanned||0, r.qty_required||0),0);
+    const pct = totalReq>0 ? Math.round(totalScan/totalReq*100) : 0;
+    document.getElementById('progressText').textContent = `${totalScan.toLocaleString()} / ${totalReq.toLocaleString()} (${pct}%)`;
+    document.getElementById('progressBar').style.width = pct + '%';
+  }
+
+  // ══ 스캔 입력 처리 ══
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('workView').style.display !== 'flex') return;
+    if (e.target.id === 'scanInput' && e.key === 'Enter') {
+      const val = e.target.value;
+      e.target.value = '';
+      processScan(val);
+    }
+  });
+
+  function findItemByLgPn(pn) {
+    return itemsMaster.find(m => m.lg_pn === pn);
+  }
+
+  async function ensureWorkerRecorded() {
+    if (currentSchedule.lot_status === '대기' || !currentSchedule.lot_status) {
+      const name = prompt('출하LOT관리 작업을 시작합니다.\n작업자 이름을 입력해주세요 (부서 무관):');
+      if (!name || !name.trim()) return false;
+      workerName = name.trim();
+      const now = new Date().toISOString();
+      await sbPatch('ship_schedule', currentSid, {
+        lot_status: '진행중', lot_started_at: now, lot_started_by: workerName
+      });
+      currentSchedule.lot_status = '진행중';
+      currentSchedule.lot_started_by = workerName;
+      document.getElementById('wWorker').textContent = workerName;
+      document.getElementById('wStatusPill').textContent = '진행중';
+      document.getElementById('wStatusPill').className = 'status-pill 진행중';
+    } else {
+      workerName = workerName || currentSchedule.lot_started_by || '작업자';
+    }
+    return true;
+  }
+
+  async function processScan(raw) {
+    raw = (raw||'').trim();
+    if (!raw) return;
+
+    const ok = await ensureWorkerRecorded();
+    if (!ok) return;
+
+    if (raw.indexOf('!') >= 0) {
+      // ── QR 타입: PN!QTY!필드3!필드4 (1회 완결) ──
+      const parts = raw.split('!');
+      const pn = parts[0];
+      const qty = parseFloat(parts[1]) || 0;
+      const item = findItemByLgPn(pn);
+      const itemCode = item ? item.item_code : null;
+
+      const log = await sbPost('ship_lot_log', {
+        ship_schedule_id: currentSid, item_code: itemCode, scan_type: 'QR',
+        raw_scan: raw, parsed_pn: pn, parsed_qty: qty, parsed_lot: raw,
+        pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
+      });
+      logRows.unshift(Array.isArray(log)?log[0]:log);
+      if (itemCode) await accumulateQty(itemCode, qty);
+      showToast(itemCode ? `✓ ${itemCode} ${qty.toLocaleString()}개 인식` : '⚠ 미등록 품번입니다 (items 마스터 확인 필요)', !itemCode);
+
+    } else {
+      // ── 바코드 타입: 품번+수량 또는 LOT 단독 (2회 스캔 조합) ──
+      const clean = raw.replace(/\s+/g,'');
+      const m = clean.length >= 12 ? clean.match(/^(.{11})(\d+)$/) : null;
+
+      if (m) {
+        // 품번+수량 바코드
+        const pn = m[1], qty = parseInt(m[2],10);
+        const item = findItemByLgPn(pn);
+        const itemCode = item ? item.item_code : null;
+
+        if (pendingLOT) {
+          // LOT이 먼저 와서 대기중이던 상태 → 짝 완성
+          await completePair(itemCode, pn, qty, raw, pendingLOT);
+          pendingLOT = null;
+        } else {
+          const log = await sbPost('ship_lot_log', {
+            ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
+            raw_scan: raw, parsed_pn: pn, parsed_qty: qty,
+            pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
+          });
+          const logObj = Array.isArray(log)?log[0]:log;
+          logRows.unshift(logObj);
+          pendingPN = { logId: logObj.id, pn, qty, raw, itemCode };
+          showToast('품번 인식됨 · LOT 바코드를 이어서 스캔해주세요');
+        }
+      } else {
+        // LOT 바코드로 간주
+        if (pendingPN) {
+          await completePairFromPN(pendingPN, raw);
+          pendingPN = null;
+        } else {
+          const log = await sbPost('ship_lot_log', {
+            ship_schedule_id: currentSid, item_code: null, scan_type: '바코드2_LOT',
+            raw_scan: raw, parsed_lot: raw,
+            pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
+          });
+          const logObj = Array.isArray(log)?log[0]:log;
+          logRows.unshift(logObj);
+          pendingLOT = { logId: logObj.id, raw };
+          showToast('LOT 인식됨 · 품번 바코드를 이어서 스캔해주세요');
+        }
+      }
+    }
+    renderLogTable();
+    renderItemTable();
+    updateProgress();
+    document.getElementById('scanInput').focus();
+  }
+
+  async function completePairFromPN(pn_obj, lotRaw) {
+    await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, pair_status: '완결' });
+    const idx = logRows.findIndex(r=>r.id===pn_obj.logId);
+    if (idx>=0) { logRows[idx].parsed_lot = lotRaw; logRows[idx].pair_status = '완결'; }
+    if (pn_obj.itemCode) await accumulateQty(pn_obj.itemCode, pn_obj.qty);
+    showToast(pn_obj.itemCode ? `✓ ${pn_obj.itemCode} ${pn_obj.qty.toLocaleString()}개 짝완성` : '⚠ 미매칭 품번 짝완성', !pn_obj.itemCode);
+  }
+
+  async function completePair(itemCode, pn, qty, pnRaw, lot_obj) {
+    // 새 품번스캔이 나중에 들어와서 기존 대기중 LOT과 짝짓는 경우
+    const log = await sbPost('ship_lot_log', {
+      ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
+      raw_scan: pnRaw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot_obj.raw,
+      pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
+    });
+    logRows.unshift(Array.isArray(log)?log[0]:log);
+    await sbPatch('ship_lot_log', lot_obj.logId, { item_code: itemCode, pair_status: '완결' });
+    const idx = logRows.findIndex(r=>r.id===lot_obj.logId);
+    if (idx>=0) { logRows[idx].item_code = itemCode; logRows[idx].pair_status = '완결'; }
+    if (itemCode) await accumulateQty(itemCode, qty);
+    showToast(itemCode ? `✓ ${itemCode} ${qty.toLocaleString()}개 짝완성` : '⚠ 미매칭 품번 짝완성', !itemCode);
+  }
+
+  async function accumulateQty(itemCode, qty) {
+    const row = itemRows.find(r => r.item_code === itemCode);
+    if (!row) { showToast(`⚠ 거래명세표에 없는 품목입니다 (${itemCode})`, true); return; }
+    row.qty_scanned = (row.qty_scanned||0) + qty;
+    row.is_done = row.qty_scanned >= row.qty_required;
+    await sbPatch('ship_lot_item', row.id, { qty_scanned: row.qty_scanned, is_done: row.is_done });
+  }
+
+  // ══ 완료 처리 ══
+  function tryCompleteScan() {
+    const undone = itemRows.filter(r => !r.is_done);
+    if (undone.length === 0) { doComplete(null); return; }
+    document.getElementById('forceCount').textContent = undone.length;
+    document.getElementById('forceReason').value = '';
+    document.getElementById('forceModal').classList.add('show');
+  }
+  function closeForceModal(){ document.getElementById('forceModal').classList.remove('show'); }
+  function confirmForceComplete() {
+    const reason = document.getElementById('forceReason').value.trim();
+    if (!reason) { showToast('⚠ 강제완료 사유를 입력해주세요', true); return; }
+    closeForceModal();
+    doComplete(reason);
+  }
+  async function doComplete(forceReason) {
+    const now = new Date().toISOString();
+    await sbPatch('ship_schedule', currentSid, {
+      lot_status: '완료', lot_completed_at: now, lot_completed_by: workerName || currentSchedule.lot_started_by
+    });
+    showToast(forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다' : '✓ 출고검수가 완료되었습니다');
+    setTimeout(()=>backToList(), 1200);
+  }
+
+  // ══ 컬럼 리사이즈 (표준규칙 ①) ══
+  function initColResize() {
+    document.querySelectorAll('table.dtab').forEach(tab => {
+      const ths = tab.querySelectorAll('th');
+      ths.forEach(th => {
+        if (th.querySelector('.col-resizer')) {
+          const resizer = th.querySelector('.col-resizer');
+          resizer.onmousedown = (e) => {
+            e.preventDefault();
+            const startX = e.pageX; const startW = th.offsetWidth;
+            function onMove(ev) {
+              const w = Math.max(30, startW + (ev.pageX - startX));
+              th.style.width = w + 'px';
+            }
+            function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+            document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+          };
+        }
+      });
+    });
+  }
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMEKOREA 출하관리</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg:#f0f4f9;--surface:#fff;--surface2:#e8eef6;--surface3:#d8e4f0;
@@ -82,6 +83,9 @@
   .tag-p{background:rgba(14,159,110,0.1);color:var(--accent3);border:1px solid rgba(14,159,110,0.2);}
   .tag-done{background:rgba(14,159,110,0.15);color:var(--accent3);border:1px solid rgba(14,159,110,0.3);}
   .tag-edited{background:rgba(217,119,6,0.15);color:var(--warn);border:1px solid rgba(217,119,6,0.3);}
+  .tag-lot-대기{background:rgba(217,119,6,0.12);color:var(--warn);border:1px solid rgba(217,119,6,0.25);}
+  .tag-lot-진행중{background:rgba(26,86,219,0.12);color:var(--accent2);border:1px solid rgba(26,86,219,0.25);}
+  .tag-lot-완료{background:rgba(14,159,110,0.12);color:var(--accent3);border:1px solid rgba(14,159,110,0.25);}
   .card-meta{display:flex;gap:8px;font-size:10px;color:var(--muted);flex-wrap:wrap;}
   .note-text{font-size:10px;color:var(--muted);padding-top:4px;border-top:1px solid var(--border);}
   .note-text.has-note{color:var(--warn);font-weight:500;}
@@ -342,6 +346,19 @@
             </div>
           </div>
           <div class="pack-result" id="packResult">-</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full" style="background:rgba(26,86,219,0.05);border:1.5px solid rgba(26,86,219,0.2);border-radius:8px;padding:10px 12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--accent2);">
+            <input type="checkbox" id="inLotRequired" onchange="toggleLotFileArea()" style="width:16px;height:16px;">
+            📡 LOT관리 필요 (출하LOT관리 프로세스로 바코드 검수)
+          </label>
+          <div id="lotFileArea" style="display:none;margin-top:8px;">
+            <div class="form-label">거래명세표 엑셀 첨부 <span class="req">*</span></div>
+            <input type="file" class="form-input" id="inLotFile" accept=".xlsx,.xls" style="padding:5px;">
+            <div id="lotFilePreview" style="font-size:10px;color:var(--muted);margin-top:4px;"></div>
+          </div>
         </div>
       </div>
       <div class="form-row">
@@ -657,6 +674,9 @@
     const hasNote = r.note && r.note.trim() !== '' && r.note.trim() !== '-';
     const cleanArrival = (r.arrival_time && r.arrival_time !== '-') ? r.arrival_time : '';
     const packLabel = (r.pack_done && r.pack_done !== '-') ? r.pack_done : '';
+    const lotBadge = r.lot_required
+      ? `<span class="tag tag-lot-${r.lot_status||'대기'}" onclick="event.stopPropagation();location.href='ship_lot.html?sid=${r.id}'" style="cursor:pointer;">📡 LOT ${r.lot_status||'대기'}</span>`
+      : '';
 
     return `<div class="ship-card ${type}-card${isDone?' done-card':''}${isEdited?' edited-card':''}">
       <div class="card-top">
@@ -664,6 +684,7 @@
         <div class="tags">
           <span class="tag ${deptClass}">${r.input_by||'-'}</span>
           ${packLabel?`<span class="tag tag-p">${packLabel}</span>`:''}
+          ${lotBadge}
           ${isEdited?'<span class="tag tag-edited">✎ 수정됨</span>':''}
           ${isDone?'<span class="tag tag-done">출하완료</span>':''}
         </div>
@@ -827,7 +848,51 @@
     document.querySelectorAll('input[name="inputDept"]').forEach(r => r.checked = false);
     document.querySelectorAll('input[name="inputUnit"]').forEach(r => r.checked = false);
     document.getElementById('packResult').className = 'pack-result';
+    document.getElementById('inLotRequired').checked = false;
+    document.getElementById('inLotFile').value = '';
+    document.getElementById('lotFilePreview').textContent = '';
+    toggleLotFileArea();
     document.getElementById('inputModal').classList.add('show');
+  }
+
+  function toggleLotFileArea() {
+    const checked = document.getElementById('inLotRequired').checked;
+    document.getElementById('lotFileArea').style.display = checked ? 'block' : 'none';
+  }
+
+  // ── 거래명세표 엑셀 파싱 (이카운트 다운로드 포맷) ──
+  // 상단 5행: 거래명세서/전표번호/수신-거래처/출고창고/금액 메타정보
+  // 6행: 헤더(일자,품목코드,품목명[규격],수량(단위포함),단가,공급가액,부가세)
+  // 7행부터 데이터
+  function parseLotExcelFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          const items = [];
+          let headerRowIdx = -1;
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i][1] === '품목코드' || rows[i][0] === '품목코드') { headerRowIdx = i; break; }
+          }
+          if (headerRowIdx < 0) { resolve([]); return; }
+          for (let i = headerRowIdx + 1; i < rows.length; i++) {
+            const r = rows[i];
+            const itemCode = String(r[1] || '').trim();
+            if (!itemCode) continue;
+            const desc = String(r[2] || '').trim();
+            const qtyRaw = String(r[3] || '').trim(); // 예: "20,000EA"
+            const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.]/g, '')) || 0;
+            items.push({ item_code: itemCode, description: desc, qty_required: qtyNum });
+          }
+          resolve(items);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
   }
 
   function closeInputModal() {
@@ -860,10 +925,30 @@
     if (!customer) { showToast('⚠ 매출처명을 입력해주세요', true); return; }
     if (!packQty || !unit) { showToast('⚠ 포장 수량과 단위를 입력해주세요', true); return; }
 
+    const lotRequired = document.getElementById('inLotRequired').checked;
+    const lotFile = document.getElementById('inLotFile').files[0];
+    if (lotRequired && !lotFile) { showToast('⚠ LOT관리 필요 건은 거래명세표 엑셀을 첨부해주세요', true); return; }
+
     const btn = document.getElementById('inputSaveBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
 
     const now = new Date();
+
+    let lotItems = [];
+    if (lotRequired) {
+      try {
+        lotItems = await parseLotExcelFile(lotFile);
+        if (lotItems.length === 0) {
+          showToast('⚠ 거래명세표에서 품목을 찾지 못했습니다. 파일 형식을 확인해주세요', true);
+          btn.disabled = false; btn.textContent = '출하지시 등록';
+          return;
+        }
+      } catch(e) {
+        showToast('⚠ 엑셀 파싱 실패', true);
+        btn.disabled = false; btn.textContent = '출하지시 등록';
+        return;
+      }
+    }
 
     const body = {
       created_at: now.toISOString(),
@@ -874,13 +959,27 @@
       manager,
       arrival_time: arrHour ? `${arrHour}:${arrMin}` : '-',
       pack_done: `${packQty}${unit.value}`,
-      ship_done: '미완료'
+      ship_done: '미완료',
+      lot_required: lotRequired,
+      lot_status: lotRequired ? '대기' : null
     };
 
     try {
       const result = await sbPost('ship_schedule', body);
       if (Array.isArray(result) && result.length > 0) {
-        showToast('✓ 출하지시가 등록되었습니다');
+        const newId = result[0].id;
+        if (lotRequired && lotItems.length > 0) {
+          const itemBody = lotItems.map(it => ({
+            ship_schedule_id: newId,
+            item_code: it.item_code,
+            description: it.description,
+            qty_required: it.qty_required,
+            qty_scanned: 0,
+            is_done: false
+          }));
+          await sbPost('ship_lot_item', itemBody);
+        }
+        showToast(lotRequired ? '✓ 출하지시 등록 + LOT관리 항목 ' + lotItems.length + '건 등록완료' : '✓ 출하지시가 등록되었습니다');
         closeInputModal();
         loadData();
       } else {
