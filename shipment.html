@@ -170,8 +170,26 @@
   .form-group{display:flex;flex-direction:column;gap:3px;}
   .form-group.full{grid-column:1/-1;}
   .form-label{font-size:10px;font-weight:600;color:var(--muted);}
-  #inputModal .form-label{font-size:13px;font-weight:800;color:var(--accent);letter-spacing:0.2px;}
+  #inputModal .form-label{font-size:13px;font-weight:800;color:var(--text);letter-spacing:0.2px;}
   #inputModal .modal-header{cursor:move;}
+  .cust-ac-wrap{position:relative;}
+  .cust-ac-list{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1.5px solid var(--border2);border-top:none;border-radius:0 0 7px 7px;max-height:180px;overflow-y:auto;z-index:50;box-shadow:0 6px 16px rgba(0,0,0,0.12);display:none;}
+  .cust-ac-list.show{display:block;}
+  .cust-ac-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);}
+  .cust-ac-item:last-child{border-bottom:none;}
+  .cust-ac-item:hover,.cust-ac-item.active{background:var(--surface2);color:var(--accent2);}
+  .lot-dropzone{border:2px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);}
+  .lot-dropzone:hover{border-color:var(--accent2);background:rgba(26,86,219,0.04);}
+  .lot-dropzone.dragover{border-color:var(--accent2);background:rgba(26,86,219,0.1);}
+  .lot-dropzone .ldz-icon{font-size:22px;margin-bottom:4px;}
+  .lot-dropzone .ldz-text{font-size:12px;color:var(--muted);}
+  .lot-dropzone .ldz-filename{font-size:12px;font-weight:700;color:var(--accent2);margin-top:4px;}
+  .lot-preview{margin-top:10px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface);font-size:12px;}
+  .lot-preview-stat{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;font-weight:700;}
+  .lot-preview-stat span.ok{color:var(--accent3);}
+  .lot-preview-stat span.warn{color:var(--accent);}
+  .lot-preview-warn-list{max-height:110px;overflow-y:auto;border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;}
+  .lot-preview-warn-item{color:var(--accent);font-size:11px;padding:1px 0;}
   .form-label .req{color:var(--accent);}
   .form-input,.form-select,.form-textarea{padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);transition:border-color 0.2s;}
   .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent2);background:var(--surface);}
@@ -317,8 +335,10 @@
       <div class="form-row">
         <div class="form-group">
           <div class="form-label">매출처명 <span class="req">*</span></div>
-          <input type="text" class="form-input" id="inCustomer" list="customerMasterList" placeholder="목록에서 선택 또는 직접 입력" autocomplete="off">
-          <datalist id="customerMasterList"></datalist>
+          <div class="cust-ac-wrap">
+            <input type="text" class="form-input" id="inCustomer" placeholder="목록에서 선택 또는 직접 입력" autocomplete="off" oninput="onCustomerInput()" onfocus="onCustomerInput()">
+            <div class="cust-ac-list" id="custAcList"></div>
+          </div>
         </div>
         <div class="form-group">
           <div class="form-label">도착시간</div>
@@ -359,8 +379,13 @@
           </label>
           <div id="lotFileArea" style="display:none;margin-top:8px;">
             <div class="form-label">거래명세표 엑셀 첨부 <span class="req">*</span></div>
-            <input type="file" class="form-input" id="inLotFile" accept=".xlsx,.xls" style="padding:5px;">
-            <div id="lotFilePreview" style="font-size:10px;color:var(--muted);margin-top:4px;"></div>
+            <div class="lot-dropzone" id="lotDropzone" onclick="document.getElementById('inLotFile').click()">
+              <div class="ldz-icon">📄</div>
+              <div class="ldz-text">여기로 파일을 끌어다 놓거나, 클릭해서 선택하세요 (.xlsx, .xls)</div>
+              <div class="ldz-filename" id="ldzFilename"></div>
+            </div>
+            <input type="file" id="inLotFile" accept=".xlsx,.xls" style="display:none;" onchange="handleLotFileSelect(this.files[0])">
+            <div id="lotPreviewArea"></div>
           </div>
         </div>
       </div>
@@ -852,8 +877,7 @@
     document.querySelectorAll('input[name="inputUnit"]').forEach(r => r.checked = false);
     document.getElementById('packResult').className = 'pack-result';
     document.getElementById('inLotRequired').checked = false;
-    document.getElementById('inLotFile').value = '';
-    document.getElementById('lotFilePreview').textContent = '';
+    resetLotFileState();
     toggleLotFileArea();
     resetInputModalPosition();
     document.getElementById('inputModal').classList.add('show');
@@ -865,10 +889,9 @@
     if (customerMasterLoaded) return;
     try {
       const rows = await sbGet('partners', "select=name,type,is_active&order=name&limit=1000");
-      const list = (Array.isArray(rows) ? rows : [])
-        .filter(r => r.is_active !== false && (r.type === '매출처' || r.type === '매입매출처'));
-      document.getElementById('customerMasterList').innerHTML =
-        list.map(r => `<option value="${(r.name||'').replace(/"/g,'&quot;')}">`).join('');
+      customerMasterNames = (Array.isArray(rows) ? rows : [])
+        .filter(r => r.is_active !== false && (r.type === '매출처' || r.type === '매입매출처'))
+        .map(r => r.name).filter(Boolean);
       customerMasterLoaded = true;
     } catch(e) { /* 마스터 로드 실패해도 직접입력은 계속 가능 */ }
   }
@@ -910,7 +933,86 @@
   function toggleLotFileArea() {
     const checked = document.getElementById('inLotRequired').checked;
     document.getElementById('lotFileArea').style.display = checked ? 'block' : 'none';
+    if (!checked) resetLotFileState();
   }
+
+  // ── LOT 파일 상태 ──
+  let parsedLotItems = null; // 미리보기에서 파싱완료된 결과(제출시 재사용)
+
+  function resetLotFileState() {
+    parsedLotItems = null;
+    document.getElementById('inLotFile').value = '';
+    document.getElementById('ldzFilename').textContent = '';
+    document.getElementById('lotPreviewArea').innerHTML = '';
+  }
+
+  async function handleLotFileSelect(file) {
+    if (!file) return;
+    document.getElementById('ldzFilename').textContent = '📎 ' + file.name;
+    document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
+    try {
+      const parsed = await parseLotExcelFile(file);
+      if (parsed.items.length === 0) {
+        document.getElementById('lotPreviewArea').innerHTML =
+          `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ 인식된 품목이 없습니다</span></div>
+           <div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div></div>`;
+        parsedLotItems = null;
+        return;
+      }
+      const enriched = await enrichCheckType(parsed.items);
+      parsedLotItems = enriched;
+      const totalQty = enriched.reduce((s,it)=>s+it.qty_required,0);
+      const barcodeCnt = enriched.filter(it=>it.check_type==='barcode').length;
+      const manualCnt = enriched.length - barcodeCnt;
+      const warnHtml = parsed.warnings.length
+        ? `<div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>`
+        : '';
+      document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview">
+        <div class="lot-preview-stat">
+          <span class="ok">✓ 품목 ${enriched.length}건</span>
+          <span>총수량 ${totalQty.toLocaleString()}</span>
+          <span>📡 바코드검수 ${barcodeCnt}건</span>
+          <span>✍ 수기확인 ${manualCnt}건</span>
+          ${parsed.warnings.length ? `<span class="warn">⚠ 확인필요 ${parsed.warnings.length}건</span>` : ''}
+        </div>
+        ${warnHtml}
+      </div>`;
+    } catch(e) {
+      document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview"><span class="warn">⚠ 엑셀 파싱 실패: ${e.message||e}</span></div>`;
+      parsedLotItems = null;
+    }
+  }
+
+  (function initLotDropzone() {
+    const dz = document.getElementById('lotDropzone');
+    if (!dz) return;
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault(); dz.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) { document.getElementById('inLotFile').files = e.dataTransfer.files; handleLotFileSelect(file); }
+    });
+  })();
+
+  // ── 매출처명 자동완성 (partners 마스터) ──
+  let customerMasterNames = [];
+  function onCustomerInput() {
+    const val = document.getElementById('inCustomer').value.trim().toLowerCase();
+    const list = document.getElementById('custAcList');
+    if (!val) { list.classList.remove('show'); list.innerHTML=''; return; }
+    const matched = customerMasterNames.filter(n => n.toLowerCase().includes(val)).slice(0, 8);
+    if (matched.length === 0) { list.classList.remove('show'); list.innerHTML=''; return; }
+    list.innerHTML = matched.map(n => `<div class="cust-ac-item" onclick="selectCustomer('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+    list.classList.add('show');
+  }
+  function selectCustomer(name) {
+    document.getElementById('inCustomer').value = name;
+    document.getElementById('custAcList').classList.remove('show');
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.cust-ac-wrap')) document.getElementById('custAcList').classList.remove('show');
+  });
 
   // ── 거래명세표 엑셀 파싱 (이카운트 다운로드 포맷) ──
   // 상단 5행: 거래명세서/전표번호/수신-거래처/출고창고/금액 메타정보
@@ -924,22 +1026,44 @@
           const wb = XLSX.read(e.target.result, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          const items = [];
+          const warnings = [];
           let headerRowIdx = -1;
           for (let i = 0; i < rows.length; i++) {
             if (rows[i][1] === '품목코드' || rows[i][0] === '품목코드') { headerRowIdx = i; break; }
           }
-          if (headerRowIdx < 0) { resolve([]); return; }
+          if (headerRowIdx < 0) { resolve({ items: [], warnings: ['⚠ "품목코드" 헤더행을 찾지 못했습니다. 이카운트 거래명세표 다운로드 형식이 맞는지 확인해주세요.'] }); return; }
+
+          const rawItems = [];
           for (let i = headerRowIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             const itemCode = String(r[1] || '').trim();
-            if (!itemCode) continue;
             const desc = String(r[2] || '').trim();
             const qtyRaw = String(r[3] || '').trim(); // 예: "20,000EA"
+            if (!itemCode && !desc && !qtyRaw) continue; // 완전 빈행은 무시
+            if (!itemCode) { warnings.push(`⚠ ${i+1}행: 품목코드가 없어 제외됨 (품명: ${desc||'-'})`); continue; }
             const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.]/g, '')) || 0;
-            items.push({ item_code: itemCode, description: desc, qty_required: qtyNum });
+            if (qtyNum <= 0) warnings.push(`⚠ ${itemCode}: 수량 인식 실패 또는 0 (원본값: "${qtyRaw}")`);
+            rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum });
           }
-          resolve(items);
+
+          // 품목코드 중복 합산
+          const map = new Map();
+          rawItems.forEach(it => {
+            if (map.has(it.item_code)) {
+              const ex = map.get(it.item_code);
+              ex.qty_required += it.qty_required;
+              ex._dupCount = (ex._dupCount||1) + 1;
+            } else {
+              map.set(it.item_code, { ...it, _dupCount: 1 });
+            }
+          });
+          const items = Array.from(map.values());
+          items.forEach(it => {
+            if (it._dupCount > 1) warnings.push(`ℹ ${it.item_code}: 품목코드 중복 ${it._dupCount}건 → 수량 합산 처리(${it.qty_required.toLocaleString()})`);
+            delete it._dupCount;
+          });
+
+          resolve({ items, warnings });
         } catch (err) { reject(err); }
       };
       reader.onerror = reject;
@@ -1004,30 +1128,16 @@
     if (!packQty || !unit) { showToast('⚠ 포장 수량과 단위를 입력해주세요', true); return; }
 
     const lotRequired = document.getElementById('inLotRequired').checked;
-    const lotFile = document.getElementById('inLotFile').files[0];
-    if (lotRequired && !lotFile) { showToast('⚠ LOT관리 필요 건은 거래명세표 엑셀을 첨부해주세요', true); return; }
+    if (lotRequired && (!parsedLotItems || parsedLotItems.length === 0)) {
+      showToast('⚠ 거래명세표 엑셀을 첨부하고 미리보기에서 정상 인식되어야 등록할 수 있습니다', true);
+      return;
+    }
 
     const btn = document.getElementById('inputSaveBtn');
     btn.disabled = true; btn.textContent = '등록 중...';
 
     const now = new Date();
-
-    let lotItems = [];
-    if (lotRequired) {
-      try {
-        lotItems = await parseLotExcelFile(lotFile);
-        if (lotItems.length === 0) {
-          showToast('⚠ 거래명세표에서 품목을 찾지 못했습니다. 파일 형식을 확인해주세요', true);
-          btn.disabled = false; btn.textContent = '출하지시 등록';
-          return;
-        }
-        lotItems = await enrichCheckType(lotItems);
-      } catch(e) {
-        showToast('⚠ 엑셀 파싱 실패', true);
-        btn.disabled = false; btn.textContent = '출하지시 등록';
-        return;
-      }
-    }
+    const lotItems = lotRequired ? parsedLotItems : [];
 
     const body = {
       created_at: now.toISOString(),
