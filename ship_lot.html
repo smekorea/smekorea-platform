@@ -133,6 +133,11 @@
   .hist-filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow);}
   .hist-filter-bar input,.hist-filter-bar select{padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;}
   .hist-table-wrap{background:var(--surface);border-radius:9px;overflow-x:auto;overflow-y:hidden;box-shadow:var(--shadow);}
+  .hist-item-suggest{display:none;position:absolute;top:100%;left:0;margin-top:2px;background:var(--surface);border:1px solid var(--border2);border-radius:7px;box-shadow:0 6px 18px rgba(20,30,60,0.15);width:280px;max-height:260px;overflow-y:auto;z-index:50;}
+  .hist-item-suggest .sug-row{padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);}
+  .hist-item-suggest .sug-row:last-child{border-bottom:none;}
+  .hist-item-suggest .sug-row:hover{background:var(--surface2);}
+  .hist-item-suggest .sug-code{font-family:'Share Tech Mono',monospace;font-weight:700;color:var(--accent2);margin-right:6px;}
 
   table.dtab{border-collapse:collapse;table-layout:fixed;}
   table.dtab th{position:relative;user-select:none;background:var(--navy);color:#c9d6ec;padding:8px;font-size:10px;font-weight:700;text-align:left;border-bottom:2px solid var(--navy2);cursor:pointer;white-space:nowrap;overflow:hidden;}
@@ -254,7 +259,7 @@
                 <th style="width:60px;">구분<div class="col-resizer"></div></th>
                 <th style="width:65px;">필요수량<div class="col-resizer"></div></th>
                 <th style="width:65px;">진행/확인<div class="col-resizer"></div></th>
-                <th style="width:36px;">상태</th>
+                <th style="width:36px;">상태<div class="col-resizer"></div></th>
               </tr></thead>
               <tbody id="itemTbody2"></tbody>
             </table>
@@ -305,6 +310,10 @@
     <span style="color:var(--muted);">~</span>
     <input type="date" id="histTo">
     <input type="text" id="histCustomer" placeholder="매출처명 검색">
+    <div style="position:relative;display:inline-block;">
+      <input type="text" id="histItemSearch" placeholder="품명 검색" autocomplete="off" oninput="onHistItemSearchInput()" onblur="setTimeout(()=>hideHistItemSuggest(),150)">
+      <div id="histItemSuggest" class="hist-item-suggest"></div>
+    </div>
     <select id="histResult">
       <option value="all">전체결과</option>
       <option value="완결">완결</option>
@@ -322,10 +331,12 @@
         <th style="width:60px;">타입<div class="col-resizer"></div></th>
         <th>원본값(LOT)<div class="col-resizer"></div></th>
         <th style="width:100px;">매칭품번<div class="col-resizer"></div></th>
+        <th style="width:75px;">지시수량<div class="col-resizer"></div></th>
+        <th style="width:75px;">리딩수량<div class="col-resizer"></div></th>
         <th style="width:70px;">결과<div class="col-resizer"></div></th>
         <th style="width:80px;">작업자<div class="col-resizer"></div></th>
       </tr></thead>
-      <tbody id="histTbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted);">조회 버튼을 눌러 이력을 검색하세요</td></tr></tbody>
+      <tbody id="histTbody"><tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted);">조회 버튼을 눌러 이력을 검색하세요</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -438,6 +449,18 @@
   let itemRows = [];
   let logRows = [];
   let itemsMaster = [];
+  async function ensureItemsMaster() {
+    if (itemsMaster.length > 0) return;
+    let pg = 0, all = [];
+    while (true) {
+      const chunk = await sbGet('items', `select=item_code,lg_pn,description,maker&order=id&limit=1000&offset=${pg*1000}`);
+      if (!Array.isArray(chunk) || chunk.length === 0) break;
+      all = all.concat(chunk);
+      if (chunk.length < 1000) break;
+      pg++;
+    }
+    itemsMaster = all;
+  }
   let pendingPN = null;
   let pendingLOT = null;
   let workerName = null;
@@ -458,6 +481,7 @@
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     });
     if (tab === 'makers') loadScanMakers();
+    if (tab === 'history') ensureItemsMaster();
   }
 
   // ══ 목록 탭 ══
@@ -537,17 +561,7 @@
     }
     document.getElementById('scanInput').disabled = !workerName;
 
-    if (itemsMaster.length === 0) {
-      let pg = 0, all = [];
-      while (true) {
-        const chunk = await sbGet('items', `select=item_code,lg_pn,description,maker&order=id&limit=1000&offset=${pg*1000}`);
-        if (!Array.isArray(chunk) || chunk.length === 0) break;
-        all = all.concat(chunk);
-        if (chunk.length < 1000) break;
-        pg++;
-      }
-      itemsMaster = all;
-    }
+    await ensureItemsMaster();
 
     const items = await sbGet('ship_lot_item', 'ship_schedule_id=eq.' + sid + '&order=id');
     if (!Array.isArray(items)) {
@@ -624,22 +638,62 @@
     win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>거래명세표 - ${currentSchedule?currentSchedule.customer:''}</title>
       <style>
         @page{ size: portrait; margin: 14mm; }
+        *{box-sizing:border-box;}
         body{font-family:'Noto Sans KR',sans-serif;padding:20px;color:#111;}
         h1{font-size:18px;margin-bottom:6px;}
         .meta{font-size:13px;color:#222;font-weight:700;margin-bottom:16px;line-height:1.6;}
-        table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+        .print-hint{font-size:11px;color:#888;margin-bottom:8px;}
+        table{border-collapse:collapse;font-size:12px;table-layout:fixed;}
         th,td{border:1px solid #999;padding:6px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        th:nth-child(1){width:32px;} th:nth-child(2){width:85px;} th:nth-child(3){width:auto;}
-        th:nth-child(4){width:75px;} th:nth-child(5){width:70px;} th:nth-child(6){width:70px;} th:nth-child(7){width:70px;}
+        th{background:#eee;position:relative;user-select:none;}
         td:nth-child(3){white-space:normal;}
-        th{background:#eee;}
-        @media print{ button{display:none;} }
+        .col-resizer{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;}
+        @media print{ button{display:none;} .print-hint{display:none;} .col-resizer{display:none;} }
       </style></head><body>
       <h1>출하LOT관리 - 거래명세표 픽킹리스트</h1>
       <div class="meta">매출처: ${currentSchedule?currentSchedule.customer:'-'} &nbsp;·&nbsp; 출하예정일: ${currentSchedule?currentSchedule.ship_date:'-'} &nbsp;·&nbsp; 작업지시자: ${currentSchedule?currentSchedule.manager:'-'} &nbsp;·&nbsp; 출력일시: ${new Date().toLocaleString('ko-KR')}</div>
-      <table><thead><tr><th>#</th><th>품번</th><th>품명</th><th>브랜드명</th><th>구분</th><th>필요수량</th><th>실물확인✓</th></tr></thead>
+      <div class="print-hint">↔ 컬럼 경계를 드래그하면 폭을 조절할 수 있습니다 (조절한 폭 그대로 인쇄됩니다)</div>
+      <table id="printTable"><thead><tr>
+        <th style="width:32px;">#<div class="col-resizer"></div></th>
+        <th style="width:85px;">품번<div class="col-resizer"></div></th>
+        <th style="width:300px;">품명<div class="col-resizer"></div></th>
+        <th style="width:75px;">브랜드명<div class="col-resizer"></div></th>
+        <th style="width:70px;">구분<div class="col-resizer"></div></th>
+        <th style="width:70px;">필요수량<div class="col-resizer"></div></th>
+        <th style="width:70px;">실물확인✓</th>
+      </tr></thead>
       <tbody>${rowsHtml}</tbody></table>
       <button onclick="window.print()" style="margin-top:16px;padding:8px 16px;">🖨 인쇄하기</button>
+      <script>
+        (function(){
+          var table = document.getElementById('printTable');
+          function applyWidth(){
+            var sum = 0;
+            table.querySelectorAll('th').forEach(function(th){ sum += parseInt(th.style.width)||th.offsetWidth||0; });
+            table.style.width = sum + 'px';
+          }
+          applyWidth();
+          table.querySelectorAll('th').forEach(function(th){
+            var resizer = th.querySelector('.col-resizer');
+            if (!resizer) return;
+            resizer.addEventListener('mousedown', function(e){
+              e.preventDefault();
+              var startX = e.pageX, startW = th.offsetWidth;
+              function onMove(ev){
+                var w = Math.max(30, startW + (ev.pageX - startX));
+                th.style.width = w + 'px';
+                applyWidth();
+              }
+              function onUp(){
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+              }
+              document.addEventListener('mousemove', onMove);
+              document.addEventListener('mouseup', onUp);
+            });
+          });
+        })();
+      <\/script>
       </body></html>`);
     win.document.close();
   }
@@ -846,9 +900,10 @@
     const from = document.getElementById('histFrom').value;
     const to = document.getElementById('histTo').value;
     const custFilter = document.getElementById('histCustomer').value.trim();
+    const itemFilter = document.getElementById('histItemSearch').value.trim();
     const resultFilter = document.getElementById('histResult').value;
 
-    document.getElementById('histTbody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
+    document.getElementById('histTbody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
 
     let q = 'order=scanned_at.desc&limit=1000';
     if (from) q += '&scanned_at=gte.' + from + 'T00:00:00';
@@ -862,6 +917,15 @@
       else rows = rows.filter(r => r.pair_status === resultFilter);
     }
 
+    if (itemFilter) {
+      await ensureItemsMaster();
+      const kw = itemFilter.toLowerCase();
+      const matchCodes = new Set(itemsMaster.filter(it =>
+        (it.description||'').toLowerCase().includes(kw) || (it.item_code||'').toLowerCase().includes(kw)
+      ).map(it => it.item_code));
+      rows = rows.filter(r => r.item_code && matchCodes.has(r.item_code));
+    }
+
     const sids = [...new Set(rows.map(r => r.ship_schedule_id))];
     let schedMap = {};
     if (sids.length > 0) {
@@ -871,12 +935,26 @@
     }
     if (custFilter) rows = rows.filter(r => (schedMap[r.ship_schedule_id]||'').toLowerCase().includes(custFilter.toLowerCase()));
 
-    historyResults = rows.map(r => ({ ...r, _customer: schedMap[r.ship_schedule_id] || '-' }));
+    // 지시수량 매핑: (일정ID + 품번) 기준으로 ship_lot_item에서 현재값 조회
+    let qtyReqMap = {};
+    if (sids.length > 0) {
+      const chunk = sids.slice(0, 200).join(',');
+      const itemRowsForQty = await sbGet('ship_lot_item', `ship_schedule_id=in.(${chunk})&select=ship_schedule_id,item_code,qty_required`);
+      if (Array.isArray(itemRowsForQty)) {
+        itemRowsForQty.forEach(ir => { qtyReqMap[ir.ship_schedule_id + '_' + ir.item_code] = ir.qty_required; });
+      }
+    }
+
+    historyResults = rows.map(r => ({
+      ...r,
+      _customer: schedMap[r.ship_schedule_id] || '-',
+      _qtyRequired: qtyReqMap[r.ship_schedule_id + '_' + r.item_code]
+    }));
     renderHistoryTable();
   }
   function renderHistoryTable() {
     if (historyResults.length === 0) {
-      document.getElementById('histTbody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">조회 결과가 없습니다</td></tr>';
+      document.getElementById('histTbody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted);">조회 결과가 없습니다</td></tr>';
       return;
     }
     document.getElementById('histTbody').innerHTML = historyResults.map(r => {
@@ -885,16 +963,41 @@
         : '<span class="tag-scan tag-b2">LOT</span>';
       const resultBadge = !r.item_code ? '<span class="badge-red">미매칭</span>'
         : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? `<span style="color:var(--warn);font-weight:700;">짝대기</span>` : `<span style="color:var(--accent3);font-weight:700;">완결</span>`);
+      const qtyReq = (r._qtyRequired!=null) ? r._qtyRequired.toLocaleString() : '-';
+      const qtyScan = (r.parsed_qty!=null) ? r.parsed_qty.toLocaleString() : '-';
       return `<tr>
         <td class="mono">${fmtDT(r.scanned_at)}</td>
         <td>${r._customer}</td>
         <td>${typeTag}</td>
         <td class="mono" title="${r.raw_scan||''}">${r.raw_scan||''}</td>
         <td class="mono">${r.item_code||'-'}</td>
+        <td class="mono" style="text-align:right;">${qtyReq}</td>
+        <td class="mono" style="text-align:right;">${qtyScan}</td>
         <td>${resultBadge}</td>
         <td>${r.scanned_by||'-'}</td>
       </tr>`;
     }).join('');
+  }
+  function onHistItemSearchInput() {
+    const kw = document.getElementById('histItemSearch').value.trim().toLowerCase();
+    const box = document.getElementById('histItemSuggest');
+    if (!kw) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const matches = itemsMaster.filter(it =>
+      (it.description||'').toLowerCase().includes(kw) || (it.item_code||'').toLowerCase().includes(kw)
+    ).slice(0, 20);
+    if (matches.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = matches.map(it =>
+      `<div class="sug-row" onmousedown="selectHistItem('${(it.item_code||'').replace(/'/g,"\\'")}')"><span class="sug-code">${it.item_code||''}</span>${it.description||''}</div>`
+    ).join('');
+    box.style.display = 'block';
+  }
+  function hideHistItemSuggest() {
+    document.getElementById('histItemSuggest').style.display = 'none';
+  }
+  function selectHistItem(code) {
+    const it = itemsMaster.find(x => x.item_code === code);
+    document.getElementById('histItemSearch').value = it ? (it.description || it.item_code) : code;
+    hideHistItemSuggest();
   }
   function fmtDT(v) {
     if (!v) return '-';
@@ -1033,6 +1136,14 @@
     loadScanMakers();
   }
 
+  function applyTableWidth(table) {
+    // table-layout:fixed라도 테이블 자체가 auto width면 긴 텍스트(white-space:nowrap)가
+    // 테이블 전체를 늘려버리므로, 컬럼 폭 합계를 테이블에 명시적으로 고정한다.
+    let sum = 0;
+    table.querySelectorAll('th').forEach(th => { sum += parseInt(th.style.width) || th.offsetWidth || 0; });
+    table.style.width = sum + 'px';
+  }
+
   function initColResize(tableId, storageKey) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -1047,6 +1158,7 @@
       const w = saved[i] || inlineW || th.offsetWidth || 100;
       th.style.width = w + 'px';
     });
+    applyTableWidth(table);
 
     ths.forEach((th, i) => {
       const resizer = th.querySelector('.col-resizer');
@@ -1057,6 +1169,7 @@
         function onMove(ev) {
           const w = Math.max(30, startW + (ev.pageX - startX));
           th.style.width = w + 'px';
+          applyTableWidth(table);
         }
         function onUp() {
           document.removeEventListener('mousemove', onMove);
