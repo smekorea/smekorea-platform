@@ -331,12 +331,13 @@
         <th style="width:60px;">타입<div class="col-resizer"></div></th>
         <th>원본값(LOT)<div class="col-resizer"></div></th>
         <th style="width:100px;">매칭품번<div class="col-resizer"></div></th>
+        <th style="width:60px;">산지<div class="col-resizer"></div></th>
         <th style="width:75px;">지시수량<div class="col-resizer"></div></th>
         <th style="width:75px;">리딩수량<div class="col-resizer"></div></th>
         <th style="width:70px;">결과<div class="col-resizer"></div></th>
         <th style="width:80px;">작업자<div class="col-resizer"></div></th>
       </tr></thead>
-      <tbody id="histTbody"><tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted);">조회 버튼을 눌러 이력을 검색하세요</td></tr></tbody>
+      <tbody id="histTbody"><tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted);">조회 버튼을 눌러 이력을 검색하세요</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -732,6 +733,19 @@
 
   function findItemByLgPn(pn) { return itemsMaster.find(m => m.lg_pn === pn); }
 
+  // ══ 산지 판정 (FOSAN 중국 / TA-I 대만) ══
+  // LOT 값에 '-' 구분자가 있으면 그 뒤 문자가 F로 시작하면 FOSAN, 숫자면 TA-I
+  // '-' 없이 바코드 단독(예: 606F100401)인 경우 숫자+F+숫자 패턴이면 FOSAN
+  // 그 외(제조사 자체 바코드 등)는 판정 불가 → null
+  function detectOrigin(lotStr) {
+    if (!lotStr) return null;
+    const s = String(lotStr);
+    const dashMatch = s.match(/-([A-Za-z0-9]+)/);
+    if (dashMatch) return /^F/i.test(dashMatch[1]) ? 'FOSAN' : 'TA-I';
+    if (/^\d+F\d+$/i.test(s)) return 'FOSAN';
+    return null;
+  }
+
   // ══ OK/NG 오버레이 - mfg_lot 스타일 (짧게 표시 후 자동 사라지고 바로 다음 스캔) ══
   let overlayTimer = null;
   function showOkOverlay(ok, text, sub) {
@@ -768,12 +782,15 @@
       const parts = raw.split('!');
       const pn = parts[0];
       const qty = parseFloat(parts[1]) || 0;
+      const lotPart = parts[2] || '';
+      const lot = parts.slice(2).join('!');
+      const origin = detectOrigin(lotPart);
       const item = findItemByLgPn(pn);
       const itemCode = item ? item.item_code : null;
 
       const log = await sbPost('ship_lot_log', {
         ship_schedule_id: currentSid, item_code: itemCode, scan_type: 'QR',
-        raw_scan: raw, parsed_pn: pn, parsed_qty: qty, parsed_lot: raw,
+        raw_scan: raw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot, origin: origin,
         pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
       });
       logRows.unshift(Array.isArray(log)?log[0]:log);
@@ -828,7 +845,7 @@
         } else {
           const log = await sbPost('ship_lot_log', {
             ship_schedule_id: currentSid, item_code: null, scan_type: '바코드2_LOT',
-            raw_scan: raw, parsed_lot: raw,
+            raw_scan: raw, parsed_lot: raw, origin: detectOrigin(raw),
             pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
           });
           const logObj = Array.isArray(log)?log[0]:log;
@@ -843,16 +860,18 @@
   }
 
   async function completePairFromPN(pn_obj, lotRaw) {
-    await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, pair_status: '완결' });
+    const origin = detectOrigin(lotRaw);
+    await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, origin: origin, pair_status: '완결' });
     const idx = logRows.findIndex(r=>r.id===pn_obj.logId);
-    if (idx>=0) { logRows[idx].parsed_lot = lotRaw; logRows[idx].pair_status = '완결'; }
+    if (idx>=0) { logRows[idx].parsed_lot = lotRaw; logRows[idx].origin = origin; logRows[idx].pair_status = '완결'; }
     if (pn_obj.itemCode) await accumulateQty(pn_obj.itemCode, pn_obj.qty);
   }
 
   async function completePair(itemCode, pn, qty, pnRaw, lot_obj) {
+    const origin = detectOrigin(lot_obj.raw);
     const log = await sbPost('ship_lot_log', {
       ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
-      raw_scan: pnRaw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot_obj.raw,
+      raw_scan: pnRaw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot_obj.raw, origin: origin,
       pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
     });
     logRows.unshift(Array.isArray(log)?log[0]:log);
@@ -903,7 +922,7 @@
     const itemFilter = document.getElementById('histItemSearch').value.trim();
     const resultFilter = document.getElementById('histResult').value;
 
-    document.getElementById('histTbody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
+    document.getElementById('histTbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
 
     let q = 'order=scanned_at.desc&limit=1000';
     if (from) q += '&scanned_at=gte.' + from + 'T00:00:00';
@@ -954,7 +973,7 @@
   }
   function renderHistoryTable() {
     if (historyResults.length === 0) {
-      document.getElementById('histTbody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted);">조회 결과가 없습니다</td></tr>';
+      document.getElementById('histTbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted);">조회 결과가 없습니다</td></tr>';
       return;
     }
     document.getElementById('histTbody').innerHTML = historyResults.map(r => {
@@ -965,12 +984,16 @@
         : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? `<span style="color:var(--warn);font-weight:700;">짝대기</span>` : `<span style="color:var(--accent3);font-weight:700;">완결</span>`);
       const qtyReq = (r._qtyRequired!=null) ? r._qtyRequired.toLocaleString() : '-';
       const qtyScan = (r.parsed_qty!=null) ? r.parsed_qty.toLocaleString() : '-';
+      const originTag = r.origin==='FOSAN' ? '<span class="tag-scan" style="background:rgba(217,119,6,0.12);color:var(--warn);border:1px solid rgba(217,119,6,0.25);" title="FOSAN(중국)">FOSAN</span>'
+        : r.origin==='TA-I' ? '<span class="tag-scan" style="background:rgba(14,159,110,0.12);color:var(--accent3);border:1px solid rgba(14,159,110,0.25);" title="TA-I(대만)">TA-I</span>'
+        : '<span style="color:var(--muted);">-</span>';
       return `<tr>
         <td class="mono">${fmtDT(r.scanned_at)}</td>
         <td>${r._customer}</td>
         <td>${typeTag}</td>
         <td class="mono" title="${r.raw_scan||''}">${r.raw_scan||''}</td>
         <td class="mono">${r.item_code||'-'}</td>
+        <td style="text-align:center;">${originTag}</td>
         <td class="mono" style="text-align:right;">${qtyReq}</td>
         <td class="mono" style="text-align:right;">${qtyScan}</td>
         <td>${resultBadge}</td>
@@ -1009,7 +1032,8 @@
     if (historyResults.length === 0) { showToast('⚠ 내보낼 데이터가 없습니다', true); return; }
     const data = historyResults.map(r => ({
       '일시': r.scanned_at, '매출처': r._customer, '타입': r.scan_type,
-      '원본값': r.raw_scan, '매칭품번': r.item_code||'', 'LOT': r.parsed_lot||'',
+      '원본값': r.raw_scan, '매칭품번': r.item_code||'', 'LOT': r.parsed_lot||'', '산지': r.origin||'',
+      '지시수량': r._qtyRequired!=null ? r._qtyRequired : '', '리딩수량': r.parsed_qty!=null ? r.parsed_qty : '',
       '결과': !r.item_code ? '미매칭' : r.pair_status, '작업자': r.scanned_by||''
     }));
     const ws = XLSX.utils.json_to_sheet(data);
