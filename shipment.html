@@ -178,6 +178,9 @@
   .cust-ac-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);}
   .cust-ac-item:last-child{border-bottom:none;}
   .cust-ac-item:hover,.cust-ac-item.active{background:var(--surface2);color:var(--accent2);}
+  .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .btn-primary-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--accent3);background:var(--accent3);color:#fff;font-size:11px;font-weight:700;cursor:pointer;}
+  .btn-ghost-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;}
   .lot-dropzone{border:2px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);}
   .lot-dropzone:hover{border-color:var(--accent2);background:rgba(26,86,219,0.04);}
   .lot-dropzone.dragover{border-color:var(--accent2);background:rgba(26,86,219,0.1);}
@@ -313,23 +316,36 @@
       <button class="modal-close" onclick="closeInputModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-group full">
+      <div class="form-row form-row-3">
+        <div class="form-group">
           <div class="form-label">입력 부서 <span class="req">*</span></div>
-          <div class="radio-group">
-            <div class="radio-btn"><input type="radio" name="inputDept" id="dept1" value="자재구매"><label for="dept1">자재구매</label></div>
-            <div class="radio-btn"><input type="radio" name="inputDept" id="dept2" value="개발구매"><label for="dept2">개발구매</label></div>
-          </div>
+          <select class="form-input" id="inDeptSelect" onchange="onInDeptChange()">
+            <option value="">부서 선택</option>
+          </select>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-group">
           <div class="form-label">담당자 <span class="req">*</span></div>
-          <input type="text" class="form-input" id="inManager" placeholder="이름 입력">
+          <select class="form-input" id="inManagerSelect">
+            <option value="">부서 먼저 선택</option>
+          </select>
         </div>
         <div class="form-group">
           <div class="form-label">출하일자 <span class="req">*</span></div>
           <input type="date" class="form-input" id="inShipDate">
+        </div>
+      </div>
+      <div class="form-row form-row-3">
+        <div class="form-group">
+          <div class="form-label">전달받는 부서</div>
+          <select class="form-input" id="inRecvDeptSelect" onchange="onRecvDeptChange()">
+            <option value="">부서 선택</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column: span 2;">
+          <div class="form-label">전달받는 담당자</div>
+          <select class="form-input" id="inRecvManagerSelect">
+            <option value="">부서 먼저 선택</option>
+          </select>
         </div>
       </div>
       <div class="form-row">
@@ -698,13 +714,15 @@
   function renderCard(r, type) {
     const isDone = r.ship_done === '완료';
     const isEdited = r.updated_at && r.updated_at.trim() !== '';
-    const deptClass = r.input_by === '자재구매' ? 'tag-m' : 'tag-d';
+    const deptClass = (r.input_by||'').indexOf('자재구매') >= 0 ? 'tag-m' : 'tag-d';
     const hasNote = r.note && r.note.trim() !== '' && r.note.trim() !== '-';
     const cleanArrival = (r.arrival_time && r.arrival_time !== '-') ? r.arrival_time : '';
     const packLabel = (r.pack_done && r.pack_done !== '-') ? r.pack_done : '';
-    const lotBadge = r.lot_required
+    const lotRequired = r.lot_required === true || r.lot_required === 'true' || r.lot_required === 't';
+    const lotBadge = lotRequired
       ? `<span class="tag tag-lot-${r.lot_status||'대기'}" onclick="event.stopPropagation();location.href='ship_lot.html?sid=${r.id}'" style="cursor:pointer;">📡 LOT ${r.lot_status||'대기'}</span>`
       : '';
+    const recvInfo = (r.recv_dept || r.recv_manager) ? `<span>📥 ${r.recv_dept||''} ${r.recv_manager||''}</span>` : '';
 
     return `<div class="ship-card ${type}-card${isDone?' done-card':''}${isEdited?' edited-card':''}">
       <div class="card-top">
@@ -720,12 +738,14 @@
       <div class="card-meta">
         <span>👤 ${r.manager||'-'}</span>
         ${cleanArrival?`<span>🕐 ${cleanArrival}</span>`:''}
+        ${recvInfo}
         ${r.created_at?`<span>📝 ${fmtDatetime(r.created_at)}</span>`:''}
       </div>
       ${hasNote?`<div class="note-text has-note">⚠ ${r.note}</div>`:''}
       ${isEdited?`<div class="edit-history">✎ ${fmtDatetime(r.updated_at)} · ${r.updated_by||''} · ${r.update_reason||''}</div>`:''}
       ${!isDone?`<div class="card-actions">
         <button class="action-btn edit-btn" onclick="openEditModal(${r.id})">✏ 수정</button>
+        ${lotRequired?`<button class="action-btn" style="background:rgba(26,86,219,0.1);color:var(--accent2);border:1px solid rgba(26,86,219,0.25);" onclick="event.stopPropagation();location.href='ship_lot.html?sid=${r.id}'">📋 출하리스트확인(거래명세표)</button>`:''}
         <button class="action-btn complete-btn" onclick="markComplete(${r.id})">출하 완료</button>
         <button class="action-btn del-btn" onclick="deleteRecord(${r.id})">삭제</button>
       </div>`:''}
@@ -867,13 +887,15 @@
   // ── 입력 모달 ──
   function openInputModal() {
     document.getElementById('inShipDate').value = todayStr();
-    document.getElementById('inManager').value = '';
+    document.getElementById('inDeptSelect').value = '';
+    document.getElementById('inManagerSelect').innerHTML = '<option value="">부서 먼저 선택</option>';
+    document.getElementById('inRecvDeptSelect').value = '';
+    document.getElementById('inRecvManagerSelect').innerHTML = '<option value="">부서 먼저 선택</option>';
     document.getElementById('inCustomer').value = '';
     document.getElementById('inNote').value = '';
     document.getElementById('inPackQty').value = '';
     document.getElementById('inArrHour').value = '';
     document.getElementById('inArrMin').value = '00';
-    document.querySelectorAll('input[name="inputDept"]').forEach(r => r.checked = false);
     document.querySelectorAll('input[name="inputUnit"]').forEach(r => r.checked = false);
     document.getElementById('packResult').className = 'pack-result';
     document.getElementById('inLotRequired').checked = false;
@@ -883,15 +905,49 @@
     document.getElementById('inputModal').classList.add('show');
   }
 
+  // ── 부서/담당자 마스터 (완료처리 담당자 목록과 동일 소스) ──
+  const DEPT_EMP_MAP = {
+    '대표이사': ['곽선효'],
+    '상무이사': ['박정용'],
+    '재경팀': ['김근복','이서연'],
+    '개발기획팀': ['김봉승'],
+    '자재구매팀': ['배병대','조승연','곽경민','박영주'],
+    '개발구매팀': ['김종길','최성빈','최세진'],
+    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
+    '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
+  };
+  function fillDeptSelect(selEl) {
+    selEl.innerHTML = '<option value="">부서 선택</option>' +
+      Object.keys(DEPT_EMP_MAP).map(d => `<option value="${d}">${d}</option>`).join('');
+  }
+  function fillManagerSelect(selEl, dept) {
+    if (!dept || !DEPT_EMP_MAP[dept]) { selEl.innerHTML = '<option value="">부서 먼저 선택</option>'; return; }
+    selEl.innerHTML = '<option value="">담당자 선택</option>' +
+      DEPT_EMP_MAP[dept].map(n => `<option value="${n}">${n}</option>`).join('');
+  }
+  function onInDeptChange() {
+    fillManagerSelect(document.getElementById('inManagerSelect'), document.getElementById('inDeptSelect').value);
+  }
+  function onRecvDeptChange() {
+    fillManagerSelect(document.getElementById('inRecvManagerSelect'), document.getElementById('inRecvDeptSelect').value);
+  }
+  fillDeptSelect(document.getElementById('inDeptSelect'));
+  fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+
   // ── 매출처명 마스터(partners) 자동완성 ──
   let customerMasterLoaded = false;
   async function loadCustomerMasterList() {
     if (customerMasterLoaded) return;
     try {
-      const rows = await sbGet('partners', "select=name,type,is_active&order=name&limit=1000");
-      customerMasterNames = (Array.isArray(rows) ? rows : [])
-        .filter(r => r.is_active !== false && (r.type === '매출처' || r.type === '매입매출처'))
-        .map(r => r.name).filter(Boolean);
+      const rows = await sbGet('partners', "select=name,alias1,alias2,type,is_active&order=name&limit=1000");
+      // 구분(type)이 비어있거나 다르게 표기된 케이스도 놓치지 않도록, is_active만 확인하고 전체 거래처를 대상으로 함
+      const active = (Array.isArray(rows) ? rows : []).filter(r => r.is_active !== false);
+      customerMasterNames = [];
+      active.forEach(r => {
+        if (r.name) customerMasterNames.push(r.name);
+        if (r.alias1) customerMasterNames.push(r.alias1);
+        if (r.alias2) customerMasterNames.push(r.alias2);
+      });
       customerMasterLoaded = true;
     } catch(e) { /* 마스터 로드 실패해도 직접입력은 계속 가능 */ }
   }
@@ -937,10 +993,12 @@
   }
 
   // ── LOT 파일 상태 ──
-  let parsedLotItems = null; // 미리보기에서 파싱완료된 결과(제출시 재사용)
+  let parsedLotItems = null;   // 확정된 후 제출시 재사용
+  let pendingLotPreview = null; // 확정 전 임시 파싱결과
 
   function resetLotFileState() {
     parsedLotItems = null;
+    pendingLotPreview = null;
     document.getElementById('inLotFile').value = '';
     document.getElementById('ldzFilename').textContent = '';
     document.getElementById('lotPreviewArea').innerHTML = '';
@@ -948,39 +1006,64 @@
 
   async function handleLotFileSelect(file) {
     if (!file) return;
+    parsedLotItems = null;
     document.getElementById('ldzFilename').textContent = '📎 ' + file.name;
     document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
     try {
       const parsed = await parseLotExcelFile(file);
       if (parsed.items.length === 0) {
+        pendingLotPreview = null;
         document.getElementById('lotPreviewArea').innerHTML =
           `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ 인식된 품목이 없습니다</span></div>
-           <div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div></div>`;
-        parsedLotItems = null;
+           <div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>
+           <div style="margin-top:8px;"><button type="button" class="btn-ghost-sm" onclick="resetLotFileState()">✕ 파일 다시 선택</button></div></div>`;
         return;
       }
       const enriched = await enrichCheckType(parsed.items);
-      parsedLotItems = enriched;
-      const totalQty = enriched.reduce((s,it)=>s+it.qty_required,0);
-      const barcodeCnt = enriched.filter(it=>it.check_type==='barcode').length;
-      const manualCnt = enriched.length - barcodeCnt;
-      const warnHtml = parsed.warnings.length
-        ? `<div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>`
-        : '';
-      document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview">
-        <div class="lot-preview-stat">
-          <span class="ok">✓ 품목 ${enriched.length}건</span>
-          <span>총수량 ${totalQty.toLocaleString()}</span>
-          <span>📡 바코드검수 ${barcodeCnt}건</span>
-          <span>✍ 수기확인 ${manualCnt}건</span>
-          ${parsed.warnings.length ? `<span class="warn">⚠ 확인필요 ${parsed.warnings.length}건</span>` : ''}
-        </div>
-        ${warnHtml}
-      </div>`;
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer };
+      renderLotPreview();
     } catch(e) {
+      pendingLotPreview = null;
       document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview"><span class="warn">⚠ 엑셀 파싱 실패: ${e.message||e}</span></div>`;
-      parsedLotItems = null;
     }
+  }
+
+  function renderLotPreview() {
+    if (!pendingLotPreview) return;
+    const { enriched, warnings, customer } = pendingLotPreview;
+    const totalQty = enriched.reduce((s,it)=>s+it.qty_required,0);
+    const barcodeCnt = enriched.filter(it=>it.check_type==='barcode').length;
+    const manualCnt = enriched.length - barcodeCnt;
+    const warnHtml = warnings.length
+      ? `<div class="lot-preview-warn-list">${warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>`
+      : '';
+    const confirmed = parsedLotItems !== null;
+    document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview">
+      <div class="lot-preview-stat">
+        <span class="ok">✓ 품목 ${enriched.length}건</span>
+        <span>총수량 ${totalQty.toLocaleString()}</span>
+        <span>📡 바코드검수 ${barcodeCnt}건</span>
+        <span>✍ 수기확인 ${manualCnt}건</span>
+        ${customer ? `<span>🏢 매출처 인식: ${customer}</span>` : ''}
+        ${warnings.length ? `<span class="warn">⚠ 확인필요 ${warnings.length}건</span>` : ''}
+      </div>
+      ${warnHtml}
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        ${confirmed
+          ? `<span style="color:var(--accent3);font-weight:700;font-size:12px;">✓ 이 내용으로 확정되었습니다</span>`
+          : `<button type="button" class="btn-primary-sm" onclick="confirmLotPreview()">✓ 이 내용으로 등록 진행</button>
+             <button type="button" class="btn-ghost-sm" onclick="resetLotFileState()">✕ 취소</button>`}
+      </div>
+    </div>`;
+  }
+
+  function confirmLotPreview() {
+    if (!pendingLotPreview) return;
+    parsedLotItems = pendingLotPreview.enriched;
+    const custInput = document.getElementById('inCustomer');
+    if (!custInput.value.trim() && pendingLotPreview.customer) custInput.value = pendingLotPreview.customer;
+    renderLotPreview();
+    showToast('✓ 거래명세표 내용이 확정되었습니다');
   }
 
   (function initLotDropzone() {
@@ -1028,10 +1111,17 @@
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
           const warnings = [];
           let headerRowIdx = -1;
+          let extractedCustomer = '';
           for (let i = 0; i < rows.length; i++) {
+            const rowText = rows[i].join(' ');
+            if (extractedCustomer === '' && rowText.indexOf('수신-거래처') >= 0) {
+              // "수신-거래처 : 엠에스이주식회사" 또는 셀이 나뉘어 저장된 경우 모두 대응
+              const m = rowText.match(/수신-거래처\s*[:：]?\s*(.+)/);
+              if (m && m[1]) extractedCustomer = m[1].trim();
+            }
             if (rows[i][1] === '품목코드' || rows[i][0] === '품목코드') { headerRowIdx = i; break; }
           }
-          if (headerRowIdx < 0) { resolve({ items: [], warnings: ['⚠ "품목코드" 헤더행을 찾지 못했습니다. 이카운트 거래명세표 다운로드 형식이 맞는지 확인해주세요.'] }); return; }
+          if (headerRowIdx < 0) { resolve({ items: [], warnings: ['⚠ "품목코드" 헤더행을 찾지 못했습니다. 이카운트 거래명세표 다운로드 형식이 맞는지 확인해주세요.'], customer: '' }); return; }
 
           const rawItems = [];
           for (let i = headerRowIdx + 1; i < rows.length; i++) {
@@ -1063,7 +1153,7 @@
             delete it._dupCount;
           });
 
-          resolve({ items, warnings });
+          resolve({ items, warnings, customer: extractedCustomer });
         } catch (err) { reject(err); }
       };
       reader.onerror = reject;
@@ -1111,9 +1201,11 @@
   }
 
   async function submitInput() {
-    const dept = document.querySelector('input[name="inputDept"]:checked');
+    const deptVal = document.getElementById('inDeptSelect').value;
     const unit = document.querySelector('input[name="inputUnit"]:checked');
-    const manager = document.getElementById('inManager').value.trim();
+    const manager = document.getElementById('inManagerSelect').value;
+    const recvDept = document.getElementById('inRecvDeptSelect').value;
+    const recvManager = document.getElementById('inRecvManagerSelect').value;
     const shipDate = document.getElementById('inShipDate').value;
     const customer = document.getElementById('inCustomer').value.trim();
     const packQty = document.getElementById('inPackQty').value.trim();
@@ -1121,15 +1213,15 @@
     const arrHour = document.getElementById('inArrHour').value;
     const arrMin = document.getElementById('inArrMin').value;
 
-    if (!dept)     { showToast('⚠ 입력 부서를 선택해주세요', true); return; }
-    if (!manager)  { showToast('⚠ 담당자 이름을 입력해주세요', true); return; }
+    if (!deptVal) { showToast('⚠ 입력 부서를 선택해주세요', true); return; }
+    if (!manager)  { showToast('⚠ 담당자를 선택해주세요', true); return; }
     if (!shipDate) { showToast('⚠ 출하 일자를 선택해주세요', true); return; }
     if (!customer) { showToast('⚠ 매출처명을 입력해주세요', true); return; }
     if (!packQty || !unit) { showToast('⚠ 포장 수량과 단위를 입력해주세요', true); return; }
 
     const lotRequired = document.getElementById('inLotRequired').checked;
     if (lotRequired && (!parsedLotItems || parsedLotItems.length === 0)) {
-      showToast('⚠ 거래명세표 엑셀을 첨부하고 미리보기에서 정상 인식되어야 등록할 수 있습니다', true);
+      showToast('⚠ 거래명세표 엑셀을 첨부 후 "이 내용으로 등록 진행" 버튼으로 확정해주세요', true);
       return;
     }
 
@@ -1144,8 +1236,10 @@
       ship_date: shipDate,
       customer,
       note: note || null,
-      input_by: dept.value,
+      input_by: deptVal,
       manager,
+      recv_dept: recvDept || null,
+      recv_manager: recvManager || null,
       arrival_time: arrHour ? `${arrHour}:${arrMin}` : '-',
       pack_done: `${packQty}${unit.value}`,
       ship_done: '미완료',
@@ -1167,17 +1261,24 @@
             is_done: false,
             check_type: it.check_type
           }));
-          await sbPost('ship_lot_item', itemBody);
-          const barcodeCnt = lotItems.filter(it=>it.check_type==='barcode').length;
-          const manualCnt = lotItems.length - barcodeCnt;
-          showToast(`✓ 출하지시 등록 완료 (바코드검수 ${barcodeCnt}건, 수기확인 ${manualCnt}건)`);
+          const itemResult = await sbPost('ship_lot_item', itemBody);
+          if (!Array.isArray(itemResult) || itemResult.length !== itemBody.length) {
+            // 인서트 실패 시 원인을 그대로 노출 (디버깅용)
+            const errMsg = (itemResult && itemResult.message) ? itemResult.message : JSON.stringify(itemResult).slice(0,200);
+            showToast(`⚠ 거래명세표 항목 저장 실패: ${errMsg}`, true);
+          } else {
+            const barcodeCnt = lotItems.filter(it=>it.check_type==='barcode').length;
+            const manualCnt = lotItems.length - barcodeCnt;
+            showToast(`✓ 출하지시 등록 완료 (바코드검수 ${barcodeCnt}건, 수기확인 ${manualCnt}건)`);
+          }
         } else {
           showToast('✓ 출하지시가 등록되었습니다');
         }
         closeInputModal();
         loadData();
       } else {
-        showToast('⚠ 등록 실패. 다시 시도해주세요', true);
+        const errMsg = (result && result.message) ? result.message : JSON.stringify(result).slice(0,200);
+        showToast(`⚠ 등록 실패: ${errMsg}`, true);
       }
     } catch(e) {
       showToast('⚠ 네트워크 오류', true);
