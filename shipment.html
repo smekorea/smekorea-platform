@@ -1123,18 +1123,23 @@
           }
           if (headerRowIdx < 0) { resolve({ items: [], warnings: ['⚠ "품목코드" 헤더행을 찾지 못했습니다. 이카운트 거래명세표 다운로드 형식이 맞는지 확인해주세요.'], customer: '' }); return; }
 
+          const headerRow = rows[headerRowIdx];
+          let brandColIdx = headerRow.findIndex(h => String(h).trim() === '브랜드명');
+
           const rawItems = [];
           for (let i = headerRowIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             const itemCode = String(r[1] || '').trim();
             const desc = String(r[2] || '').trim();
             const qtyRaw = String(r[3] || '').trim(); // 예: "20,000EA"
+            const maker = brandColIdx >= 0 ? String(r[brandColIdx] || '').trim() : '';
             if (!itemCode && !desc && !qtyRaw) continue; // 완전 빈행은 무시
             if (!itemCode) { warnings.push(`⚠ ${i+1}행: 품목코드가 없어 제외됨 (품명: ${desc||'-'})`); continue; }
             const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.]/g, '')) || 0;
             if (qtyNum <= 0) warnings.push(`⚠ ${itemCode}: 수량 인식 실패 또는 0 (원본값: "${qtyRaw}")`);
-            rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum });
+            rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum, maker });
           }
+          if (brandColIdx < 0) warnings.push('ℹ 거래명세표에 "브랜드명" 컬럼이 없어, items 마스터 조회 방식으로 구분 판정합니다.');
 
           // 품목코드 중복 합산
           const map = new Map();
@@ -1177,24 +1182,26 @@
   // ── 품목별 check_type 판별 (items 마스터 maker + scan_required_makers 대조) ──
   async function enrichCheckType(items) {
     if (items.length === 0) return items;
-    const codes = items.map(it => it.item_code);
-    let itemsMasterRows = [];
-    const chunkSize = 100;
-    for (let i = 0; i < codes.length; i += chunkSize) {
-      const chunk = codes.slice(i, i + chunkSize);
-      const inList = chunk.map(c => `"${c.replace(/"/g,'')}"`).join(',');
-      const q = 'item_code=in.(' + inList + ')&select=item_code,maker';
-      const rows = await sbGet('items', q);
-      if (Array.isArray(rows)) itemsMasterRows = itemsMasterRows.concat(rows);
-    }
+    // 거래명세표에 브랜드명이 있으면 그대로 사용, 없는 항목만 items 마스터로 폴백 조회
+    const needLookup = items.filter(it => !it.maker);
     const makerMap = {};
-    itemsMasterRows.forEach(r => { makerMap[r.item_code] = r.maker; });
+    if (needLookup.length > 0) {
+      const codes = needLookup.map(it => it.item_code);
+      const chunkSize = 100;
+      for (let i = 0; i < codes.length; i += chunkSize) {
+        const chunk = codes.slice(i, i + chunkSize);
+        const inList = chunk.map(c => `"${c.replace(/"/g,'')}"`).join(',');
+        const q = 'item_code=in.(' + inList + ')&select=item_code,maker';
+        const rows = await sbGet('items', q);
+        if (Array.isArray(rows)) rows.forEach(r => { makerMap[r.item_code] = r.maker; });
+      }
+    }
 
     const makerRows = await sbGet('scan_required_makers', 'is_active=eq.true&select=maker');
     const scanMakers = new Set((Array.isArray(makerRows) ? makerRows : []).map(r => r.maker));
 
     return items.map(it => {
-      const maker = makerMap[it.item_code];
+      const maker = it.maker || makerMap[it.item_code];
       const checkType = (maker && scanMakers.has(maker)) ? 'barcode' : 'manual';
       return { ...it, check_type: checkType };
     });
