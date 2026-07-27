@@ -100,6 +100,10 @@
   .item-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;}
   .item-badge.barcode{background:rgba(26,86,219,0.14);color:var(--accent2);}
   .item-badge.manual{background:rgba(217,119,6,0.16);color:#a15c00;}
+  .badge-dot{display:inline-block;width:11px;height:11px;border-radius:50%;}
+  .badge-dot.done{background:#5bc8f5;box-shadow:0 0 5px rgba(91,200,245,0.6);}
+  .badge-dot.progress{background:var(--warn);box-shadow:0 0 5px rgba(217,119,6,0.5);}
+  .badge-dot.wait{background:var(--border2);}
 
   /* 스캔 슬롯 2개 (QR / 바코드) - mfg_stock SCAN1~4 참고, 나란히 배치 */
   .scan-slots-row{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px;}
@@ -317,7 +321,7 @@
     <select id="histResult">
       <option value="all">전체결과</option>
       <option value="완결">완결</option>
-      <option value="미완결(짝대기)">짝대기(미완결)</option>
+      <option value="미완결(짝대기)">미완결</option>
       <option value="미매칭">미매칭</option>
     </select>
     <button class="btn btn-primary" style="width:auto;padding:8px 16px;" onclick="loadHistory()">🔍 조회</button>
@@ -631,7 +635,7 @@
         <td>${badge}</td>
         <td class="mono" style="text-align:right;">${(r.qty_required||0).toLocaleString()}</td>
         <td class="mono" style="text-align:right;">${rightPart}</td>
-        <td style="text-align:center;"><span class="badge-dot ${r.is_done?'done':'wait'}"></span></td>
+        <td style="text-align:center;"><span class="badge-dot ${r.is_done?'done':(r.qty_scanned>0?'progress':'wait')}"></span></td>
       </tr>`;
     }).join('');
   }
@@ -1008,7 +1012,7 @@
         : r.scan_type==='바코드1_품번' ? '<span class="tag-scan tag-b1">품번</span>'
         : '<span class="tag-scan tag-b2">LOT</span>';
       const resultBadge = !r.item_code ? '<span class="badge-red">미매칭</span>'
-        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? `<span style="color:var(--warn);font-weight:700;">짝대기</span>` : `<span style="color:var(--accent3);font-weight:700;">완결</span>`);
+        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? `<span style="color:var(--warn);font-weight:700;">미완결</span>` : `<span style="color:var(--accent3);font-weight:700;">완결</span>`);
       const qtyReq = (r._qtyRequired!=null) ? r._qtyRequired.toLocaleString() : '-';
       const qtyScan = (r.parsed_qty!=null) ? r.parsed_qty.toLocaleString() : '-';
       const originTag = r.origin==='FOSAN' ? '<span class="tag-scan" style="background:rgba(217,119,6,0.12);color:var(--warn);border:1px solid rgba(217,119,6,0.25);" title="FOSAN(중국)">FOSAN</span>'
@@ -1093,7 +1097,7 @@
       '일시': r.scanned_at, '매출처': r._customer, '타입': r.scan_type,
       '원본값': r.raw_scan, '매칭품번': r.item_code||'', 'LOT': r.parsed_lot||'', '산지': r.origin||'',
       '지시수량': r._qtyRequired!=null ? r._qtyRequired : '', '리딩수량': r.parsed_qty!=null ? r.parsed_qty : '',
-      '결과': !r.item_code ? '미매칭' : r.pair_status, '작업자': r.scanned_by||''
+      '결과': !r.item_code ? '미매칭' : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '미완결' : '완결'), '작업자': r.scanned_by||''
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
