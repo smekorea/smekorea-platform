@@ -336,6 +336,8 @@
         <th style="width:120px;">매출처<div class="col-resizer"></div></th>
         <th style="width:60px;">타입<div class="col-resizer"></div></th>
         <th>원본값(LOT)<div class="col-resizer"></div></th>
+        <th style="width:95px;">리딩품번<div class="col-resizer"></div></th>
+        <th style="width:110px;">거래명세서품번<div class="col-resizer"></div></th>
         <th style="width:100px;">매칭품번<div class="col-resizer"></div></th>
         <th style="width:60px;">산지<div class="col-resizer"></div></th>
         <th style="width:75px;">지시수량<div class="col-resizer"></div></th>
@@ -343,7 +345,7 @@
         <th style="width:70px;">결과<div class="col-resizer"></div></th>
         <th style="width:80px;">작업자<div class="col-resizer"></div></th>
       </tr></thead>
-      <tbody id="histTbody"><tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted);">조회 버튼을 눌러 이력을 검색하세요</td></tr></tbody>
+      <tbody id="histTbody"><tr><td colspan="13" style="text-align:center;padding:24px;color:var(--muted);">조회 버튼을 눌러 이력을 검색하세요</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -357,12 +359,15 @@
         <div class="maker-desc">
           여기에 등록된 메이커(거래명세표 "브랜드명" 컬럼과 일치)만 출하지시 등록시 자동으로 <b>바코드검수 대상</b>으로 분류됩니다.
           등록되지 않은 메이커는 자동으로 <b>수기확인 대상</b>이 됩니다. 품목마스터(관리자설정)의 브랜드명 표기와 <b>정확히 일치</b>해야 합니다.
+          <br>"매칭규칙 메모"는 해당 메이커의 품번 체계·매칭 시 유의사항(예: 산지별 LG품번 이중등록 등)을 남겨 담당자 변경 시에도 혼동을 방지하기 위한 용도입니다.
         </div>
         <div class="field-label">메이커명</div>
         <div class="maker-add-row">
-          <input type="text" id="newMakerInput" placeholder="예: SMART" onkeydown="if(event.key==='Enter')addScanMaker()">
+          <input type="text" id="newMakerInput" placeholder="예: SMART" onkeydown="if(event.key==='Enter')document.getElementById('newMakerNote').focus()">
           <button class="btn btn-primary" style="width:auto;" onclick="addScanMaker()">+ 추가</button>
         </div>
+        <div class="field-label" style="margin-top:10px;">매칭규칙 메모 (선택)</div>
+        <textarea id="newMakerNote" placeholder="예: 메이커품번(Maker P/N) 기준으로 LG품번/품목코드가 산지별로 복수 등록되어 있어 매칭 시 메이커품번 교차조회 필요" style="width:100%;min-height:56px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;"></textarea>
       </div>
     </div>
     <div class="maker-table-wrap">
@@ -371,10 +376,11 @@
         <thead><tr>
           <th style="width:44px;">순번<div class="col-resizer"></div></th>
           <th style="width:110px;">메이커명<div class="col-resizer"></div></th>
+          <th style="width:260px;">매칭규칙 메모<div class="col-resizer"></div></th>
           <th style="width:100px;">등록일<div class="col-resizer"></div></th>
           <th>관리</th>
         </tr></thead>
-        <tbody id="makerTbody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
+        <tbody id="makerTbody"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -470,7 +476,7 @@
     if (itemsMaster.length > 0) return;
     let pg = 0, all = [];
     while (true) {
-      const chunk = await sbGet('items', `select=item_code,lg_pn,description,maker&order=id&limit=1000&offset=${pg*1000}`);
+      const chunk = await sbGet('items', `select=item_code,lg_pn,description,maker,maker_pn&order=id&limit=1000&offset=${pg*1000}`);
       if (!Array.isArray(chunk) || chunk.length === 0) break;
       all = all.concat(chunk);
       if (chunk.length < 1000) break;
@@ -750,14 +756,37 @@
   function findItemByLgPn(pn) {
     const target = (pn || '').trim();
     if (!target) return null;
-    // 1차: 이번 거래명세서 품목(itemRows)의 품명 맨 앞 토큰(LG품번)과 비교
+
+    // 1차: 이번 거래명세서 품목(itemRows)의 품명 맨 앞 토큰(LG품번)과 완전일치
     const fromRow = itemRows.find(r => {
       const firstToken = (r.description || '').trim().split(/\s+/)[0] || '';
       return firstToken === target;
     });
-    if (fromRow) return { item_code: fromRow.item_code, lg_pn: target, description: fromRow.description };
-    // 2차 폴백: 전체 품목마스터의 lg_pn 컬럼과 비교
-    return itemsMaster.find(m => (m.lg_pn || '').trim() === target);
+    if (fromRow) return { item_code: fromRow.item_code, lg_pn: target, scanned_pn: target, match_method: '직접매칭' };
+
+    // 스캔된 LG품번을 품목마스터에서 찾아 Maker P/N 확인 (2차/3차 공통 준비)
+    const scannedMaster = itemsMaster.find(m => (m.lg_pn || '').trim() === target);
+
+    // 2차: 스캔된 LG품번의 Maker P/N과 같은 Maker P/N을 쓰는 "이번 거래명세서 내 다른 품목코드"가
+    //      있는지 교차조회 (SMART 등 산지별 LG품번 이중등록 브랜드 대응)
+    if (scannedMaster && scannedMaster.maker_pn) {
+      const makerPn = String(scannedMaster.maker_pn).trim();
+      const crossRow = itemRows.find(r => {
+        const rowToken = (r.description || '').trim().split(/\s+/)[0] || '';
+        if (!rowToken || rowToken === target) return false;
+        const rowMaster = itemsMaster.find(m => (m.lg_pn || '').trim() === rowToken);
+        return rowMaster && rowMaster.maker_pn && String(rowMaster.maker_pn).trim() === makerPn;
+      });
+      if (crossRow) {
+        const crossToken = (crossRow.description || '').trim().split(/\s+/)[0] || '';
+        return { item_code: crossRow.item_code, lg_pn: crossToken, scanned_pn: target, match_method: '메이커품번매칭' };
+      }
+    }
+
+    // 3차 폴백: 전체 품목마스터 lg_pn 직접일치 (이번 거래명세서 목록과 무관해도 최후수단으로 허용)
+    if (scannedMaster) return { item_code: scannedMaster.item_code, lg_pn: target, scanned_pn: target, match_method: '마스터폴백' };
+
+    return null;
   }
 
   // ══ 산지 판정 (FOSAN 중국 / TA-I 대만) ══
@@ -818,6 +847,7 @@
       const log = await sbPost('ship_lot_log', {
         ship_schedule_id: currentSid, item_code: itemCode, scan_type: 'QR',
         raw_scan: raw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot, origin: origin,
+        matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
         pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
       });
       logRows.unshift(Array.isArray(log)?log[0]:log);
@@ -843,7 +873,7 @@
         document.getElementById('slotBarcodeVal').textContent = `품번:${raw} / LOT:대기중`;
 
         if (pendingLOT) {
-          await completePair(itemCode, pn, qty, raw, pendingLOT);
+          await completePair(item, pn, qty, raw, pendingLOT);
           activeItemCode = itemCode;
           pendingLOT = null;
           document.getElementById('slotBarcode').className = 'scan-slot-box filled';
@@ -852,6 +882,7 @@
           const log = await sbPost('ship_lot_log', {
             ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
             raw_scan: raw, parsed_pn: pn, parsed_qty: qty,
+            matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
             pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
           });
           const logObj = Array.isArray(log)?log[0]:log;
@@ -894,11 +925,13 @@
     if (pn_obj.itemCode) await accumulateQty(pn_obj.itemCode, pn_obj.qty);
   }
 
-  async function completePair(itemCode, pn, qty, pnRaw, lot_obj) {
+  async function completePair(item, pn, qty, pnRaw, lot_obj) {
+    const itemCode = item ? item.item_code : null;
     const origin = detectOrigin(lot_obj.raw);
     const log = await sbPost('ship_lot_log', {
       ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
       raw_scan: pnRaw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot_obj.raw, origin: origin,
+      matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
       pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
     });
     logRows.unshift(Array.isArray(log)?log[0]:log);
@@ -953,7 +986,7 @@
     const itemFilter = document.getElementById('histItemSearch').value.trim();
     const resultFilter = document.getElementById('histResult').value;
 
-    document.getElementById('histTbody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
+    document.getElementById('histTbody').innerHTML = '<tr><td colspan="13" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
 
     let q = 'order=scanned_at.desc&limit=1000';
     if (from) q += '&scanned_at=gte.' + from + 'T00:00:00';
@@ -1004,7 +1037,7 @@
   }
   function renderHistoryTable() {
     if (historyResults.length === 0) {
-      document.getElementById('histTbody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--muted);">조회 결과가 없습니다</td></tr>';
+      document.getElementById('histTbody').innerHTML = '<tr><td colspan="13" style="text-align:center;padding:20px;color:var(--muted);">조회 결과가 없습니다</td></tr>';
       return;
     }
     document.getElementById('histTbody').innerHTML = historyResults.map(r => {
@@ -1018,6 +1051,9 @@
       const originTag = r.origin==='FOSAN' ? '<span class="tag-scan" style="background:rgba(217,119,6,0.12);color:var(--warn);border:1px solid rgba(217,119,6,0.25);" title="FOSAN(중국)">FOSAN</span>'
         : r.origin==='TA-I' ? '<span class="tag-scan" style="background:rgba(14,159,110,0.12);color:var(--accent3);border:1px solid rgba(14,159,110,0.25);" title="TA-I(대만)">TA-I</span>'
         : '<span style="color:var(--muted);">-</span>';
+      const methodBadge = r.match_method === '메이커품번매칭'
+        ? '<span class="tag-scan" style="background:rgba(217,119,6,0.14);color:#a15c00;border:1px solid rgba(217,119,6,0.3);" title="스캔품번과 거래명세서품번이 다르지만 Maker P/N이 같아 매칭됨">⚠메이커품번매칭</span>'
+        : (r.match_method === '마스터폴백' ? '<span class="tag-scan" style="background:rgba(122,139,170,0.15);color:var(--muted);border:1px solid rgba(122,139,170,0.3);" title="이번 거래명세서 목록엔 없지만 품목마스터 기준으로 매칭됨">마스터폴백</span>' : '');
       const checked = histSelectedIds.has(r.id) ? 'checked' : '';
       return `<tr>
         <td style="text-align:center;"><input type="checkbox" class="hist-row-check" data-id="${r.id}" ${checked} onchange="toggleHistSelectOne(${r.id}, this.checked)"></td>
@@ -1025,6 +1061,8 @@
         <td>${r._customer}</td>
         <td>${typeTag}</td>
         <td class="mono" title="${r.raw_scan||''}">${r.raw_scan||''}</td>
+        <td class="mono">${r.parsed_pn||'-'}</td>
+        <td class="mono">${r.matched_lg_pn||'-'}${methodBadge ? ' '+methodBadge : ''}</td>
         <td class="mono">${r.item_code||'-'}</td>
         <td style="text-align:center;">${originTag}</td>
         <td class="mono" style="text-align:right;">${qtyReq}</td>
@@ -1049,19 +1087,53 @@
     document.querySelectorAll('.hist-row-check').forEach(cb => { cb.checked = checked; });
     updateHistSelCount();
   }
+  async function refreshItemListForSchedule(sid) {
+    const items = await sbGet('ship_lot_item', 'ship_schedule_id=eq.' + sid + '&order=id');
+    if (Array.isArray(items)) itemRows = items;
+    const logs = await sbGet('ship_lot_log', 'ship_schedule_id=eq.' + sid + '&order=id.desc&limit=1000');
+    logRows = Array.isArray(logs) ? logs : [];
+    renderItemList();
+    updateProgress();
+  }
+
+  async function recalcItemProgress(sid, itemCode) {
+    const rows = await sbGet('ship_lot_log', `ship_schedule_id=eq.${sid}&item_code=eq.${itemCode}&pair_status=eq.완결&select=parsed_qty`);
+    const total = Array.isArray(rows) ? rows.reduce((s, r) => s + (Number(r.parsed_qty) || 0), 0) : 0;
+    const itemRowsDb = await sbGet('ship_lot_item', `ship_schedule_id=eq.${sid}&item_code=eq.${itemCode}&select=id,qty_required,check_type`);
+    if (!Array.isArray(itemRowsDb) || itemRowsDb.length === 0) return;
+    const it = itemRowsDb[0];
+    if (it.check_type === 'manual') return; // 수기확인 항목은 스캔 누적수량 대상 아님
+    const isDone = total >= (it.qty_required || 0);
+    await sbPatch('ship_lot_item', it.id, { qty_scanned: total, is_done: isDone });
+  }
+
   async function deleteSelectedHistory() {
     if (histSelectedIds.size === 0) { showToast('⚠ 삭제할 항목을 먼저 선택해주세요', true); return; }
-    if (!confirm(`선택한 ${histSelectedIds.size}건의 체크이력을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    if (!confirm(`선택한 ${histSelectedIds.size}건의 체크이력을 삭제하시겠습니까?\n연결된 품목의 검수 진행상태(리딩수량/완료여부)도 함께 재계산됩니다.\n이 작업은 되돌릴 수 없습니다.`)) return;
     const ids = Array.from(histSelectedIds);
+    const deletedRows = historyResults.filter(r => histSelectedIds.has(r.id));
+    // 영향받는 (일정ID+품번) 쌍 수집 — 삭제 후 이 조합들의 진행상태를 다시 계산
+    const affected = new Map();
+    deletedRows.forEach(r => {
+      if (r.item_code) affected.set(r.ship_schedule_id + '_' + r.item_code, { sid: r.ship_schedule_id, itemCode: r.item_code });
+    });
+
     const ok = await sbDelete('ship_lot_log', ids);
-    if (ok) {
-      showToast(`✓ ${ids.length}건 삭제되었습니다`);
-      historyResults = historyResults.filter(r => !histSelectedIds.has(r.id));
-      histSelectedIds.clear();
-      renderHistoryTable();
-      updateHistSelCount();
-    } else {
-      showToast('⚠ 삭제 중 오류가 발생했습니다', true);
+    if (!ok) { showToast('⚠ 삭제 중 오류가 발생했습니다', true); return; }
+
+    for (const { sid, itemCode } of affected.values()) {
+      await recalcItemProgress(sid, itemCode);
+    }
+
+    showToast(`✓ ${ids.length}건 삭제 및 진행상태 재계산 완료`);
+    historyResults = historyResults.filter(r => !histSelectedIds.has(r.id));
+    histSelectedIds.clear();
+    renderHistoryTable();
+    updateHistSelCount();
+
+    // 지금 열려있는 바코드검수 화면이 방금 삭제한 일정과 같으면 화면도 갱신
+    if (currentSid && Array.from(affected.values()).some(a => String(a.sid) === String(currentSid))) {
+      await refreshItemListForSchedule(currentSid);
     }
   }
   function onHistItemSearchInput() {
@@ -1095,7 +1167,8 @@
     if (historyResults.length === 0) { showToast('⚠ 내보낼 데이터가 없습니다', true); return; }
     const data = historyResults.map(r => ({
       '일시': r.scanned_at, '매출처': r._customer, '타입': r.scan_type,
-      '원본값': r.raw_scan, '매칭품번': r.item_code||'', 'LOT': r.parsed_lot||'', '산지': r.origin||'',
+      '원본값': r.raw_scan, '리딩품번': r.parsed_pn||'', '거래명세서품번': r.matched_lg_pn||'', '매칭방식': r.match_method||'',
+      '매칭품번': r.item_code||'', 'LOT': r.parsed_lot||'', '산지': r.origin||'',
       '지시수량': r._qtyRequired!=null ? r._qtyRequired : '', '리딩수량': r.parsed_qty!=null ? r.parsed_qty : '',
       '결과': !r.item_code ? '미매칭' : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '미완결' : '완결'), '작업자': r.scanned_by||''
     }));
@@ -1129,14 +1202,14 @@
   }
 
   async function loadScanMakers() {
-    document.getElementById('makerTbody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr>';
+    document.getElementById('makerTbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr>';
     const rows = await sbGet('scan_required_makers', 'is_active=eq.true&order=created_at.desc');
     scanMakersList = Array.isArray(rows) ? rows : [];
     renderMakerTable();
   }
   function renderMakerTable() {
     if (scanMakersList.length === 0) {
-      document.getElementById('makerTbody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">등록된 메이커가 없습니다. 좌측에서 추가해주세요.</td></tr>';
+      document.getElementById('makerTbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">등록된 메이커가 없습니다. 좌측에서 추가해주세요.</td></tr>';
       return;
     }
     document.getElementById('makerTbody').innerHTML = scanMakersList.map((m,i) => {
@@ -1144,6 +1217,9 @@
       const nameCell = isEditing
         ? `<input type="text" class="maker-edit-input" id="editMakerInput_${m.id}" value="${m.maker}">`
         : `<b>${m.maker}</b>`;
+      const noteCell = isEditing
+        ? `<textarea class="maker-edit-input" id="editMakerNote_${m.id}" style="width:100%;min-height:44px;font-size:11px;">${m.match_note||''}</textarea>`
+        : `<span style="font-size:11.5px;color:var(--muted);white-space:normal;">${m.match_note ? m.match_note.replace(/</g,'&lt;') : '-'}</span>`;
       const dateStr = m.created_at ? new Date(m.created_at).toLocaleDateString('ko-KR') : '-';
       const actionCell = isEditing
         ? `<button class="btn btn-primary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="saveMakerEdit(${m.id})">저장</button>
@@ -1153,6 +1229,7 @@
       return `<tr>
         <td class="mono">${scanMakersList.length-i}</td>
         <td>${nameCell}</td>
+        <td style="white-space:normal;">${noteCell}</td>
         <td class="mono">${dateStr}</td>
         <td>${actionCell}</td>
       </tr>`;
@@ -1160,7 +1237,9 @@
   }
   async function addScanMaker() {
     const input = document.getElementById('newMakerInput');
+    const noteInput = document.getElementById('newMakerNote');
     const val = input.value.trim();
+    const note = noteInput.value.trim();
     if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
     if (scanMakersList.some(m => m.maker === val)) { showToast('⚠ 이미 등록된 메이커입니다', true); return; }
 
@@ -1176,16 +1255,16 @@
     if (Array.isArray(existing) && existing.length > 0) {
       const row = existing[0];
       if (!confirm(`"${val}"은(는) 예전에 삭제(비활성화)된 메이커명입니다.\n다시 활성화하시겠습니까?`)) return;
-      await sbPatch('scan_required_makers', row.id, { is_active: true });
-      input.value = '';
+      await sbPatch('scan_required_makers', row.id, { is_active: true, match_note: note || row.match_note || null });
+      input.value = ''; noteInput.value = '';
       showToast(`✓ "${val}" 재활성화되었습니다`);
       loadScanMakers();
       return;
     }
 
-    const result = await sbPost('scan_required_makers', { maker: val, is_active: true, created_at: new Date().toISOString() });
+    const result = await sbPost('scan_required_makers', { maker: val, is_active: true, match_note: note || null, created_at: new Date().toISOString() });
     if (Array.isArray(result) && result.length > 0) {
-      input.value = '';
+      input.value = ''; noteInput.value = '';
       showToast(`✓ "${val}" 등록되었습니다`);
       loadScanMakers();
     } else {
@@ -1197,6 +1276,7 @@
   function cancelMakerEdit() { editingMakerId = null; renderMakerTable(); }
   async function saveMakerEdit(id) {
     const val = document.getElementById('editMakerInput_'+id).value.trim();
+    const note = document.getElementById('editMakerNote_'+id).value.trim();
     if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
     if (scanMakersList.some(m => m.maker === val && m.id !== id)) { showToast('⚠ 이미 등록된 메이커명입니다', true); return; }
 
@@ -1206,7 +1286,7 @@
       return;
     }
 
-    const result = await sbPatch('scan_required_makers', id, { maker: val });
+    const result = await sbPatch('scan_required_makers', id, { maker: val, match_note: note || null });
     if (Array.isArray(result) && result.length > 0) {
       showToast('✓ 수정되었습니다');
       editingMakerId = null;
