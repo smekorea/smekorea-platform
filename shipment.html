@@ -1270,9 +1270,12 @@
           }));
           const itemResult = await sbPost('ship_lot_item', itemBody);
           if (!Array.isArray(itemResult) || itemResult.length !== itemBody.length) {
-            // 인서트 실패 시 원인을 그대로 노출 (디버깅용)
-            const errMsg = (itemResult && itemResult.message) ? itemResult.message : JSON.stringify(itemResult).slice(0,200);
-            showToast(`⚠ 거래명세표 항목 저장 실패: ${errMsg}`, true);
+            // 인서트 실패 시 원인을 그대로 노출 (alert: 사용자가 직접 닫을 때까지 유지됨)
+            const errMsg = (itemResult && itemResult.message) ? itemResult.message
+              : (itemResult && itemResult.error) ? JSON.stringify(itemResult.error)
+              : JSON.stringify(itemResult).slice(0,500);
+            alert('⚠ 거래명세표 항목(ship_lot_item) 저장 실패!\n\n출하지시(ship_schedule)는 등록됐지만, 품목 데이터는 저장되지 않았습니다.\n\n[에러 원인]\n' + errMsg + '\n\n이 내용을 그대로 캡처해서 전달해주세요.');
+            showToast('⚠ 거래명세표 항목 저장 실패 (위 팝업 확인)', true);
           } else {
             const barcodeCnt = lotItems.filter(it=>it.check_type==='barcode').length;
             const manualCnt = lotItems.length - barcodeCnt;
@@ -1288,6 +1291,7 @@
         showToast(`⚠ 등록 실패: ${errMsg}`, true);
       }
     } catch(e) {
+      alert('⚠ 등록 처리 중 오류 발생\n\n' + (e && e.message ? e.message : e));
       showToast('⚠ 네트워크 오류', true);
     }
     btn.disabled = false; btn.textContent = '출하지시 등록';
