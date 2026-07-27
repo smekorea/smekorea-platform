@@ -27,12 +27,12 @@
   .top-btn:hover{background:rgba(255,255,255,0.16);color:#fff;}
   .clock{font-family:'Share Tech Mono',monospace;color:#5b9bff;font-size:16px;}
 
-  /* ══ 카드형 탭바 ══ */
-  .tabbar{background:var(--bg);display:flex;gap:10px;padding:14px 24px;}
-  .tabbtn{flex:1;text-align:center;padding:14px 10px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;background:#fff;border:1.5px solid var(--border);border-radius:10px;box-shadow:var(--shadow);transition:all 0.15s;}
-  .tabbtn:hover{border-color:var(--accent2);}
-  .tabbtn.active{color:#fff;background:var(--navy);border-color:var(--navy);}
-  .tabbtn .ico{font-size:20px;display:block;margin-bottom:4px;}
+  /* ══ 탭바 - 플랫 알약형 (좌측정렬, 컴팩트) ══ */
+  .tabbar{background:#fff;display:flex;gap:4px;padding:10px 24px;border-bottom:1px solid var(--border);}
+  .tabbtn{padding:8px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:20px;background:transparent;transition:all 0.15s;}
+  .tabbtn:hover{color:var(--text);}
+  .tabbtn.active{color:#fff;background:var(--navy);}
+  .tabbtn .ico{display:none;}
 
   .tabpanel{display:none;padding:0 24px 20px;}
   .tabpanel.active{display:block;}
@@ -144,13 +144,13 @@
   .tag-b2{background:rgba(217,119,6,0.12);color:var(--warn);}
 
   /* ══ LOT관리업체등록 탭 ══ */
-  .maker-card{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);padding:20px 22px;max-width:640px;}
+  .maker-grid{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;}
+  .maker-card{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);padding:20px 22px;}
   .maker-desc{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px;background:rgba(26,86,219,0.05);border:1px solid rgba(26,86,219,0.15);border-radius:8px;padding:10px 12px;}
-  .maker-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;min-height:36px;}
-  .maker-tag{background:rgba(26,86,219,0.1);color:var(--accent2);border:1px solid rgba(26,86,219,0.25);padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:8px;}
-  .maker-tag .x{cursor:pointer;font-weight:900;color:var(--accent);}
   .maker-add-row{display:flex;gap:8px;}
   .maker-add-row input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;}
+  .maker-table-wrap{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+  .maker-edit-input{padding:5px 8px;border:1.5px solid var(--accent2);border-radius:6px;font-size:12px;width:140px;}
 
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;}
   .modal-overlay.show{display:flex;}
@@ -299,15 +299,28 @@
 
 <!-- ══ LOT관리업체등록 탭 ══ -->
 <div class="tabpanel" id="tab-makers">
-  <div class="maker-card">
-    <div class="maker-desc">
-      여기에 등록된 메이커(거래명세표 "브랜드명" 컬럼과 일치)만 출하지시 등록시 자동으로 <b>바코드검수 대상</b>으로 분류됩니다.
-      등록되지 않은 메이커는 자동으로 <b>수기확인 대상</b>이 됩니다.
+  <div class="maker-grid">
+    <div class="maker-card">
+      <div class="maker-desc">
+        여기에 등록된 메이커(거래명세표 "브랜드명" 컬럼과 일치)만 출하지시 등록시 자동으로 <b>바코드검수 대상</b>으로 분류됩니다.
+        등록되지 않은 메이커는 자동으로 <b>수기확인 대상</b>이 됩니다.
+      </div>
+      <div class="field-label">메이커명</div>
+      <div class="maker-add-row">
+        <input type="text" id="newMakerInput" placeholder="예: SMART" onkeydown="if(event.key==='Enter')addScanMaker()">
+        <button class="btn btn-primary" style="width:auto;" onclick="addScanMaker()">+ 추가</button>
+      </div>
     </div>
-    <div class="maker-list" id="makerTagList"><span style="color:var(--muted);font-size:12px;">불러오는 중...</span></div>
-    <div class="maker-add-row">
-      <input type="text" id="newMakerInput" placeholder="메이커명 입력 (예: SMART)" onkeydown="if(event.key==='Enter')addScanMaker()">
-      <button class="btn btn-primary" style="width:auto;" onclick="addScanMaker()">+ 추가</button>
+    <div class="maker-table-wrap">
+      <table class="dtab" id="makerTable">
+        <thead><tr>
+          <th style="width:60px;">순번<div class="col-resizer"></div></th>
+          <th>메이커명<div class="col-resizer"></div></th>
+          <th style="width:140px;">등록일<div class="col-resizer"></div></th>
+          <th style="width:120px;">관리</th>
+        </tr></thead>
+        <tbody id="makerTbody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -832,32 +845,92 @@
 
   // ══ LOT관리업체등록 탭 ══
   let scanMakersList = [];
+  let editingMakerId = null;
   async function loadScanMakers() {
-    const rows = await sbGet('scan_required_makers', 'is_active=eq.true&order=maker');
+    document.getElementById('makerTbody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr>';
+    const rows = await sbGet('scan_required_makers', 'is_active=eq.true&order=created_at.desc');
     scanMakersList = Array.isArray(rows) ? rows : [];
-    renderMakerTags();
+    renderMakerTable();
   }
-  function renderMakerTags() {
-    document.getElementById('makerTagList').innerHTML = scanMakersList.length === 0
-      ? '<span style="color:var(--muted);font-size:12px;">등록된 메이커가 없습니다. 아래에서 추가해주세요.</span>'
-      : scanMakersList.map(m => `<span class="maker-tag">${m.maker}<span class="x" onclick="removeScanMaker(${m.id})">✕</span></span>`).join('');
+  function renderMakerTable() {
+    if (scanMakersList.length === 0) {
+      document.getElementById('makerTbody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">등록된 메이커가 없습니다. 좌측에서 추가해주세요.</td></tr>';
+      return;
+    }
+    document.getElementById('makerTbody').innerHTML = scanMakersList.map((m,i) => {
+      const isEditing = editingMakerId === m.id;
+      const nameCell = isEditing
+        ? `<input type="text" class="maker-edit-input" id="editMakerInput_${m.id}" value="${m.maker}">`
+        : `<b>${m.maker}</b>`;
+      const dateStr = m.created_at ? new Date(m.created_at).toLocaleDateString('ko-KR') : '-';
+      const actionCell = isEditing
+        ? `<button class="btn btn-primary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="saveMakerEdit(${m.id})">저장</button>
+           <button class="btn btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;" onclick="cancelMakerEdit()">취소</button>`
+        : `<button class="btn btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;" onclick="startMakerEdit(${m.id})">수정</button>
+           <button class="btn btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;color:var(--accent);" onclick="removeScanMaker(${m.id})">삭제</button>`;
+      return `<tr>
+        <td class="mono">${scanMakersList.length-i}</td>
+        <td>${nameCell}</td>
+        <td class="mono">${dateStr}</td>
+        <td>${actionCell}</td>
+      </tr>`;
+    }).join('');
   }
   async function addScanMaker() {
     const input = document.getElementById('newMakerInput');
     const val = input.value.trim();
     if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
     if (scanMakersList.some(m => m.maker === val)) { showToast('⚠ 이미 등록된 메이커입니다', true); return; }
-    try {
-      await sbPost('scan_required_makers', { maker: val, is_active: true });
+
+    // 비활성화(삭제)된 메이커명과 겹치는지 먼저 확인 (UNIQUE 제약으로 인한 저장실패 방지)
+    const existing = await sbGet('scan_required_makers', `maker=eq.${encodeURIComponent(val)}&limit=1`);
+    if (Array.isArray(existing) && existing.length > 0) {
+      const row = existing[0];
+      if (!confirm(`"${val}"은(는) 예전에 삭제(비활성화)된 메이커명입니다.\n다시 활성화하시겠습니까?`)) return;
+      await sbPatch('scan_required_makers', row.id, { is_active: true });
+      input.value = '';
+      showToast(`✓ "${val}" 재활성화되었습니다`);
+      loadScanMakers();
+      return;
+    }
+
+    const result = await sbPost('scan_required_makers', { maker: val, is_active: true, created_at: new Date().toISOString() });
+    if (Array.isArray(result) && result.length > 0) {
       input.value = '';
       showToast(`✓ "${val}" 등록되었습니다`);
       loadScanMakers();
-    } catch(e) { showToast('⚠ 등록 실패', true); }
+    } else {
+      const errMsg = (result && result.message) ? result.message : JSON.stringify(result).slice(0,150);
+      showToast(`⚠ 등록 실패: ${errMsg}`, true);
+    }
+  }
+  function startMakerEdit(id) { editingMakerId = id; renderMakerTable(); }
+  function cancelMakerEdit() { editingMakerId = null; renderMakerTable(); }
+  async function saveMakerEdit(id) {
+    const val = document.getElementById('editMakerInput_'+id).value.trim();
+    if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
+    if (scanMakersList.some(m => m.maker === val && m.id !== id)) { showToast('⚠ 이미 등록된 메이커명입니다', true); return; }
+
+    const existing = await sbGet('scan_required_makers', `maker=eq.${encodeURIComponent(val)}&limit=1`);
+    if (Array.isArray(existing) && existing.length > 0 && existing[0].id !== id) {
+      showToast(`⚠ "${val}"은(는) 이미 다른 항목(비활성 포함)에 등록되어 있어 사용할 수 없습니다`, true);
+      return;
+    }
+
+    const result = await sbPatch('scan_required_makers', id, { maker: val });
+    if (Array.isArray(result) && result.length > 0) {
+      showToast('✓ 수정되었습니다');
+      editingMakerId = null;
+      loadScanMakers();
+    } else {
+      const errMsg = (result && result.message) ? result.message : JSON.stringify(result).slice(0,150);
+      showToast(`⚠ 수정 실패: ${errMsg}`, true);
+    }
   }
   async function removeScanMaker(id) {
-    if (!confirm('이 메이커를 스캔대상에서 제외하시겠습니까?')) return;
+    if (!confirm('이 메이커를 삭제(비활성화)하시겠습니까?')) return;
     await sbPatch('scan_required_makers', id, { is_active: false });
-    showToast('제외되었습니다');
+    showToast('삭제되었습니다');
     loadScanMakers();
   }
 
