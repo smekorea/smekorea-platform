@@ -794,12 +794,18 @@
     document.getElementById('statMismatch').textContent = '미매칭 ' + logRows.filter(r=>!r.item_code).length;
   }
 
+  let scanQueue = Promise.resolve();
   document.addEventListener('keydown', (e) => {
     if (!document.getElementById('tab-work').classList.contains('active')) return;
     if (e.target.id === 'scanInput' && e.key === 'Enter') {
       const val = e.target.value;
       e.target.value = '';
-      processScan(val);
+      // 스캐너가 사람보다 훨씬 빨라서 이전 스캔의 저장(await)이 끝나기 전에 다음 스캔이 들어올 수 있음.
+      // 큐로 강제 직렬화해서 pendingPN/pendingLOT 레이스 컨디션(짝 놓침) 방지.
+      scanQueue = scanQueue.then(() => processScan(val)).catch(err => {
+        console.error('스캔 처리 오류:', err);
+        showToast('⚠ 스캔 처리 중 오류 발생', true);
+      });
     }
   });
 
