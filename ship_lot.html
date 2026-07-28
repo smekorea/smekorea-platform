@@ -126,13 +126,11 @@
   .scan-input-wrap input:disabled{border-color:var(--border);background:var(--surface2);}
 
   /* OK/NG 오버레이 - mfg_lot 스타일: 짧게(1~2초) 표시 후 자동 사라짐 */
-  .ok-overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:30;border-radius:12px;backdrop-filter:blur(1px);}
-  .ok-overlay.show{display:flex;}
-  .ok-overlay.ok{background:rgba(14,159,110,0.94);}
-  .ok-overlay.ng{background:rgba(200,0,30,0.94);}
-  .ok-overlay .oo-icon{font-size:44px;color:#fff;}
-  .ok-overlay .oo-text{font-size:16px;font-weight:800;color:#fff;}
-  .ok-overlay .oo-sub{font-size:12px;color:rgba(255,255,255,0.85);}
+  .scan-slot-box.ok{border-color:#1a56db;border-style:solid;background:rgba(26,86,219,0.07);}
+  .scan-slot-box.ng{border-color:var(--accent);border-style:solid;background:rgba(200,0,30,0.07);}
+  .slot-badge{font-size:10px;font-weight:800;padding:2px 9px;border-radius:10px;background:var(--surface2);color:var(--muted);}
+  .slot-badge.ok{background:rgba(26,86,219,0.16);color:#1a56db;}
+  .slot-badge.ng{background:rgba(200,0,30,0.16);color:var(--accent);}
 
   .btn{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid;transition:all 0.2s;}
   .btn-primary{background:var(--accent3);border-color:var(--accent3);color:#fff;width:100%;}
@@ -287,12 +285,6 @@
           <button class="print-btn" onclick="printItemList()">🖨 거래명세표 인쇄</button>
         </div>
         <div class="card-body" style="position:relative;">
-          <div class="ok-overlay" id="okOverlay">
-            <div class="oo-icon" id="ooIcon">✓</div>
-            <div class="oo-text" id="ooText">인식 완료</div>
-            <div class="oo-sub" id="ooSub"></div>
-          </div>
-
           <div class="scan-input-wrap">
             <input type="text" id="scanInput" placeholder="여기에 스캐너로 리딩 → Enter" autocomplete="off" disabled>
           </div>
@@ -300,16 +292,16 @@
           <!-- QR / 바코드 2슬롯, mfg_stock SCAN1~4 참고 -->
           <div class="scan-slots-row">
             <div class="scan-slot-box" id="slotQR">
-              <div class="slot-hd"><span>① QR 리딩</span><span>1회 완결</span></div>
+              <div class="slot-hd"><span>① QR 리딩</span><span id="slotQRBadge" class="slot-badge">1회 완결</span></div>
               <div class="slot-val" id="slotQRVal">대기중...</div>
             </div>
             <div class="scan-slot-box" id="slotBarcode">
-              <div class="slot-hd"><span>② 바코드 리딩</span><span>품번+LOT 순서무관</span></div>
+              <div class="slot-hd"><span>② 바코드 리딩</span><span id="slotBarcodeBadge" class="slot-badge">품번+LOT 순서무관</span></div>
               <div class="slot-val" id="slotBarcodeVal">대기중...</div>
             </div>
           </div>
 
-          <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:12px;">일치 시 짧게 표시 후 바로 다음 스캔으로 이어집니다</div>
+          <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:12px;">스캔 결과는 위 박스에 바로 표시됩니다 (OK=파랑 / NG=빨강)</div>
           <button class="btn btn-primary" id="completeBtn" onclick="tryCompleteScan()">✓ 출고검수 완료 확정</button>
         </div>
       </div>
@@ -859,27 +851,28 @@
     return null;
   }
 
-  // ══ OK/NG 오버레이 - mfg_lot 스타일 (짧게 표시 후 자동 사라지고 바로 다음 스캔) ══
-  let overlayTimer = null;
-  function showOkOverlay(ok, text, sub) {
-    const el = document.getElementById('okOverlay');
-    document.getElementById('ooIcon').textContent = ok ? '✓' : '✕';
-    document.getElementById('ooText').textContent = text;
-    document.getElementById('ooSub').textContent = sub || '';
-    el.className = 'ok-overlay show ' + (ok?'ok':'ng');
-    if (overlayTimer) clearTimeout(overlayTimer);
-    overlayTimer = setTimeout(() => {
-      el.className = 'ok-overlay';
-      resetSlots();
-      document.getElementById('scanInput').focus();
-    }, ok ? 1400 : 4500);
+  // ══ 스캔 결과를 QR/바코드 박스 자체에 표시 (OK=파랑/NG=빨강), 팝업 없음 ══
+  function finishScan(slot, ok, headline, detail) {
+    const boxId = slot === 'qr' ? 'slotQR' : 'slotBarcode';
+    const badgeId = slot === 'qr' ? 'slotQRBadge' : 'slotBarcodeBadge';
+    const valId = slot === 'qr' ? 'slotQRVal' : 'slotBarcodeVal';
+    document.getElementById(boxId).className = 'scan-slot-box ' + (ok ? 'ok' : 'ng');
+    const badge = document.getElementById(badgeId);
+    badge.textContent = ok ? 'OK' : 'NG';
+    badge.className = 'slot-badge ' + (ok ? 'ok' : 'ng');
+    document.getElementById(valId).innerHTML = `<b>${headline}</b>` + (detail ? `<br><span style="font-weight:400;">${detail}</span>` : '');
+    document.getElementById('scanInput').focus();
   }
 
   function resetSlots() {
     document.getElementById('slotQR').className = 'scan-slot-box';
     document.getElementById('slotQRVal').textContent = '대기중...';
+    document.getElementById('slotQRBadge').textContent = '1회 완결';
+    document.getElementById('slotQRBadge').className = 'slot-badge';
     document.getElementById('slotBarcode').className = 'scan-slot-box';
     document.getElementById('slotBarcodeVal').textContent = '대기중...';
+    document.getElementById('slotBarcodeBadge').textContent = '품번+LOT 순서무관';
+    document.getElementById('slotBarcodeBadge').className = 'slot-badge';
   }
 
   function isAlreadyFulfilled(itemCode) {
@@ -916,8 +909,7 @@
         pair_status: overScan ? '초과스캔' : '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
       });
       if (isSbError(log)) {
-        document.getElementById('slotQR').className = 'scan-slot-box';
-        showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 수량 반영 안 됨. 관리자에게 문의하세요');
+        finishScan('qr', false, '⚠ 저장 실패', '체크이력 저장 오류 — 수량 반영 안 됨. 관리자에게 문의하세요');
         console.error('ship_lot_log 저장 실패:', log);
         renderItemList(); updateProgress(); renderScanResultList();
         return;
@@ -926,14 +918,12 @@
       activeItemCode = itemCode;
       if (itemCode && overScan) {
         const row = itemRows.find(r => r.item_code === itemCode);
-        document.getElementById('slotQR').className = 'scan-slot-box';
-        showOkOverlay(false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+        finishScan('qr', false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
       } else if (itemCode) {
         await accumulateQty(itemCode, qty);
-        document.getElementById('slotQR').className = 'scan-slot-box filled';
-        showOkOverlay(true, '✓ 인식 완료', `${itemCode} +${qty.toLocaleString()}개`);
+        finishScan('qr', true, '✓ 인식 완료', `${itemCode} +${qty.toLocaleString()}개`);
       } else {
-        showOkOverlay(false, '미매칭 품번', raw);
+        finishScan('qr', false, '미매칭 품번', raw);
       }
 
     } else {
@@ -952,14 +942,13 @@
           const overScan = await completePair(item, pn, qty, raw, pendingLOT);
           activeItemCode = itemCode;
           pendingLOT = null;
-          document.getElementById('slotBarcode').className = overScan ? 'scan-slot-box' : 'scan-slot-box filled';
           if (overScan === 'error') {
-            showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 수량 반영 안 됨');
+            finishScan('barcode', false, '⚠ 저장 실패', '체크이력 저장 오류 — 수량 반영 안 됨');
           } else if (itemCode && overScan) {
             const row = itemRows.find(r => r.item_code === itemCode);
-            showOkOverlay(false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+            finishScan('barcode', false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
           } else {
-            showOkOverlay(!!itemCode, itemCode ? '✓ 인식 완료' : '미매칭 품번', itemCode ? `${itemCode} +${qty.toLocaleString()}개` : raw);
+            finishScan('barcode', !!itemCode, itemCode ? '✓ 인식 완료' : '미매칭 품번', itemCode ? `${itemCode} +${qty.toLocaleString()}개` : raw);
           }
         } else {
           const log = await sbPost('ship_lot_log', {
@@ -969,8 +958,7 @@
             pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
           });
           if (isSbError(log)) {
-            document.getElementById('slotBarcode').className = 'scan-slot-box';
-            showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 다시 스캔해주세요');
+            finishScan('barcode', false, '⚠ 저장 실패', '체크이력 저장 오류 — 다시 스캔해주세요');
             console.error('ship_lot_log 저장 실패:', log);
             renderItemList(); updateProgress(); renderScanResultList();
             return;
@@ -989,17 +977,14 @@
           const pnQty = pendingPN.qty;
           pendingPN = null;
           if (overScan === 'error') {
-            document.getElementById('slotBarcode').className = 'scan-slot-box';
-            showOkOverlay(false, '⚠ 저장 실패', '체크이력 갱신 오류 — 수량 반영 안 됨');
+            finishScan('barcode', false, '⚠ 저장 실패', '체크이력 갱신 오류 — 수량 반영 안 됨');
           } else if (pnItemCode && overScan) {
             const row = itemRows.find(r => r.item_code === pnItemCode);
-            document.getElementById('slotBarcode').className = 'scan-slot-box';
-            showOkOverlay(false, '⚠ 초과 스캔', `${pnItemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+            finishScan('barcode', false, '⚠ 초과 스캔', `${pnItemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
           } else {
             const ok = !!pnItemCode;
             const info = ok ? `${pnItemCode} +${pnQty.toLocaleString()}개` : raw;
-            document.getElementById('slotBarcode').className = 'scan-slot-box filled';
-            showOkOverlay(ok, ok ? '✓ 인식 완료' : '미매칭 품번', info);
+            finishScan('barcode', ok, ok ? '✓ 인식 완료' : '미매칭 품번', info);
           }
         } else {
           const log = await sbPost('ship_lot_log', {
@@ -1008,8 +993,7 @@
             pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
           });
           if (isSbError(log)) {
-            document.getElementById('slotBarcode').className = 'scan-slot-box';
-            showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 다시 스캔해주세요');
+            finishScan('barcode', false, '⚠ 저장 실패', '체크이력 저장 오류 — 다시 스캔해주세요');
             console.error('ship_lot_log 저장 실패:', log);
             renderItemList(); updateProgress(); renderScanResultList();
             return;
