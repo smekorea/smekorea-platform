@@ -104,6 +104,10 @@
   .badge-dot.done{background:#5bc8f5;box-shadow:0 0 5px rgba(91,200,245,0.6);}
   .badge-dot.progress{background:var(--warn);box-shadow:0 0 5px rgba(217,119,6,0.5);}
   .badge-dot.wait{background:var(--border2);}
+  .status-text{font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;}
+  .status-text.done{background:rgba(91,200,245,0.16);color:#0369a1;}
+  .status-text.partial{background:rgba(217,119,6,0.14);color:#a15c00;}
+  .status-text.wait{background:rgba(122,139,170,0.14);color:#4b5768;}
 
   /* 스캔 슬롯 2개 (QR / 바코드) - mfg_stock SCAN1~4 참고, 나란히 배치 */
   .scan-slots-row{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px;}
@@ -166,6 +170,8 @@
   .maker-add-row{display:flex;gap:8px;}
   .maker-add-row input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;}
   .maker-table-wrap{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden;}
+  .maker-table-wrap .card-hd{background:#000;}
+  .maker-table-wrap table.dtab thead th{background:#3f4550;}
   .maker-edit-input{padding:5px 8px;border:1.5px solid var(--accent2);border-radius:6px;font-size:12px;width:140px;}
 
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;}
@@ -341,7 +347,7 @@
     </div>
     <select id="histResult">
       <option value="all">전체결과</option>
-      <option value="완결">완결</option>
+      <option value="완결">완료</option>
       <option value="미완결(짝대기)">미완결</option>
       <option value="미매칭">미매칭</option>
     </select>
@@ -663,7 +669,7 @@
         <td>${badge}</td>
         <td class="mono" style="text-align:right;">${(r.qty_required||0).toLocaleString()}</td>
         <td class="mono" style="text-align:right;">${rightPart}</td>
-        <td style="text-align:center;"><span class="badge-dot ${r.is_done?'done':(r.qty_scanned>0?'progress':'wait')}"></span></td>
+        <td style="text-align:center;">${r.is_done ? '<span class="status-text done">완료</span>' : ((r.qty_scanned||0)>0 ? '<span class="status-text partial">미매칭</span>' : '<span class="status-text wait">대기</span>')}</td>
       </tr>`;
     }).join('');
   }
@@ -1097,7 +1103,7 @@
         : r.scan_type==='바코드1_품번' ? '<span class="tag-scan tag-b1">품번</span>'
         : '<span class="tag-scan tag-b2">LOT</span>';
       const resultBadge = !r.item_code ? '<span class="badge-red">미매칭</span>'
-        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? `<span style="color:var(--warn);font-weight:700;">미완결</span>` : `<span style="color:var(--accent3);font-weight:700;">완결</span>`);
+        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? `<span style="color:var(--warn);font-weight:700;">미완결</span>` : `<span style="color:var(--accent3);font-weight:700;">완료</span>`);
       const qtyReq = (r._qtyRequired!=null) ? r._qtyRequired.toLocaleString() : '-';
       const qtyScan = (r.parsed_qty!=null) ? r.parsed_qty.toLocaleString() : '-';
       const originTag = r.origin==='FOSAN' ? '<span class="tag-scan" style="background:rgba(217,119,6,0.12);color:var(--warn);border:1px solid rgba(217,119,6,0.25);" title="FOSAN(중국)">FOSAN</span>'
@@ -1167,7 +1173,7 @@
       const timeStr = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('ko-KR', {hour12:false}) : '-';
       const resultBadge = r.pair_status === '초과스캔' ? '<span style="color:var(--accent);font-weight:700;">초과</span>'
         : !r.item_code ? '<span class="badge-red">미매칭</span>'
-        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '<span style="color:var(--warn);font-weight:700;">미완결</span>' : '<span style="color:var(--accent3);font-weight:700;">완결</span>');
+        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '<span style="color:var(--warn);font-weight:700;">미완결</span>' : '<span style="color:var(--accent3);font-weight:700;">완료</span>');
       const rawEsc = (r.raw_scan||'').replace(/"/g,'&quot;');
       const rawCell = isEditing
         ? `<input type="text" class="maker-edit-input" style="width:100%;font-size:11px;" id="editScanRaw_${r.id}" value="${rawEsc}">`
@@ -1322,7 +1328,7 @@
       '원본값': r.raw_scan, '리딩품번': r.parsed_pn||'', '거래명세서품번': r.matched_lg_pn||'', '매칭방식': r.match_method||'',
       '매칭품번': r.item_code||'', 'LOT': r.parsed_lot||'', '산지': r.origin||'',
       '지시수량': r._qtyRequired!=null ? r._qtyRequired : '', '리딩수량': r.parsed_qty!=null ? r.parsed_qty : '',
-      '결과': !r.item_code ? '미매칭' : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '미완결' : '완결'), '작업자': r.scanned_by||''
+      '결과': !r.item_code ? '미매칭' : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '미완결' : '완료'), '작업자': r.scanned_by||''
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -1369,8 +1375,10 @@
       const nameCell = isEditing
         ? `<input type="text" class="maker-edit-input" id="editMakerInput_${m.id}" value="${m.maker}">`
         : `<b>${m.maker}</b>`;
+      const defaultSmartNote = '메이커품번(Maker P/N) 기준으로 LG품번/품목코드가 산지별로 복수 등록되어 있음 (예: 3000-98/0RZZA90001A ↔ 9000-268/EBC36109501, 둘 다 Maker P/N 동일). 매칭 시 메이커품번 교차조회 로직 적용 중(2026-07-28 반영).';
+      const noteValue = m.match_note || (m.maker && m.maker.trim().toUpperCase() === 'SMART' ? defaultSmartNote : '');
       const noteCell = isEditing
-        ? `<textarea class="maker-edit-input" id="editMakerNote_${m.id}" style="width:100%;min-height:44px;font-size:11px;">${m.match_note||''}</textarea>`
+        ? `<textarea class="maker-edit-input" id="editMakerNote_${m.id}" style="width:100%;min-height:44px;font-size:11px;">${noteValue}</textarea>`
         : `<span style="font-size:11.5px;color:var(--muted);white-space:normal;">${m.match_note ? m.match_note.replace(/</g,'&lt;') : '-'}</span>`;
       const dateStr = m.created_at ? new Date(m.created_at).toLocaleDateString('ko-KR') : '-';
       const actionCell = isEditing
