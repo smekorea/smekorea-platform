@@ -914,6 +914,13 @@
         matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
         pair_status: overScan ? '초과스캔' : '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
       });
+      if (isSbError(log)) {
+        document.getElementById('slotQR').className = 'scan-slot-box';
+        showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 수량 반영 안 됨. 관리자에게 문의하세요');
+        console.error('ship_lot_log 저장 실패:', log);
+        renderItemList(); updateProgress(); renderScanResultList();
+        return;
+      }
       logRows.unshift(Array.isArray(log)?log[0]:log);
       activeItemCode = itemCode;
       if (itemCode && overScan) {
@@ -945,7 +952,9 @@
           activeItemCode = itemCode;
           pendingLOT = null;
           document.getElementById('slotBarcode').className = overScan ? 'scan-slot-box' : 'scan-slot-box filled';
-          if (itemCode && overScan) {
+          if (overScan === 'error') {
+            showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 수량 반영 안 됨');
+          } else if (itemCode && overScan) {
             const row = itemRows.find(r => r.item_code === itemCode);
             showOkOverlay(false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
           } else {
@@ -958,6 +967,13 @@
             matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
             pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
           });
+          if (isSbError(log)) {
+            document.getElementById('slotBarcode').className = 'scan-slot-box';
+            showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 다시 스캔해주세요');
+            console.error('ship_lot_log 저장 실패:', log);
+            renderItemList(); updateProgress(); renderScanResultList();
+            return;
+          }
           const logObj = Array.isArray(log)?log[0]:log;
           logRows.unshift(logObj);
           pendingPN = { logId: logObj.id, pn, qty, raw, itemCode };
@@ -971,7 +987,10 @@
           const pnItemCode = pendingPN.itemCode;
           const pnQty = pendingPN.qty;
           pendingPN = null;
-          if (pnItemCode && overScan) {
+          if (overScan === 'error') {
+            document.getElementById('slotBarcode').className = 'scan-slot-box';
+            showOkOverlay(false, '⚠ 저장 실패', '체크이력 갱신 오류 — 수량 반영 안 됨');
+          } else if (pnItemCode && overScan) {
             const row = itemRows.find(r => r.item_code === pnItemCode);
             document.getElementById('slotBarcode').className = 'scan-slot-box';
             showOkOverlay(false, '⚠ 초과 스캔', `${pnItemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
@@ -987,6 +1006,13 @@
             raw_scan: raw, parsed_lot: raw, origin: detectOrigin(raw),
             pair_status: '미완결(짝대기)', scanned_at: new Date().toISOString(), scanned_by: workerName
           });
+          if (isSbError(log)) {
+            document.getElementById('slotBarcode').className = 'scan-slot-box';
+            showOkOverlay(false, '⚠ 저장 실패', '체크이력 저장 오류 — 다시 스캔해주세요');
+            console.error('ship_lot_log 저장 실패:', log);
+            renderItemList(); updateProgress(); renderScanResultList();
+            return;
+          }
           const logObj = Array.isArray(log)?log[0]:log;
           logRows.unshift(logObj);
           pendingLOT = { logId: logObj.id, raw };
@@ -1002,7 +1028,12 @@
   async function completePairFromPN(pn_obj, lotRaw) {
     const origin = detectOrigin(lotRaw);
     const overScan = pn_obj.itemCode ? isAlreadyFulfilled(pn_obj.itemCode) : false;
-    await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, origin: origin, pair_status: overScan ? '초과스캔' : '완결' });
+    const patchResult = await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, origin: origin, pair_status: overScan ? '초과스캔' : '완결' });
+    if (isSbError(patchResult)) {
+      console.error('ship_lot_log 패치 실패:', patchResult);
+      showToast('⚠ 체크이력 갱신 실패 — 수량 미반영, 관리자에게 문의하세요', true);
+      return 'error';
+    }
     const idx = logRows.findIndex(r=>r.id===pn_obj.logId);
     if (idx>=0) { logRows[idx].parsed_lot = lotRaw; logRows[idx].origin = origin; logRows[idx].pair_status = overScan ? '초과스캔' : '완결'; }
     if (pn_obj.itemCode && !overScan) await accumulateQty(pn_obj.itemCode, pn_obj.qty);
@@ -1019,8 +1050,17 @@
       matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
       pair_status: overScan ? '초과스캔' : '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
     });
+    if (isSbError(log)) {
+      console.error('ship_lot_log 저장 실패:', log);
+      showToast('⚠ 체크이력 저장 실패 — 수량 미반영, 관리자에게 문의하세요', true);
+      return 'error';
+    }
     logRows.unshift(Array.isArray(log)?log[0]:log);
-    await sbPatch('ship_lot_log', lot_obj.logId, { item_code: itemCode, pair_status: overScan ? '초과스캔' : '완결' });
+    const patchResult = await sbPatch('ship_lot_log', lot_obj.logId, { item_code: itemCode, pair_status: overScan ? '초과스캔' : '완결' });
+    if (isSbError(patchResult)) {
+      console.error('ship_lot_log(LOT측) 패치 실패:', patchResult);
+      showToast('⚠ LOT 기록 갱신 실패 — 체크이력을 확인해주세요', true);
+    }
     const idx = logRows.findIndex(r=>r.id===lot_obj.logId);
     if (idx>=0) { logRows[idx].item_code = itemCode; logRows[idx].pair_status = overScan ? '초과스캔' : '완결'; }
     if (itemCode && !overScan) await accumulateQty(itemCode, qty);
@@ -1031,9 +1071,16 @@
     const row = itemRows.find(r => r.item_code === itemCode);
     if (!row) return;
     if (row.check_type === 'manual') return;
-    row.qty_scanned = (row.qty_scanned||0) + qty;
-    row.is_done = row.qty_scanned >= row.qty_required;
-    await sbPatch('ship_lot_item', row.id, { qty_scanned: row.qty_scanned, is_done: row.is_done });
+    const newQtyScanned = (row.qty_scanned||0) + qty;
+    const newIsDone = newQtyScanned >= row.qty_required;
+    const result = await sbPatch('ship_lot_item', row.id, { qty_scanned: newQtyScanned, is_done: newIsDone });
+    if (isSbError(result)) {
+      console.error('ship_lot_item 수량 반영 실패:', result);
+      showToast(`⚠ ${itemCode} 수량 반영 실패 — 화면과 실제 DB가 다를 수 있습니다`, true);
+      return;
+    }
+    row.qty_scanned = newQtyScanned;
+    row.is_done = newIsDone;
   }
 
   function tryCompleteScan() {
