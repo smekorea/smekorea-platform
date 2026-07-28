@@ -303,6 +303,27 @@
           <button class="btn btn-primary" id="completeBtn" onclick="tryCompleteScan()">✓ 출고검수 완료 확정</button>
         </div>
       </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-hd">
+          <span>📄 스캔 결과 내역</span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="item-table-scroll" style="max-height:280px;">
+            <table class="dtab" id="scanResultTable">
+              <thead><tr>
+                <th style="width:66px;">시각<div class="col-resizer"></div></th>
+                <th style="width:52px;">타입<div class="col-resizer"></div></th>
+                <th>원본값<div class="col-resizer"></div></th>
+                <th style="width:90px;">매칭품번<div class="col-resizer"></div></th>
+                <th style="width:60px;">결과<div class="col-resizer"></div></th>
+                <th style="width:100px;">관리<div class="col-resizer"></div></th>
+              </tr></thead>
+              <tbody id="scanResultTbody"><tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted);">스캔 기록 없음</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -598,6 +619,7 @@
 
     renderItemList();
     updateProgress();
+    renderScanResultList();
 
     document.getElementById('scanInput').value = '';
     if (workerName) document.getElementById('scanInput').focus();
@@ -825,6 +847,13 @@
     document.getElementById('slotBarcodeVal').textContent = '대기중...';
   }
 
+  function isAlreadyFulfilled(itemCode) {
+    const row = itemRows.find(r => r.item_code === itemCode);
+    if (!row) return false;
+    if (row.check_type === 'manual') return false;
+    return (row.qty_scanned||0) >= (row.qty_required||0);
+  }
+
   async function processScan(raw) {
     raw = (raw||'').trim();
     if (!raw) return;
@@ -843,16 +872,21 @@
       const origin = detectOrigin(lotPart);
       const item = findItemByLgPn(pn);
       const itemCode = item ? item.item_code : null;
+      const overScan = itemCode ? isAlreadyFulfilled(itemCode) : false;
 
       const log = await sbPost('ship_lot_log', {
         ship_schedule_id: currentSid, item_code: itemCode, scan_type: 'QR',
         raw_scan: raw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot, origin: origin,
         matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
-        pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
+        pair_status: overScan ? '초과스캔' : '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
       });
       logRows.unshift(Array.isArray(log)?log[0]:log);
       activeItemCode = itemCode;
-      if (itemCode) {
+      if (itemCode && overScan) {
+        const row = itemRows.find(r => r.item_code === itemCode);
+        document.getElementById('slotQR').className = 'scan-slot-box';
+        showOkOverlay(false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+      } else if (itemCode) {
         await accumulateQty(itemCode, qty);
         document.getElementById('slotQR').className = 'scan-slot-box filled';
         showOkOverlay(true, '✓ 인식 완료', `${itemCode} +${qty.toLocaleString()}개`);
@@ -873,11 +907,16 @@
         document.getElementById('slotBarcodeVal').textContent = `품번:${raw} / LOT:대기중`;
 
         if (pendingLOT) {
-          await completePair(item, pn, qty, raw, pendingLOT);
+          const overScan = await completePair(item, pn, qty, raw, pendingLOT);
           activeItemCode = itemCode;
           pendingLOT = null;
-          document.getElementById('slotBarcode').className = 'scan-slot-box filled';
-          showOkOverlay(!!itemCode, itemCode ? '✓ 인식 완료' : '미매칭 품번', itemCode ? `${itemCode} +${qty.toLocaleString()}개` : raw);
+          document.getElementById('slotBarcode').className = overScan ? 'scan-slot-box' : 'scan-slot-box filled';
+          if (itemCode && overScan) {
+            const row = itemRows.find(r => r.item_code === itemCode);
+            showOkOverlay(false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+          } else {
+            showOkOverlay(!!itemCode, itemCode ? '✓ 인식 완료' : '미매칭 품번', itemCode ? `${itemCode} +${qty.toLocaleString()}개` : raw);
+          }
         } else {
           const log = await sbPost('ship_lot_log', {
             ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
@@ -893,13 +932,21 @@
       } else {
         document.getElementById('slotBarcodeVal').textContent = pendingPN ? `품번:${pendingPN.raw} / LOT:${raw}` : `품번:대기중 / LOT:${raw}`;
         if (pendingPN) {
-          await completePairFromPN(pendingPN, raw);
+          const overScan = await completePairFromPN(pendingPN, raw);
           activeItemCode = pendingPN.itemCode;
-          const ok = !!pendingPN.itemCode;
-          const info = ok ? `${pendingPN.itemCode} +${pendingPN.qty.toLocaleString()}개` : raw;
+          const pnItemCode = pendingPN.itemCode;
+          const pnQty = pendingPN.qty;
           pendingPN = null;
-          document.getElementById('slotBarcode').className = 'scan-slot-box filled';
-          showOkOverlay(ok, ok ? '✓ 인식 완료' : '미매칭 품번', info);
+          if (pnItemCode && overScan) {
+            const row = itemRows.find(r => r.item_code === pnItemCode);
+            document.getElementById('slotBarcode').className = 'scan-slot-box';
+            showOkOverlay(false, '⚠ 초과 스캔', `${pnItemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+          } else {
+            const ok = !!pnItemCode;
+            const info = ok ? `${pnItemCode} +${pnQty.toLocaleString()}개` : raw;
+            document.getElementById('slotBarcode').className = 'scan-slot-box filled';
+            showOkOverlay(ok, ok ? '✓ 인식 완료' : '미매칭 품번', info);
+          }
         } else {
           const log = await sbPost('ship_lot_log', {
             ship_schedule_id: currentSid, item_code: null, scan_type: '바코드2_LOT',
@@ -915,30 +962,35 @@
     }
     renderItemList();
     updateProgress();
+    renderScanResultList();
   }
 
   async function completePairFromPN(pn_obj, lotRaw) {
     const origin = detectOrigin(lotRaw);
-    await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, origin: origin, pair_status: '완결' });
+    const overScan = pn_obj.itemCode ? isAlreadyFulfilled(pn_obj.itemCode) : false;
+    await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, origin: origin, pair_status: overScan ? '초과스캔' : '완결' });
     const idx = logRows.findIndex(r=>r.id===pn_obj.logId);
-    if (idx>=0) { logRows[idx].parsed_lot = lotRaw; logRows[idx].origin = origin; logRows[idx].pair_status = '완결'; }
-    if (pn_obj.itemCode) await accumulateQty(pn_obj.itemCode, pn_obj.qty);
+    if (idx>=0) { logRows[idx].parsed_lot = lotRaw; logRows[idx].origin = origin; logRows[idx].pair_status = overScan ? '초과스캔' : '완결'; }
+    if (pn_obj.itemCode && !overScan) await accumulateQty(pn_obj.itemCode, pn_obj.qty);
+    return overScan;
   }
 
   async function completePair(item, pn, qty, pnRaw, lot_obj) {
     const itemCode = item ? item.item_code : null;
+    const overScan = itemCode ? isAlreadyFulfilled(itemCode) : false;
     const origin = detectOrigin(lot_obj.raw);
     const log = await sbPost('ship_lot_log', {
       ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
       raw_scan: pnRaw, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot_obj.raw, origin: origin,
       matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
-      pair_status: '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
+      pair_status: overScan ? '초과스캔' : '완결', scanned_at: new Date().toISOString(), scanned_by: workerName
     });
     logRows.unshift(Array.isArray(log)?log[0]:log);
-    await sbPatch('ship_lot_log', lot_obj.logId, { item_code: itemCode, pair_status: '완결' });
+    await sbPatch('ship_lot_log', lot_obj.logId, { item_code: itemCode, pair_status: overScan ? '초과스캔' : '완결' });
     const idx = logRows.findIndex(r=>r.id===lot_obj.logId);
-    if (idx>=0) { logRows[idx].item_code = itemCode; logRows[idx].pair_status = '완결'; }
-    if (itemCode) await accumulateQty(itemCode, qty);
+    if (idx>=0) { logRows[idx].item_code = itemCode; logRows[idx].pair_status = overScan ? '초과스캔' : '완결'; }
+    if (itemCode && !overScan) await accumulateQty(itemCode, qty);
+    return overScan;
   }
 
   async function accumulateQty(itemCode, qty) {
@@ -1094,9 +1146,109 @@
     logRows = Array.isArray(logs) ? logs : [];
     renderItemList();
     updateProgress();
+    renderScanResultList();
   }
 
-  async function recalcItemProgress(sid, itemCode) {
+  // ══ 스캔 결과 내역 (우측 하단) — 수정/삭제 가능 ══
+  let editingLogId = null;
+
+  function renderScanResultList() {
+    const tbody = document.getElementById('scanResultTbody');
+    if (!tbody) return;
+    if (!logRows || logRows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted);">스캔 기록 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = logRows.slice(0, 200).map(r => {
+      const isEditing = editingLogId === r.id;
+      const typeTag = r.scan_type==='QR' ? '<span class="tag-scan tag-qr">QR</span>'
+        : r.scan_type==='바코드1_품번' ? '<span class="tag-scan tag-b1">품번</span>'
+        : '<span class="tag-scan tag-b2">LOT</span>';
+      const timeStr = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('ko-KR', {hour12:false}) : '-';
+      const resultBadge = r.pair_status === '초과스캔' ? '<span style="color:var(--accent);font-weight:700;">초과</span>'
+        : !r.item_code ? '<span class="badge-red">미매칭</span>'
+        : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '<span style="color:var(--warn);font-weight:700;">미완결</span>' : '<span style="color:var(--accent3);font-weight:700;">완결</span>');
+      const rawEsc = (r.raw_scan||'').replace(/"/g,'&quot;');
+      const rawCell = isEditing
+        ? `<input type="text" class="maker-edit-input" style="width:100%;font-size:11px;" id="editScanRaw_${r.id}" value="${rawEsc}">`
+        : `<span title="${rawEsc}">${r.raw_scan||''}</span>`;
+      const actionCell = isEditing
+        ? `<button class="btn btn-primary" style="width:auto;padding:3px 8px;font-size:10px;" onclick="saveScanEdit(${r.id})">저장</button>
+           <button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;" onclick="cancelScanEdit()">취소</button>`
+        : `<button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;" onclick="editScanRow(${r.id})">수정</button>
+           <button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;color:var(--accent);" onclick="deleteScanRow(${r.id})">삭제</button>`;
+      return `<tr>
+        <td class="mono">${timeStr}</td>
+        <td>${typeTag}</td>
+        <td class="mono">${rawCell}</td>
+        <td class="mono">${r.item_code||'-'}</td>
+        <td>${resultBadge}</td>
+        <td>${actionCell}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function editScanRow(id) { editingLogId = id; renderScanResultList(); }
+  function cancelScanEdit() { editingLogId = null; renderScanResultList(); }
+
+  async function saveScanEdit(id) {
+    const input = document.getElementById('editScanRaw_'+id);
+    const newRaw = input ? input.value.trim() : '';
+    const row = logRows.find(r => r.id === id);
+    if (!row || !newRaw) { showToast('⚠ 값을 입력해주세요', true); return; }
+    const oldItemCode = row.item_code;
+
+    let updates = { raw_scan: newRaw };
+    if (row.scan_type === 'QR') {
+      const parts = newRaw.split('!');
+      const pn = parts[0];
+      const qty = parseFloat(parts[1]) || 0;
+      const lotPart = parts[2] || '';
+      const lot = parts.slice(2).join('!');
+      const item = findItemByLgPn(pn);
+      const newItemCode = item ? item.item_code : null;
+      const overScan = newItemCode ? isAlreadyFulfilled(newItemCode) && newItemCode !== oldItemCode : false;
+      updates = { ...updates, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot, origin: detectOrigin(lotPart),
+        item_code: newItemCode, matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
+        pair_status: overScan ? '초과스캔' : '완결' };
+    } else if (row.scan_type === '바코드1_품번') {
+      const clean = newRaw.replace(/\s+/g,'');
+      const m = clean.length >= 12 ? clean.match(/^(.{11})(\d+)$/) : null;
+      if (!m) { showToast('⚠ 품번+수량 형식(11자+숫자)이 아닙니다', true); return; }
+      const pn = m[1], qty = parseInt(m[2],10);
+      const item = findItemByLgPn(pn);
+      const newItemCode = item ? item.item_code : null;
+      updates = { ...updates, parsed_pn: pn, parsed_qty: qty,
+        item_code: newItemCode, matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null };
+    } else {
+      updates = { ...updates, parsed_lot: newRaw, origin: detectOrigin(newRaw) };
+    }
+
+    await sbPatch('ship_lot_log', id, updates);
+    Object.assign(row, updates);
+    editingLogId = null;
+    renderScanResultList();
+
+    const affected = new Set([oldItemCode, updates.item_code].filter(Boolean));
+    for (const ic of affected) await recalcItemProgress(currentSid, ic);
+    if (affected.size > 0) await refreshItemListForSchedule(currentSid);
+    showToast('✓ 수정 및 수량 재계산 완료');
+  }
+
+  async function deleteScanRow(id) {
+    if (!confirm('이 스캔 기록을 삭제하시겠습니까?\n연결된 품목의 진행상태도 함께 재계산됩니다.')) return;
+    const row = logRows.find(r => r.id === id);
+    const itemCode = row ? row.item_code : null;
+    const ok = await sbDelete('ship_lot_log', [id]);
+    if (!ok) { showToast('⚠ 삭제 실패', true); return; }
+    logRows = logRows.filter(r => r.id !== id);
+    renderScanResultList();
+    if (itemCode) {
+      await recalcItemProgress(currentSid, itemCode);
+      await refreshItemListForSchedule(currentSid);
+    }
+    showToast('✓ 삭제 및 수량 재계산 완료');
+  }  async function recalcItemProgress(sid, itemCode) {
     const rows = await sbGet('ship_lot_log', `ship_schedule_id=eq.${sid}&item_code=eq.${itemCode}&pair_status=eq.완결&select=parsed_qty`);
     const total = Array.isArray(rows) ? rows.reduce((s, r) => s + (Number(r.parsed_qty) || 0), 0) : 0;
     const itemRowsDb = await sbGet('ship_lot_item', `ship_schedule_id=eq.${sid}&item_code=eq.${itemCode}&select=id,qty_required,check_type`);
@@ -1354,6 +1506,7 @@
   initColResize('histTable', 'shiplot_hist_col_v1');
   initColResize('makerTable', 'shiplot_maker_col_v1');
   initColResize('itemDtab', 'shiplot_item_col_v1');
+  initColResize('scanResultTable', 'shiplot_scanresult_col_v1');
 </script>
 </body>
 </html>
