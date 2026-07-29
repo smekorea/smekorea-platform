@@ -166,7 +166,7 @@
   /* ── 모달 공용 ── */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;}
   .modal-overlay.show{display:flex;}
-  .modal{background:var(--surface);border-radius:12px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+  .modal{background:var(--surface);border-radius:12px;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
   .modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:2px solid var(--border);}
   .modal-title{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px;}
   .modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:2px;}
@@ -356,12 +356,19 @@
           </select>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row form-row-3">
         <div class="form-group">
           <div class="form-label">매출처명 <span class="req">*</span></div>
           <div class="cust-ac-wrap">
             <input type="text" class="form-input" id="inCustomer" placeholder="목록에서 선택 또는 직접 입력" autocomplete="off" oninput="onCustomerInput()" onfocus="onCustomerInput()">
             <div class="cust-ac-list" id="custAcList"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="form-label">추가구분 <span style="color:var(--muted);font-weight:400;">(선택)</span></div>
+          <div class="cust-ac-wrap">
+            <input type="text" class="form-input" id="inExtraCategory" placeholder="사업부/해외법인 등" autocomplete="off" oninput="onExtraCategoryInput()" onfocus="onExtraCategoryInput()">
+            <div class="cust-ac-list" id="extraCatAcList"></div>
           </div>
         </div>
         <div class="form-group">
@@ -453,12 +460,18 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <div class="form-label">담당자</div>
-            <input type="text" class="form-input" id="editManager">
+            <div class="form-label">추가구분</div>
+            <input type="text" class="form-input" id="editExtraCategory" placeholder="사업부/해외법인 등">
           </div>
           <div class="form-group">
             <div class="form-label">도착시간</div>
             <input type="text" class="form-input" id="editArrivalTime" placeholder="예: 14:00">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <div class="form-label">담당자</div>
+            <input type="text" class="form-input" id="editManager">
           </div>
         </div>
         <div class="form-row">
@@ -735,7 +748,7 @@
 
     return `<div class="ship-card ${type}-card${isDone?' done-card':''}${isEdited?' edited-card':''}">
       <div class="card-top">
-        <div class="customer-name">${r.customer||'-'}</div>
+        <div class="customer-name">${r.customer||'-'}${r.extra_category?` <span style="font-size:11px;font-weight:600;color:var(--accent2);">[${r.extra_category}]</span>`:''}</div>
         <div class="tags">
           <span class="tag ${deptClass}">${r.input_by||'-'}</span>
           ${packLabel?`<span class="tag tag-p">${packLabel}</span>`:''}
@@ -901,6 +914,7 @@
     document.getElementById('inRecvDeptSelect').value = '';
     document.getElementById('inRecvManagerSelect').innerHTML = '<option value="">부서 먼저 선택</option>';
     document.getElementById('inCustomer').value = '';
+    document.getElementById('inExtraCategory').value = '';
     document.getElementById('inNote').value = '';
     document.getElementById('inPackQty').value = '';
     document.getElementById('inArrHour').value = '';
@@ -961,6 +975,55 @@
     } catch(e) { /* 마스터 로드 실패해도 직접입력은 계속 가능 */ }
   }
   loadCustomerMasterList();
+
+  // ── 추가구분 마스터(extra_category) 자동완성 + 자동등록 ──
+  let extraCategoryList = [];
+  let extraCategoryLoaded = false;
+  async function loadExtraCategoryList() {
+    if (extraCategoryLoaded) return;
+    try {
+      const rows = await sbGet('extra_category', 'select=name&order=name&limit=500');
+      extraCategoryList = (Array.isArray(rows) ? rows : []).map(r => r.name).filter(Boolean);
+      extraCategoryLoaded = true;
+    } catch(e) { /* 마스터 로드 실패해도 직접입력은 계속 가능 */ }
+  }
+  loadExtraCategoryList();
+
+  // 담당자가 새 값을 입력하면 마스터에 없을 때 자동 등록 → 다음부터 자동완성에 뜸
+  async function ensureExtraCategoryRegistered(name) {
+    if (!name) return;
+    if (extraCategoryList.some(n => n === name)) return;
+    try {
+      const result = await sbPost('extra_category', { name, created_at: new Date().toISOString() });
+      if (Array.isArray(result) && result.length > 0) extraCategoryList.push(name);
+    } catch(e) { /* 등록 실패해도 출하지시 저장 자체는 막지 않음 */ }
+  }
+
+  function onExtraCategoryInput() {
+    const val = document.getElementById('inExtraCategory').value.trim().toLowerCase();
+    const list = document.getElementById('extraCatAcList');
+    if (!val) {
+      // 빈 값이면 등록된 전체 목록을 보여줌 (선택지가 뭐가 있는지 바로 보이도록)
+      if (extraCategoryList.length === 0) { list.classList.remove('show'); list.innerHTML=''; return; }
+      list.innerHTML = extraCategoryList.slice(0, 8).map(n => `<div class="cust-ac-item" onclick="selectExtraCategory('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+      list.classList.add('show');
+      return;
+    }
+    const matched = extraCategoryList.filter(n => n.toLowerCase().includes(val)).slice(0, 8);
+    if (matched.length === 0) { list.classList.remove('show'); list.innerHTML=''; return; }
+    list.innerHTML = matched.map(n => `<div class="cust-ac-item" onclick="selectExtraCategory('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+    list.classList.add('show');
+  }
+  function selectExtraCategory(name) {
+    document.getElementById('inExtraCategory').value = name;
+    document.getElementById('extraCatAcList').classList.remove('show');
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#inExtraCategory') && !e.target.closest('#extraCatAcList')) {
+      const l = document.getElementById('extraCatAcList');
+      if (l) l.classList.remove('show');
+    }
+  });
 
   // ── 출하지시 입력창 드래그 이동 ──
   function resetInputModalPosition() {
@@ -1224,6 +1287,7 @@
     const recvManager = document.getElementById('inRecvManagerSelect').value;
     const shipDate = document.getElementById('inShipDate').value;
     const customer = document.getElementById('inCustomer').value.trim();
+    const extraCategory = document.getElementById('inExtraCategory').value.trim();
     const packQty = document.getElementById('inPackQty').value.trim();
     const note = document.getElementById('inNote').value.trim();
     const arrHour = document.getElementById('inArrHour').value;
@@ -1251,6 +1315,7 @@
       created_at: now.toISOString(),
       ship_date: shipDate,
       customer,
+      extra_category: extraCategory || null,
       note: note || null,
       input_by: deptVal,
       manager,
@@ -1264,6 +1329,7 @@
     };
 
     try {
+      if (extraCategory) await ensureExtraCategoryRegistered(extraCategory);
       const result = await sbPost('ship_schedule', body);
       if (Array.isArray(result) && result.length > 0) {
         const newId = result[0].id;
@@ -1317,6 +1383,7 @@
       <div class="orig-row"><span class="orig-label">등록일시</span><span>${fmtDatetime(r.created_at)}</span></div>
       <div class="orig-row"><span class="orig-label">출하일자</span><span>${r.ship_date||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">매출처명</span><span>${r.customer||'-'}</span></div>
+      <div class="orig-row"><span class="orig-label">추가구분</span><span>${r.extra_category||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">담당자</span><span>${r.manager||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">도착시간</span><span>${r.arrival_time||'-'}</span></div>
       <div class="orig-row"><span class="orig-label">포장</span><span>${r.pack_done||'-'}</span></div>
@@ -1326,6 +1393,7 @@
 
     document.getElementById('editShipDate').value = r.ship_date || '';
     document.getElementById('editCustomer').value = r.customer || '';
+    document.getElementById('editExtraCategory').value = r.extra_category || '';
     document.getElementById('editManager').value = r.manager || '';
     document.getElementById('editArrivalTime').value = (r.arrival_time && r.arrival_time !== '-') ? r.arrival_time : '';
     document.getElementById('editInputBy').value = r.input_by || '자재구매';
@@ -1351,9 +1419,11 @@
     btn.disabled = true; btn.textContent = '저장 중...';
 
     const now = new Date();
+    const extraCategoryVal = document.getElementById('editExtraCategory').value.trim();
     const body = {
       ship_date:    document.getElementById('editShipDate').value,
       customer:     document.getElementById('editCustomer').value.trim(),
+      extra_category: extraCategoryVal || null,
       manager:      document.getElementById('editManager').value.trim(),
       arrival_time: document.getElementById('editArrivalTime').value.trim() || '-',
       input_by:     document.getElementById('editInputBy').value,
@@ -1363,6 +1433,7 @@
       updated_by:   editBy,
       update_reason: editReason
     };
+    if (extraCategoryVal) await ensureExtraCategoryRegistered(extraCategoryVal);
 
     try {
       await sbPatch('ship_schedule', editTargetId, body);
