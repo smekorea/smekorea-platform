@@ -139,8 +139,10 @@
   .placeholder-box{padding:60px 20px;text-align:center;color:var(--muted);}
 
   /* ══ 체크이력 탭 ══ */
-  .hist-filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .hist-filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow);}
   .hist-filter-bar input,.hist-filter-bar select{padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;}
+  .hf-group{display:flex;flex-direction:column;gap:4px;}
+  .hf-label{font-size:12.5px;font-weight:800;color:#0a0e17;}
   .hist-table-wrap{background:var(--surface);border-radius:9px;overflow-x:auto;overflow-y:hidden;box-shadow:var(--shadow);}
   .hist-item-suggest{display:none;position:absolute;top:100%;left:0;margin-top:2px;background:var(--surface);border:1px solid var(--border2);border-radius:7px;box-shadow:0 6px 18px rgba(20,30,60,0.15);width:280px;max-height:260px;overflow-y:auto;z-index:50;}
   .hist-item-suggest .sug-row{padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);}
@@ -340,23 +342,38 @@
 <!-- ══ 체크이력 탭 ══ -->
 <div class="tabpanel" id="tab-history">
   <div class="hist-filter-bar">
-    <input type="date" id="histFrom">
-    <span style="color:var(--muted);">~</span>
-    <input type="date" id="histTo">
-    <input type="text" id="histCustomer" placeholder="매출처명 검색">
-    <div style="position:relative;display:inline-block;">
+    <div class="hf-group">
+      <div class="hf-label">기간</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="date" id="histFrom">
+        <span style="color:var(--muted);">~</span>
+        <input type="date" id="histTo">
+      </div>
+    </div>
+    <div class="hf-group" style="position:relative;">
+      <div class="hf-label">매출처명</div>
+      <input type="text" id="histCustomer" placeholder="매출처명 검색" autocomplete="off" oninput="onHistCustomerInput()" onfocus="onHistCustomerInput()" onblur="setTimeout(()=>hideHistCustomerSuggest(),150)">
+      <div id="histCustomerSuggest" class="hist-item-suggest"></div>
+    </div>
+    <div class="hf-group" style="position:relative;">
+      <div class="hf-label">품명</div>
       <input type="text" id="histItemSearch" placeholder="품명 검색" autocomplete="off" oninput="onHistItemSearchInput()" onblur="setTimeout(()=>hideHistItemSuggest(),150)">
       <div id="histItemSuggest" class="hist-item-suggest"></div>
     </div>
-    <select id="histResult">
+    <div class="hf-group">
+      <div class="hf-label">결과</div>
+      <select id="histResult">
       <option value="all">전체결과</option>
       <option value="완결">완료</option>
       <option value="미완결(짝대기)">미완결</option>
       <option value="미매칭">미매칭</option>
-    </select>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;">
     <button class="btn btn-primary" style="width:auto;padding:8px 16px;" onclick="loadHistory()">🔍 조회</button>
     <button class="btn btn-ghost" onclick="exportHistoryExcel()">⬇ 엑셀</button>
     <button class="btn btn-ghost" style="color:var(--accent);border-color:rgba(200,0,30,0.3);" onclick="deleteSelectedHistory()">🗑 선택 삭제 (<span id="histSelCount">0</span>)</button>
+    </div>
   </div>
   <div class="hist-table-wrap">
     <table class="dtab" id="histTable">
@@ -538,6 +555,39 @@
     }
     itemsMaster = all;
   }
+
+  // ── 체크이력 매출처명 검색 자동완성 (partners 마스터, shipment.html과 동일 소스) ──
+  let customerMasterList = [];
+  let customerMasterLoaded = false;
+  async function ensureCustomerMaster() {
+    if (customerMasterLoaded) return;
+    try {
+      const rows = await sbGet('partners', 'select=name,alias1,alias2,is_active&order=name&limit=1000');
+      const active = (Array.isArray(rows) ? rows : []).filter(r => r.is_active !== false);
+      const set = new Set();
+      active.forEach(r => { if (r.name) set.add(r.name); if (r.alias1) set.add(r.alias1); if (r.alias2) set.add(r.alias2); });
+      customerMasterList = [...set];
+      customerMasterLoaded = true;
+    } catch(e) { /* 로드 실패해도 직접입력 검색은 계속 가능 */ }
+  }
+  function onHistCustomerInput() {
+    const kw = document.getElementById('histCustomer').value.trim().toLowerCase();
+    const box = document.getElementById('histCustomerSuggest');
+    const pool = kw ? customerMasterList.filter(n => n.toLowerCase().includes(kw)) : customerMasterList;
+    const matches = pool.slice(0, 20);
+    if (matches.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = matches.map(n =>
+      `<div class="sug-row" onmousedown="selectHistCustomer('${n.replace(/'/g,"\\'")}')">${n}</div>`
+    ).join('');
+    box.style.display = 'block';
+  }
+  function hideHistCustomerSuggest() {
+    document.getElementById('histCustomerSuggest').style.display = 'none';
+  }
+  function selectHistCustomer(name) {
+    document.getElementById('histCustomer').value = name;
+    hideHistCustomerSuggest();
+  }
   let pendingPN = null;
   let pendingLOT = null;
   let workerName = null;
@@ -558,7 +608,7 @@
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     });
     if (tab === 'makers') loadScanMakers();
-    if (tab === 'history') ensureItemsMaster();
+    if (tab === 'history') { ensureItemsMaster(); ensureCustomerMaster(); }
   }
 
   // ══ 목록 탭 ══
