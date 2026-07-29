@@ -186,6 +186,20 @@
   .cust-ac-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);}
   .cust-ac-item:last-child{border-bottom:none;}
   .cust-ac-item:hover,.cust-ac-item.active{background:var(--surface2);color:var(--accent2);}
+  .ecat-dropdown-wrap{position:relative;}
+  .ecat-select-box{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border:1.5px solid var(--border2);border-radius:7px;cursor:pointer;background:var(--surface);font-size:13px;}
+  .ecat-select-box:hover{border-color:var(--accent2);}
+  .ecat-caret{color:var(--muted);font-size:11px;}
+  .ecat-dropdown-list{display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1.5px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.14);max-height:260px;overflow-y:auto;z-index:60;}
+  .ecat-dropdown-list.show{display:block;}
+  .ecat-dropdown-item{padding:9px 14px;font-size:13px;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);}
+  .ecat-dropdown-item:hover{background:var(--surface2);color:var(--accent2);}
+  .ecat-dropdown-empty{padding:12px 14px;font-size:12px;color:var(--muted);}
+  .ecat-dropdown-add{padding:10px 14px;font-size:13px;font-weight:800;cursor:pointer;background:#4b5563;color:#fff;text-align:center;}
+  .ecat-dropdown-add:hover{background:#374151;}
+  .ecat-add-input-row{display:flex;gap:6px;padding:8px;background:var(--surface2);}
+  .ecat-add-input-row input{flex:1;padding:7px 9px;border:1.5px solid var(--accent2);border-radius:6px;font-size:12px;}
+  .ecat-add-input-row button{padding:7px 12px;border-radius:6px;border:none;background:var(--accent2);color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
   .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
   .btn-primary-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--accent3);background:var(--accent3);color:#fff;font-size:11px;font-weight:700;cursor:pointer;}
   .btn-ghost-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;}
@@ -367,10 +381,14 @@
         </div>
         <div class="form-group">
           <div class="form-label">추가구분 <span style="color:var(--muted);font-weight:400;">(선택)</span></div>
-          <div class="cust-ac-wrap">
-            <input type="text" class="form-input" id="inExtraCategory" placeholder="사업부/해외법인 등" autocomplete="off" oninput="onExtraCategoryInput()" onfocus="onExtraCategoryInput()">
-            <div class="cust-ac-list" id="extraCatAcList"></div>
+          <div class="ecat-dropdown-wrap" id="ecatDropdownWrap">
+            <div class="ecat-select-box" id="ecatSelectBox" onclick="toggleExtraCategoryDropdown()">
+              <span id="ecatSelectedText" style="color:var(--muted);">선택 안함</span>
+              <span class="ecat-caret">▾</span>
+            </div>
+            <div class="ecat-dropdown-list" id="ecatDropdownList"></div>
           </div>
+          <input type="hidden" id="inExtraCategory" value="">
         </div>
         <div class="form-group">
           <div class="form-label">도착시간</div>
@@ -915,7 +933,7 @@
     document.getElementById('inRecvDeptSelect').value = '';
     document.getElementById('inRecvManagerSelect').innerHTML = '<option value="">부서 먼저 선택</option>';
     document.getElementById('inCustomer').value = '';
-    document.getElementById('inExtraCategory').value = '';
+    clearExtraCategorySelection();
     document.getElementById('inNote').value = '';
     document.getElementById('inPackQty').value = '';
     document.getElementById('inArrHour').value = '';
@@ -990,7 +1008,7 @@
   }
   loadExtraCategoryList();
 
-  // 담당자가 새 값을 입력하면 마스터에 없을 때 자동 등록 → 다음부터 자동완성에 뜸
+  // 담당자가 새 값을 입력하면 마스터에 없을 때 자동 등록 → 다음부터 드롭다운에 뜸
   async function ensureExtraCategoryRegistered(name) {
     if (!name) return;
     if (extraCategoryList.some(n => n === name)) return;
@@ -1000,28 +1018,55 @@
     } catch(e) { /* 등록 실패해도 출하지시 저장 자체는 막지 않음 */ }
   }
 
-  function onExtraCategoryInput() {
-    const val = document.getElementById('inExtraCategory').value.trim().toLowerCase();
-    const list = document.getElementById('extraCatAcList');
-    if (!val) {
-      // 빈 값이면 등록된 전체 목록을 보여줌 (선택지가 뭐가 있는지 바로 보이도록)
-      if (extraCategoryList.length === 0) { list.classList.remove('show'); list.innerHTML=''; return; }
-      list.innerHTML = extraCategoryList.slice(0, 8).map(n => `<div class="cust-ac-item" onclick="selectExtraCategory('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
-      list.classList.add('show');
-      return;
-    }
-    const matched = extraCategoryList.filter(n => n.toLowerCase().includes(val)).slice(0, 8);
-    if (matched.length === 0) { list.classList.remove('show'); list.innerHTML=''; return; }
-    list.innerHTML = matched.map(n => `<div class="cust-ac-item" onclick="selectExtraCategory('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+  // ── 추가구분 드롭다운 (workflow.html "업무유형" 방식: 목록 + 맨 아래 "+ 항목 추가") ──
+  function renderExtraCategoryDropdown() {
+    const list = document.getElementById('ecatDropdownList');
+    const itemsHtml = extraCategoryList.length
+      ? extraCategoryList.map(n => `<div class="ecat-dropdown-item" onclick="event.stopPropagation();selectExtraCategoryOpt('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('')
+      : `<div class="ecat-dropdown-empty">등록된 항목이 없습니다. 아래에서 추가해주세요.</div>`;
+    list.innerHTML = itemsHtml + `<div class="ecat-dropdown-add" onclick="event.stopPropagation();showExtraCategoryAddInput()">＋ 항목 추가</div>`;
+  }
+  function toggleExtraCategoryDropdown() {
+    const list = document.getElementById('ecatDropdownList');
+    if (list.classList.contains('show')) { list.classList.remove('show'); return; }
+    renderExtraCategoryDropdown();
     list.classList.add('show');
   }
-  function selectExtraCategory(name) {
+  function selectExtraCategoryOpt(name) {
     document.getElementById('inExtraCategory').value = name;
-    document.getElementById('extraCatAcList').classList.remove('show');
+    const label = document.getElementById('ecatSelectedText');
+    label.textContent = name;
+    label.style.color = 'var(--text)';
+    document.getElementById('ecatDropdownList').classList.remove('show');
+  }
+  function clearExtraCategorySelection() {
+    document.getElementById('inExtraCategory').value = '';
+    const label = document.getElementById('ecatSelectedText');
+    label.textContent = '선택 안함';
+    label.style.color = 'var(--muted)';
+  }
+  function showExtraCategoryAddInput() {
+    const list = document.getElementById('ecatDropdownList');
+    const itemsHtml = extraCategoryList.map(n => `<div class="ecat-dropdown-item" onclick="event.stopPropagation();selectExtraCategoryOpt('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+    list.innerHTML = itemsHtml + `
+      <div class="ecat-add-input-row" onclick="event.stopPropagation();">
+        <input type="text" id="ecatNewInput" placeholder="새 항목 입력 후 Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmExtraCategoryAdd();}">
+        <button onclick="event.stopPropagation();confirmExtraCategoryAdd()">추가</button>
+      </div>`;
+    setTimeout(() => { const el = document.getElementById('ecatNewInput'); if (el) el.focus(); }, 30);
+  }
+  async function confirmExtraCategoryAdd() {
+    const input = document.getElementById('ecatNewInput');
+    const val = input ? input.value.trim() : '';
+    if (!val) { showToast('⚠ 추가할 항목명을 입력해주세요', true); return; }
+    if (extraCategoryList.some(n => n === val)) { selectExtraCategoryOpt(val); return; }
+    await ensureExtraCategoryRegistered(val);
+    selectExtraCategoryOpt(val);
+    showToast(`✓ "${val}" 항목이 추가되었습니다`);
   }
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#inExtraCategory') && !e.target.closest('#extraCatAcList')) {
-      const l = document.getElementById('extraCatAcList');
+    if (!e.target.closest('#ecatDropdownWrap')) {
+      const l = document.getElementById('ecatDropdownList');
       if (l) l.classList.remove('show');
     }
   });
