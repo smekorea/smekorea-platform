@@ -635,6 +635,63 @@
     itemsMaster = all;
   }
 
+  // ── 메이커품번 기준 품목체계표(maker_pn_master 등) — 바코드 스캔 매칭의 기준 데이터 ──
+  let mpnMasterLoaded = false;
+  let lgPnToMakerId = {};      // lg_pn -> maker_pn_id
+  let makerIdToLgPns = {};     // maker_pn_id -> Set(lg_pn)
+  let makerIdToItemCodes = {}; // maker_pn_id -> Set(item_code)
+  let makerIdToMakerPn = {};   // maker_pn_id -> maker_pn(표시용)
+
+  function invalidateMpnMasterCache() {
+    mpnMasterLoaded = false;
+    lgPnToMakerId = {}; makerIdToLgPns = {}; makerIdToItemCodes = {}; makerIdToMakerPn = {};
+  }
+
+  async function ensureMakerPnMaster() {
+    if (mpnMasterLoaded) return;
+    try {
+      let pg = 0, masters = [];
+      while (true) {
+        const chunk = await sbGet('maker_pn_master', `select=id,maker_pn&order=id&limit=1000&offset=${pg*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        masters = masters.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg++;
+      }
+      masters.forEach(m => { makerIdToMakerPn[m.id] = m.maker_pn; });
+
+      let pg2 = 0, lgAll = [];
+      while (true) {
+        const chunk = await sbGet('maker_pn_lgpn_map', `select=maker_pn_id,lg_pn&limit=1000&offset=${pg2*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        lgAll = lgAll.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg2++;
+      }
+      lgAll.forEach(r => {
+        lgPnToMakerId[r.lg_pn] = r.maker_pn_id;
+        (makerIdToLgPns[r.maker_pn_id] = makerIdToLgPns[r.maker_pn_id] || new Set()).add(r.lg_pn);
+      });
+
+      let pg3 = 0, icAll = [];
+      while (true) {
+        const chunk = await sbGet('maker_pn_itemcode_map', `select=maker_pn_id,item_code&limit=1000&offset=${pg3*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        icAll = icAll.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg3++;
+      }
+      icAll.forEach(r => {
+        (makerIdToItemCodes[r.maker_pn_id] = makerIdToItemCodes[r.maker_pn_id] || new Set()).add(r.item_code);
+      });
+
+      mpnMasterLoaded = true;
+    } catch(e) {
+      console.warn('메이커품번 품목체계표 로드 실패:', e);
+    }
+  }
+
+
   // ── 체크이력 매출처명 검색 자동완성 (partners 마스터, shipment.html과 동일 소스) ──
   let customerMasterList = [];
   let customerMasterLoaded = false;
@@ -687,7 +744,7 @@
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     });
     if (tab === 'makers') loadScanMakers();
-    if (tab === 'history') { ensureItemsMaster(); ensureCustomerMaster(); }
+    if (tab === 'history') { ensureItemsMaster(); ensureMakerPnMaster(); ensureCustomerMaster(); }
     if (tab === 'mpn') loadMpnData();
   }
 
@@ -776,6 +833,7 @@
     document.getElementById('scanInput').disabled = !workerName;
 
     await ensureItemsMaster();
+    await ensureMakerPnMaster();
 
     const items = await sbGet('ship_lot_item', 'ship_schedule_id=eq.' + sid + '&order=id');
     if (!Array.isArray(items)) {
@@ -962,18 +1020,17 @@
     });
     if (fromRow) return { item_code: fromRow.item_code, lg_pn: target, scanned_pn: target, match_method: '직접매칭' };
 
-    // 스캔된 LG품번을 품목마스터에서 찾아 Maker P/N 확인 (2차/3차 공통 준비)
-    const scannedMaster = itemsMaster.find(m => (m.lg_pn || '').trim() === target);
+    // 스캔된 LG품번이 소속된 메이커품번 확인 (maker_pn_lgpn_map 기준)
+    const makerId = lgPnToMakerId[target];
 
-    // 2차: 스캔된 LG품번의 Maker P/N과 같은 Maker P/N을 쓰는 "이번 거래명세서 내 다른 품목코드"가
-    //      있는지 교차조회 (SMART 등 산지별 LG품번 이중등록 브랜드 대응)
-    if (scannedMaster && scannedMaster.maker_pn) {
-      const makerPn = String(scannedMaster.maker_pn).trim();
+    // 2차: 같은 메이커품번에 등록된 다른 LG품번들 중, 이번 거래명세서 내 다른 품목코드와 일치하는 게 있는지 교차조회
+    //      (SMART 등 산지별 LG품번 이중등록 브랜드 대응)
+    if (makerId) {
+      const sameMakerLgPns = makerIdToLgPns[makerId] || new Set();
       const crossRow = itemRows.find(r => {
         const rowToken = (r.description || '').trim().split(/\s+/)[0] || '';
         if (!rowToken || rowToken === target) return false;
-        const rowMaster = itemsMaster.find(m => (m.lg_pn || '').trim() === rowToken);
-        return rowMaster && rowMaster.maker_pn && String(rowMaster.maker_pn).trim() === makerPn;
+        return sameMakerLgPns.has(rowToken);
       });
       if (crossRow) {
         const crossToken = (crossRow.description || '').trim().split(/\s+/)[0] || '';
@@ -981,8 +1038,14 @@
       }
     }
 
-    // 3차 폴백: 전체 품목마스터 lg_pn 직접일치 (이번 거래명세서 목록과 무관해도 최후수단으로 허용)
-    if (scannedMaster) return { item_code: scannedMaster.item_code, lg_pn: target, scanned_pn: target, match_method: '마스터폴백' };
+    // 3차 폴백: 이번 거래명세서와 무관하게, 해당 메이커품번의 ERP품목코드가 1개로 특정되면 그걸로 확정
+    //          2개 이상이면 어느 것인지 확정할 수 없어 매칭 보류(수기확인 필요)
+    if (makerId) {
+      const codes = [...(makerIdToItemCodes[makerId] || [])];
+      if (codes.length === 1) {
+        return { item_code: codes[0], lg_pn: target, scanned_pn: target, match_method: '마스터폴백' };
+      }
+    }
 
     return null;
   }
@@ -1306,13 +1369,14 @@
   function getMakerPnForRow(r) {
     const key = r.matched_lg_pn || r.parsed_pn;
     if (!key) return null;
-    const m = itemsMaster.find(x => (x.lg_pn||'').trim() === String(key).trim());
-    return (m && m.maker_pn) ? m.maker_pn : null;
+    const makerId = lgPnToMakerId[String(key).trim()];
+    return makerId ? (makerIdToMakerPn[makerId] || null) : null;
   }
   function getMatchedCodesForRow(r, makerPn) {
     if (!r.item_code) return null;
     if (r.match_method !== '메이커품번매칭' || !makerPn) return r.item_code;
-    const codes = [...new Set(itemsMaster.filter(x => x.maker_pn && String(x.maker_pn).trim() === String(makerPn).trim()).map(x => x.item_code))];
+    const makerId = Object.keys(makerIdToMakerPn).find(id => makerIdToMakerPn[id] === makerPn);
+    const codes = makerId ? [...(makerIdToItemCodes[makerId] || [])] : [];
     return codes.length > 1 ? codes.join(' / ') : r.item_code;
   }
 
@@ -1883,6 +1947,7 @@
 
     showToast('✓ 저장되었습니다');
     closeMpnModal();
+    invalidateMpnMasterCache();
     loadMpnData();
   }
 
@@ -1892,6 +1957,7 @@
     await fetch(SB_URL + '/rest/v1/maker_pn_itemcode_map?maker_pn_id=eq.' + id, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
     await sbDelete('maker_pn_master', id);
     showToast('삭제되었습니다');
+    invalidateMpnMasterCache();
     loadMpnData();
   }
 
@@ -1946,6 +2012,7 @@
     }
     evt.target.value = '';
     showToast(`✓ 업로드 완료 — 신규 ${added}건 등록${skipped ? `, 중복/오류 ${skipped}건 제외` : ''}${conflictNoted ? `, ⚠ LG품번 중복의심 ${conflictNoted}건(별도 확인 필요)` : ''}`);
+    invalidateMpnMasterCache();
     loadMpnData();
   }
 
