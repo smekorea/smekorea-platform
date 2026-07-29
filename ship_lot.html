@@ -195,7 +195,7 @@
     <div><div class="brand-title">출하LOT관리 프로세스</div><div class="brand-sub">거래명세표 바코드검수 · LOT 추적</div></div>
   </div>
   <div class="top-right">
-    <a class="top-btn" href="shipment.html">← 출하관리로</a>
+    <a class="top-btn" href="shipment.html" style="background:rgba(200,0,30,0.16);border-color:rgba(200,0,30,0.35);color:#ff8a94;">📦 출하관리로</a>
     <div class="clock" id="clock">--:--:--</div>
   </div>
 </div>
@@ -506,6 +506,12 @@
   let currentSchedule = null;
   let itemRows = [];
   let logRows = [];
+  // 매출처명 + 추가구분(사업부/해외법인 등)을 "매출처명/추가구분" 형태로 결합 표시
+  function custDisplay(customer, extraCategory) {
+    const c = customer || '-';
+    return extraCategory ? `${c}/${extraCategory}` : c;
+  }
+
   let itemsMaster = [];
   let makerPnColumnOk = true;
   async function ensureItemsMaster() {
@@ -585,7 +591,7 @@
       return `<div class="batch-card st-${st}" onclick="selectBatch(${r.id})">
         <div class="batch-row-main">
           <div class="brow-cell"><div class="brow-cell-val mono">${r.ship_date||'-'}</div></div>
-          <div class="brow-cell brow-customer"><div class="brow-cell-val">${r.customer||'-'}</div></div>
+          <div class="brow-cell brow-customer"><div class="brow-cell-val">${custDisplay(r.customer, r.extra_category)}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.input_by||'-'}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.manager||'-'}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.recv_dept||'-'}</div></div>
@@ -612,7 +618,7 @@
     if (!Array.isArray(rows) || rows.length === 0) { showToast('작업지시를 찾을 수 없습니다', true); return; }
     currentSchedule = rows[0];
 
-    document.getElementById('wCustomer').textContent = currentSchedule.customer || '-';
+    document.getElementById('wCustomer').textContent = custDisplay(currentSchedule.customer, currentSchedule.extra_category);
     document.getElementById('wShipDate').textContent = currentSchedule.ship_date || '-';
     document.getElementById('wInstructBy').textContent = currentSchedule.manager || '-';
     const st = currentSchedule.lot_status || '대기';
@@ -707,7 +713,7 @@
       <td></td>
     </tr>`).join('');
     const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>거래명세표 - ${currentSchedule?currentSchedule.customer:''}</title>
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>거래명세표 - ${currentSchedule?custDisplay(currentSchedule.customer, currentSchedule.extra_category):''}</title>
       <style>
         @page{ size: portrait; margin: 14mm; }
         *{box-sizing:border-box;}
@@ -723,7 +729,7 @@
         @media print{ button{display:none;} .print-hint{display:none;} .col-resizer{display:none;} }
       </style></head><body>
       <h1>출하LOT관리 - 거래명세표 픽킹리스트</h1>
-      <div class="meta">매출처: ${currentSchedule?currentSchedule.customer:'-'} &nbsp;·&nbsp; 출하예정일: ${currentSchedule?currentSchedule.ship_date:'-'} &nbsp;·&nbsp; 작업지시자: ${currentSchedule?currentSchedule.manager:'-'} &nbsp;·&nbsp; 출력일시: ${new Date().toLocaleString('ko-KR')}</div>
+      <div class="meta">매출처: ${currentSchedule?custDisplay(currentSchedule.customer, currentSchedule.extra_category):'-'} &nbsp;·&nbsp; 출하예정일: ${currentSchedule?currentSchedule.ship_date:'-'} &nbsp;·&nbsp; 작업지시자: ${currentSchedule?currentSchedule.manager:'-'} &nbsp;·&nbsp; 출력일시: ${new Date().toLocaleString('ko-KR')}</div>
       <div class="print-hint">↔ 컬럼 경계를 드래그하면 폭을 조절할 수 있습니다 (조절한 폭 그대로 인쇄됩니다)</div>
       <table id="printTable"><thead><tr>
         <th style="width:32px;">#<div class="col-resizer"></div></th>
@@ -1137,8 +1143,8 @@
     let schedMap = {};
     if (sids.length > 0) {
       const chunk = sids.slice(0, 200).join(',');
-      const scheds = await sbGet('ship_schedule', `id=in.(${chunk})&select=id,customer`);
-      if (Array.isArray(scheds)) scheds.forEach(s => schedMap[s.id] = s.customer);
+      const scheds = await sbGet('ship_schedule', `id=in.(${chunk})&select=id,customer,extra_category`);
+      if (Array.isArray(scheds)) scheds.forEach(s => schedMap[s.id] = custDisplay(s.customer, s.extra_category));
     }
     if (custFilter) rows = rows.filter(r => (schedMap[r.ship_schedule_id]||'').toLowerCase().includes(custFilter.toLowerCase()));
 
