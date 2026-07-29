@@ -636,8 +636,12 @@
     }
     document.getElementById('batchGrid').innerHTML = rows.map(r => {
       const st = r.lot_status || '대기';
+      const hasForceReason = st === '완료' && r.lot_force_reason;
+      const badgeLabel = hasForceReason ? '완료(사유있음)' : st;
       const completeInfo = (st === '완료' && r.lot_completed_at)
         ? `<div style="font-size:11px;color:var(--accent3);font-weight:600;margin-top:4px;">✓ 검수완료: ${fmtDT(r.lot_completed_at)} (${r.lot_completed_by||''})</div>` : '';
+      const forceInfo = hasForceReason
+        ? `<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:2px;">⚠ 강제완료 사유: ${r.lot_force_reason}</div>` : '';
       return `<div class="batch-card st-${st}" onclick="selectBatch(${r.id})">
         <div class="batch-row-main">
           <div class="brow-cell"><div class="brow-cell-val mono">${r.ship_date||'-'}</div></div>
@@ -646,9 +650,10 @@
           <div class="brow-cell"><div class="brow-cell-val">${r.manager||'-'}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.recv_dept||'-'}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.recv_manager||'-'}</div></div>
-          <div class="brow-cell"><div class="bc-badge ${st}">${st}</div></div>
+          <div class="brow-cell"><div class="bc-badge ${st}"${hasForceReason?' style="background:#fff3b0;color:#7a5b00;"':''}>${badgeLabel}</div></div>
         </div>
         ${completeInfo}
+        ${forceInfo}
       </div>`;
     }).join('');
   }
@@ -672,8 +677,10 @@
     document.getElementById('wShipDate').textContent = currentSchedule.ship_date || '-';
     document.getElementById('wInstructBy').textContent = currentSchedule.manager || '-';
     const st = currentSchedule.lot_status || '대기';
-    document.getElementById('wStatusPill').textContent = st;
+    const hasForceReason = st === '완료' && currentSchedule.lot_force_reason;
+    document.getElementById('wStatusPill').textContent = hasForceReason ? '완료(사유있음)' : st;
     document.getElementById('wStatusPill').className = 'status-pill ' + st;
+    if (hasForceReason) document.getElementById('wStatusPill').title = '강제완료 사유: ' + currentSchedule.lot_force_reason;
 
     workerName = currentSchedule.lot_started_by || null;
     document.getElementById('workerDeptSelect').value = '';
@@ -1147,7 +1154,8 @@
   async function doComplete(forceReason) {
     const now = new Date().toISOString();
     await sbPatch('ship_schedule', currentSid, {
-      lot_status: '완료', lot_completed_at: now, lot_completed_by: workerName || currentSchedule.lot_started_by
+      lot_status: '완료', lot_completed_at: now, lot_completed_by: workerName || currentSchedule.lot_started_by,
+      lot_force_reason: forceReason || null
     });
     showToast(forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다' : '✓ 출고검수가 완료되었습니다');
     setTimeout(()=>{ switchTab('list'); loadList(); }, 1200);
