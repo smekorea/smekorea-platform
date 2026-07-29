@@ -175,6 +175,23 @@
   .maker-table-wrap{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden;}
   .maker-table-wrap .card-hd{background:#000;}
   .maker-table-wrap table.dtab thead th{background:#3f4550;}
+
+  /* ══ 메이커별 품목체계표 탭 ══ */
+  .mpn-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:10px 14px;flex-wrap:wrap;}
+  .mpn-btn{padding:8px 14px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text);}
+  .mpn-btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+  .mpn-btn:hover{filter:brightness(0.97);}
+  .mpn-pill-list{display:flex;flex-wrap:wrap;gap:4px;white-space:normal !important;}
+  .mpn-pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10.5px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+  .mpn-pill.lg{background:rgba(26,86,219,0.12);color:var(--accent2);}
+  .mpn-pill.ic{background:rgba(14,159,110,0.12);color:var(--accent3);}
+  .mpn-pill-warn{background:rgba(217,119,6,0.16) !important;color:var(--warn) !important;}
+  .mpn-count-warn{color:var(--warn);font-weight:800;font-size:10px;margin-left:4px;}
+  .mpn-search{padding:8px 12px;border:1.5px solid var(--border2);border-radius:7px;font-size:12.5px;width:220px;}
+  .mpn-dyn-row{display:flex;gap:6px;margin-bottom:6px;}
+  .mpn-dyn-row input{flex:1;padding:7px 9px;border:1.5px solid var(--border2);border-radius:6px;font-size:12.5px;}
+  .mpn-dyn-row button{padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:12px;cursor:pointer;font-weight:700;}
+  .mpn-dyn-add{padding:6px 12px;border-radius:6px;border:1px dashed var(--accent2);background:rgba(26,86,219,0.06);color:var(--accent2);font-size:12px;font-weight:700;cursor:pointer;width:100%;margin-top:2px;}
   .maker-edit-input{padding:5px 8px;border:1.5px solid var(--accent2);border-radius:6px;font-size:12px;width:140px;}
 
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;}
@@ -207,6 +224,7 @@
   <div class="tabbtn" id="tabbtn-work" onclick="switchTab('work')"><span class="ico">📡</span>바코드 검수</div>
   <div class="tabbtn" id="tabbtn-history" onclick="switchTab('history')"><span class="ico">🕘</span>체크 이력</div>
   <div class="tabbtn" id="tabbtn-makers" onclick="switchTab('makers')"><span class="ico">⚙</span>LOT관리업체등록</div>
+  <div class="tabbtn" id="tabbtn-mpn" onclick="switchTab('mpn')"><span class="ico">🔖</span>메이커별 품목체계표</div>
 </div>
 
 <!-- ══ 목록 탭 ══ -->
@@ -434,6 +452,69 @@
   </div>
 </div>
 
+<!-- ══ 메이커별 품목체계표 탭 ══ -->
+<div class="tabpanel" id="tab-mpn">
+  <div class="mpn-toolbar">
+    <input type="text" class="mpn-search" id="mpnSearchInput" placeholder="메이커품번/품명/LG품번 검색" oninput="renderMpnTable()">
+    <button class="mpn-btn" onclick="downloadMpnTemplate()">📄 업로드 양식</button>
+    <button class="mpn-btn" onclick="document.getElementById('mpnUploadFile').click()">⬆ 엑셀 업로드</button>
+    <input type="file" id="mpnUploadFile" accept=".xlsx" style="display:none;" onchange="handleMpnUpload(event)">
+    <button class="mpn-btn" onclick="downloadMpnExcel()">⬇ 엑셀 다운로드</button>
+    <button class="mpn-btn primary" onclick="openMpnModal()">＋ 신규 등록</button>
+  </div>
+  <div class="maker-table-wrap" style="margin:0 14px 14px;">
+    <table class="dtab" id="mpnTable">
+      <thead><tr>
+        <th style="width:80px;" onclick="sortMpn('brand')">브랜드명<div class="col-resizer"></div></th>
+        <th style="width:130px;" onclick="sortMpn('maker_pn')">메이커품번<div class="col-resizer"></div></th>
+        <th style="width:220px;" onclick="sortMpn('description')">품명 및 규격<div class="col-resizer"></div></th>
+        <th style="width:260px;">LG품번<div class="col-resizer"></div></th>
+        <th style="width:200px;">ERP품목코드<div class="col-resizer"></div></th>
+        <th style="width:90px;">관리</th>
+      </tr></thead>
+      <tbody id="mpnTbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ 메이커품번 등록/수정 모달 ══ -->
+<div class="modal-overlay" id="mpnModal">
+  <div class="modal" style="width:520px;max-height:86vh;overflow-y:auto;">
+    <div class="modal-header">
+      <div class="modal-title" id="mpnModalTitle">메이커품번 신규 등록</div>
+      <button class="modal-close" onclick="closeMpnModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">브랜드명</div>
+        <input type="text" class="form-input" id="mpnBrand" value="SMART" style="width:100%;">
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">메이커품번 <span style="color:var(--accent);font-size:9px;">* 필수</span></div>
+        <input type="text" class="form-input" id="mpnMakerPn" style="width:100%;">
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">품명 및 규격</div>
+        <input type="text" class="form-input" id="mpnDescription" style="width:100%;">
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">LG품번 (여러 개 등록 가능) <span id="mpnLgWarn" class="mpn-count-warn"></span></div>
+        <div id="mpnLgRows"></div>
+        <div class="mpn-dyn-add" onclick="addMpnDynRow('lg')">＋ LG품번 추가</div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">ERP품목코드 (여러 개 등록 가능, 선택)</div>
+        <div id="mpnIcRows"></div>
+        <div class="mpn-dyn-add" onclick="addMpnDynRow('ic')">＋ ERP품목코드 추가</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeMpnModal()">취소</button>
+      <button class="modal-btn modal-btn-save" onclick="saveMpn()">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- 강제완료 확인 모달 -->
 <div class="modal-overlay" id="forceModal">
   <div class="modal">
@@ -603,12 +684,13 @@
   });
 
   function switchTab(tab) {
-    ['list','work','history','makers'].forEach(t => {
+    ['list','work','history','makers','mpn'].forEach(t => {
       document.getElementById('tabbtn-'+t).classList.toggle('active', t===tab);
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     });
     if (tab === 'makers') loadScanMakers();
     if (tab === 'history') { ensureItemsMaster(); ensureCustomerMaster(); }
+    if (tab === 'mpn') loadMpnData();
   }
 
   // ══ 목록 탭 ══
@@ -1614,6 +1696,226 @@
     loadScanMakers();
   }
 
+  // ══ 메이커별 품목체계표 탭 ══
+  let mpnList = [];          // {id, brand, maker_pn, description, lg_pns:[], item_codes:[]}
+  let mpnLoaded = false;
+  let mpnSortKey = 'maker_pn';
+  let mpnSortAsc = true;
+  let mpnEditingId = null;   // null = 신규 등록
+
+  async function loadMpnData() {
+    document.getElementById('mpnTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr>';
+    try {
+      let pg = 0, masters = [];
+      while (true) {
+        const chunk = await sbGet('maker_pn_master', `select=id,brand,maker_pn,description&order=maker_pn&limit=1000&offset=${pg*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        masters = masters.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg++;
+      }
+      let lgAll = [], icAll = [];
+      pg = 0;
+      while (true) {
+        const chunk = await sbGet('maker_pn_lgpn_map', `select=maker_pn_id,lg_pn&limit=1000&offset=${pg*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        lgAll = lgAll.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg++;
+      }
+      pg = 0;
+      while (true) {
+        const chunk = await sbGet('maker_pn_itemcode_map', `select=maker_pn_id,item_code&limit=1000&offset=${pg*1000}`);
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        icAll = icAll.concat(chunk);
+        if (chunk.length < 1000) break;
+        pg++;
+      }
+      const lgMap = {}, icMap = {};
+      lgAll.forEach(r => { (lgMap[r.maker_pn_id] = lgMap[r.maker_pn_id] || []).push(r.lg_pn); });
+      icAll.forEach(r => { (icMap[r.maker_pn_id] = icMap[r.maker_pn_id] || []).push(r.item_code); });
+      mpnList = masters.map(m => ({
+        id: m.id, brand: m.brand, maker_pn: m.maker_pn, description: m.description || '',
+        lg_pns: lgMap[m.id] || [], item_codes: icMap[m.id] || []
+      }));
+      mpnLoaded = true;
+      renderMpnTable();
+    } catch(e) {
+      document.getElementById('mpnTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">불러오기 실패</td></tr>';
+    }
+  }
+
+  function sortMpn(key) {
+    if (mpnSortKey === key) { mpnSortAsc = !mpnSortAsc; } else { mpnSortKey = key; mpnSortAsc = true; }
+    renderMpnTable();
+  }
+
+  function renderMpnTable() {
+    const kw = (document.getElementById('mpnSearchInput').value || '').trim().toLowerCase();
+    let rows = mpnList.filter(r => {
+      if (!kw) return true;
+      return r.maker_pn.toLowerCase().includes(kw)
+        || (r.description||'').toLowerCase().includes(kw)
+        || r.lg_pns.some(v => v.toLowerCase().includes(kw));
+    });
+    rows.sort((a,b) => {
+      const av = (a[mpnSortKey]||'').toString(); const bv = (b[mpnSortKey]||'').toString();
+      const c = av.localeCompare(bv);
+      return mpnSortAsc ? c : -c;
+    });
+    if (rows.length === 0) {
+      document.getElementById('mpnTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">등록된 항목이 없습니다.</td></tr>';
+      return;
+    }
+    document.getElementById('mpnTbody').innerHTML = rows.map(r => {
+      const lgOver5 = r.lg_pns.length > 5;
+      const lgPills = r.lg_pns.map(v => `<span class="mpn-pill lg${lgOver5?' mpn-pill-warn':''}">${v}</span>`).join('');
+      const icPills = r.item_codes.map(v => `<span class="mpn-pill ic">${v}</span>`).join('') || '<span style="color:var(--muted);font-size:11px;">-</span>';
+      const warnBadge = lgOver5 ? `<span class="mpn-count-warn">⚠ LG품번 ${r.lg_pns.length}개 (오타 확인 필요)</span>` : '';
+      return `<tr>
+        <td><b>${r.brand||'-'}</b></td>
+        <td class="mono"><b>${r.maker_pn}</b></td>
+        <td style="white-space:normal;">${r.description||'-'}</td>
+        <td class="mpn-pill-list">${lgPills}${warnBadge}</td>
+        <td class="mpn-pill-list">${icPills}</td>
+        <td>
+          <button class="btn btn-ghost" style="width:auto;padding:4px 9px;font-size:11px;" onclick="openMpnModal(${r.id})">수정</button>
+          <button class="btn btn-ghost" style="width:auto;padding:4px 9px;font-size:11px;color:var(--accent);" onclick="deleteMpn(${r.id})">삭제</button>
+        </td>
+      </tr>`;
+    }).join('');
+    applyTableWidth(document.getElementById('mpnTable'));
+  }
+
+  // ── 등록/수정 모달 ──
+  function addMpnDynRow(type, value) {
+    const wrap = document.getElementById(type === 'lg' ? 'mpnLgRows' : 'mpnIcRows');
+    const div = document.createElement('div');
+    div.className = 'mpn-dyn-row';
+    div.innerHTML = `<input type="text" value="${value ? value.replace(/"/g,'&quot;') : ''}" placeholder="${type==='lg'?'LG품번 입력':'ERP품목코드 입력'}">
+      <button onclick="this.parentElement.remove();updateMpnLgWarn();">✕</button>`;
+    wrap.appendChild(div);
+    updateMpnLgWarn();
+  }
+  function updateMpnLgWarn() {
+    const n = document.querySelectorAll('#mpnLgRows .mpn-dyn-row').length;
+    document.getElementById('mpnLgWarn').textContent = n > 5 ? `⚠ ${n}개 — 보통 5개를 넘지 않습니다. 오타 여부 확인해주세요.` : '';
+  }
+  function openMpnModal(id) {
+    mpnEditingId = id || null;
+    document.getElementById('mpnLgRows').innerHTML = '';
+    document.getElementById('mpnIcRows').innerHTML = '';
+    if (id) {
+      const r = mpnList.find(x => x.id === id);
+      document.getElementById('mpnModalTitle').textContent = '메이커품번 수정';
+      document.getElementById('mpnBrand').value = r.brand || 'SMART';
+      document.getElementById('mpnMakerPn').value = r.maker_pn;
+      document.getElementById('mpnDescription').value = r.description || '';
+      (r.lg_pns.length ? r.lg_pns : ['']).forEach(v => addMpnDynRow('lg', v));
+      r.item_codes.forEach(v => addMpnDynRow('ic', v));
+    } else {
+      document.getElementById('mpnModalTitle').textContent = '메이커품번 신규 등록';
+      document.getElementById('mpnBrand').value = 'SMART';
+      document.getElementById('mpnMakerPn').value = '';
+      document.getElementById('mpnDescription').value = '';
+      addMpnDynRow('lg');
+    }
+    document.getElementById('mpnModal').classList.add('show');
+  }
+  function closeMpnModal() { document.getElementById('mpnModal').classList.remove('show'); }
+
+  async function saveMpn() {
+    const brand = document.getElementById('mpnBrand').value.trim();
+    const makerPn = document.getElementById('mpnMakerPn').value.trim();
+    const description = document.getElementById('mpnDescription').value.trim();
+    if (!makerPn) { showToast('⚠ 메이커품번을 입력해주세요', true); return; }
+    const lgVals = Array.from(document.querySelectorAll('#mpnLgRows input')).map(i => i.value.trim()).filter(Boolean);
+    const icVals = Array.from(document.querySelectorAll('#mpnIcRows input')).map(i => i.value.trim()).filter(Boolean);
+    if (lgVals.length === 0) { showToast('⚠ LG품번을 최소 1개 이상 입력해주세요', true); return; }
+
+    const dup = mpnList.find(r => r.maker_pn === makerPn && r.id !== mpnEditingId);
+    if (dup) { showToast('⚠ 이미 등록된 메이커품번입니다', true); return; }
+
+    let mid = mpnEditingId;
+    if (mid) {
+      await sbPatch('maker_pn_master', mid, { brand, maker_pn: makerPn, description });
+      // 기존 매핑 전체 삭제 후 재등록(간단/안전한 방식)
+      await fetch(SB_URL + '/rest/v1/maker_pn_lgpn_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+      await fetch(SB_URL + '/rest/v1/maker_pn_itemcode_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+    } else {
+      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description });
+      if (!Array.isArray(result) || result.length === 0) { showToast('⚠ 등록 실패', true); return; }
+      mid = result[0].id;
+    }
+    if (lgVals.length) await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
+    if (icVals.length) await sbPost('maker_pn_itemcode_map', icVals.map(v => ({ maker_pn_id: mid, item_code: v })));
+
+    showToast('✓ 저장되었습니다');
+    closeMpnModal();
+    loadMpnData();
+  }
+
+  async function deleteMpn(id) {
+    if (!confirm('이 메이커품번(및 연결된 LG품번/ERP품목코드)을 삭제하시겠습니까?')) return;
+    await fetch(SB_URL + '/rest/v1/maker_pn_lgpn_map?maker_pn_id=eq.' + id, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+    await fetch(SB_URL + '/rest/v1/maker_pn_itemcode_map?maker_pn_id=eq.' + id, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+    await sbDelete('maker_pn_master', id);
+    showToast('삭제되었습니다');
+    loadMpnData();
+  }
+
+  // ── 엑셀 업로드/다운로드 ──
+  function downloadMpnTemplate() {
+    const data = [{ '브랜드명':'SMART', '메이커품번':'예시: RC-98TRF5K10', '품명및규격':'예시: RC- 1/8W 2012 1% 5.1K Ω',
+      'LG품번1':'0RH5101L422','LG품번2':'0301-019087','LG품번3':'','ERP품목코드1':'3000-0015','ERP품목코드2':'9000-...','ERP품목코드3':'' }];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '업로드양식');
+    XLSX.writeFile(wb, '메이커품번_업로드양식.xlsx');
+  }
+  function downloadMpnExcel() {
+    const maxLg = Math.max(1, ...mpnList.map(r => r.lg_pns.length));
+    const maxIc = Math.max(1, ...mpnList.map(r => r.item_codes.length));
+    const data = mpnList.map(r => {
+      const row = { '브랜드명': r.brand, '메이커품번': r.maker_pn, '품명및규격': r.description };
+      for (let i=0;i<maxLg;i++) row['LG품번'+(i+1)] = r.lg_pns[i] || '';
+      for (let i=0;i<maxIc;i++) row['ERP품목코드'+(i+1)] = r.item_codes[i] || '';
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '메이커별품목체계표');
+    XLSX.writeFile(wb, `메이커별품목체계표_${todayStrLocal()}.xlsx`);
+  }
+  async function handleMpnUpload(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    let added = 0, skipped = 0;
+    for (const row of rows) {
+      const makerPn = String(row['메이커품번']||'').trim();
+      if (!makerPn || makerPn.indexOf('예시') === 0) continue;
+      if (mpnList.some(r => r.maker_pn === makerPn)) { skipped++; continue; }
+      const brand = String(row['브랜드명']||'SMART').trim();
+      const description = String(row['품명및규격']||'').trim();
+      const lgVals = Object.keys(row).filter(k => k.startsWith('LG품번')).map(k => String(row[k]||'').trim()).filter(Boolean);
+      const icVals = Object.keys(row).filter(k => k.startsWith('ERP품목코드')).map(k => String(row[k]||'').trim()).filter(Boolean);
+      if (lgVals.length === 0) { skipped++; continue; }
+      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description });
+      if (!Array.isArray(result) || result.length === 0) { skipped++; continue; }
+      const mid = result[0].id;
+      await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
+      if (icVals.length) await sbPost('maker_pn_itemcode_map', icVals.map(v => ({ maker_pn_id: mid, item_code: v })));
+      added++;
+    }
+    evt.target.value = '';
+    showToast(`✓ 업로드 완료 — 신규 ${added}건 등록${skipped ? `, 중복/오류 ${skipped}건 제외` : ''}`);
+    loadMpnData();
+  }
+
   function applyTableWidth(table) {
     // table-layout:fixed라도 테이블 자체가 auto width면 긴 텍스트(white-space:nowrap)가
     // 테이블 전체를 늘려버리므로, 컬럼 폭 합계를 테이블에 명시적으로 고정한다.
@@ -1666,6 +1968,7 @@
   initColResize('makerTable', 'shiplot_maker_col_v1');
   initColResize('itemDtab', 'shiplot_item_col_v1');
   initColResize('scanResultTable', 'shiplot_scanresult_col_v1');
+  initColResize('mpnTable', 'shiplot_mpn_col_v1');
 </script>
 </body>
 </html>
