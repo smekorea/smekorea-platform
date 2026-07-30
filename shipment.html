@@ -1063,8 +1063,12 @@
     if (extraCategoryList.some(n => n === name)) return;
     try {
       const result = await sbPost('extra_category', { name, created_at: new Date().toISOString() });
-      if (Array.isArray(result) && result.length > 0) extraCategoryList.push(name);
-    } catch(e) { /* 등록 실패해도 출하지시 저장 자체는 막지 않음 */ }
+      if (Array.isArray(result) && result.length > 0) {
+        extraCategoryList.push(name);
+      } else {
+        console.error('extra_category 자동등록 실패(권한/RLS 문제일 수 있음):', result);
+      }
+    } catch(e) { console.error('extra_category 자동등록 예외:', e); /* 등록 실패해도 출하지시 저장 자체는 막지 않음 */ }
   }
 
   // ── 추가구분 드롭다운 (순수 선택 전용 — 추가/수정/삭제는 "+항목 관리" 모달에서만) ──
@@ -1160,7 +1164,12 @@
     const val = input.value.trim();
     if (!val) { showToast('⚠ 추가할 항목명을 입력해주세요', true); return; }
     if (ecatManageRows.some(r => r.name === val)) { showToast('⚠ 이미 등록된 항목입니다', true); return; }
-    await sbPost('extra_category', { name: val, created_at: new Date().toISOString() });
+    const result = await sbPost('extra_category', { name: val, created_at: new Date().toISOString() });
+    if (!Array.isArray(result) || result.length === 0) {
+      console.error('extra_category 저장 실패(권한/RLS 문제일 수 있음):', result);
+      showToast('⚠ 저장 실패 — 관리자에게 문의하세요 (콘솔 확인 필요)', true);
+      return;
+    }
     input.value = '';
     extraCategoryLoaded = false; // 드롭다운 목록도 다음 오픈 시 다시 불러오도록
     await loadExtraCategoryList();
