@@ -194,9 +194,12 @@
   .ecat-mrow-actions{display:flex;gap:6px;flex-shrink:0;}
   .ecat-mrow-btn{padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);font-size:12px;font-weight:700;cursor:pointer;}
   .ecat-mrow-btn.del{color:var(--accent);border-color:var(--accent);}
-  .force-view-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface2);}
-  .force-view-row .fv-code{font-weight:800;color:var(--accent2);}
-  .force-view-row .fv-reason{margin-top:3px;color:var(--text);font-size:12.5px;}
+  .force-view-row{border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;background:var(--surface2);display:flex;align-items:center;gap:10px;flex-wrap:nowrap;white-space:nowrap;overflow-x:auto;font-size:12.5px;}
+  .force-view-row .fv-no{color:var(--muted);font-weight:800;flex-shrink:0;}
+  .force-view-row .fv-code{font-weight:800;color:var(--accent2);flex-shrink:0;}
+  .force-view-row .fv-sub{color:var(--muted);font-size:11.5px;flex-shrink:0;}
+  .force-view-row .fv-qty{font-weight:700;flex-shrink:0;}
+  .force-view-row .fv-reason{color:var(--text);flex-shrink:0;padding-left:6px;border-left:1px solid var(--border2);}
   .force-item-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface);}
   .force-item-hd{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px;}
   .force-item-hd .fi-no{color:var(--muted);font-weight:800;margin-right:4px;}
@@ -602,7 +605,7 @@
 
 <!-- ══ 강제완료 사유 확인 팝업 ══ -->
 <div class="modal-overlay" id="forceReasonViewModal">
-  <div class="modal" style="width:520px;max-height:80vh;overflow-y:auto;">
+  <div class="modal" style="width:820px;max-width:96vw;max-height:80vh;overflow-y:auto;">
     <div class="modal-header" style="cursor:move;">
       <div class="modal-title" style="color:var(--accent2);">📝 강제완료 사유 내역</div>
       <button class="modal-close" onclick="closeForceReasonViewModal()">✕</button>
@@ -1540,22 +1543,33 @@
   }
 
   // ── 강제완료 사유 확인 팝업(출하지시 목록에서 "확인" 클릭 시) ──
-  function openForceReasonViewModal(scheduleId) {
-    const r = allBatches.find(x => x.id === scheduleId);
+  async function openForceReasonViewModal(scheduleId) {
     const box = document.getElementById('forceReasonViewList');
-    if (!r || !r.lot_force_reason) {
-      box.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12.5px;">사유 정보가 없습니다.</div>`;
-    } else {
-      const parts = r.lot_force_reason.split('|').map(s => s.trim()).filter(Boolean);
-      box.innerHTML = parts.map(p => {
-        const idx = p.indexOf(':');
-        const code = idx >= 0 ? p.slice(0, idx).trim() : '';
-        const reason = idx >= 0 ? p.slice(idx + 1).trim() : p;
-        return `<div class="force-view-row">${code ? `<div class="fv-code">${code}</div>` : ''}<div class="fv-reason">${reason}</div></div>`;
-      }).join('');
-    }
+    box.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12.5px;">불러오는 중...</div>`;
     resetForceReasonViewModalPosition();
     document.getElementById('forceReasonViewModal').classList.add('show');
+
+    await ensureMakerPnMaster();
+    const items = await sbGet('ship_lot_item', 'ship_schedule_id=eq.' + scheduleId + '&force_reason=not.is.null&order=id');
+    if (!Array.isArray(items) || items.length === 0) {
+      box.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12.5px;">사유 정보가 없습니다.</div>`;
+      return;
+    }
+    box.innerHTML = items.map((it, idx) => {
+      const lgPn = (it.description || '').trim().split(/\s+/)[0] || '-';
+      const makerId = lgPnToMakerId[lgPn];
+      const makerPn = makerId ? (makerIdToMakerPn[makerId] || '-') : '-';
+      const need = it.qty_required || 0;
+      const done = it.qty_scanned || 0;
+      const short = Math.max(0, need - done);
+      return `<div class="force-view-row">
+        <span class="fv-no">${idx+1}.</span>
+        <span class="fv-code">${it.item_code || '-'}</span>
+        <span class="fv-sub">메이커 ${makerPn} · LG ${lgPn}</span>
+        <span class="fv-qty"><span style="color:var(--accent2);">필요 ${need.toLocaleString()}</span> / <span style="color:var(--accent);">부족 ${short.toLocaleString()}</span></span>
+        <span class="fv-reason">사유: ${it.force_reason}</span>
+      </div>`;
+    }).join('');
   }
   function closeForceReasonViewModal() { document.getElementById('forceReasonViewModal').classList.remove('show'); }
   function resetForceReasonViewModalPosition() {
