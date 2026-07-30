@@ -68,7 +68,7 @@
 
   /* ══ 검수 탭 ══ */
   .work-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr);gap:16px;align-items:stretch;height:calc(100vh - 220px);}
-  .work-grid > .card{min-height:0;display:flex;flex-direction:column;}
+  .work-grid > .card{min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
   .card{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;position:relative;}
   .card-hd{padding:11px 16px;background:var(--navy);color:#fff;font-size:13px;font-weight:800;display:flex;justify-content:space-between;align-items:center;}
   .card-hd .print-btn{background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.35);color:#fff;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;}
@@ -186,6 +186,13 @@
 
   /* ══ 메이커별 품목체계표 탭 ══ */
   #mpnModal .modal-header{cursor:move;display:flex;align-items:center;justify-content:space-between;}
+  #forceModal .modal-header{display:flex;align-items:center;justify-content:space-between;}
+  .force-item-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface);}
+  .force-item-hd{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px;}
+  .force-item-hd .muted{color:var(--muted);font-weight:600;margin-left:6px;}
+  .force-item-reasons{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:6px;}
+  .force-item-reasons label{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;color:var(--text);}
+  .force-item-note{width:100%;padding:6px 9px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;}
   .modal-section{margin-bottom:12px;}
   .modal-title{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px;}
   #mpnModal .modal-title{color:var(--accent2);}
@@ -361,7 +368,7 @@
           <div class="scan-result-scroll">
             <table class="dtab" id="scanResultTable">
               <thead><tr>
-                <th style="width:66px;">시각<div class="col-resizer"></div></th>
+                <th style="width:108px;">시각<div class="col-resizer"></div></th>
                 <th style="width:52px;">타입<div class="col-resizer"></div></th>
                 <th>원본값<div class="col-resizer"></div></th>
                 <th style="width:90px;">매칭품번<div class="col-resizer"></div></th>
@@ -536,17 +543,19 @@
 
 <!-- 강제완료 확인 모달 -->
 <div class="modal-overlay" id="forceModal">
-  <div class="modal">
-    <div class="modal-header" style="color:var(--accent);">⚠ 미완료 품목이 있습니다</div>
-    <div class="modal-body">
-      미완료 품목이 <b id="forceCount">0</b>건 있습니다. 그래도 완료 처리하시겠습니까?
-      <div style="margin-top:12px;font-size:12.5px;font-weight:700;color:var(--text);">사유 선택 (중복 선택 가능)</div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox" class="forceReasonChk" value="수량부족"> 수량부족</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox" class="forceReasonChk" value="품목없음(미입고)"> 품목없음(미입고)</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox" class="forceReasonChk" value="추가출하 필요"> 추가출하 필요</label>
+  <div class="modal" style="width:720px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;">
+    <div class="modal-header" style="cursor:move;">
+      <div class="modal-title" style="color:var(--accent);">⚠ 미완료 품목이 있습니다</div>
+      <button class="modal-close" onclick="closeForceModal()">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;">
+      <div style="font-size:12.5px;color:var(--text);margin-bottom:10px;">미완료 품목이 <b id="forceCount">0</b>건 있습니다. <b>품목별로 사유를 선택</b>해주세요.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <span style="font-size:12px;font-weight:800;white-space:nowrap;">＋ 새 사유 등록</span>
+        <input type="text" id="forceReasonNewInput" placeholder="새 사유 입력 후 Enter (모든 품목에 선택 옵션으로 추가됩니다)" style="flex:1;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addForceReasonMaster();}">
+        <button class="btn btn-ghost" style="width:auto;padding:7px 14px;" onclick="addForceReasonMaster()">추가</button>
       </div>
-      <input type="text" class="form-input" id="forceReason" placeholder="비고 (상세 내용 직접 입력, 선택)" style="margin-top:10px;">
+      <div id="forceItemList"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeForceModal()">취소</button>
@@ -1395,23 +1404,98 @@
     row.is_done = newIsDone;
   }
 
-  function tryCompleteScan() {
+  // ── 강제완료 사유 마스터(재사용 목록) ──
+  let forceReasonMasterList = [];
+  let forceReasonMasterLoaded = false;
+  async function ensureForceReasonMaster() {
+    if (forceReasonMasterLoaded) return;
+    try {
+      const rows = await sbGet('lot_force_reason_master', 'select=name&order=id');
+      forceReasonMasterList = (Array.isArray(rows) ? rows : []).map(r => r.name).filter(Boolean);
+      forceReasonMasterLoaded = true;
+    } catch(e) { /* 로드 실패해도 강제완료 자체는 계속 가능(체크박스만 비어있게) */ }
+  }
+  async function addForceReasonMaster() {
+    const input = document.getElementById('forceReasonNewInput');
+    const val = input.value.trim();
+    if (!val) { showToast('⚠ 추가할 사유를 입력해주세요', true); return; }
+    if (forceReasonMasterList.includes(val)) { showToast('⚠ 이미 있는 사유입니다', true); return; }
+    const result = await sbPost('lot_force_reason_master', { name: val });
+    if (!Array.isArray(result) || result.length === 0) {
+      showToast('⚠ 사유 등록 실패 — 관리자에게 문의하세요', true);
+      console.error('lot_force_reason_master 저장 실패:', result);
+      return;
+    }
+    forceReasonMasterList.push(val);
+    input.value = '';
+    // 기존에 열려있는 각 품목 사유 목록에도 체크박스를 바로 추가(선택 상태 유지)
+    document.querySelectorAll('.force-item-reasons').forEach(box => {
+      const itemId = box.closest('.force-item-row').dataset.itemId;
+      const label = document.createElement('label');
+      label.innerHTML = `<input type="checkbox" class="force-item-chk" data-item="${itemId}" value="${val.replace(/"/g,'&quot;')}"> ${val}`;
+      box.appendChild(label);
+    });
+    showToast(`✓ "${val}" 사유가 추가되었습니다`);
+  }
+
+  function renderForceItemList(undone) {
+    const box = document.getElementById('forceItemList');
+    box.innerHTML = undone.map(r => {
+      const reasonChks = forceReasonMasterList.map(name =>
+        `<label><input type="checkbox" class="force-item-chk" data-item="${r.id}" value="${name.replace(/"/g,'&quot;')}"> ${name}</label>`
+      ).join('');
+      return `<div class="force-item-row" data-item-id="${r.id}">
+        <div class="force-item-hd">
+          <span class="mono">${r.item_code||'-'}</span> ${r.description||''}
+          <span class="muted">필요 ${(r.qty_required||0).toLocaleString()} / 진행 ${(r.qty_scanned||0).toLocaleString()}</span>
+        </div>
+        <div class="force-item-reasons">${reasonChks}</div>
+        <input type="text" class="force-item-note" data-item="${r.id}" placeholder="이 품목에 대한 비고(선택)">
+      </div>`;
+    }).join('');
+  }
+
+  async function tryCompleteScan() {
     const undone = itemRows.filter(r => !r.is_done);
     if (undone.length === 0) { doComplete(null); return; }
+    await ensureForceReasonMaster();
     document.getElementById('forceCount').textContent = undone.length;
-    document.getElementById('forceReason').value = '';
-    document.querySelectorAll('.forceReasonChk').forEach(chk => chk.checked = false);
+    document.getElementById('forceReasonNewInput').value = '';
+    renderForceItemList(undone);
+    resetForceModalPosition();
     document.getElementById('forceModal').classList.add('show');
   }
   function closeForceModal(){ document.getElementById('forceModal').classList.remove('show'); }
-  function confirmForceComplete() {
-    const checked = Array.from(document.querySelectorAll('.forceReasonChk:checked')).map(el => el.value);
-    const detail = document.getElementById('forceReason').value.trim();
-    if (checked.length === 0 && !detail) { showToast('⚠ 사유를 하나 이상 선택하거나 비고를 입력해주세요', true); return; }
-    const combined = [checked.join(', '), detail].filter(Boolean).join(' / ');
+
+  async function confirmForceComplete() {
+    const rows = Array.from(document.querySelectorAll('.force-item-row'));
+    if (rows.length === 0) { closeForceModal(); doComplete(null); return; }
+
+    let anyReason = false;
+    const perItem = []; // {itemId, itemCode, text}
+    for (const rowEl of rows) {
+      const itemId = rowEl.dataset.itemId;
+      const checked = Array.from(rowEl.querySelectorAll('.force-item-chk:checked')).map(el => el.value);
+      const note = rowEl.querySelector('.force-item-note').value.trim();
+      const text = [checked.join(', '), note].filter(Boolean).join(' / ');
+      if (text) anyReason = true;
+      const itemRow = itemRows.find(r => String(r.id) === String(itemId));
+      perItem.push({ itemId, itemCode: itemRow ? itemRow.item_code : itemId, text });
+    }
+    if (!anyReason) { showToast('⚠ 최소 한 품목 이상에 사유를 선택하거나 비고를 입력해주세요', true); return; }
+
+    // 품목별 사유를 ship_lot_item.force_reason에 개별 저장
+    for (const it of perItem) {
+      if (it.text) {
+        await sbPatch('ship_lot_item', it.itemId, { force_reason: it.text });
+      }
+    }
+    // 전체 요약(출하지시 비고/사유란用)
+    const combined = perItem.filter(it => it.text).map(it => `${it.itemCode}: ${it.text}`).join(' | ');
     closeForceModal();
     doComplete(combined);
   }
+
   async function doComplete(forceReason) {
     const now = new Date().toISOString();
     const patchBody = {
@@ -1425,9 +1509,37 @@
       patchBody.note = existingNote ? (existingNote + '\n' + addLine) : addLine;
     }
     await sbPatch('ship_schedule', currentSid, patchBody);
-    showToast(forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다 (비고란에 사유 등록됨)' : '✓ 출고검수가 완료되었습니다');
+    showToast(forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다 (품목별 사유 등록됨)' : '✓ 출고검수가 완료되었습니다');
     setTimeout(()=>{ switchTab('list'); loadList(); }, 1200);
   }
+
+  function resetForceModalPosition() {
+    const modal = document.querySelector('#forceModal .modal');
+    if (!modal) return;
+    modal.style.position = ''; modal.style.left = ''; modal.style.top = ''; modal.style.margin = '';
+  }
+  (function initForceModalDrag() {
+    const header = document.querySelector('#forceModal .modal-header');
+    const modal = document.querySelector('#forceModal .modal');
+    if (!header || !modal) return;
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.modal-close')) return;
+      const rect = modal.getBoundingClientRect();
+      modal.style.position = 'fixed'; modal.style.margin = '0';
+      modal.style.left = rect.left + 'px'; modal.style.top = rect.top + 'px';
+      origLeft = rect.left; origTop = rect.top;
+      startX = e.clientX; startY = e.clientY;
+      dragging = true; e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      modal.style.left = (origLeft + e.clientX - startX) + 'px';
+      modal.style.top = (origTop + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  })();
+
 
   // ══ 체크이력 ══
   let historyResults = [];
@@ -1585,7 +1697,13 @@
       const typeTag = r.scan_type==='QR' ? '<span class="tag-scan tag-qr">QR</span>'
         : r.scan_type==='바코드1_품번' ? '<span class="tag-scan tag-b1">품번</span>'
         : '<span class="tag-scan tag-b2">LOT</span>';
-      const timeStr = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('ko-KR', {hour12:false}) : '-';
+      const timeStr = r.scanned_at ? (() => {
+        const d = new Date(r.scanned_at);
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        const time = d.toLocaleTimeString('ko-KR', {hour12:false});
+        return `${mm}/${dd} ${time}`;
+      })() : '-';
       const resultBadge = r.pair_status === '초과스캔' ? '<span style="color:var(--accent);font-weight:700;">초과</span>'
         : !r.item_code ? '<span class="badge-red">미매칭</span>'
         : (r.pair_status && r.pair_status.indexOf('미완결')>=0 ? '<span style="color:var(--warn);font-weight:700;">미완결</span>' : '<span style="color:var(--accent3);font-weight:700;">완료</span>');
