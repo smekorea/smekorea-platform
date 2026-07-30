@@ -195,6 +195,8 @@
   .ecat-dropdown-item{padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);}
   .ecat-dropdown-item:hover{background:var(--surface2);color:var(--accent2);}
   .ecat-dropdown-empty{padding:14px 16px;font-size:12.5px;color:var(--muted);}
+  .ecat-dropdown-empty-clickable{cursor:pointer;font-weight:700;color:var(--accent2);background:rgba(26,86,219,0.06);text-align:center;}
+  .ecat-dropdown-empty-clickable:hover{background:rgba(26,86,219,0.12);}
   .ecat-dropdown-add{padding:12px 16px;font-size:14px;font-weight:800;cursor:pointer;background:#374151;color:#fff;text-align:center;}
   .ecat-dropdown-add:hover{background:#1f2937;}
   .ecat-add-input-row{display:flex;gap:6px;padding:10px;background:#fff8e1;border-top:2px dashed var(--accent2);}
@@ -522,6 +524,19 @@
           </div>
         </div>
       </div>
+      <div class="modal-section" id="editLotSection" style="display:none;">
+        <div class="modal-section-title">거래명세표 (LOT관리) <span id="editLotStatusBadge" style="font-size:10px;color:var(--muted);font-weight:600;"></span></div>
+        <div class="lot-dropzone" id="editLotDropzone" onclick="document.getElementById('editLotFile').click()">
+          <div class="ldz-icon">📎</div>
+          <div class="ldz-text">클릭 또는 파일을 드래그해서 새 거래명세표로 교체</div>
+          <div class="ldz-filename" id="editLdzFilename"></div>
+        </div>
+        <input type="file" id="editLotFile" accept=".xlsx,.xls" style="display:none;" onchange="handleEditLotFileSelect(this.files[0])">
+        <div id="editLotPreviewArea"></div>
+        <div style="margin-top:8px;">
+          <button type="button" class="action-btn del-btn" style="width:auto;" onclick="removeLotFromEdit()">🗑 LOT관리 해제 (거래명세표 전체 삭제)</button>
+        </div>
+      </div>
       <div class="modal-section history-zone">
         <div class="modal-section-title">수정 이력 기록 <span style="color:var(--accent);font-size:9px;">(필수)</span></div>
         <div class="form-row">
@@ -801,7 +816,7 @@
 
     return `<div class="ship-card ${type}-card${isDone?' done-card':''}${isEdited?' edited-card':''}">
       <div class="card-top">
-        <div class="customer-name">${r.customer||'-'}${r.extra_category?`<span style="font-size:12px;font-weight:700;color:var(--accent2);">/${r.extra_category}</span>`:''}</div>
+        <div class="customer-name">${r.customer||'-'}${r.extra_category?`<span style="font-weight:800;color:var(--accent2);">/${r.extra_category}</span>`:''}</div>
         <div class="tags">
           <span class="tag ${deptClass}">${r.input_by||'-'}</span>
           ${packLabel?`<span class="tag tag-p">${packLabel}</span>`:''}
@@ -1052,17 +1067,18 @@
     } catch(e) { /* 등록 실패해도 출하지시 저장 자체는 막지 않음 */ }
   }
 
-  // ── 추가구분 드롭다운 (workflow.html "업무유형" 방식: 목록 + 맨 아래 "+ 항목 추가") ──
+  // ── 추가구분 드롭다운 (순수 선택 전용 — 추가/수정/삭제는 "+항목 관리" 모달에서만) ──
   function renderExtraCategoryDropdown() {
     const list = document.getElementById('ecatDropdownList');
-    const itemsHtml = extraCategoryList.length
+    list.innerHTML = extraCategoryList.length
       ? extraCategoryList.map(n => `<div class="ecat-dropdown-item" onclick="event.stopPropagation();selectExtraCategoryOpt('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('')
-      : `<div class="ecat-dropdown-empty">등록된 항목이 없습니다. 아래에서 추가해주세요.</div>`;
-    list.innerHTML = itemsHtml + `<div class="ecat-dropdown-add" onclick="event.stopPropagation();showExtraCategoryAddInput()">＋ 항목 추가</div>`;
+      : `<div class="ecat-dropdown-empty ecat-dropdown-empty-clickable" onclick="event.stopPropagation();document.getElementById('ecatDropdownList').classList.remove('show');openEcatManageModal();">＋ 등록된 항목이 없습니다. 클릭해서 추가하기</div>`;
   }
-  function toggleExtraCategoryDropdown() {
+  async function toggleExtraCategoryDropdown() {
     const list = document.getElementById('ecatDropdownList');
     if (list.classList.contains('show')) { list.classList.remove('show'); return; }
+    extraCategoryLoaded = false;
+    await loadExtraCategoryList(); // 관리 모달에서 방금 바뀐 내용도 바로 반영되도록 매번 새로고침
     renderExtraCategoryDropdown();
     list.classList.add('show');
   }
@@ -1078,25 +1094,6 @@
     const label = document.getElementById('ecatSelectedText');
     label.textContent = '선택 안함';
     label.style.color = 'var(--muted)';
-  }
-  function showExtraCategoryAddInput() {
-    const list = document.getElementById('ecatDropdownList');
-    const itemsHtml = extraCategoryList.map(n => `<div class="ecat-dropdown-item" onclick="event.stopPropagation();selectExtraCategoryOpt('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
-    list.innerHTML = itemsHtml + `
-      <div class="ecat-add-input-row" onclick="event.stopPropagation();">
-        <input type="text" id="ecatNewInput" placeholder="새 항목 입력 후 Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmExtraCategoryAdd();}">
-        <button onclick="event.stopPropagation();confirmExtraCategoryAdd()">추가</button>
-      </div>`;
-    setTimeout(() => { const el = document.getElementById('ecatNewInput'); if (el) el.focus(); }, 30);
-  }
-  async function confirmExtraCategoryAdd() {
-    const input = document.getElementById('ecatNewInput');
-    const val = input ? input.value.trim() : '';
-    if (!val) { showToast('⚠ 추가할 항목명을 입력해주세요', true); return; }
-    if (extraCategoryList.some(n => n === val)) { selectExtraCategoryOpt(val); return; }
-    await ensureExtraCategoryRegistered(val);
-    selectExtraCategoryOpt(val);
-    showToast(`✓ "${val}" 항목이 추가되었습니다`);
   }
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#ecatDropdownWrap')) {
@@ -1330,6 +1327,108 @@
       if (file) { document.getElementById('inLotFile').files = e.dataTransfer.files; handleLotFileSelect(file); }
     });
   })();
+
+  // ── 수정모달: 거래명세표 재업로드 / LOT관리 해제 ──
+  let editLotTargetRow = null;
+  let editPendingLotPreview = null;
+  let editLotItemsToSave = null; // 저장 시점에 실제 반영할 파싱결과(확정 후 세팅)
+
+  async function handleEditLotFileSelect(file) {
+    if (!file) return;
+    editLotItemsToSave = null;
+    document.getElementById('editLdzFilename').textContent = '📎 ' + file.name;
+    document.getElementById('editLotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
+    try {
+      const parsed = await parseLotExcelFile(file);
+      if (parsed.items.length === 0) {
+        editPendingLotPreview = null;
+        document.getElementById('editLotPreviewArea').innerHTML =
+          `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ 인식된 품목이 없습니다</span></div>
+           <div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div></div>`;
+        return;
+      }
+      const enriched = await enrichCheckType(parsed.items);
+      editPendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer };
+      renderEditLotPreview();
+    } catch(e) {
+      editPendingLotPreview = null;
+      document.getElementById('editLotPreviewArea').innerHTML = `<div class="lot-preview"><span class="warn">⚠ 엑셀 파싱 실패: ${e.message||e}</span></div>`;
+    }
+  }
+
+  function renderEditLotPreview() {
+    if (!editPendingLotPreview) return;
+    const { enriched, warnings, customer } = editPendingLotPreview;
+    const totalQty = enriched.reduce((s,it)=>s+it.qty_required,0);
+    const barcodeCnt = enriched.filter(it=>it.check_type==='barcode').length;
+    const manualCnt = enriched.length - barcodeCnt;
+    const warnHtml = warnings.length
+      ? `<div class="lot-preview-warn-list">${warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>` : '';
+    const confirmed = editLotItemsToSave !== null;
+    document.getElementById('editLotPreviewArea').innerHTML = `<div class="lot-preview">
+      <div class="lot-preview-stat">
+        <span class="ok">✓ 품목 ${enriched.length}건</span>
+        <span>총수량 ${totalQty.toLocaleString()}</span>
+        <span>📡 바코드검수 ${barcodeCnt}건</span>
+        <span>✍ 수기확인 ${manualCnt}건</span>
+        ${customer ? `<span>🏢 매출처 인식: ${customer}</span>` : ''}
+        ${warnings.length ? `<span class="warn">⚠ 확인필요 ${warnings.length}건</span>` : ''}
+      </div>
+      ${warnHtml}
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        ${confirmed
+          ? `<span style="color:var(--accent3);font-weight:700;font-size:12px;">✓ 저장 시 기존 거래명세표를 이 내용으로 교체합니다</span>`
+          : `<button type="button" class="btn-primary-sm" onclick="confirmEditLotPreview()">✓ 이 내용으로 교체 확정</button>
+             <button type="button" class="btn-ghost-sm" onclick="document.getElementById('editLotFile').value='';document.getElementById('editLdzFilename').textContent='';document.getElementById('editLotPreviewArea').innerHTML='';editPendingLotPreview=null;">✕ 취소</button>`}
+      </div>
+    </div>`;
+  }
+
+  function confirmEditLotPreview() {
+    if (!editPendingLotPreview) return;
+    const r = editLotTargetRow;
+    const inProgress = r && (r.lot_status === '진행중' || r.lot_status === '완료');
+    if (inProgress && !confirm(`⚠ 이 출하 건은 이미 바코드검수가 "${r.lot_status}" 상태입니다.\n거래명세표를 교체하면 지금까지의 스캔 이력이 전부 삭제됩니다.\n그래도 교체하시겠습니까?`)) return;
+    editLotItemsToSave = editPendingLotPreview.enriched;
+    renderEditLotPreview();
+    showToast('✓ 재업로드 내용이 확정되었습니다 (수정 저장 시 반영됩니다)');
+  }
+
+  async function removeLotFromEdit() {
+    const r = editLotTargetRow;
+    if (!r) return;
+    const inProgress = r.lot_status === '진행중' || r.lot_status === '완료';
+    const msg = inProgress
+      ? `⚠ 이 출하 건은 이미 바코드검수가 "${r.lot_status}" 상태입니다.\nLOT관리를 해제하면 거래명세표 품목/스캔 이력이 전부 삭제됩니다.\n그래도 해제하시겠습니까?`
+      : '거래명세표(LOT관리) 정보를 전부 삭제하시겠습니까?';
+    if (!confirm(msg)) return;
+    try {
+      await fetch(SB_URL + '/rest/v1/ship_lot_item?ship_schedule_id=eq.' + r.id, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+      await fetch(SB_URL + '/rest/v1/ship_lot_log?ship_schedule_id=eq.' + r.id, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+      await sbPatch('ship_schedule', r.id, {
+        lot_required: false, lot_status: null, lot_started_at: null, lot_started_by: null,
+        lot_completed_at: null, lot_completed_by: null, lot_force_reason: null
+      });
+      showToast('✓ LOT관리가 해제되었습니다');
+      closeEditModal();
+      loadData();
+    } catch(e) {
+      showToast('⚠ 해제 처리 중 오류가 발생했습니다', true);
+    }
+  }
+
+  (function initEditLotDropzone() {
+    const dz = document.getElementById('editLotDropzone');
+    if (!dz) return;
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault(); dz.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) { document.getElementById('editLotFile').files = e.dataTransfer.files; handleEditLotFileSelect(file); }
+    });
+  })();
+
 
   // ── 매출처명 자동완성 (partners 마스터) ──
   let customerMasterNames = [];
@@ -1582,6 +1681,18 @@
     document.getElementById('editNote').value = (r.note && r.note !== '-') ? r.note : '';
     document.getElementById('editBy').value = '';
     document.getElementById('editReason').value = '';
+
+    // ── 거래명세표(LOT관리) 섹션 ──
+    editLotTargetRow = r;
+    editPendingLotPreview = null;
+    editLotItemsToSave = null;
+    document.getElementById('editLotFile').value = '';
+    document.getElementById('editLdzFilename').textContent = '';
+    document.getElementById('editLotPreviewArea').innerHTML = '';
+    const lotRequired = r.lot_required === true || r.lot_required === 'true' || r.lot_required === 't';
+    document.getElementById('editLotSection').style.display = lotRequired ? 'block' : 'none';
+    document.getElementById('editLotStatusBadge').textContent = lotRequired ? `현재 상태: ${r.lot_status||'대기'}` : '';
+
     document.getElementById('editModal').classList.add('show');
   }
 
@@ -1618,7 +1729,19 @@
 
     try {
       await sbPatch('ship_schedule', editTargetId, body);
-      showToast('✓ 수정이 완료되었습니다');
+      if (editLotItemsToSave && editLotItemsToSave.length > 0) {
+        await fetch(SB_URL + '/rest/v1/ship_lot_item?ship_schedule_id=eq.' + editTargetId, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+        await fetch(SB_URL + '/rest/v1/ship_lot_log?ship_schedule_id=eq.' + editTargetId, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+        const itemBody = editLotItemsToSave.map(it => ({
+          ship_schedule_id: editTargetId, item_code: it.item_code, description: it.description,
+          qty_required: it.qty_required, qty_scanned: 0, is_done: false, check_type: it.check_type, maker: it.maker || null
+        }));
+        await sbPost('ship_lot_item', itemBody);
+        await sbPatch('ship_schedule', editTargetId, { lot_status: '대기', lot_started_at: null, lot_started_by: null, lot_completed_at: null, lot_completed_by: null, lot_force_reason: null });
+        showToast('✓ 수정 및 거래명세표 교체가 완료되었습니다');
+      } else {
+        showToast('✓ 수정이 완료되었습니다');
+      }
       closeEditModal();
       loadData();
     } catch(e) {
