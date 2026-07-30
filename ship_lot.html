@@ -41,23 +41,26 @@
   .filter-tabs{display:flex;gap:6px;margin-bottom:14px;}
   .filter-tab{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
   .filter-tab.active{border-color:var(--accent2);color:var(--accent2);background:rgba(26,86,219,0.07);}
-  .batch-list-header{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr;gap:8px;padding:8px 18px;margin-bottom:6px;font-size:12px;font-weight:800;color:#fff;background:var(--navy);border-radius:8px 8px 0 0;}
+  .batch-list-header{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr;gap:18px;padding:10px 20px;margin-bottom:6px;font-size:12px;font-weight:800;color:#fff;background:var(--navy);border-radius:8px 8px 0 0;}
+  .batch-list-header > div{position:relative;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;user-select:none;}
+  .batch-col-resizer{position:absolute;right:-9px;top:-10px;bottom:-10px;width:8px;cursor:col-resize;z-index:5;}
+  .batch-col-resizer:hover{background:rgba(255,255,255,0.25);}
   .batch-grid{display:flex;flex-direction:column;gap:6px;}
-  .batch-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;transition:all 0.15s;border-left:4px solid var(--muted);box-shadow:var(--shadow);}
+  .batch-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;transition:all 0.15s;border-left:12px solid var(--muted);box-shadow:var(--shadow);}
   .batch-card:hover{transform:translateY(-1px);}
   .batch-card.st-대기{border-left-color:#ec4899;}
   .batch-card.st-진행중{border-left-color:var(--warn);}
   .batch-card.st-완료{border-left-color:var(--accent2);opacity:0.85;}
-  .batch-row-main{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr;gap:8px;align-items:center;}
+  .batch-row-main{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr;gap:18px;align-items:center;}
   .brow-cell-lbl{font-size:9px;color:var(--muted);margin-bottom:1px;}
   .brow-cell-val{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .brow-customer .brow-cell-val{font-size:13.5px;}
   .bc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .bc-customer{font-size:14px;font-weight:700;}
-  .bc-badge{font-size:14px;font-family:'Share Tech Mono',monospace;padding:5px 14px;border-radius:20px;font-weight:700;}
-  .bc-badge.대기{background:rgba(236,72,153,0.14);color:#ec4899;}
-  .bc-badge.진행중{background:rgba(217,119,6,0.14);color:var(--warn);}
-  .bc-badge.완료{background:rgba(26,86,219,0.14);color:var(--accent2);}
+  .bc-badge{display:inline-block;width:auto;font-size:14px;font-family:'Share Tech Mono',monospace;padding:5px 14px;border-radius:20px;font-weight:700;}
+  .bc-badge.대기{background:#ec4899;color:#fff;}
+  .bc-badge.진행중{background:var(--warn);color:#fff;}
+  .bc-badge.완료{background:var(--accent2);color:#fff;}
   .bc-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
   .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 10px;color:var(--muted);gap:6px;}
 
@@ -786,6 +789,56 @@
     document.querySelector(`.filter-tab[data-f="${f}"]`).classList.add('active');
     renderBatchGrid();
   }
+  // ══ 출하지시 목록 헤더 컬럼 리사이즈 ══
+  const BATCH_COL_KEY = 'shiplot_batch_col_v1';
+  let batchColWidths = null;
+  function applyBatchColWidths() {
+    if (!batchColWidths) return;
+    const template = batchColWidths.map(w => w + 'px').join(' ');
+    document.querySelectorAll('.batch-list-header, .batch-row-main').forEach(el => {
+      el.style.gridTemplateColumns = template;
+    });
+  }
+  function initBatchColResize() {
+    const header = document.querySelector('.batch-list-header');
+    if (!header) return;
+    const cells = Array.from(header.children);
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(BATCH_COL_KEY) || 'null'); } catch(e) {}
+    if (saved && Array.isArray(saved) && saved.length === cells.length) {
+      batchColWidths = saved;
+    } else {
+      batchColWidths = cells.map(c => c.getBoundingClientRect().width);
+    }
+    applyBatchColWidths();
+    cells.forEach((cell, i) => {
+      if (i === cells.length - 1) return; // 마지막 컬럼(상태)은 리사이저 불필요
+      if (cell.querySelector('.batch-col-resizer')) return;
+      const rz = document.createElement('div');
+      rz.className = 'batch-col-resizer';
+      cell.appendChild(rz);
+      rz.addEventListener('mousedown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const startX = e.clientX;
+        const startW = batchColWidths[i];
+        const startWNext = batchColWidths[i+1];
+        function onMove(ev) {
+          const dx = ev.clientX - startX;
+          batchColWidths[i] = Math.max(40, startW + dx);
+          batchColWidths[i+1] = Math.max(40, startWNext - dx);
+          applyBatchColWidths();
+        }
+        function onUp() {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          localStorage.setItem(BATCH_COL_KEY, JSON.stringify(batchColWidths));
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  }
+
   function renderBatchGrid() {
     let rows = allBatches;
     if (currentFilter !== 'all') rows = rows.filter(r => (r.lot_status||'대기') === currentFilter);
@@ -804,7 +857,7 @@
       return `<div class="batch-card st-${st}" onclick="selectBatch(${r.id})">
         <div class="batch-row-main">
           <div class="brow-cell"><div class="brow-cell-val mono">${r.ship_date||'-'}</div></div>
-          <div class="brow-cell"><div class="brow-cell-val" style="color:${st==='완료'?'var(--accent3)':'var(--muted)'};">${completeCell}</div></div>
+          <div class="brow-cell"><div class="brow-cell-val" style="color:${st==='완료'?'var(--accent2)':'var(--muted)'};">${completeCell}</div></div>
           <div class="brow-cell brow-customer"><div class="brow-cell-val">${custDisplay(r.customer, r.extra_category)}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.input_by||'-'}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.manager||'-'}</div></div>
@@ -815,6 +868,7 @@
         ${forceInfo}
       </div>`;
     }).join('');
+    applyBatchColWidths();
   }
   function selectBatch(sid) {
     history.pushState({}, '', 'ship_lot.html?sid=' + sid);
@@ -2147,6 +2201,7 @@
   initColResize('itemDtab', 'shiplot_item_col_v1');
   initColResize('scanResultTable', 'shiplot_scanresult_col_v1');
   initColResize('mpnTable', 'shiplot_mpn_col_v1');
+  initBatchColResize();
 </script>
 </body>
 </html>
