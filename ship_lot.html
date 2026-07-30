@@ -1085,6 +1085,29 @@
     }
   });
 
+  // ── 바코드(품번+수량 붙어있는 문자열) 파싱: 고정 11자리가 아니라
+  //    실제 품목체계표(maker_pn_lgpn_map)에 등록된 LG품번 길이들을 긴 것부터 순서대로 대조해서
+  //    등록된 값과 정확히 일치하는 지점을 찾는다. (자릿수가 다른 LG품번도 정확히 매칭되도록)
+  function splitBarcodeByRegisteredLength(raw) {
+    const clean = (raw || '').replace(/\s+/g, '');
+    if (clean.length < 2) return null;
+    const registeredLens = [...new Set(Object.keys(lgPnToMakerId).map(k => k.length))].sort((a, b) => b - a);
+    for (const len of registeredLens) {
+      if (clean.length <= len) continue;
+      const candidate = clean.slice(0, len);
+      const rest = clean.slice(len);
+      if (/^\d+$/.test(rest) && lgPnToMakerId[candidate] !== undefined) {
+        return { pn: candidate, qty: parseInt(rest, 10) };
+      }
+    }
+    // 품목체계표에 없는 값이라 매칭 자체는 안 되지만, 참고용으로 기존 11자리 방식 폴백 (이력엔 남겨서 추후 확인 가능하게)
+    if (clean.length >= 12) {
+      const m = clean.match(/^(.{11})(\d+)$/);
+      if (m) return { pn: m[1], qty: parseInt(m[2], 10) };
+    }
+    return null;
+  }
+
   function findItemByLgPn(pn) {
     const target = (pn || '').trim();
     if (!target) return null;
@@ -1217,11 +1240,11 @@
     } else {
       // ── 바코드 슬롯: 품번+수량 / LOT 순서무관 2단 ──
       const clean = raw.replace(/\s+/g,'');
-      const m = clean.length >= 12 ? clean.match(/^(.{11})(\d+)$/) : null;
+      const m = splitBarcodeByRegisteredLength(clean);
       document.getElementById('slotBarcode').className = 'scan-slot-box active';
 
       if (m) {
-        const pn = m[1], qty = parseInt(m[2],10);
+        const pn = m.pn, qty = m.qty;
         const item = findItemByLgPn(pn);
         const itemCode = item ? item.item_code : null;
         document.getElementById('slotBarcodeVal').textContent = `품번:${raw} / LOT:대기중`;
@@ -1595,9 +1618,9 @@
         pair_status: overScan ? '초과스캔' : '완결' };
     } else if (row.scan_type === '바코드1_품번') {
       const clean = newRaw.replace(/\s+/g,'');
-      const m = clean.length >= 12 ? clean.match(/^(.{11})(\d+)$/) : null;
-      if (!m) { showToast('⚠ 품번+수량 형식(11자+숫자)이 아닙니다', true); return; }
-      const pn = m[1], qty = parseInt(m[2],10);
+      const m = splitBarcodeByRegisteredLength(clean);
+      if (!m) { showToast('⚠ 품목체계표에 등록된 LG품번과 일치하는 형식을 찾을 수 없습니다', true); return; }
+      const pn = m.pn, qty = m.qty;
       const item = findItemByLgPn(pn);
       const newItemCode = item ? item.item_code : null;
       updates = { ...updates, parsed_pn: pn, parsed_qty: qty,
