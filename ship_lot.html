@@ -41,7 +41,7 @@
   .filter-tabs{display:flex;gap:6px;margin-bottom:14px;}
   .filter-tab{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
   .filter-tab.active{border-color:var(--accent2);color:var(--accent2);background:rgba(26,86,219,0.07);}
-  .batch-list-header{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.75fr 0.75fr 0.75fr 0.75fr 0.7fr;gap:10px;padding:10px 20px;margin-bottom:6px;font-size:12px;font-weight:800;color:#fff;background:var(--navy);border-radius:8px 8px 0 0;}
+  .batch-list-header{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.75fr 0.75fr 0.75fr 0.75fr 0.7fr 0.6fr;gap:10px;padding:10px 20px;margin-bottom:6px;font-size:12px;font-weight:800;color:#fff;background:var(--navy);border-radius:8px 8px 0 0;}
   .batch-list-header > div{position:relative;white-space:nowrap;user-select:none;box-sizing:border-box;padding-right:8px;}
   .batch-list-header > div.grp-start{padding-left:10px;border-left:1px solid rgba(255,255,255,0.18);}
   .batch-col-resizer{position:absolute;right:-9px;top:-10px;bottom:-10px;width:10px;cursor:col-resize;z-index:5;}
@@ -52,7 +52,7 @@
   .batch-card.st-대기{border-left-color:#ec4899;}
   .batch-card.st-진행중{border-left-color:var(--warn);}
   .batch-card.st-완료{border-left-color:var(--accent2);opacity:0.85;}
-  .batch-row-main{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.75fr 0.75fr 0.75fr 0.75fr 0.7fr;gap:10px;align-items:center;}
+  .batch-row-main{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.75fr 0.75fr 0.75fr 0.75fr 0.7fr 0.6fr;gap:10px;align-items:center;}
   .batch-row-main > .brow-cell.grp-start{padding-left:10px;border-left:1px solid var(--border);}
   .brow-cell-lbl{font-size:9px;color:var(--muted);margin-bottom:1px;}
   .brow-cell-val{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -194,6 +194,9 @@
   .ecat-mrow-actions{display:flex;gap:6px;flex-shrink:0;}
   .ecat-mrow-btn{padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);font-size:12px;font-weight:700;cursor:pointer;}
   .ecat-mrow-btn.del{color:var(--accent);border-color:var(--accent);}
+  .force-view-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface2);}
+  .force-view-row .fv-code{font-weight:800;color:var(--accent2);}
+  .force-view-row .fv-reason{margin-top:3px;color:var(--text);font-size:12.5px;}
   .force-item-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface);}
   .force-item-hd{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px;}
   .force-item-hd .fi-no{color:var(--muted);font-weight:800;margin-right:4px;}
@@ -279,7 +282,7 @@
     <div class="filter-tab" data-f="완료" onclick="setFilter('완료')">완료</div>
   </div>
   <div class="batch-list-header">
-    <div>출하일자</div><div>검수완료</div><div class="grp-start">매출처명</div><div class="grp-start">보낸부서</div><div>보낸담당자</div><div class="grp-start">받는부서</div><div>받는담당자</div><div class="grp-start">상태</div>
+    <div>출하일자</div><div>검수완료</div><div class="grp-start">매출처명</div><div class="grp-start">보낸부서</div><div>보낸담당자</div><div class="grp-start">받는부서</div><div>받는담당자</div><div class="grp-start">상태</div><div>사유확인</div>
   </div>
   <div class="batch-grid" id="batchGrid"><div class="empty-state">불러오는 중...</div></div>
 </div>
@@ -597,6 +600,22 @@
   </div>
 </div>
 
+<!-- ══ 강제완료 사유 확인 팝업 ══ -->
+<div class="modal-overlay" id="forceReasonViewModal">
+  <div class="modal" style="width:520px;max-height:80vh;overflow-y:auto;">
+    <div class="modal-header" style="cursor:move;">
+      <div class="modal-title" style="color:var(--accent2);">📝 강제완료 사유 내역</div>
+      <button class="modal-close" onclick="closeForceReasonViewModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="forceReasonViewList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeForceReasonViewModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -893,11 +912,11 @@
     document.getElementById('batchGrid').innerHTML = rows.map(r => {
       const st = r.lot_status || '대기';
       const hasForceReason = st === '완료' && r.lot_force_reason;
-      const badgeLabel = hasForceReason ? '완료(사유있음)' : st;
       const completeCell = (st === '완료' && r.lot_completed_at)
         ? `${fmtDT(r.lot_completed_at)} (${r.lot_completed_by||''})` : '-';
-      const forceInfo = hasForceReason
-        ? `<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:2px;">📝 비고: ${r.lot_force_reason}</div>` : '';
+      const reasonCell = hasForceReason
+        ? `<button class="btn btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;color:var(--accent2);border-color:var(--accent2);" onclick="event.stopPropagation();openForceReasonViewModal(${r.id})">확인</button>`
+        : `<span style="color:var(--muted);">-</span>`;
       return `<div class="batch-card st-${st}" onclick="selectBatch(${r.id})">
         <div class="batch-row-main">
           <div class="brow-cell"><div class="brow-cell-val mono">${r.ship_date||'-'}</div></div>
@@ -907,9 +926,9 @@
           <div class="brow-cell"><div class="brow-cell-val">${r.manager||'-'}</div></div>
           <div class="brow-cell grp-start"><div class="brow-cell-val">${r.recv_dept||'-'}</div></div>
           <div class="brow-cell"><div class="brow-cell-val">${r.recv_manager||'-'}</div></div>
-          <div class="brow-cell grp-start"><div class="bc-badge ${st}"${hasForceReason?' style="background:#fff3b0;color:#7a5b00;"':''}>${badgeLabel}</div></div>
+          <div class="brow-cell grp-start"><div class="bc-badge ${st}"${hasForceReason?' style="background:#ffd400;color:#3d2b00;"':''}>${st}</div></div>
+          <div class="brow-cell">${reasonCell}</div>
         </div>
-        ${forceInfo}
       </div>`;
     }).join('');
     applyBatchColWidths();
@@ -935,9 +954,17 @@
     document.getElementById('wInstructBy').textContent = currentSchedule.manager || '-';
     const st = currentSchedule.lot_status || '대기';
     const hasForceReason = st === '완료' && currentSchedule.lot_force_reason;
-    document.getElementById('wStatusPill').textContent = hasForceReason ? '완료(사유있음)' : st;
+    document.getElementById('wStatusPill').textContent = st;
     document.getElementById('wStatusPill').className = 'status-pill ' + st;
-    if (hasForceReason) document.getElementById('wStatusPill').title = '비고: ' + currentSchedule.lot_force_reason;
+    if (hasForceReason) {
+      document.getElementById('wStatusPill').style.background = '#ffd400';
+      document.getElementById('wStatusPill').style.color = '#3d2b00';
+      document.getElementById('wStatusPill').title = '사유 있음 — 출하지시 목록에서 확인 가능';
+    } else {
+      document.getElementById('wStatusPill').style.background = '';
+      document.getElementById('wStatusPill').style.color = '';
+      document.getElementById('wStatusPill').title = '';
+    }
 
     workerName = currentSchedule.lot_started_by || null;
     document.getElementById('workerDeptSelect').value = '';
@@ -1511,6 +1538,52 @@
       </div>`;
     }).join('');
   }
+
+  // ── 강제완료 사유 확인 팝업(출하지시 목록에서 "확인" 클릭 시) ──
+  function openForceReasonViewModal(scheduleId) {
+    const r = allBatches.find(x => x.id === scheduleId);
+    const box = document.getElementById('forceReasonViewList');
+    if (!r || !r.lot_force_reason) {
+      box.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12.5px;">사유 정보가 없습니다.</div>`;
+    } else {
+      const parts = r.lot_force_reason.split('|').map(s => s.trim()).filter(Boolean);
+      box.innerHTML = parts.map(p => {
+        const idx = p.indexOf(':');
+        const code = idx >= 0 ? p.slice(0, idx).trim() : '';
+        const reason = idx >= 0 ? p.slice(idx + 1).trim() : p;
+        return `<div class="force-view-row">${code ? `<div class="fv-code">${code}</div>` : ''}<div class="fv-reason">${reason}</div></div>`;
+      }).join('');
+    }
+    resetForceReasonViewModalPosition();
+    document.getElementById('forceReasonViewModal').classList.add('show');
+  }
+  function closeForceReasonViewModal() { document.getElementById('forceReasonViewModal').classList.remove('show'); }
+  function resetForceReasonViewModalPosition() {
+    const modal = document.querySelector('#forceReasonViewModal .modal');
+    if (!modal) return;
+    modal.style.position = ''; modal.style.left = ''; modal.style.top = ''; modal.style.margin = '';
+  }
+  (function initForceReasonViewModalDrag() {
+    const header = document.querySelector('#forceReasonViewModal .modal-header');
+    const modal = document.querySelector('#forceReasonViewModal .modal');
+    if (!header || !modal) return;
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.modal-close')) return;
+      const rect = modal.getBoundingClientRect();
+      modal.style.position = 'fixed'; modal.style.margin = '0';
+      modal.style.left = rect.left + 'px'; modal.style.top = rect.top + 'px';
+      origLeft = rect.left; origTop = rect.top;
+      startX = e.clientX; startY = e.clientY;
+      dragging = true; e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      modal.style.left = (origLeft + e.clientX - startX) + 'px';
+      modal.style.top = (origTop + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  })();
 
   // ── 강제완료 사유 관리(수정/삭제) 모달 ──
   function openForceReasonManageModal() {
