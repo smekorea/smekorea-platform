@@ -174,18 +174,19 @@
   .maker-add-row input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;}
   .maker-table-wrap{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden;}
   .maker-table-wrap .card-hd{background:#000;}
-  .maker-table-wrap table.dtab thead th{background:#3f4550;}
+  .maker-table-wrap table.dtab thead th{background:#3f4550;color:#fff;}
 
   /* ══ 메이커별 품목체계표 탭 ══ */
+  #mpnModal .modal-header{cursor:move;}
   .mpn-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:10px 14px;flex-wrap:wrap;}
   .mpn-btn{padding:8px 14px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text);}
   .mpn-btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;}
   .mpn-btn:hover{filter:brightness(0.97);}
   .mpn-pill-list{display:flex;flex-wrap:wrap;gap:4px;white-space:normal !important;}
-  .mpn-pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10.5px;font-weight:700;font-family:'Share Tech Mono',monospace;}
-  .mpn-pill.lg{background:rgba(26,86,219,0.12);color:var(--accent2);}
-  .mpn-pill.ic{background:rgba(14,159,110,0.12);color:var(--accent3);}
-  .mpn-pill-warn{background:rgba(217,119,6,0.16) !important;color:var(--warn) !important;}
+  .mpn-pill{font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+  .mpn-pill.lg{color:var(--accent2);}
+  .mpn-pill.ic{color:#374151;}
+  .mpn-pill-warn{color:var(--warn) !important;}
   .mpn-count-warn{color:var(--warn);font-weight:800;font-size:10px;margin-left:4px;}
   .mpn-search{padding:8px 12px;border:1.5px solid var(--border2);border-radius:7px;font-size:12.5px;width:220px;}
   .mpn-dyn-row{display:flex;gap:6px;margin-bottom:6px;}
@@ -468,7 +469,7 @@
         <th style="width:80px;" onclick="sortMpn('brand')">브랜드명<div class="col-resizer"></div></th>
         <th style="width:130px;" onclick="sortMpn('maker_pn')">메이커품번<div class="col-resizer"></div></th>
         <th style="width:220px;" onclick="sortMpn('description')">품명 및 규격<div class="col-resizer"></div></th>
-        <th style="width:90px;">관리</th>
+        <th style="width:90px;">관리<div class="col-resizer"></div></th>
       </tr></thead>
       <tbody id="mpnTbody"><tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
     </table>
@@ -1758,6 +1759,39 @@
     loadScanMakers();
   }
 
+  function resetMpnModalPosition() {
+    const modal = document.querySelector('#mpnModal .modal');
+    if (!modal) return;
+    modal.style.position = '';
+    modal.style.left = '';
+    modal.style.top = '';
+    modal.style.margin = '';
+  }
+  (function initMpnModalDrag() {
+    const header = document.querySelector('#mpnModal .modal-header');
+    const modal = document.querySelector('#mpnModal .modal');
+    if (!header || !modal) return;
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.modal-close')) return;
+      const rect = modal.getBoundingClientRect();
+      modal.style.position = 'fixed';
+      modal.style.margin = '0';
+      modal.style.left = rect.left + 'px';
+      modal.style.top = rect.top + 'px';
+      origLeft = rect.left; origTop = rect.top;
+      startX = e.clientX; startY = e.clientY;
+      dragging = true;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      modal.style.left = (origLeft + e.clientX - startX) + 'px';
+      modal.style.top = (origTop + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  })();
+
   // ══ 메이커별 품목체계표 탭 ══
   let mpnList = [];          // {id, brand, maker_pn, description, lg_pns:[], item_codes:[]}
   let mpnLoaded = false;
@@ -1848,7 +1882,7 @@
       <th style="width:200px;" onclick="sortMpn('description')">품명 및 규격<div class="col-resizer"></div></th>
       ${Array.from({length:maxLg}, (_,i)=>`<th style="width:120px;">LG품번${i+1}<div class="col-resizer"></div></th>`).join('')}
       ${Array.from({length:maxIc}, (_,i)=>`<th style="width:110px;">ERP품목코드${i+1}<div class="col-resizer"></div></th>`).join('')}
-      <th style="width:90px;">관리</th>
+      <th style="width:90px;">관리<div class="col-resizer"></div></th>
     </tr>`;
     document.getElementById('mpnThead').innerHTML = theadHtml;
 
@@ -1898,6 +1932,7 @@
     document.getElementById('mpnLgWarn').textContent = n > 5 ? `⚠ ${n}개 — 보통 5개를 넘지 않습니다. 오타 여부 확인해주세요.` : '';
   }
   function openMpnModal(id) {
+    resetMpnModalPosition();
     mpnEditingId = id || null;
     document.getElementById('mpnLgRows').innerHTML = '';
     document.getElementById('mpnIcRows').innerHTML = '';
