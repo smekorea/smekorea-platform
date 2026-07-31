@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>코인 저점매수 신호 - SMERP</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --app-bg:#ffffff;--surface:#f4f4f2;--border:#d8d8d5;
+  --text1:#111827;--text2:#555555;--text3:#9a8e82;
+  --accent:#378ADD;--accent2:#185FA5;
+  --gold:#B8860B;--gold-bg:#FFF6DD;--gold-border:#E8C468;
+  --today-bg:#FFF3B0;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;background:#eee;color:var(--text1);}
+.app{max-width:100%;min-height:100vh;background:var(--app-bg);margin:0 auto;display:flex;flex-direction:column;}
+
+/* ── 접근 차단 화면 ── */
+.deny-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;color:var(--text2);}
+.deny-screen h2{color:var(--text1);}
+.deny-screen a{color:var(--accent);}
+
+/* ── 상단바 ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--app-bg);z-index:20;}
+.topbar h1{font-size:19px;font-weight:800;}
+.summary-bar{font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;}
+.summary-bar b{color:var(--gold);font-size:15px;}
+.back-link{font-size:12px;color:var(--accent2);text-decoration:none;}
+.back-link:hover{text-decoration:underline;}
+
+/* ── 필터바 ── */
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--surface);}
+.filter-bar label{font-size:12px;color:var(--text2);}
+.filter-bar input,.filter-bar select{font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;}
+.filter-bar input[type=date]{width:140px;}
+.filter-bar input[list]{width:140px;}
+.filter-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;}
+.filter-btn:hover{background:var(--accent2);}
+.reset-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--text2);}
+
+/* ── 테이블 ── */
+.table-wrap{flex:1;overflow:auto;position:relative;}
+table{border-collapse:collapse;table-layout:fixed;font-size:13px;}
+thead{position:sticky;top:0;z-index:5;background:#fafafa;}
+th{position:relative;user-select:none;text-align:left;padding:9px 10px;border-bottom:2px solid var(--border);
+  font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+th:hover{background:#f0f0ee;}
+th .sort-arrow{margin-left:3px;color:var(--accent2);}
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+.col-resizer:hover,.col-resizer.dragging{background:rgba(55,138,221,.35);}
+tbody td{padding:8px 10px;border-right:1px solid #e8edf5;border-bottom:1px solid #f0f0ee;
+  color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+tbody td:last-child{border-right:none;}
+tbody tr:hover{background:#f7fafd;}
+.num-col{font-family:'Courier New',Courier,monospace;}
+.today-row td{background:var(--today-bg)!important;font-weight:700;}
+.today-row:hover td{background:#ffe98a!important;}
+.signal-badge{display:inline-block;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);
+  border-radius:12px;padding:1px 8px;font-size:12px;font-weight:700;}
+.no-signal{color:var(--text3);}
+.empty-state{padding:60px 20px;text-align:center;color:var(--text3);}
+
+/* ── 상세 모달 ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:100;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:#fff;border-radius:12px;padding:22px;width:min(480px,92vw);max-height:82vh;overflow-y:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.2);}
+.modal-box h3{font-size:16px;margin-bottom:4px;}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:14px;}
+.criteria-list{list-style:none;margin:10px 0;padding:0;}
+.criteria-list li{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px dashed #eee;}
+.criteria-list .ok{color:#2e8b57;}
+.criteria-list .no{color:#bbb;}
+.reason-box{margin-top:14px;padding:12px;background:var(--surface);border-radius:8px;font-size:13px;line-height:1.5;}
+.reason-box b{display:block;margin-bottom:4px;color:var(--text2);font-size:11px;}
+.modal-close{margin-top:16px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;
+  font-size:14px;cursor:pointer;}
+.modal-close:hover{background:var(--accent2);}
+.disclaimer{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div id="denyScreen" class="deny-screen" style="display:none;">
+  <h2>🔒 접근 권한이 없습니다</h2>
+  <p>이 화면은 개인 전용 화면입니다.</p>
+  <a href="index.html">메인으로 돌아가기</a>
+</div>
+
+<div id="appRoot" class="app" style="display:none;">
+  <div class="topbar">
+    <div>
+      <h1>💰 코인 저점매수 신호</h1>
+      <div class="summary-bar">오늘 발생 신호: <b id="todaySignalCount">-</b>건 · 매시 자동 스캔</div>
+    </div>
+    <a class="back-link" href="index.html">← 메인으로</a>
+  </div>
+
+  <div class="filter-bar">
+    <label>날짜</label>
+    <input type="date" id="fDate">
+    <label>종목명</label>
+    <input list="coinList" id="fCoin" placeholder="전체">
+    <datalist id="coinList"></datalist>
+    <label>신호</label>
+    <select id="fSignal">
+      <option value="">전체</option>
+      <option value="true">신호있음만</option>
+    </select>
+    <button class="filter-btn" onclick="applyFilter()">🔍 조회</button>
+    <button class="reset-btn" onclick="resetFilter()">초기화</button>
+  </div>
+
+  <div class="table-wrap" id="tableWrap">
+    <table id="signalTable">
+      <thead>
+        <tr id="headerRow"></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty-state" style="display:none;">해당 조건의 신호 데이터가 없습니다.</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <h3 id="modalTitle">-</h3>
+    <div class="modal-sub" id="modalSub">-</div>
+    <ul class="criteria-list" id="criteriaList"></ul>
+    <div class="reason-box">
+      <b>Claude 판단 근거</b>
+      <span id="modalReason">-</span>
+    </div>
+    <div class="disclaimer">본 신호는 기술적 지표 기반 참고정보이며, 투자 확정 조언이 아닙니다. 최종 매수 판단은 본인 책임하에 결정하세요.</div>
+    <button class="modal-close" onclick="closeModal()">닫기</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ═══ 접근 제어 - workflow.html과 동일한 wf_session 재사용 ═══ */
+var wfSession = null;
+(function checkAccess(){
+  try{
+    var d = JSON.parse(localStorage.getItem('wf_session') || '{}');
+    if (d.expire && d.expire > Date.now() && d.empId === 2) {
+      wfSession = d;
+      return;
+    }
+  }catch(e){}
+  document.getElementById('denyScreen').style.display='flex';
+})();
+
+if (wfSession) {
+  document.getElementById('appRoot').style.display='flex';
+  main();
+}
+
+/* ═══ Supabase ═══ */
+var SB = null;
+function initSb(){
+  var SME_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+  var SME_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+  SB = window.supabase.createClient(SME_URL, SME_KEY);
+}
+
+/* ═══ 컬럼 정의 ═══ */
+var COLUMNS = [
+  {key:'date', label:'날짜', w:90},
+  {key:'time', label:'시각', w:70},
+  {key:'coin_name', label:'종목명', w:100},
+  {key:'market', label:'마켓', w:100},
+  {key:'price', label:'현재가', w:100, num:true},
+  {key:'rsi', label:'RSI', w:70, num:true},
+  {key:'bb_position', label:'볼린저위치%', w:100, num:true},
+  {key:'volume_ratio', label:'거래량배율', w:95, num:true},
+  {key:'low_position_pct', label:'저점대비%', w:90, num:true},
+  {key:'signal', label:'신호', w:80},
+  {key:'reason_text', label:'근거', w:260},
+];
+
+var allRows = [];
+var filteredRows = [];
+var sortKey = 'checked_at';
+var sortAsc = false;
+var todayStr = '';
+
+function kstTodayStr(){
+  var now = new Date();
+  var kst = new Date(now.getTime() + (9*60 - now.getTimezoneOffset())*60000);
+  return kst.toISOString().slice(0,10);
+}
+
+function toKstTimeStr(isoStr){
+  if(!isoStr) return '';
+  var d = new Date(isoStr);
+  return d.toLocaleString('ko-KR', {timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false});
+}
+
+async function main(){
+  todayStr = kstTodayStr();
+  initSb();
+  await loadAllRows();
+  buildHeader();
+  applyFilter();
+  buildCoinDatalist();
+}
+
+/* ═══ 데이터 로드 (1000행 제한 대응 range 페이지네이션) ═══ */
+async function loadAllRows(){
+  allRows = [];
+  var from = 0, pageSize = 1000;
+  while(true){
+    var {data, error} = await SB.from('coin_signal')
+      .select('*')
+      .order('checked_at', {ascending:false})
+      .range(from, from + pageSize - 1);
+    if (error) { console.error(error); break; }
+    if (!data || data.length === 0) break;
+    allRows = allRows.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+}
+
+function buildCoinDatalist(){
+  var names = Array.from(new Set(allRows.map(r=>r.coin_name).filter(Boolean))).sort();
+  var dl = document.getElementById('coinList');
+  dl.innerHTML = names.map(n=>'<option value="'+n+'">').join('');
+}
+
+/* ═══ 필터 ═══ */
+function applyFilter(){
+  var dateVal = document.getElementById('fDate').value;
+  var coinVal = document.getElementById('fCoin').value.trim();
+  var signalVal = document.getElementById('fSignal').value;
+
+  filteredRows = allRows.filter(function(r){
+    if (dateVal && r.date !== dateVal) return false;
+    if (coinVal && !(r.coin_name||'').includes(coinVal) && !(r.market||'').includes(coinVal)) return false;
+    if (signalVal === 'true' && r.signal !== true) return false;
+    return true;
+  });
+
+  sortRows();
+  renderTable();
+  updateTodaySummary();
+}
+
+function resetFilter(){
+  document.getElementById('fDate').value = '';
+  document.getElementById('fCoin').value = '';
+  document.getElementById('fSignal').value = '';
+  applyFilter();
+}
+
+function updateTodaySummary(){
+  var count = allRows.filter(function(r){ return r.date === todayStr && r.signal === true; }).length;
+  document.getElementById('todaySignalCount').textContent = count;
+}
+
+/* ═══ 정렬 ═══ */
+function sortRows(){
+  filteredRows.sort(function(a,b){
+    var av = a[sortKey], bv = b[sortKey];
+    if (av == null) av = '';
+    if (bv == null) bv = '';
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+  // 오늘 날짜 항목 최상단 고정
+  var todayItems = filteredRows.filter(function(r){ return r.date === todayStr; });
+  var restItems = filteredRows.filter(function(r){ return r.date !== todayStr; });
+  filteredRows = todayItems.concat(restItems);
+}
+
+function setSortKey(key){
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = false; }
+  sortRows();
+  renderTable();
+  buildHeader();
+}
+
+/* ═══ 헤더 렌더링 (독립 컬럼 리사이즈) ═══ */
+var colWidths = {};
+function loadColWidths(){
+  try{
+    var saved = JSON.parse(localStorage.getItem('coin_signal_col_widths_v1')||'{}');
+    COLUMNS.forEach(function(c){ colWidths[c.key] = saved[c.key] || c.w; });
+  }catch(e){
+    COLUMNS.forEach(function(c){ colWidths[c.key] = c.w; });
+  }
+}
+function saveColWidths(){
+  localStorage.setItem('coin_signal_col_widths_v1', JSON.stringify(colWidths));
+}
+
+function buildHeader(){
+  loadColWidths();
+  var row = document.getElementById('headerRow');
+  row.innerHTML = '';
+  var totalW = 0;
+  COLUMNS.forEach(function(col){
+    var th = document.createElement('th');
+    th.style.width = colWidths[col.key]+'px';
+    totalW += colWidths[col.key];
+    var arrow = '';
+    if (sortKey === col.key) arrow = '<span class="sort-arrow">'+(sortAsc?'▲':'▼')+'</span>';
+    th.innerHTML = col.label + arrow;
+    th.onclick = function(e){
+      if (e.target.classList.contains('col-resizer')) return;
+      setSortKey(col.key);
+    };
+    var resizer = document.createElement('div');
+    resizer.className = 'col-resizer';
+    resizer.onmousedown = function(e){ startResize(e, col.key, th); };
+    th.appendChild(resizer);
+    row.appendChild(th);
+  });
+  document.getElementById('signalTable').style.width = totalW + 'px';
+}
+
+function startResize(e, key, th){
+  e.preventDefault();
+  e.stopPropagation();
+  var startX = e.clientX;
+  var startW = colWidths[key];
+  var resizer = e.target;
+  resizer.classList.add('dragging');
+  function onMove(ev){
+    var newW = Math.max(50, startW + (ev.clientX - startX));
+    colWidths[key] = newW;
+    th.style.width = newW + 'px';
+    var totalW = COLUMNS.reduce(function(s,c){ return s + colWidths[c.key]; }, 0);
+    document.getElementById('signalTable').style.width = totalW + 'px';
+    updateBodyColWidth(key, newW);
+  }
+  function onUp(){
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    resizer.classList.remove('dragging');
+    saveColWidths();
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function updateBodyColWidth(key, w){
+  var idx = COLUMNS.findIndex(function(c){ return c.key===key; });
+  var rows = document.querySelectorAll('#tableBody tr');
+  rows.forEach(function(tr){
+    var td = tr.children[idx];
+    if (td) td.style.width = w+'px';
+  });
+}
+
+/* ═══ 바디 렌더링 ═══ */
+function renderTable(){
+  var tbody = document.getElementById('tableBody');
+  var emptyState = document.getElementById('emptyState');
+  tbody.innerHTML = '';
+
+  if (filteredRows.length === 0) {
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  filteredRows.forEach(function(r){
+    var tr = document.createElement('tr');
+    if (r.date === todayStr) tr.classList.add('today-row');
+    tr.onclick = function(){ openDetail(r); };
+
+    COLUMNS.forEach(function(col){
+      var td = document.createElement('td');
+      td.style.width = colWidths[col.key]+'px';
+      if (col.num) td.classList.add('num-col');
+
+      var val;
+      if (col.key === 'time') val = toKstTimeStr(r.checked_at);
+      else if (col.key === 'signal') val = r.signal ? '<span class="signal-badge">💰 신호</span>' : '<span class="no-signal">-</span>';
+      else if (col.key === 'reason_text') val = r.reason_text || '-';
+      else val = (r[col.key] !== null && r[col.key] !== undefined) ? r[col.key] : '-';
+
+      td.innerHTML = val;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+/* ═══ 상세 모달 ═══ */
+var CRITERIA_LABELS = {
+  rsi: 'RSI 35 이하 (과매도)',
+  bb: '볼린저 하단밴드 근접/이탈',
+  volume: '거래량 평균대비 1.5배 이상',
+  low: '최근14일 저점대비 15% 이내',
+  macd: 'MACD 골든크로스',
+  stoch: 'StochRSI 과매도권 반전',
+  ma_cross: '이동평균(5/20) 골든크로스',
+  orderbook: '호가 매수우위 (비율 1.2 이상)',
+};
+
+function openDetail(r){
+  document.getElementById('modalTitle').textContent = (r.coin_name||'') + ' (' + r.market + ')';
+  document.getElementById('modalSub').textContent =
+    r.date + ' ' + toKstTimeStr(r.checked_at) + ' 기준 · 현재가 ' + r.price;
+
+  var list = document.getElementById('criteriaList');
+  list.innerHTML = '';
+  var cm = r.criteria_met || {};
+  Object.keys(CRITERIA_LABELS).forEach(function(key){
+    var met = !!cm[key];
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="'+(met?'ok':'no')+'">'+(met?'✅':'⬜')+'</span> ' + CRITERIA_LABELS[key];
+    list.appendChild(li);
+  });
+
+  document.getElementById('modalReason').textContent = r.reason_text || '(판단 정보 없음)';
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function closeModal(){
+  document.getElementById('detailModal').classList.remove('show');
+}
+document.getElementById('detailModal').addEventListener('click', function(e){
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>
