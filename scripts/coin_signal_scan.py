@@ -11,9 +11,24 @@ import requests
 from datetime import datetime, timezone, timedelta
 
 # ---------------- 환경변수 ----------------
-SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+def _clean_secret(name):
+    """Secret 값에 섞여 들어간 공백/개행/보이지 않는 문자를 제거하고,
+    헤더 전송이 불가능한 non-ASCII 문자가 있으면 즉시 에러로 알림."""
+    raw = os.environ[name]
+    cleaned = raw.strip()
+    try:
+        cleaned.encode("ascii")
+    except UnicodeEncodeError as e:
+        raise RuntimeError(
+            f"[secret오류] {name} 값에 non-ASCII(한글/특수문자 등)가 섞여 있습니다. "
+            f"GitHub Secrets에서 값을 지우고 다시 등록해주세요. 상세: {e}"
+        )
+    return cleaned
+
+
+SUPABASE_URL = _clean_secret("SUPABASE_URL").rstrip("/")
+SUPABASE_KEY = _clean_secret("SUPABASE_KEY")
+ANTHROPIC_API_KEY = _clean_secret("ANTHROPIC_API_KEY")
 
 UPBIT_MARKET_ALL_URL = "https://api.upbit.com/v1/market/all?isDetails=false"
 UPBIT_CANDLE_DAYS_URL = "https://api.upbit.com/v1/candles/days"
@@ -195,8 +210,10 @@ def call_claude_for_signals(candidates):
         json=body,
         timeout=60,
     )
+    print(f"[info] Claude API 응답 상태코드: {r.status_code}")
     r.raise_for_status()
     data = r.json()
+    print(f"[info] Claude API 원본 응답(앞부분): {json.dumps(data, ensure_ascii=False)[:1000]}")
     text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
     text = text.strip()
     if text.startswith("```"):
@@ -278,5 +295,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
+        import traceback
         print(f"[fatal] 스크립트 실행 실패: {e}")
+        traceback.print_exc()
         sys.exit(1)
