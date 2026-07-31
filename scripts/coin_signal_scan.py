@@ -193,7 +193,8 @@ def call_claude_for_signals(candidates):
 
     body = {
         "model": "claude-sonnet-5",
-        "max_tokens": 2000,
+        "max_tokens": 8000,
+        "thinking": {"type": "disabled"},
         "system": system_prompt,
         "messages": [
             {"role": "user", "content": json.dumps(payload_for_prompt, ensure_ascii=False)}
@@ -213,6 +214,7 @@ def call_claude_for_signals(candidates):
     print(f"[info] Claude API 응답 상태코드: {r.status_code}")
     r.raise_for_status()
     data = r.json()
+    print(f"[info] stop_reason: {data.get('stop_reason')}, usage: {data.get('usage')}")
     print(f"[info] Claude API 원본 응답(앞부분): {json.dumps(data, ensure_ascii=False)[:1000]}")
     text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
     text = text.strip()
