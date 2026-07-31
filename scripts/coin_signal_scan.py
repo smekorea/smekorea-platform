@@ -166,73 +166,80 @@ def analyze_market(market, korean_name):
 
 
 def call_claude_for_signals(candidates):
-    """1차 필터 통과 종목들을 묶어 Claude API에 최종 판단 요청"""
+    """1차 필터 통과 종목들을 30개씩 나눠 Claude API에 최종 판단 요청 (max_tokens 한도 방지)"""
     if not candidates:
         return {}
-
-    payload_for_prompt = [
-        {
-            "market": c["market"],
-            "coin_name": c["coin_name"],
-            "price": c["price"],
-            "rsi": c["rsi"],
-            "bb_position_pct": c["bb_position"],
-            "volume_ratio": c["volume_ratio"],
-            "low_position_pct": c["low_position_pct"],
-        }
-        for c in candidates
-    ]
 
     system_prompt = (
         "당신은 7일 이내 단기매매 관점의 암호화폐 기술적 분석 보조입니다. "
         "아래 JSON 배열의 각 종목에 대해, 제공된 지표만 근거로 저점매수 신호 여부를 판단하세요. "
         "투자 확정 조언이 아니라 '기술적으로 저점권 근접 신호가 감지됨'을 알리는 용도입니다. "
-        "반드시 JSON만 응답하고 다른 텍스트는 포함하지 마세요. "
-        "형식: {\"results\":[{\"market\":\"KRW-XXX\",\"signal\":true/false,\"reason\":\"한글 2문장 이내 근거\"}]}"
+        "reason은 반드시 30자 이내 한 문장으로 간결하게 작성하세요. "
+        "반드시 JSON만 응답하고 다른 텍스트(코드블럭 표시 포함)는 포함하지 마세요. "
+        "형식: {\"results\":[{\"market\":\"KRW-XXX\",\"signal\":true/false,\"reason\":\"30자 이내 근거\"}]}"
     )
 
-    body = {
-        "model": "claude-sonnet-5",
-        "max_tokens": 8000,
-        "thinking": {"type": "disabled"},
-        "system": system_prompt,
-        "messages": [
-            {"role": "user", "content": json.dumps(payload_for_prompt, ensure_ascii=False)}
-        ],
-    }
-
-    r = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json=body,
-        timeout=60,
-    )
-    print(f"[info] Claude API 응답 상태코드: {r.status_code}")
-    r.raise_for_status()
-    data = r.json()
-    print(f"[info] stop_reason: {data.get('stop_reason')}, usage: {data.get('usage')}")
-    print(f"[info] Claude API 원본 응답(앞부분): {json.dumps(data, ensure_ascii=False)[:1000]}")
-    text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.replace("json\n", "", 1)
-    try:
-        parsed = json.loads(text)
-    except Exception as e:
-        print(f"[warn] Claude 응답 JSON 파싱 실패: {e}\n원문: {text[:500]}")
-        return {}
-
+    CHUNK_SIZE = 30
     result_map = {}
-    for item in parsed.get("results", []):
-        result_map[item["market"]] = {
-            "signal": bool(item.get("signal", False)),
-            "reason": item.get("reason", ""),
+
+    for i in range(0, len(candidates), CHUNK_SIZE):
+        chunk = candidates[i:i + CHUNK_SIZE]
+        payload_for_prompt = [
+            {
+                "market": c["market"],
+                "coin_name": c["coin_name"],
+                "price": c["price"],
+                "rsi": c["rsi"],
+                "bb_position_pct": c["bb_position"],
+                "volume_ratio": c["volume_ratio"],
+                "low_position_pct": c["low_position_pct"],
+            }
+            for c in chunk
+        ]
+
+        body = {
+            "model": "claude-sonnet-5",
+            "max_tokens": 4000,
+            "thinking": {"type": "disabled"},
+            "system": system_prompt,
+            "messages": [
+                {"role": "user", "content": json.dumps(payload_for_prompt, ensure_ascii=False)}
+            ],
         }
+
+        try:
+            r = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=body,
+                timeout=60,
+            )
+            print(f"[info] Claude API 청크 {i // CHUNK_SIZE + 1} 응답 상태코드: {r.status_code}")
+            r.raise_for_status()
+            data = r.json()
+            print(f"[info] 청크 {i // CHUNK_SIZE + 1} stop_reason: {data.get('stop_reason')}, usage: {data.get('usage')}")
+            text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+            text = text.strip()
+            if text.startswith("```"):
+                text = text.strip("`")
+                if text.startswith("json"):
+                    text = text[4:]
+            parsed = json.loads(text)
+            for item in parsed.get("results", []):
+                result_map[item["market"]] = {
+                    "signal": bool(item.get("signal", False)),
+                    "reason": item.get("reason", ""),
+                }
+        except Exception as e:
+            print(f"[warn] 청크 {i // CHUNK_SIZE + 1} 처리 실패: {e}")
+            continue
+
+        time.sleep(0.5)  # 청크 간 짧은 대기
+
     return result_map
 
 
