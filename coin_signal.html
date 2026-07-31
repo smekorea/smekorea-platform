@@ -78,6 +78,14 @@ tbody tr:hover{background:#f7fafd;}
 .criteria-list .no{color:#bbb;}
 .reason-box{margin-top:14px;padding:12px;background:var(--surface);border-radius:8px;font-size:13px;line-height:1.5;}
 .reason-box b{display:block;margin-bottom:4px;color:var(--text2);font-size:11px;}
+.price-trend-box{margin-top:14px;padding:12px;background:var(--surface);border-radius:8px;}
+.ptb-label{display:block;margin-bottom:8px;color:var(--text2);font-size:11px;}
+.ptb-table{width:100%;border-collapse:collapse;font-size:12px;}
+.ptb-table th{text-align:left;padding:4px 6px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);}
+.ptb-table td{padding:4px 6px;border-bottom:1px solid #eee;font-family:'Courier New',Courier,monospace;}
+.ptb-up{color:#c0392b;font-weight:700;}
+.ptb-down{color:#1a56db;font-weight:700;}
+.ptb-wait{color:var(--text3);}
 .modal-close{margin-top:16px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;
   font-size:14px;cursor:pointer;}
 .modal-close:hover{background:var(--accent2);}
@@ -134,6 +142,10 @@ tbody tr:hover{background:#f7fafd;}
     <div class="reason-box">
       <b>Claude 판단 근거</b>
       <span id="modalReason">-</span>
+    </div>
+    <div class="price-trend-box" id="priceTrendBox" style="display:none;">
+      <b class="ptb-label">신호 발생 이후 가격 추이</b>
+      <table class="ptb-table" id="ptbTable"></table>
     </div>
     <div class="disclaimer">본 신호는 기술적 지표 기반 참고정보이며, 투자 확정 조언이 아닙니다. 최종 매수 판단은 본인 책임하에 결정하세요.</div>
     <button class="modal-close" onclick="closeModal()">닫기</button>
@@ -408,7 +420,20 @@ var CRITERIA_LABELS = {
   orderbook: '호가 매수우위 (비율 1.2 이상)',
 };
 
-function openDetail(r){
+var PRICE_MILESTONES = [
+  {label:'30분', minutes:30},
+  {label:'1시간', minutes:60},
+  {label:'3시간', minutes:180},
+  {label:'6시간', minutes:360},
+  {label:'12시간', minutes:720},
+  {label:'1일', minutes:1440},
+  {label:'2일', minutes:2880},
+  {label:'3일', minutes:4320},
+  {label:'5일', minutes:7200},
+  {label:'7일', minutes:10080},
+];
+
+async function openDetail(r){
   document.getElementById('modalTitle').textContent = (r.coin_name||'') + ' (' + r.market + ')';
   document.getElementById('modalSub').textContent =
     r.date + ' ' + toKstTimeStr(r.checked_at) + ' 기준 · 현재가 ' + r.price;
@@ -425,6 +450,53 @@ function openDetail(r){
 
   document.getElementById('modalReason').textContent = r.reason_text || '(판단 정보 없음)';
   document.getElementById('detailModal').classList.add('show');
+
+  var trendBox = document.getElementById('priceTrendBox');
+  if (r.signal === true) {
+    trendBox.style.display = 'block';
+    await renderPriceTrend(r);
+  } else {
+    trendBox.style.display = 'none';
+  }
+}
+
+async function renderPriceTrend(r){
+  var table = document.getElementById('ptbTable');
+  table.innerHTML = '<tr><td colspan="3" class="ptb-wait">불러오는 중...</td></tr>';
+
+  var {data, error} = await SB.from('coin_signal_price_track')
+    .select('minutes_after,price,pct_change')
+    .eq('signal_id', r.id)
+    .order('minutes_after', {ascending:true});
+
+  if (error || !data) {
+    table.innerHTML = '<tr><td colspan="3" class="ptb-wait">추이 데이터를 불러올 수 없습니다.</td></tr>';
+    return;
+  }
+
+  var rowsHtml = '<tr><th>경과</th><th>가격</th><th>등락률</th></tr>';
+  PRICE_MILESTONES.forEach(function(m){
+    // 목표 경과분에 가장 가까우면서 아직 지나지 않은 미래는 제외 (실제 발생한 시점까지만)
+    var candidates = data.filter(function(d){ return d.minutes_after <= m.minutes + 15 && d.minutes_after >= m.minutes - 15; });
+    if (candidates.length === 0) {
+      // 근접치 없으면: 해당 시점이 아직 안 지났는지 확인
+      var maxRecorded = data.length ? data[data.length-1].minutes_after : -1;
+      if (maxRecorded < m.minutes - 15) {
+        rowsHtml += '<tr><td>'+m.label+'</td><td class="ptb-wait">대기중</td><td class="ptb-wait">-</td></tr>';
+        return;
+      }
+      rowsHtml += '<tr><td>'+m.label+'</td><td class="ptb-wait">-</td><td class="ptb-wait">-</td></tr>';
+      return;
+    }
+    // 가장 근접한 것 선택
+    var best = candidates.reduce(function(a,b){
+      return Math.abs(a.minutes_after - m.minutes) <= Math.abs(b.minutes_after - m.minutes) ? a : b;
+    });
+    var cls = best.pct_change > 0 ? 'ptb-up' : (best.pct_change < 0 ? 'ptb-down' : '');
+    var sign = best.pct_change > 0 ? '+' : '';
+    rowsHtml += '<tr><td>'+m.label+'</td><td>'+best.price+'</td><td class="'+cls+'">'+sign+best.pct_change+'%</td></tr>';
+  });
+  table.innerHTML = rowsHtml;
 }
 
 function closeModal(){
