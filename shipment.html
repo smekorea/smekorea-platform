@@ -215,6 +215,10 @@
   .btn-primary-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--accent3);background:var(--accent3);color:#fff;font-size:11px;font-weight:700;cursor:pointer;}
   .btn-ghost-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;}
   .lot-dropzone{border:2px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);}
+  .lot-mode-btn{flex:1;padding:8px 10px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);color:var(--muted);font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+  .lot-mode-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(26,86,219,0.06);}
+  .lot-paste-hint{font-size:11.5px;color:var(--muted);margin-bottom:6px;line-height:1.5;}
+  .lot-paste-textarea{width:100%;height:120px;border:1.5px solid var(--border2);border-radius:8px;padding:10px;font-size:11.5px;font-family:'Share Tech Mono',monospace;resize:vertical;box-sizing:border-box;}
   .lot-dropzone:hover{border-color:var(--accent2);background:rgba(26,86,219,0.04);}
   .lot-dropzone.dragover{border-color:var(--accent2);background:rgba(26,86,219,0.1);}
   .lot-dropzone .ldz-icon{font-size:22px;margin-bottom:4px;}
@@ -439,13 +443,24 @@
             📡 LOT관리 필요 (출하LOT관리 프로세스로 바코드 검수)
           </label>
           <div id="lotFileArea" style="display:none;margin-top:8px;">
-            <div class="form-label">거래명세표 엑셀 첨부 <span class="req">*</span></div>
-            <div class="lot-dropzone" id="lotDropzone" onclick="document.getElementById('inLotFile').click()">
-              <div class="ldz-icon">📄</div>
-              <div class="ldz-text">여기로 파일을 끌어다 놓거나, 클릭해서 선택하세요 (.xlsx, .xls)</div>
-              <div class="ldz-filename" id="ldzFilename"></div>
+            <div class="form-label">거래명세표 첨부 <span class="req">*</span></div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <button type="button" class="lot-mode-btn active" id="lotModeFileBtn" onclick="switchLotInputMode('file')">📁 파일 업로드</button>
+              <button type="button" class="lot-mode-btn" id="lotModePasteBtn" onclick="switchLotInputMode('paste')">📋 붙여넣기로 등록</button>
             </div>
-            <input type="file" id="inLotFile" accept=".xlsx,.xls" style="display:none;" onchange="handleLotFileSelect(this.files[0])">
+            <div id="lotFileModeArea">
+              <div class="lot-dropzone" id="lotDropzone" onclick="document.getElementById('inLotFile').click()">
+                <div class="ldz-icon">📄</div>
+                <div class="ldz-text">여기로 파일을 끌어다 놓거나, 클릭해서 선택하세요 (.xlsx, .xls)</div>
+                <div class="ldz-filename" id="ldzFilename"></div>
+              </div>
+              <input type="file" id="inLotFile" accept=".xlsx,.xls" style="display:none;" onchange="handleLotFileSelect(this.files[0])">
+            </div>
+            <div id="lotPasteModeArea" style="display:none;">
+              <div class="lot-paste-hint">이카운트에서 거래명세서를 열고 전체 선택(Ctrl+A) 후 복사(Ctrl+C)해서 아래에 붙여넣으세요(Ctrl+V). 일자~총합계 구간만 붙여넣어도 됩니다.</div>
+              <textarea class="lot-paste-textarea" id="lotPasteArea" placeholder="여기에 Ctrl+V로 붙여넣기"></textarea>
+              <button type="button" class="btn-primary-sm" style="margin-top:6px;" onclick="handleLotPasteInput()">🔍 미리보기</button>
+            </div>
             <div id="lotPreviewArea"></div>
           </div>
         </div>
@@ -1261,6 +1276,16 @@
     document.getElementById('inLotFile').value = '';
     document.getElementById('ldzFilename').textContent = '';
     document.getElementById('lotPreviewArea').innerHTML = '';
+    const pasteArea = document.getElementById('lotPasteArea');
+    if (pasteArea) pasteArea.value = '';
+  }
+
+  // ── 파일/붙여넣기에서 인식된 거래처명과 폼에 입력된 매출처명 대조 ──
+  function checkCustomerMismatch(warnings, extractedCustomer) {
+    const formCustomer = document.getElementById('inCustomer').value.trim();
+    if (formCustomer && extractedCustomer && formCustomer !== extractedCustomer) {
+      warnings.push(`⚠ 인식된 거래처(${extractedCustomer})가 폼에 입력한 매출처(${formCustomer})와 다릅니다`);
+    }
   }
 
   async function handleLotFileSelect(file) {
@@ -1270,6 +1295,13 @@
     document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
     try {
       const parsed = await parseLotExcelFile(file);
+      if (parsed.blocked) {
+        pendingLotPreview = null;
+        document.getElementById('lotPreviewArea').innerHTML =
+          `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ ${parsed.blockReason}</span></div>
+           <div style="margin-top:8px;"><button type="button" class="btn-ghost-sm" onclick="resetLotFileState()">✕ 파일 다시 선택</button></div></div>`;
+        return;
+      }
       if (parsed.items.length === 0) {
         pendingLotPreview = null;
         document.getElementById('lotPreviewArea').innerHTML =
@@ -1278,8 +1310,9 @@
            <div style="margin-top:8px;"><button type="button" class="btn-ghost-sm" onclick="resetLotFileState()">✕ 파일 다시 선택</button></div></div>`;
         return;
       }
+      checkCustomerMismatch(parsed.warnings, parsed.customer);
       const enriched = await enrichCheckType(parsed.items);
-      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer };
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount };
       renderLotPreview();
     } catch(e) {
       pendingLotPreview = null;
@@ -1287,9 +1320,49 @@
     }
   }
 
+  async function handleLotPasteInput() {
+    const text = document.getElementById('lotPasteArea').value;
+    if (!text.trim()) { showToast('⚠ 붙여넣은 내용이 없습니다', true); return; }
+    parsedLotItems = null;
+    document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
+    try {
+      const parsed = parseLotPasteText(text);
+      if (parsed.blocked) {
+        pendingLotPreview = null;
+        document.getElementById('lotPreviewArea').innerHTML =
+          `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ ${parsed.blockReason}</span></div>
+           <div style="margin-top:8px;"><button type="button" class="btn-ghost-sm" onclick="resetLotFileState()">✕ 다시 붙여넣기</button></div></div>`;
+        return;
+      }
+      if (parsed.items.length === 0) {
+        pendingLotPreview = null;
+        document.getElementById('lotPreviewArea').innerHTML =
+          `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ 인식된 품목이 없습니다</span></div>
+           <div class="lot-preview-warn-list">${parsed.warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>
+           <div style="margin-top:8px;"><button type="button" class="btn-ghost-sm" onclick="resetLotFileState()">✕ 다시 붙여넣기</button></div></div>`;
+        return;
+      }
+      checkCustomerMismatch(parsed.warnings, parsed.customer);
+      const enriched = await enrichCheckType(parsed.items);
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount };
+      renderLotPreview();
+    } catch(e) {
+      pendingLotPreview = null;
+      document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview"><span class="warn">⚠ 붙여넣기 파싱 실패: ${e.message||e}</span></div>`;
+    }
+  }
+
+  function switchLotInputMode(mode) {
+    document.getElementById('lotModeFileBtn').classList.toggle('active', mode === 'file');
+    document.getElementById('lotModePasteBtn').classList.toggle('active', mode === 'paste');
+    document.getElementById('lotFileModeArea').style.display = mode === 'file' ? '' : 'none';
+    document.getElementById('lotPasteModeArea').style.display = mode === 'paste' ? '' : 'none';
+    resetLotFileState();
+  }
+
   function renderLotPreview() {
     if (!pendingLotPreview) return;
-    const { enriched, warnings, customer } = pendingLotPreview;
+    const { enriched, warnings, customer, slipNo, amount } = pendingLotPreview;
     const totalQty = enriched.reduce((s,it)=>s+it.qty_required,0);
     const barcodeCnt = enriched.filter(it=>it.check_type==='barcode').length;
     const manualCnt = enriched.length - barcodeCnt;
@@ -1304,6 +1377,8 @@
         <span>📡 바코드검수 ${barcodeCnt}건</span>
         <span>✍ 수기확인 ${manualCnt}건</span>
         ${customer ? `<span>🏢 매출처 인식: ${customer}</span>` : ''}
+        ${slipNo ? `<span>🧾 전표번호: ${slipNo}</span>` : ''}
+        ${amount !== null && amount !== undefined ? `<span>💰 금액: ${Math.round(amount).toLocaleString()}</span>` : ''}
         ${warnings.length ? `<span class="warn">⚠ 확인필요 ${warnings.length}건</span>` : ''}
       </div>
       ${warnHtml}
@@ -1458,10 +1533,91 @@
     if (!e.target.closest('.cust-ac-wrap')) document.getElementById('custAcList').classList.remove('show');
   });
 
-  // ── 거래명세표 엑셀 파싱 (이카운트 다운로드 포맷) ──
+  // ── 거래명세표 파싱 공통 로직 (이카운트 다운로드 포맷) — 파일업로드/붙여넣기 공용 ──
   // 상단 5행: 거래명세서/전표번호/수신-거래처/출고창고/금액 메타정보
-  // 6행: 헤더(일자,품목코드,품목명[규격],수량(단위포함),단가,공급가액,부가세)
-  // 7행부터 데이터
+  // 헤더행: 일자,품목코드,품목명[규격],수량(단위포함),단가,공급가액,브랜드명 / 이후 데이터 / 총합계로 종료
+  function parseLotRows(rows) {
+    const warnings = [];
+    let headerRowIdx = -1;
+    let extractedCustomer = '';
+    let extractedSlipNo = '';
+    let extractedAmount = null;
+    const slipNosFound = new Set();
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowText = rows[i].join(' ');
+      if (rowText.indexOf('전표번호') >= 0) {
+        const m = rowText.match(/전표번호\s*[:：]?\s*(\S+)/);
+        if (m && m[1]) {
+          slipNosFound.add(m[1].trim());
+          if (!extractedSlipNo) extractedSlipNo = m[1].trim();
+        }
+      }
+      if (extractedCustomer === '' && rowText.indexOf('수신-거래처') >= 0) {
+        const m = rowText.match(/수신-거래처\s*[:：]?\s*(.+)/);
+        if (m && m[1]) extractedCustomer = m[1].trim();
+      }
+      if (extractedAmount === null && rowText.indexOf('금액') >= 0 && rowText.indexOf('공급가액') < 0) {
+        const m = rowText.match(/금액\s*[:：]?\s*([\d,]+)/);
+        if (m && m[1]) extractedAmount = parseFloat(m[1].replace(/,/g, ''));
+      }
+      if (rows[i][1] === '품목코드' || rows[i][0] === '품목코드') { headerRowIdx = i; break; }
+    }
+
+    if (slipNosFound.size > 1) {
+      return { items: [], warnings: [], customer: '', slipNo: '', amount: null, blocked: true,
+        blockReason: `거래명세서가 ${slipNosFound.size}건(전표번호: ${Array.from(slipNosFound).join(', ')}) 포함되어 있습니다. 1건만 붙여넣어 주세요.` };
+    }
+    if (headerRowIdx < 0) {
+      return { items: [], warnings: ['⚠ "품목코드" 헤더행을 찾지 못했습니다. 이카운트 거래명세표 형식이 맞는지 확인해주세요.'], customer: '', slipNo: extractedSlipNo, amount: extractedAmount, blocked: false };
+    }
+
+    const headerRow = rows[headerRowIdx];
+    let brandColIdx = headerRow.findIndex(h => String(h).trim() === '브랜드명');
+
+    const rawItems = [];
+    let sumSupply = 0;
+    for (let i = headerRowIdx + 1; i < rows.length; i++) {
+      const r = rows[i];
+      const itemCode = String(r[1] || '').trim();
+      const desc = String(r[2] || '').trim();
+      const qtyRaw = String(r[3] || '').trim(); // 예: "20,000EA"
+      const supplyRaw = String(r[5] || '').trim();
+      const maker = brandColIdx >= 0 ? String(r[brandColIdx] || '').trim() : '';
+      if (!itemCode && !desc && !qtyRaw) continue; // 완전 빈행은 무시
+      if (!itemCode) { warnings.push(`⚠ ${i+1}행: 품목코드가 없어 제외됨 (품명: ${desc||'-'})`); continue; }
+      const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.]/g, '')) || 0;
+      if (qtyNum <= 0) warnings.push(`⚠ ${itemCode}: 수량 인식 실패 또는 0 (원본값: "${qtyRaw}")`);
+      const supplyNum = parseFloat(String(supplyRaw).replace(/[^0-9.-]/g, '')) || 0;
+      sumSupply += supplyNum;
+      rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum, maker });
+    }
+    if (brandColIdx < 0) warnings.push('ℹ 거래명세표에 "브랜드명" 컬럼이 없어, items 마스터 조회 방식으로 구분 판정합니다.');
+
+    if (extractedAmount !== null && Math.round(sumSupply) !== Math.round(extractedAmount)) {
+      warnings.push(`⚠ 합계 불일치 — 품목 공급가액 합계 ${Math.round(sumSupply).toLocaleString()}원 / 표시된 금액 ${Math.round(extractedAmount).toLocaleString()}원`);
+    }
+
+    // 품목코드 중복 합산
+    const map = new Map();
+    rawItems.forEach(it => {
+      if (map.has(it.item_code)) {
+        const ex = map.get(it.item_code);
+        ex.qty_required += it.qty_required;
+        ex._dupCount = (ex._dupCount||1) + 1;
+      } else {
+        map.set(it.item_code, { ...it, _dupCount: 1 });
+      }
+    });
+    const items = Array.from(map.values());
+    items.forEach(it => {
+      if (it._dupCount > 1) warnings.push(`ℹ ${it.item_code}: 품목코드 중복 ${it._dupCount}건 → 수량 합산 처리(${it.qty_required.toLocaleString()})`);
+      delete it._dupCount;
+    });
+
+    return { items, warnings, customer: extractedCustomer, slipNo: extractedSlipNo, amount: extractedAmount, blocked: false };
+  }
+
   function parseLotExcelFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1470,61 +1626,19 @@
           const wb = XLSX.read(e.target.result, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          const warnings = [];
-          let headerRowIdx = -1;
-          let extractedCustomer = '';
-          for (let i = 0; i < rows.length; i++) {
-            const rowText = rows[i].join(' ');
-            if (extractedCustomer === '' && rowText.indexOf('수신-거래처') >= 0) {
-              // "수신-거래처 : 엠에스이주식회사" 또는 셀이 나뉘어 저장된 경우 모두 대응
-              const m = rowText.match(/수신-거래처\s*[:：]?\s*(.+)/);
-              if (m && m[1]) extractedCustomer = m[1].trim();
-            }
-            if (rows[i][1] === '품목코드' || rows[i][0] === '품목코드') { headerRowIdx = i; break; }
-          }
-          if (headerRowIdx < 0) { resolve({ items: [], warnings: ['⚠ "품목코드" 헤더행을 찾지 못했습니다. 이카운트 거래명세표 다운로드 형식이 맞는지 확인해주세요.'], customer: '' }); return; }
-
-          const headerRow = rows[headerRowIdx];
-          let brandColIdx = headerRow.findIndex(h => String(h).trim() === '브랜드명');
-
-          const rawItems = [];
-          for (let i = headerRowIdx + 1; i < rows.length; i++) {
-            const r = rows[i];
-            const itemCode = String(r[1] || '').trim();
-            const desc = String(r[2] || '').trim();
-            const qtyRaw = String(r[3] || '').trim(); // 예: "20,000EA"
-            const maker = brandColIdx >= 0 ? String(r[brandColIdx] || '').trim() : '';
-            if (!itemCode && !desc && !qtyRaw) continue; // 완전 빈행은 무시
-            if (!itemCode) { warnings.push(`⚠ ${i+1}행: 품목코드가 없어 제외됨 (품명: ${desc||'-'})`); continue; }
-            const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.]/g, '')) || 0;
-            if (qtyNum <= 0) warnings.push(`⚠ ${itemCode}: 수량 인식 실패 또는 0 (원본값: "${qtyRaw}")`);
-            rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum, maker });
-          }
-          if (brandColIdx < 0) warnings.push('ℹ 거래명세표에 "브랜드명" 컬럼이 없어, items 마스터 조회 방식으로 구분 판정합니다.');
-
-          // 품목코드 중복 합산
-          const map = new Map();
-          rawItems.forEach(it => {
-            if (map.has(it.item_code)) {
-              const ex = map.get(it.item_code);
-              ex.qty_required += it.qty_required;
-              ex._dupCount = (ex._dupCount||1) + 1;
-            } else {
-              map.set(it.item_code, { ...it, _dupCount: 1 });
-            }
-          });
-          const items = Array.from(map.values());
-          items.forEach(it => {
-            if (it._dupCount > 1) warnings.push(`ℹ ${it.item_code}: 품목코드 중복 ${it._dupCount}건 → 수량 합산 처리(${it.qty_required.toLocaleString()})`);
-            delete it._dupCount;
-          });
-
-          resolve({ items, warnings, customer: extractedCustomer });
+          resolve(parseLotRows(rows));
         } catch (err) { reject(err); }
       };
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
     });
+  }
+
+  // ── 붙여넣기 텍스트 → rows 2차원배열 변환 (이카운트에서 복사한 탭구분 텍스트) ──
+  function parseLotPasteText(text) {
+    const lines = text.replace(/\r/g, '').split('\n');
+    const rows = lines.map(line => line.split('\t'));
+    return parseLotRows(rows);
   }
 
   function closeInputModal() {
