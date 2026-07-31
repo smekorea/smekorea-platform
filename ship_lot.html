@@ -41,7 +41,16 @@
   .filter-tabs{display:flex;gap:6px;margin-bottom:14px;}
   .filter-tab{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
   .filter-tab.active{border-color:var(--accent2);color:var(--accent2);background:rgba(26,86,219,0.07);}
-  .batch-list-header{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.75fr 0.75fr 0.75fr 0.75fr 0.7fr 0.6fr;gap:10px;padding:10px 20px;margin-bottom:6px;font-size:12px;font-weight:800;color:#fff;background:var(--navy);border-radius:8px 8px 0 0;}
+  .today-progress{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .progress-summary{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
+  .progress-title{font-size:13.5px;font-weight:800;color:var(--navy);}
+  .progress-stats{font-size:12.5px;font-weight:700;color:var(--text);}
+  .progress-stats b{color:var(--accent2);font-size:15px;}
+  .progress-track{height:16px;background:var(--surface2);border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),#5b9bff);border-radius:8px;transition:width 0.4s ease;}
+  .progress-empty{font-size:12.5px;color:var(--muted);font-weight:700;text-align:center;padding:4px 0;}
+  .brow-no{font-size:12.5px;font-weight:800;color:var(--muted);text-align:center;}
+  .batch-list-header{display:grid;grid-template-columns:0.35fr 1.3fr 0.8fr 1fr 0.85fr 1fr 0.95fr 0.6fr 0.55fr;gap:10px;padding:10px 20px;margin-bottom:6px;font-size:12px;font-weight:800;color:#fff;background:var(--navy);border-radius:8px 8px 0 0;}
   .batch-list-header > div{position:relative;white-space:nowrap;user-select:none;box-sizing:border-box;padding-right:8px;}
   .batch-list-header > div.grp-start{padding-left:10px;border-left:1px solid rgba(255,255,255,0.18);}
   .batch-col-resizer{position:absolute;right:-9px;top:-10px;bottom:-10px;width:10px;cursor:col-resize;z-index:5;}
@@ -52,7 +61,7 @@
   .batch-card.st-대기{border-left-color:#ec4899;}
   .batch-card.st-진행중{border-left-color:var(--warn);}
   .batch-card.st-완료{border-left-color:var(--accent2);opacity:0.85;}
-  .batch-row-main{display:grid;grid-template-columns:0.8fr 1fr 1.2fr 0.75fr 0.75fr 0.75fr 0.75fr 0.7fr 0.6fr;gap:10px;align-items:center;}
+  .batch-row-main{display:grid;grid-template-columns:0.35fr 1.3fr 0.8fr 1fr 0.85fr 1fr 0.95fr 0.6fr 0.55fr;gap:10px;align-items:center;}
   .batch-row-main > .brow-cell.grp-start{padding-left:10px;border-left:1px solid var(--border);}
   .brow-cell-lbl{font-size:9px;color:var(--muted);margin-bottom:1px;}
   .brow-cell-val{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -297,8 +306,9 @@
     <div class="filter-tab" data-f="진행중" onclick="setFilter('진행중')">진행중</div>
     <div class="filter-tab" data-f="완료" onclick="setFilter('완료')">완료</div>
   </div>
+  <div class="today-progress" id="todayProgressBar"><div class="progress-empty">불러오는 중...</div></div>
   <div class="batch-list-header">
-    <div>출하일자</div><div>검수완료</div><div class="grp-start">매출처명</div><div class="grp-start">보낸부서</div><div>보낸담당자</div><div class="grp-start">받는부서</div><div>받는담당자</div><div class="grp-start">상태</div><div>사유확인</div>
+    <div>No.</div><div class="grp-start">매출처명</div><div>출하일자</div><div class="grp-start">보낸부서/담당자</div><div>등록일자</div><div class="grp-start">받는부서/담당자</div><div>검수완료</div><div class="grp-start">상태</div><div>사유확인</div>
   </div>
   <div class="batch-grid" id="batchGrid"><div class="empty-state">불러오는 중...</div></div>
 </div>
@@ -977,6 +987,7 @@
     try {
       const rows = await sbGet('ship_schedule', 'lot_required=eq.true&order=ship_date.desc&limit=500');
       allBatches = Array.isArray(rows) ? rows : [];
+      renderTodayProgress();
       renderBatchGrid();
     } catch(e) {
       document.getElementById('batchGrid').innerHTML = '<div class="empty-state">데이터 로딩 실패</div>';
@@ -1038,6 +1049,29 @@
     });
   }
 
+  function renderTodayProgress() {
+    const el = document.getElementById('todayProgressBar');
+    if (!el) return;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const todays = allBatches.filter(r => r.ship_date === todayStr);
+    const total = todays.length;
+    if (total === 0) {
+      el.innerHTML = '<div class="progress-empty">오늘(' + todayStr + ') 등록된 출하지시가 없습니다</div>';
+      return;
+    }
+    const done = todays.filter(r => (r.lot_status||'대기') === '완료').length;
+    const inProg = todays.filter(r => (r.lot_status||'대기') === '진행중').length;
+    const wait = total - done - inProg;
+    const pct = Math.round(done / total * 100);
+    el.innerHTML = `
+      <div class="progress-summary">
+        <span class="progress-title">📊 오늘(${todayStr}) 출하지시 진행률</span>
+        <span class="progress-stats">완료 ${done}건 · 진행중 ${inProg}건 · 대기 ${wait}건 &nbsp;(총 ${total}건 중 <b>${pct}%</b> 완료)</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>`;
+  }
+
   function renderBatchGrid() {
     let rows = allBatches;
     if (currentFilter !== 'all') rows = rows.filter(r => (r.lot_status||'대기') === currentFilter);
@@ -1045,23 +1079,26 @@
       document.getElementById('batchGrid').innerHTML = '<div class="empty-state">📭 해당 건이 없습니다</div>';
       return;
     }
-    document.getElementById('batchGrid').innerHTML = rows.map(r => {
+    document.getElementById('batchGrid').innerHTML = rows.map((r, idx) => {
       const st = r.lot_status || '대기';
       const hasForceReason = st === '완료' && r.lot_force_reason;
       const completeCell = (st === '완료' && r.lot_completed_at)
         ? `${fmtDT(r.lot_completed_at)} (${r.lot_completed_by||''})` : '-';
+      const registerCell = r.created_at ? fmtDT(r.created_at) : '-';
+      const sendCell = [r.input_by, r.manager].filter(Boolean).join(' · ') || '-';
+      const recvCell = [r.recv_dept, r.recv_manager].filter(Boolean).join(' · ') || '-';
       const reasonCell = hasForceReason
         ? `<button class="btn btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;color:var(--accent2);border-color:var(--accent2);" onclick="event.stopPropagation();openForceReasonViewModal(${r.id})">확인</button>`
         : `<span style="color:var(--muted);">-</span>`;
       return `<div class="batch-card st-${st}" onclick="selectBatch(${r.id})">
         <div class="batch-row-main">
-          <div class="brow-cell"><div class="brow-cell-val mono">${r.ship_date||'-'}</div></div>
-          <div class="brow-cell"><div class="brow-cell-val" style="color:${st==='완료'?'var(--accent2)':'var(--muted)'};">${completeCell}</div></div>
+          <div class="brow-cell"><div class="brow-cell-val brow-no">${idx+1}</div></div>
           <div class="brow-cell grp-start brow-customer"><div class="brow-cell-val">${custDisplay(r.customer, r.extra_category)}</div></div>
-          <div class="brow-cell grp-start"><div class="brow-cell-val">${r.input_by||'-'}</div></div>
-          <div class="brow-cell"><div class="brow-cell-val">${r.manager||'-'}</div></div>
-          <div class="brow-cell grp-start"><div class="brow-cell-val">${r.recv_dept||'-'}</div></div>
-          <div class="brow-cell"><div class="brow-cell-val">${r.recv_manager||'-'}</div></div>
+          <div class="brow-cell"><div class="brow-cell-val mono">${r.ship_date||'-'}</div></div>
+          <div class="brow-cell grp-start"><div class="brow-cell-val">${sendCell}</div></div>
+          <div class="brow-cell"><div class="brow-cell-val mono" style="font-size:11px;">${registerCell}</div></div>
+          <div class="brow-cell grp-start"><div class="brow-cell-val">${recvCell}</div></div>
+          <div class="brow-cell"><div class="brow-cell-val" style="color:${st==='완료'?'var(--accent2)':'var(--muted)'};">${completeCell}</div></div>
           <div class="brow-cell grp-start"><div class="bc-badge ${st}"${hasForceReason?' style="background:#ffd400;color:#3d2b00;"':''}>${st}</div></div>
           <div class="brow-cell">${reasonCell}</div>
         </div>
