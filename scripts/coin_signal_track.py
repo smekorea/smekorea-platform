@@ -43,17 +43,17 @@ def get_active_signals():
     rows = []
     offset = 0
     page_size = 1000
+    base_url = f"{SUPABASE_URL}/rest/v1/coin_signal"
     while True:
-        url = (
-            f"{SUPABASE_URL}/rest/v1/coin_signal"
-            f"?select=id,market,price,checked_at"
-            f"&signal=eq.true"
-            f"&checked_at=gte.{since}"
-            f"&order=id.asc"
-        )
+        params = {
+            "select": "id,market,price,checked_at",
+            "signal": "eq.true",
+            "checked_at": f"gte.{since}",
+            "order": "id.asc",
+        }
         headers = dict(SB_HEADERS)
         headers["Range"] = f"{offset}-{offset + page_size - 1}"
-        r = requests.get(url, headers=headers, timeout=30)
+        r = requests.get(base_url, headers=headers, params=params, timeout=30)
         if r.status_code not in (200, 206):
             print(f"[error] 신호 조회 실패: {r.status_code} {r.text}")
             break
