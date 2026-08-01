@@ -54,10 +54,21 @@ def kst_today_str():
 
 
 def get_krw_markets():
-    r = requests.get(UPBIT_MARKET_ALL_URL, timeout=10)
+    """원화마켓 전체 조회, 업비트 지정 유의종목(market_warning=CAUTION)은 제외"""
+    r = requests.get("https://api.upbit.com/v1/market/all?isDetails=true", timeout=10)
     r.raise_for_status()
     data = r.json()
-    markets = [(d["market"], d.get("korean_name", "")) for d in data if d["market"].startswith("KRW-")]
+    markets = []
+    excluded = 0
+    for d in data:
+        if not d["market"].startswith("KRW-"):
+            continue
+        warning = d.get("market_warning", "NONE")
+        if warning and warning != "NONE":
+            excluded += 1
+            continue
+        markets.append((d["market"], d.get("korean_name", "")))
+    print(f"[info] 유의종목 제외: {excluded}건")
     return markets
 
 
@@ -283,6 +294,63 @@ def calc_atr(highs, lows, closes, period=14):
     return round(atr / price * 100, 2)  # 가격 대비 %로 표현
 
 
+def calc_signal_score(criteria_met, rsi, bb_position, low_position_pct, volume_ratio, orderbook_ratio, secondary_count):
+    """저점매수 강도 점수 (0~100) - 실전 투자 관점 가중치
+    - 반전신호강도 35점: MACD/StochRSI/이평 골든크로스 (실제 꺾임의 증거, 가장 중요)
+    - 매수세유입증거 25점: 거래량배율 + 호가매수비율 (실제 자금 유입 확인)
+    - RSI과매도정도 15점: 너무 극단적이면 오히려 감점(추락중일 위험)
+    - 볼린저/저점근접도 15점: 통계적/가격적 저점 근접성
+    - 충족조건개수보너스 10점: 여러 지표 동시 충족의 신뢰도
+    """
+    # 1) 반전 신호 강도 (35점) - macd 13 + stoch 12 + ma_cross 10
+    reversal_score = 0
+    if criteria_met.get("macd"): reversal_score += 13
+    if criteria_met.get("stoch"): reversal_score += 12
+    if criteria_met.get("ma_cross"): reversal_score += 10
+
+    # 2) 매수세 유입 증거 (25점) - 거래량 12.5 + 호가 12.5
+    vol_score = 0
+    if volume_ratio is not None:
+        vol_score = min(volume_ratio / 3.0, 1.0) * 12.5
+    ob_score = 0
+    if orderbook_ratio is not None:
+        ob_score = min(orderbook_ratio / 2.0, 1.0) * 12.5
+    buy_pressure_score = vol_score + ob_score
+
+    # 3) RSI 과매도 정도 (15점) - 20 부근 최고점, 너무 낮으면(추락중 위험) 감점
+    rsi_score = 0
+    if rsi is not None:
+        if rsi >= 35:
+            rsi_score = 0
+        elif rsi >= 20:
+            rsi_score = 15 * (35 - rsi) / 15
+        elif rsi >= 10:
+            rsi_score = 15 - (20 - rsi) * 0.5
+        else:
+            rsi_score = 8  # 극단적 과매도 - 추락하는 칼 위험으로 낮게 유지
+
+    # 4) 볼린저/저점 근접도 (15점) - bb 7.5 + low 7.5
+    bb_score = 0
+    if bb_position is not None:
+        if bb_position <= 0:
+            bb_score = 7.5
+        elif bb_position <= BB_NEAR_PCT:
+            bb_score = 7.5 * (BB_NEAR_PCT - bb_position) / BB_NEAR_PCT
+    low_score = 0
+    if low_position_pct is not None:
+        if low_position_pct <= 0:
+            low_score = 7.5
+        elif low_position_pct <= LOW_POSITION_THRESHOLD:
+            low_score = 7.5 * (LOW_POSITION_THRESHOLD - low_position_pct) / LOW_POSITION_THRESHOLD
+    proximity_score = bb_score + low_score
+
+    # 5) 충족조건 개수 보너스 (10점) - 필터 최소기준(4개) 초과분에 비례
+    bonus = max(0, min(10, 10 * (secondary_count - SECONDARY_NEEDED) / (7 - SECONDARY_NEEDED)))
+
+    total = reversal_score + buy_pressure_score + rsi_score + proximity_score + bonus
+    return round(min(100, max(0, total)), 1)
+
+
 def analyze_market(market, korean_name, orderbook_ratio):
     try:
         candles = get_daily_candles(market)
@@ -329,6 +397,11 @@ def analyze_market(market, korean_name, orderbook_ratio):
     secondary_count = sum(criteria_met[k] for k in secondary_keys)
     passed_filter = criteria_met["rsi"] and secondary_count >= SECONDARY_NEEDED
 
+    signal_score = calc_signal_score(
+        criteria_met, rsi, bb_position, low_position_pct,
+        volume_ratio, orderbook_ratio, secondary_count
+    )
+
     return {
         "market": market,
         "coin_name": korean_name,
@@ -345,6 +418,7 @@ def analyze_market(market, korean_name, orderbook_ratio):
         "orderbook_ratio": orderbook_ratio,
         "criteria_met": criteria_met,
         "passed_filter": passed_filter,
+        "signal_score": signal_score,
     }
 
 
@@ -451,6 +525,18 @@ def save_to_supabase(rows):
     print(f"Supabase 저장 완료: {len(rows)}건")
 
 
+def calc_risk_level(atr_pct):
+    """ATR% 기반 변동성 위험도 라벨 (점수에는 미반영, 참고정보)"""
+    if atr_pct is None:
+        return None
+    if atr_pct < 3:
+        return "낮음"
+    elif atr_pct < 7:
+        return "보통"
+    else:
+        return "높음"
+
+
 def main():
     date_str = kst_today_str()
     checked_at = datetime.now(timezone.utc).isoformat()
@@ -495,8 +581,19 @@ def main():
             "criteria_met": c["criteria_met"],
             "signal": cr["signal"],
             "reason_text": cr["reason"],
+            "signal_score": c["signal_score"],
+            "risk_level": calc_risk_level(c["atr_pct"]),
             "checked_at": checked_at,
         })
+
+    # 동시간대(같은 checked_at) 내 signal=true 건들끼리 점수 높은순 순위 부여
+    signal_rows = [r for r in rows if r["signal"]]
+    signal_rows.sort(key=lambda r: r["signal_score"], reverse=True)
+    for idx, r in enumerate(signal_rows):
+        r["rank"] = idx + 1
+    for r in rows:
+        if not r["signal"]:
+            r["rank"] = None
 
     save_to_supabase(rows)
 
