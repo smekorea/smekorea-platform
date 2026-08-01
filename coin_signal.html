@@ -33,6 +33,26 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .back-link{font-size:12px;color:var(--accent2);text-decoration:none;}
 .back-link:hover{text-decoration:underline;}
 
+/* ── 탭 ── */
+.tab-bar{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--border);background:var(--app-bg);}
+.tab-btn{padding:10px 16px;font-size:13px;font-weight:600;color:var(--text3);background:none;border:none;
+  cursor:pointer;border-bottom:2px solid transparent;}
+.tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent);}
+.tab-btn:hover{color:var(--accent2);}
+.view-panel{display:none;flex:1;flex-direction:column;overflow:hidden;}
+.view-panel.active{display:flex;}
+
+/* ── 순위/점수 뱃지 ── */
+.rank-badge{font-size:14px;}
+.score-val{font-family:'Courier New',Courier,monospace;font-weight:700;}
+.score-high{color:#c0392b;}
+.score-mid{color:#B8860B;}
+.score-low{color:var(--text3);}
+.risk-tag{font-size:11px;padding:1px 6px;border-radius:8px;}
+.risk-낮음{background:#e8f5e9;color:#2e7d32;}
+.risk-보통{background:#fff8e1;color:#b8860b;}
+.risk-높음{background:#fdecea;color:#c0392b;}
+
 /* ── 필터바 ── */
 .filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--surface);}
 .filter-bar label{font-size:12px;color:var(--text2);}
@@ -62,6 +82,10 @@ tbody tr:hover{background:#f7fafd;}
 .today-row:hover td{background:#ffe98a!important;}
 .signal-badge{display:inline-block;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);
   border-radius:12px;padding:1px 8px;font-size:12px;font-weight:700;}
+.risk-badge{display:inline-block;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;}
+.risk-badge.risk-low{background:#e6f4ea;color:#1e7a45;}
+.risk-badge.risk-mid{background:#fff3d6;color:#a56a00;}
+.risk-badge.risk-high{background:#fde8e8;color:#c0392b;}
 .no-signal{color:var(--text3);}
 .empty-state{padding:60px 20px;text-align:center;color:var(--text3);}
 
@@ -78,7 +102,10 @@ tbody tr:hover{background:#f7fafd;}
 .criteria-list .no{color:#bbb;}
 .reason-box{margin-top:14px;padding:12px;background:var(--surface);border-radius:8px;font-size:13px;line-height:1.5;}
 .reason-box b{display:block;margin-bottom:4px;color:var(--text2);font-size:11px;}
-.price-trend-box{margin-top:14px;padding:12px;background:var(--surface);border-radius:8px;}
+.price-trend-box{margin-top:14px;}
+.trend-link-btn{width:100%;padding:10px;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);
+  border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;}
+.trend-link-btn:hover{background:var(--gold-border);}
 .ptb-label{display:block;margin-bottom:8px;color:var(--text2);font-size:11px;}
 .ptb-table{width:100%;border-collapse:collapse;font-size:12px;}
 .ptb-table th{text-align:left;padding:4px 6px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);}
@@ -86,6 +113,19 @@ tbody tr:hover{background:#f7fafd;}
 .ptb-up{color:#c0392b;font-weight:700;}
 .ptb-down{color:#1a56db;font-weight:700;}
 .ptb-wait{color:var(--text3);}
+
+/* ── 가격추이 탭 ── */
+.trend-table-wrap{flex:1;overflow:auto;}
+.trend-table{border-collapse:collapse;font-size:12px;width:max-content;min-width:100%;}
+.trend-table thead{position:sticky;top:0;background:#fafafa;z-index:5;}
+.trend-table th{padding:8px 9px;border-bottom:2px solid var(--border);text-align:left;font-weight:700;color:var(--text2);white-space:nowrap;}
+.trend-table td{padding:7px 9px;border-bottom:1px solid #f0f0ee;border-right:1px solid #f2f2f2;white-space:nowrap;
+  font-family:'Courier New',Courier,monospace;}
+.trend-table td.label-col{font-family:inherit;}
+.trend-up{color:#c0392b;font-weight:700;}
+.trend-down{color:#1a56db;font-weight:700;}
+.trend-wait{color:var(--text3);}
+.trend-milestone-hd{text-align:center;background:#f6f8fb;}
 .modal-close{margin-top:16px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;
   font-size:14px;cursor:pointer;}
 .modal-close:hover{background:var(--accent2);}
@@ -108,29 +148,52 @@ tbody tr:hover{background:#f7fafd;}
     <a class="back-link" href="index.html">← 메인으로</a>
   </div>
 
-  <div class="filter-bar">
-    <label>날짜</label>
-    <input type="date" id="fDate">
-    <label>종목명</label>
-    <input list="coinList" id="fCoin" placeholder="전체">
-    <datalist id="coinList"></datalist>
-    <label>신호</label>
-    <select id="fSignal">
-      <option value="">전체</option>
-      <option value="true">신호있음만</option>
-    </select>
-    <button class="filter-btn" onclick="applyFilter()">🔍 조회</button>
-    <button class="reset-btn" onclick="resetFilter()">초기화</button>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabBtnList" onclick="switchTab('list')">📋 신호 리스트</button>
+    <button class="tab-btn" id="tabBtnTrend" onclick="switchTab('trend')">📈 가격추이 현황</button>
   </div>
 
-  <div class="table-wrap" id="tableWrap">
-    <table id="signalTable">
-      <thead>
-        <tr id="headerRow"></tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-    <div id="emptyState" class="empty-state" style="display:none;">해당 조건의 신호 데이터가 없습니다.</div>
+  <div class="view-panel active" id="listPanel">
+    <div class="filter-bar">
+      <label>날짜</label>
+      <input type="date" id="fDate">
+      <label>종목명</label>
+      <input list="coinList" id="fCoin" placeholder="전체">
+      <datalist id="coinList"></datalist>
+      <label>신호</label>
+      <select id="fSignal">
+        <option value="">전체</option>
+        <option value="true">신호있음만</option>
+      </select>
+      <button class="filter-btn" onclick="applyFilter()">🔍 조회</button>
+      <button class="reset-btn" onclick="resetFilter()">초기화</button>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+      <table id="signalTable">
+        <thead>
+          <tr id="headerRow"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display:none;">해당 조건의 신호 데이터가 없습니다.</div>
+    </div>
+  </div>
+
+  <div class="view-panel" id="trendPanel">
+    <div class="filter-bar">
+      <label>종목명</label>
+      <input list="coinList" id="tfCoin" placeholder="전체">
+      <label>날짜</label>
+      <input type="date" id="tfDate">
+      <button class="filter-btn" onclick="renderTrendTab()">🔍 조회</button>
+      <button class="reset-btn" onclick="document.getElementById('tfCoin').value='';document.getElementById('tfDate').value='';renderTrendTab();">초기화</button>
+      <span style="font-size:12px;color:var(--text3);margin-left:auto;">💰 신호 발생 종목만 표시 · 30분 단위 등락률 추적</span>
+    </div>
+    <div class="trend-table-wrap" id="trendTableWrap">
+      <table class="trend-table" id="trendTable"></table>
+      <div id="trendEmptyState" class="empty-state" style="display:none;">신호 데이터가 없습니다.</div>
+    </div>
   </div>
 </div>
 
@@ -144,8 +207,7 @@ tbody tr:hover{background:#f7fafd;}
       <span id="modalReason">-</span>
     </div>
     <div class="price-trend-box" id="priceTrendBox" style="display:none;">
-      <b class="ptb-label">신호 발생 이후 가격 추이</b>
-      <table class="ptb-table" id="ptbTable"></table>
+      <button class="trend-link-btn" id="trendLinkBtn">📈 가격 추이 화면에서 보기</button>
     </div>
     <div class="disclaimer">본 신호는 기술적 지표 기반 참고정보이며, 투자 확정 조언이 아닙니다. 최종 매수 판단은 본인 책임하에 결정하세요.</div>
     <button class="modal-close" onclick="closeModal()">닫기</button>
@@ -183,11 +245,14 @@ function initSb(){
 
 /* ═══ 컬럼 정의 ═══ */
 var COLUMNS = [
+  {key:'rank', label:'순위', w:55},
   {key:'date', label:'날짜', w:90},
   {key:'time', label:'시각', w:70},
   {key:'coin_name', label:'종목명', w:100},
   {key:'market', label:'마켓', w:100},
   {key:'price', label:'현재가', w:100, num:true},
+  {key:'signal_score', label:'점수', w:70, num:true},
+  {key:'risk_level', label:'위험도', w:70},
   {key:'rsi', label:'RSI', w:70, num:true},
   {key:'bb_position', label:'볼린저위치%', w:100, num:true},
   {key:'volume_ratio', label:'거래량배율', w:95, num:true},
@@ -214,13 +279,41 @@ function toKstTimeStr(isoStr){
   return d.toLocaleString('ko-KR', {timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false});
 }
 
+/* ═══ 탭 전환 ═══ */
+function switchTab(name){
+  document.getElementById('tabBtnList').classList.toggle('active', name==='list');
+  document.getElementById('tabBtnTrend').classList.toggle('active', name==='trend');
+  document.getElementById('listPanel').classList.toggle('active', name==='list');
+  document.getElementById('trendPanel').classList.toggle('active', name==='trend');
+  if (name === 'trend') renderTrendTab();
+}
+
 async function main(){
   todayStr = kstTodayStr();
   initSb();
   await loadAllRows();
+  computeRanks();
   buildHeader();
   applyFilter();
   buildCoinDatalist();
+}
+
+/* ═══ 동일 스캔시각(checked_at) 내 signal=true 종목들을 signal_score 기준 순위 부여 ═══ */
+function computeRanks(){
+  var groups = {};
+  allRows.forEach(function(r){
+    r.rank = null;
+    if (r.signal !== true) return;
+    var key = r.checked_at;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+  Object.keys(groups).forEach(function(key){
+    var arr = groups[key].slice().sort(function(a,b){
+      return (b.signal_score||0) - (a.signal_score||0);
+    });
+    arr.forEach(function(r, idx){ r.rank = idx + 1; });
+  });
 }
 
 /* ═══ 데이터 로드 (1000행 제한 대응 range 페이지네이션) ═══ */
@@ -274,6 +367,19 @@ function resetFilter(){
 function updateTodaySummary(){
   var count = allRows.filter(function(r){ return r.date === todayStr && r.signal === true; }).length;
   document.getElementById('todaySignalCount').textContent = count;
+}
+
+function rankBadge(rank){
+  if (!rank) return '<span class="no-signal">-</span>';
+  if (rank === 1) return '🥇';
+  if (rank === 2) return '🥈';
+  if (rank === 3) return '🥉';
+  return String(rank);
+}
+
+function riskBadge(level){
+  var cls = level === '높음' ? 'risk-high' : (level === '보통' ? 'risk-mid' : 'risk-low');
+  return '<span class="risk-badge '+cls+'">'+level+'</span>';
 }
 
 /* ═══ 정렬 ═══ */
@@ -399,6 +505,9 @@ function renderTable(){
       if (col.key === 'time') val = toKstTimeStr(r.checked_at);
       else if (col.key === 'signal') val = r.signal ? '<span class="signal-badge">💰 신호</span>' : '<span class="no-signal">-</span>';
       else if (col.key === 'reason_text') val = r.reason_text || '-';
+      else if (col.key === 'rank') val = rankBadge(r.rank);
+      else if (col.key === 'signal_score') val = (r.signal_score !== null && r.signal_score !== undefined) ? r.signal_score : '-';
+      else if (col.key === 'risk_level') val = r.risk_level ? riskBadge(r.risk_level) : '-';
       else val = (r[col.key] !== null && r[col.key] !== undefined) ? r[col.key] : '-';
 
       td.innerHTML = val;
@@ -433,7 +542,10 @@ var PRICE_MILESTONES = [
   {label:'7일', minutes:10080},
 ];
 
+var currentDetailRow = null;
+
 async function openDetail(r){
+  currentDetailRow = r;
   document.getElementById('modalTitle').textContent = (r.coin_name||'') + ' (' + r.market + ')';
   document.getElementById('modalSub').textContent =
     r.date + ' ' + toKstTimeStr(r.checked_at) + ' 기준 · 현재가 ' + r.price;
@@ -452,51 +564,96 @@ async function openDetail(r){
   document.getElementById('detailModal').classList.add('show');
 
   var trendBox = document.getElementById('priceTrendBox');
-  if (r.signal === true) {
-    trendBox.style.display = 'block';
-    await renderPriceTrend(r);
-  } else {
-    trendBox.style.display = 'none';
-  }
+  trendBox.style.display = (r.signal === true) ? 'block' : 'none';
 }
 
-async function renderPriceTrend(r){
-  var table = document.getElementById('ptbTable');
-  table.innerHTML = '<tr><td colspan="3" class="ptb-wait">불러오는 중...</td></tr>';
+document.getElementById('trendLinkBtn').onclick = function(){
+  if (!currentDetailRow) return;
+  closeModal();
+  document.getElementById('tfCoin').value = currentDetailRow.coin_name || '';
+  document.getElementById('tfDate').value = '';
+  switchTab('trend');
+};
 
-  var {data, error} = await SB.from('coin_signal_price_track')
-    .select('minutes_after,price,pct_change')
-    .eq('signal_id', r.id)
-    .order('minutes_after', {ascending:true});
+/* ═══ 가격추이 탭 렌더링 ═══ */
+async function renderTrendTab(){
+  var wrap = document.getElementById('trendTableWrap');
+  var table = document.getElementById('trendTable');
+  var emptyState = document.getElementById('trendEmptyState');
 
-  if (error || !data) {
-    table.innerHTML = '<tr><td colspan="3" class="ptb-wait">추이 데이터를 불러올 수 없습니다.</td></tr>';
+  var coinVal = document.getElementById('tfCoin').value.trim();
+  var dateVal = document.getElementById('tfDate').value;
+
+  var signalRows = allRows.filter(function(r){
+    if (r.signal !== true) return false;
+    if (coinVal && !(r.coin_name||'').includes(coinVal) && !(r.market||'').includes(coinVal)) return false;
+    if (dateVal && r.date !== dateVal) return false;
+    return true;
+  });
+  signalRows.sort(function(a,b){ return new Date(b.checked_at) - new Date(a.checked_at); });
+
+  // 화면 성능을 위해 최근 300건까지만 표시 (필요시 날짜/종목 필터로 좁혀서 조회)
+  var LIMIT = 300;
+  var limited = signalRows.slice(0, LIMIT);
+
+  if (limited.length === 0) {
+    table.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
-  var rowsHtml = '<tr><th>경과</th><th>가격</th><th>등락률</th></tr>';
-  PRICE_MILESTONES.forEach(function(m){
-    // 목표 경과분에 가장 가까우면서 아직 지나지 않은 미래는 제외 (실제 발생한 시점까지만)
-    var candidates = data.filter(function(d){ return d.minutes_after <= m.minutes + 15 && d.minutes_after >= m.minutes - 15; });
-    if (candidates.length === 0) {
-      // 근접치 없으면: 해당 시점이 아직 안 지났는지 확인
-      var maxRecorded = data.length ? data[data.length-1].minutes_after : -1;
-      if (maxRecorded < m.minutes - 15) {
-        rowsHtml += '<tr><td>'+m.label+'</td><td class="ptb-wait">대기중</td><td class="ptb-wait">-</td></tr>';
-        return;
-      }
-      rowsHtml += '<tr><td>'+m.label+'</td><td class="ptb-wait">-</td><td class="ptb-wait">-</td></tr>';
-      return;
-    }
-    // 가장 근접한 것 선택
-    var best = candidates.reduce(function(a,b){
-      return Math.abs(a.minutes_after - m.minutes) <= Math.abs(b.minutes_after - m.minutes) ? a : b;
+  table.innerHTML = '<tr><td colspan="16" class="trend-wait" style="padding:30px;">가격추이 데이터 불러오는 중...</td></tr>';
+
+  var ids = limited.map(function(r){ return r.id; });
+  var trackMap = {};
+  var CHUNK = 150;
+  for (var i = 0; i < ids.length; i += CHUNK) {
+    var idChunk = ids.slice(i, i + CHUNK);
+    var {data, error} = await SB.from('coin_signal_price_track')
+      .select('signal_id,minutes_after,price,pct_change')
+      .in('signal_id', idChunk);
+    if (error) { console.error(error); continue; }
+    (data||[]).forEach(function(d){
+      if (!trackMap[d.signal_id]) trackMap[d.signal_id] = [];
+      trackMap[d.signal_id].push(d);
     });
-    var cls = best.pct_change > 0 ? 'ptb-up' : (best.pct_change < 0 ? 'ptb-down' : '');
-    var sign = best.pct_change > 0 ? '+' : '';
-    rowsHtml += '<tr><td>'+m.label+'</td><td>'+best.price+'</td><td class="'+cls+'">'+sign+best.pct_change+'%</td></tr>';
-  });
-  table.innerHTML = rowsHtml;
+  }
+
+  var headHtml = '<thead><tr>'+
+    '<th>날짜</th><th>시각</th><th>종목명</th><th>마켓</th><th>순위</th><th>점수</th>'+
+    PRICE_MILESTONES.map(function(m){ return '<th class="trend-milestone-hd">'+m.label+'</th>'; }).join('') +
+    '</tr></thead>';
+
+  var bodyRows = limited.map(function(r){
+    var track = (trackMap[r.id] || []).slice().sort(function(a,b){ return a.minutes_after - b.minutes_after; });
+    var cells = PRICE_MILESTONES.map(function(m){
+      var candidates = track.filter(function(d){ return d.minutes_after <= m.minutes + 15 && d.minutes_after >= m.minutes - 15; });
+      if (candidates.length === 0) {
+        var maxRecorded = track.length ? track[track.length-1].minutes_after : -1;
+        if (maxRecorded < m.minutes - 15) return '<td class="trend-wait">대기중</td>';
+        return '<td class="trend-wait">-</td>';
+      }
+      var best = candidates.reduce(function(a,b){
+        return Math.abs(a.minutes_after - m.minutes) <= Math.abs(b.minutes_after - m.minutes) ? a : b;
+      });
+      var cls = best.pct_change > 0 ? 'trend-up' : (best.pct_change < 0 ? 'trend-down' : '');
+      var sign = best.pct_change > 0 ? '+' : '';
+      return '<td class="'+cls+'">'+sign+best.pct_change+'%</td>';
+    }).join('');
+
+    return '<tr>'+
+      '<td class="label-col">'+r.date+'</td>'+
+      '<td class="label-col">'+toKstTimeStr(r.checked_at)+'</td>'+
+      '<td class="label-col">'+(r.coin_name||'-')+'</td>'+
+      '<td class="label-col">'+r.market+'</td>'+
+      '<td class="label-col">'+rankBadge(r.rank)+'</td>'+
+      '<td>'+(r.signal_score!=null?r.signal_score:'-')+'</td>'+
+      cells +
+      '</tr>';
+  }).join('');
+
+  table.innerHTML = headHtml + '<tbody>' + bodyRows + '</tbody>';
 }
 
 function closeModal(){
