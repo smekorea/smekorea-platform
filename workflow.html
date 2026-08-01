@@ -2,66 +2,6 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<script>
-/* ═══ 최초 진입 시 "전용 창으로 열기" 배너 표시 (자동 window.open은 팝업차단으로 대부분 실패하여 클릭 유도 방식 사용) ═══ */
-(function(){
-  try{
-    if(window.name==='wf_main') return; // 이미 전용창으로 전환된 상태
-    var params=new URLSearchParams(location.search);
-    if(params.has('popped')) { window.name='wf_main'; return; }
-
-    function buildTargetUrl(){
-      var p=new URLSearchParams(location.search);
-      p.set('popped','1');
-      return location.pathname+'?'+p.toString()+location.hash;
-    }
-    function openPoppedWindow(){
-      var w=Math.min(1280, screen.availWidth-40);
-      var h=Math.min(860, screen.availHeight-80);
-      var left=Math.round(((screen.availLeft||0)+(screen.availWidth-w))/2);
-      var top=Math.round(((screen.availTop||0)+(screen.availHeight-h))/2);
-      var features='width='+w+',height='+h+',left='+left+',top='+top+
-        ',menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
-      return window.open(buildTargetUrl(),'wf_main',features);
-    }
-
-    window.addEventListener('DOMContentLoaded', function(){
-      var bar=document.createElement('div');
-      bar.id='wf-popout-bar';
-      bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:100000;background:#378ADD;'+
-        'color:#fff;padding:8px 14px;display:flex;align-items:center;justify-content:center;'+
-        'gap:10px;font-size:13px;font-family:sans-serif;flex-wrap:wrap;';
-      bar.innerHTML=
-        '<span id="wf-popout-msg">📌 이 화면을 주소창 없는 전용 창으로 열까요? (듀얼모니터 고정 사용 가능)</span>'+
-        '<button id="wf-popout-yes" style="background:#fff;color:#185FA5;border:none;border-radius:6px;'+
-        'padding:4px 12px;cursor:pointer;font-weight:600;">전용 창 열기</button>'+
-        '<button id="wf-popout-no" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);'+
-        'border-radius:6px;padding:4px 12px;cursor:pointer;">닫기</button>';
-      document.body.prepend(bar);
-      document.body.style.paddingTop=bar.offsetHeight+'px';
-
-      document.getElementById('wf-popout-yes').onclick=function(){
-        var newWin=openPoppedWindow();
-        if(newWin){
-          window.close();
-          setTimeout(function(){
-            if(!window.closed){
-              document.getElementById('wf-popout-msg').textContent='새 창이 열렸습니다. 이 탭은 닫아주세요.';
-              document.getElementById('wf-popout-yes').style.display='none';
-            }
-          },500);
-        } else {
-          alert('팝업이 차단되었습니다. 주소창 오른쪽의 팝업 차단 아이콘을 눌러 허용한 후 다시 시도해주세요.');
-        }
-      };
-      document.getElementById('wf-popout-no').onclick=function(){
-        bar.remove();
-        document.body.style.paddingTop='';
-      };
-    });
-  }catch(e){}
-})();
-</script>
 
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -120,7 +60,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .settings-btn{background:none;border:1px solid var(--border);border-radius:8px;width:34px;height:34px;
   font-size:17px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center;}
 .settings-btn:hover,.settings-btn.active-btn{background:var(--surface);color:var(--text1);}
-#pin-btn.pinned{background:var(--accent);color:#fff;border-color:var(--accent);}
 
 /* ── 언어 선택 ── */
 .wf-lang-btn.wf-lang-on{background:#c8001e!important;color:#fff!important;border-color:#c8001e!important;}
@@ -623,7 +562,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     </div>
     <div class="right-btns">
       <button class="add-btn" onclick="onAddBtnClick()"><i class="ti ti-plus"></i> <span data-i18n="입력">입력</span></button>
-      <button class="settings-btn" id="pin-btn" onclick="togglePinWindow()" title="화면고정 (듀얼모니터)"><i class="ti ti-pin"></i></button>
       <button class="settings-btn" id="settings-btn" onclick="toggleSettings()"><i class="ti ti-settings"></i></button>
     </div>
   </div>
@@ -782,6 +720,13 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       <button class="diary-dl-btn" onclick="downloadDiary()">
           <i class="ti ti-download"></i> <span data-i18n="다운로드">다운로드</span>
         </button>
+      <button class="diary-dl-btn" onclick="downloadDiaryTemplate()">
+          <i class="ti ti-file-spreadsheet"></i> <span data-i18n="양식 다운로드">양식 다운로드</span>
+        </button>
+      <button class="diary-dl-btn" onclick="document.getElementById('diary-upload-file').click()">
+          <i class="ti ti-upload"></i> <span data-i18n="업로드">업로드</span>
+        </button>
+      <input type="file" id="diary-upload-file" accept=".xlsx,.xls" style="display:none;" onchange="handleDiaryUploadFile(event)">
       </div>
       <div class="diary-stats" id="diary-stats"></div>
       <div class="diary-table-wrap" id="diary-table-wrap">
@@ -1360,6 +1305,14 @@ async function loadSbSDK(){
   await new Promise((res,rej)=>{
     const s=document.createElement('script');
     s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+    s.onload=res;s.onerror=rej;document.head.appendChild(s);
+  });
+}
+async function loadXlsxSDK(){
+  if(window.XLSX)return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
     s.onload=res;s.onerror=rej;document.head.appendChild(s);
   });
 }
@@ -2333,6 +2286,167 @@ function downloadDiary(){
   document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 
+/* ─── 양식 다운로드 (엑셀) ─── */
+const DIARY_UPLOAD_HEADERS=['날짜','업무유형','활동유형','거래처','담당부서','기록유형','제목','내용','후속조치','중요도','상태','시작일','종료일','진행단계','공유','공유대상'];
+async function downloadDiaryTemplate(){
+  try{ await loadXlsxSDK(); }catch(e){ alert('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'); return; }
+  const sample=['2026-08-01','매출처','방문','LG전자','회로구매팀','일반기록','LG전자 정기방문','방문 내용 예시...','','중','완료','','','','공유안함',''];
+  const ws=XLSX.utils.aoa_to_sheet([DIARY_UPLOAD_HEADERS,sample]);
+  ws['!cols']=DIARY_UPLOAD_HEADERS.map(()=>({wch:16}));
+  const guideRows=[
+    ['컬럼','설명 / 입력 가능 값'],
+    ['날짜','필수. YYYY-MM-DD (예: 2026-08-01)'],
+    ['업무유형','매출처, 매입처, 개발, 품질, 사내관리, 인사, 조직, 출장, 개인업무 (또는 화면에서 추가 등록한 값)'],
+    ['활동유형','방문, 미팅, 회의, 식사, 접대, 라운딩, 계약, 협의, 점검, 정비, 교육, 심사, 행사, 행정처리'],
+    ['거래처 / 담당부서','자유 입력'],
+    ['기록유형','일반기록, 전달사항, 지시사항, 과제, 부서업무보고 (또는 화면에서 추가 등록한 값)'],
+    ['제목 / 내용 / 후속조치','자유 입력. 후속조치를 입력하면 자동으로 할 일이 생성됩니다.'],
+    ['중요도','상, 중, 하'],
+    ['상태','일정, 완료, 진행중, 보류, 후속필요, 지시'],
+    ['시작일 / 종료일','기록유형이 "과제" 또는 "부서업무보고"일 때만 사용 (YYYY-MM-DD)'],
+    ['진행단계','착수, 진행중, 지연, 완료 — 기록유형이 "과제" 또는 "부서업무보고"일 때만 사용'],
+    ['공유','공유안함, 부서공유, 개인공유, 법인공유, 전체공유'],
+    ['공유대상','부서공유 / 개인공유 / 법인공유 선택 시, 대상을 콤마(,)로 구분해 입력 (예: 재경팀,제조팀 / 홍길동,김철수)'],
+  ];
+  const ws2=XLSX.utils.aoa_to_sheet(guideRows);
+  ws2['!cols']=[{wch:14},{wch:64}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'업무일지');
+  XLSX.utils.book_append_sheet(wb,ws2,'작성가이드');
+  XLSX.writeFile(wb,`업무일지_업로드양식_${todayStr}.xlsx`);
+}
+
+/* ─── 업로드 (엑셀 파싱 → 미리보기 → 일괄등록) ─── */
+let diaryUploadRows=[]; // 검증 통과한 insert 대상 목록
+let diaryUploadSkipped=0;
+async function handleDiaryUploadFile(evt){
+  const file=evt.target.files[0];
+  evt.target.value=''; // 같은 파일 재선택 가능하도록 초기화
+  if(!file) return;
+  try{ await loadXlsxSDK(); }catch(e){ alert('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'); return; }
+  const buf=await file.arrayBuffer();
+  let wb;
+  try{ wb=XLSX.read(buf,{type:'array',cellDates:false}); }
+  catch(e){ alert('파일을 읽을 수 없습니다. 엑셀(.xlsx) 파일인지 확인해주세요.'); return; }
+  const sheetName=wb.SheetNames.find(n=>n==='업무일지') || wb.SheetNames[0];
+  const sheet=wb.Sheets[sheetName];
+  const json=XLSX.utils.sheet_to_json(sheet,{defval:''});
+  parseDiaryUploadRows(json);
+  openDiaryUploadPreview();
+}
+function xlsxDateToStr(v){
+  if(!v) return '';
+  if(typeof v==='string') return v.trim();
+  if(typeof v==='number'){ // 엑셀 날짜 시리얼값인 경우
+    const d=XLSX.SSF.parse_date_code(v);
+    if(!d) return '';
+    return d.y+'-'+String(d.m).padStart(2,'0')+'-'+String(d.d).padStart(2,'0');
+  }
+  return String(v).trim();
+}
+const SHARE_LABEL_MAP={'공유안함':'','부서공유':'dept','개인공유':'person','법인공유':'corp','전체공유':'all'};
+function parseDiaryUploadRows(json){
+  diaryUploadRows=[];
+  diaryUploadSkipped=0;
+  json.forEach(row=>{
+    const date=xlsxDateToStr(row['날짜']);
+    if(!date){ diaryUploadSkipped++; return; } // 날짜 없는 행은 건너뜀
+    const contentType=String(row['기록유형']||'일반기록').trim();
+    const isTaskType=['과제','부서업무보고'].includes(contentType);
+    const shareLabel=String(row['공유']||'공유안함').trim();
+    const shareKey=SHARE_LABEL_MAP[shareLabel] ?? '';
+    const targetsRaw=String(row['공유대상']||'').trim();
+    const targets=targetsRaw?targetsRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
+    let is_shared=false, share_target=null, share_type=undefined;
+    if(shareKey==='all'){ is_shared=true; share_target='전체'; }
+    else if(shareKey==='dept'){ is_shared=targets.length>0; share_target=targets.length?JSON.stringify(targets):null; }
+    else if(shareKey==='person'){ is_shared=targets.length>0; share_target=targets.length?JSON.stringify(targets):null; share_type='person'; }
+    else if(shareKey==='corp'){ is_shared=targets.length>0; share_target=targets.length?JSON.stringify(targets):null; share_type='corp'; }
+    const obj={
+      date,
+      category:String(row['업무유형']||'').trim(),
+      action_type:String(row['활동유형']||'').trim(),
+      partner:String(row['거래처']||'').trim(),
+      dept_contact:String(row['담당부서']||'').trim(),
+      content_type:contentType,
+      title:String(row['제목']||'').trim(),
+      content:String(row['내용']||'').trim(),
+      follow_up:String(row['후속조치']||'').trim(),
+      importance:String(row['중요도']||'중').trim(),
+      status:String(row['상태']||'완료').trim(),
+      is_work_log:false,
+      is_shared, share_target,
+      task_start_date:isTaskType?(xlsxDateToStr(row['시작일'])||null):null,
+      task_end_date:isTaskType?(xlsxDateToStr(row['종료일'])||null):null,
+      task_stage:isTaskType?(String(row['진행단계']||'').trim()||null):null,
+      origin:'엑셀업로드',
+    };
+    if(share_type) obj.share_type=share_type;
+    diaryUploadRows.push(obj);
+  });
+}
+function openDiaryUploadPreview(){
+  const old=document.getElementById('diaryUploadOverlay');
+  if(old) old.remove();
+  if(!diaryUploadRows.length){
+    alert('등록할 유효한 행이 없습니다. (날짜가 비어있는 행은 제외됩니다)'+(diaryUploadSkipped?'\n건너뛴 행: '+diaryUploadSkipped+'건':''));
+    return;
+  }
+  const overlay=document.createElement('div');
+  overlay.className='confirm-popup-overlay';
+  overlay.id='diaryUploadOverlay';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+
+  const previewRows=diaryUploadRows.slice(0,30).map(r=>
+    '<tr style="border-bottom:1px solid #f0ede8;">'+
+    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+escapeHtml(r.date)+'</td>'+
+    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+escapeHtml(r.content_type)+'</td>'+
+    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+escapeHtml(r.category)+'</td>'+
+    '<td style="padding:6px 8px;font-size:12px;">'+escapeHtml(r.title)+'</td>'+
+    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+(r.is_shared?'✓':'')+'</td>'+
+    '</tr>'
+  ).join('');
+
+  overlay.innerHTML='<div class="confirm-popup-box" style="width:min(720px,94vw);">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'+
+    '<div style="font-size:16px;font-weight:700;color:#1a1612;">업로드 미리보기 — 총 '+diaryUploadRows.length+'건'+(diaryUploadSkipped?' (건너뜀 '+diaryUploadSkipped+'건: 날짜 없음)':'')+'</div>'+
+    '<button onclick="document.getElementById(\'diaryUploadOverlay\').remove()" style="background:none;border:none;font-size:20px;color:#b0a090;cursor:pointer;padding:0 4px;">✕</button>'+
+    '</div>'+
+    '<div style="max-height:50vh;overflow:auto;border:1px solid #f0ede8;border-radius:8px;margin-bottom:14px;">'+
+    '<table style="width:100%;border-collapse:collapse;">'+
+    '<thead><tr style="background:#f7f5f2;">'+
+    '<th style="padding:6px 8px;font-size:11px;text-align:left;">날짜</th>'+
+    '<th style="padding:6px 8px;font-size:11px;text-align:left;">기록유형</th>'+
+    '<th style="padding:6px 8px;font-size:11px;text-align:left;">업무유형</th>'+
+    '<th style="padding:6px 8px;font-size:11px;text-align:left;">제목</th>'+
+    '<th style="padding:6px 8px;font-size:11px;text-align:left;">공유</th>'+
+    '</tr></thead><tbody>'+previewRows+'</tbody></table></div>'+
+    (diaryUploadRows.length>30?'<div style="font-size:11px;color:#9a8e82;margin-bottom:10px;">상위 30건만 미리보기로 표시됩니다.</div>':'')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid #f0ede8;">'+
+    '<button id="diaryUploadConfirmBtn" onclick="confirmDiaryUpload()" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">일괄 등록</button>'+
+    '<button onclick="document.getElementById(\'diaryUploadOverlay\').remove()" style="height:42px;padding:0 20px;border:1.5px solid #e5ddd4;border-radius:8px;background:#fff;color:#5a5048;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>'+
+    '</div></div>';
+  document.body.appendChild(overlay);
+}
+async function confirmDiaryUpload(){
+  const btn=document.getElementById('diaryUploadConfirmBtn');
+  if(btn){ btn.disabled=true; btn.textContent='등록 중...'; }
+  const toInsert=diaryUploadRows.map(r=>Object.assign({},r,{employee_id:wfSession.empId, emp_name:wfSession.name}));
+  if(!SB){ alert('서버 연결이 없어 업로드할 수 없습니다.'); if(btn){btn.disabled=false;btn.textContent='일괄 등록';} return; }
+  try{
+    const {data,error}=await SB.from('work_diary').insert(toInsert).select();
+    if(error) throw error;
+    (data||[]).forEach(d=>diaryRecords.unshift(d));
+    document.getElementById('diaryUploadOverlay')?.remove();
+    diaryUploadRows=[]; diaryUploadSkipped=0;
+    renderDiary(); renderAll();
+    alert('✅ '+(data?data.length:toInsert.length)+'건이 업무일지에 등록되었습니다.');
+  }catch(e){
+    alert('업로드 실패: '+(e.message||e));
+    if(btn){ btn.disabled=false; btn.textContent='일괄 등록'; }
+  }
+}
+
 /* ─── 컬럼 리사이즈 ─── */
 function applyResizable(ths){
   ths.forEach(th=>{
@@ -3031,35 +3145,6 @@ function closeDiaryModal(){
   window.addEventListener('touchend',endDrag);
 })();
 
-/* ═══ 화면고정 (듀얼모니터: 현재 창을 해당 모니터 전체 크기로 고정/해제) ═══ */
-let pinPrevRect=null;
-function togglePinWindow(){
-  const btn=document.getElementById('pin-btn');
-  if(pinPrevRect){
-    try{
-      window.moveTo(pinPrevRect.x, pinPrevRect.y);
-      window.resizeTo(pinPrevRect.w, pinPrevRect.h);
-    }catch(e){}
-    pinPrevRect=null;
-    btn.classList.remove('pinned');
-    return;
-  }
-  if(window.name!=='wf_main'){
-    alert('화면고정은 별도 창(주소창 없는 창)에서만 사용 가능합니다.');
-    return;
-  }
-  pinPrevRect={x:window.screenX, y:window.screenY, w:window.outerWidth, h:window.outerHeight};
-  try{
-    window.moveTo(screen.availLeft||0, screen.availTop||0);
-    window.resizeTo(screen.availWidth, screen.availHeight);
-  }catch(e){
-    alert('이 브라우저에서는 창 크기 자동 조정이 제한되어 있습니다. 수동으로 창을 옮기고 최대화해주세요.');
-    pinPrevRect=null;
-    return;
-  }
-  btn.classList.add('pinned');
-}
-
 async function saveDiary(){
   const ctVal=document.getElementById('dm-content-type').value;
   const isTaskType=['과제','부서업무보고'].includes(ctVal);
@@ -3488,6 +3573,7 @@ const I18N_T = {
 "등록":{zh:"提交",en:"Post"},"아직 코멘트가 없습니다.":{zh:"暂无评论。",en:"No comments yet."},
 "내 업무일지로 복사":{zh:"复制到我的工作日志",en:"Copy to My Diary"},
 "페이지":{zh:"页码",en:"Page"},"이동":{zh:"跳转",en:"Go"},
+"양식 다운로드":{zh:"下载模板",en:"Download Template"},"업로드":{zh:"上传",en:"Upload"},
 // 테이블 헤더
 "날짜":{zh:"日期",en:"Date"},"업무유형":{zh:"业务类型",en:"Category"},"활동":{zh:"活动",en:"Activity"},
 "거래처":{zh:"客户/供应商",en:"Partner"},"대상부서":{zh:"目标部门",en:"Target Dept"},
