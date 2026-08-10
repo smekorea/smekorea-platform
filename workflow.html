@@ -38,7 +38,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   padding:10px 16px;border-bottom:1px solid var(--border);
   background:var(--app-bg);position:sticky;top:0;z-index:20;gap:8px;flex-wrap:wrap;}
 .nav-month{display:flex;align-items:center;gap:4px;flex-shrink:0;}
-.nav-title{display:flex;flex-direction:row;align-items:baseline;gap:8px;}
+.nav-title{display:flex;flex-direction:row;align-items:baseline;gap:8px;margin-right:14px;}
 .nav-sub{font-size:11px;color:#111;font-weight:700;letter-spacing:.3px;line-height:1;white-space:nowrap;}
 .nav-month h2{font-size:var(--fs-lg);font-weight:800;color:var(--text1);white-space:nowrap;}
 @media(min-width:768px){
@@ -127,6 +127,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .day-cell:nth-child(7n){border-right:none;}
 .day-cell:hover{background:#f5f8ff;}
 .day-cell.other-month{background:#f9f9f7;}
+.day-cell.today{background:rgba(226,75,74,0.07);}
+.day-cell.today:hover{background:rgba(226,75,74,0.12);}
 .day-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px;}
 .day-num{font-size:12px;font-weight:700;width:20px;height:20px;
   display:flex;align-items:center;justify-content:center;border-radius:50%;
@@ -545,12 +547,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 <div class="app">
   <div class="topbar">
     <div class="nav-month">
-      <button class="icon-btn" onclick="changeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
       <div class="nav-title">
         <div class="nav-sub">PJY 업무관리</div>
-        <h2 id="month-label"></h2>
       </div>
-      <button class="icon-btn" onclick="changeMonth(1)"><i class="ti ti-chevron-right"></i></button>
+      <button class="icon-btn" onclick="changeMonth(-1)"><i class="ti ti-caret-left"></i></button>
+      <h2 id="month-label"></h2>
+      <button class="icon-btn" onclick="changeMonth(1)"><i class="ti ti-caret-right"></i></button>
       <button class="icon-btn" onclick="goToday()"><i class="ti ti-calendar-event"></i></button>
     </div>
     <div class="tabs">
@@ -1469,7 +1471,7 @@ function renderCal(){
       `<div class="event-chip" style="background:#FFF3E0;border-left-color:#E2772E;color:#111;"
         onclick="event.stopPropagation();">⏰ ${escapeHtml(t.text)}</div>`).join('');
     const more='';
-    html+=`<div class="day-cell${!isThis?' other-month':''}" onclick="openDayPopup('${ds}')">
+    html+=`<div class="day-cell${!isThis?' other-month':''}${isT?' today':''}" onclick="openDayPopup('${ds}')">
       <div class="day-top">
         <div class="lunar${holiday?' lunar-holiday':''}">${lbl?t('음')+lbl:''}</div>
         ${isThis
@@ -1728,7 +1730,7 @@ function updateNavSub(){
   const navSub = document.querySelector('.nav-sub');
   if(!navSub || !wfSession) return;
   const name = wfSession.name, tabName = tabDisplayName(currentTab);
-  navSub.textContent = name + ' · ' + tabName;
+  navSub.textContent = name + t('님의 ') + tabName;
 }
 function switchTab(tab){
   currentTab=tab;
@@ -1813,6 +1815,59 @@ function goToday(){cur=new Date();renderAll();}
     }
     moved=false;dir=0;
   });
+})();
+
+/* ═══ PC 마우스 세로 드래그로 월 이동 (위로 드래그→이전달, 아래로 드래그→다음달) ═══ */
+(function initMouseDrag(){
+  const daysEl=document.getElementById('days');
+  let startY=0,mMoved=false,dragging=false,suppressClick=false;
+
+  daysEl.addEventListener('mousedown',e=>{
+    if(e.button!==0) return;
+    startY=e.clientY;
+    mMoved=false;dragging=true;
+    daysEl.style.transition='none';
+  });
+
+  window.addEventListener('mousemove',e=>{
+    if(!dragging) return;
+    const dy=e.clientY-startY;
+    if(Math.abs(dy)>10){
+      mMoved=true;
+      daysEl.style.transform=`translateY(${dy*0.35}px)`;
+      daysEl.style.opacity=String(Math.max(0.5,1-Math.abs(dy)/400));
+    }
+  });
+
+  window.addEventListener('mouseup',e=>{
+    if(!dragging) return;
+    dragging=false;
+    const totalDy=e.clientY-startY;
+    if(mMoved && Math.abs(totalDy)>60){
+      suppressClick=true;
+      // 위로 드래그(음수)=이전달, 아래로 드래그(양수)=다음달
+      const m=totalDy<0?-1:1;
+      daysEl.style.transition='transform .15s ease-out,opacity .15s ease-out';
+      daysEl.style.transform=`translateY(${m<0?-80:80}px)`;
+      daysEl.style.opacity='0';
+      setTimeout(()=>{
+        changeMonth(m);
+        daysEl.style.transition='none';
+        daysEl.style.transform='translateY(0)';
+        daysEl.style.opacity='1';
+      },150);
+      setTimeout(()=>{suppressClick=false;},200);
+    } else if(mMoved){
+      daysEl.style.transition='transform .12s ease-out,opacity .12s ease-out';
+      daysEl.style.transform='translateY(0)';
+      daysEl.style.opacity='1';
+    }
+    mMoved=false;
+  });
+
+  daysEl.addEventListener('click',e=>{
+    if(suppressClick){ e.stopPropagation(); e.preventDefault(); }
+  },true);
 })();
 
 /* ═══ 드래그로 캘린더 셀 높이 조절 ═══ */
