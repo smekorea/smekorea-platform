@@ -1829,60 +1829,31 @@ function goToday(){cur=new Date();renderAll();}
   });
 })();
 
-/* ═══ PC 마우스 세로 드래그로 월 이동 (위로 드래그→이전달, 아래로 드래그→다음달) ═══ */
-(function initMouseDrag(){
+/* ═══ 마우스 휠(스크롤)로 월 이동 (휠 위로→이전달, 휠 아래로→다음달) ═══ */
+(function initWheelMonth(){
   const daysEl=document.getElementById('days');
-  let startY=0,mMoved=false,dragging=false,suppressClick=false;
+  let wheelLock=false,accum=0;
 
-  daysEl.addEventListener('pointerdown',e=>{
-    if(e.pointerType!=='mouse'||e.button!==0) return;
-    startY=e.clientY;
-    mMoved=false;dragging=true;
-    daysEl.style.transition='none';
-    daysEl.style.userSelect='none';
+  daysEl.addEventListener('wheel',e=>{
+    if(currentTab!=='cal') return;
     e.preventDefault();
-  });
-
-  window.addEventListener('pointermove',e=>{
-    if(!dragging||e.pointerType!=='mouse') return;
-    const dy=e.clientY-startY;
-    if(Math.abs(dy)>10){
-      mMoved=true;
-      daysEl.style.transform=`translateY(${dy*0.35}px)`;
-      daysEl.style.opacity=String(Math.max(0.5,1-Math.abs(dy)/400));
-    }
-  });
-
-  window.addEventListener('pointerup',e=>{
-    if(!dragging||e.pointerType!=='mouse') return;
-    dragging=false;
-    daysEl.style.userSelect='';
-    const totalDy=e.clientY-startY;
-    if(mMoved && Math.abs(totalDy)>60){
-      suppressClick=true;
-      // 위로 드래그(음수)=이전달, 아래로 드래그(양수)=다음달
-      const m=totalDy<0?-1:1;
-      daysEl.style.transition='transform .15s ease-out,opacity .15s ease-out';
-      daysEl.style.transform=`translateY(${m<0?-80:80}px)`;
-      daysEl.style.opacity='0';
-      setTimeout(()=>{
-        changeMonth(m);
-        daysEl.style.transition='none';
-        daysEl.style.transform='translateY(0)';
-        daysEl.style.opacity='1';
-      },150);
-      setTimeout(()=>{suppressClick=false;},200);
-    } else if(mMoved){
-      daysEl.style.transition='transform .12s ease-out,opacity .12s ease-out';
+    if(wheelLock) return;
+    accum+=e.deltaY;
+    if(Math.abs(accum)<40) return;
+    const m=accum<0?-1:1; // 휠 위로(음수)=이전달, 휠 아래로(양수)=다음달
+    accum=0;
+    wheelLock=true;
+    daysEl.style.transition='transform .15s ease-out,opacity .15s ease-out';
+    daysEl.style.transform=`translateY(${m<0?20:-20}px)`;
+    daysEl.style.opacity='0';
+    setTimeout(()=>{
+      changeMonth(m);
+      daysEl.style.transition='none';
       daysEl.style.transform='translateY(0)';
       daysEl.style.opacity='1';
-    }
-    mMoved=false;
-  });
-
-  daysEl.addEventListener('click',e=>{
-    if(suppressClick){ e.stopPropagation(); e.preventDefault(); }
-  },true);
+    },130);
+    setTimeout(()=>{wheelLock=false;},450);
+  },{passive:false});
 })();
 
 /* ═══ 드래그로 캘린더 셀 높이 조절 ═══ */
