@@ -109,7 +109,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 /* ── 월간 캘린더 ── */
 .calendar-wrap{padding:0 6px 16px;}
 .day-headers{display:grid;grid-template-columns:repeat(7,1fr);
-  background:#2c3e50;border-radius:6px 6px 0 0;border:1px solid #2c3e50;}
+  background:#2c3e50;border-radius:6px 6px 0 0;border:1px solid #2c3e50;
+  position:sticky;z-index:15;}
 .day-hdr{text-align:center;padding:7px 0;font-weight:700;font-size:12px;color:#ffffff;}
 .day-hdr.sun{color:#ff8a8a;}
 .day-hdr.sat{color:#90caff;}
@@ -1755,6 +1756,7 @@ function switchTab(tab){
   else if(tab==='list') renderList();
   else if(tab==='share') loadShareView();
   else if(tab==='wfsettings') initWfSettingsView();
+  syncDayHeadersOffset();
   applyI18n();
 }
 function onAddBtnClick(){
@@ -1763,6 +1765,16 @@ function onAddBtnClick(){
   else if(currentTab==='cal'||currentTab==='list') openDiaryModal();
   else openTodoModal();
 }
+/* ═══ 요일 헤더(일월화수목금토) 틀고정: 상단바 높이만큼 top 오프셋 동기화 ═══ */
+function syncDayHeadersOffset(){
+  const topbar=document.querySelector('.topbar');
+  const dh=document.querySelector('.day-headers');
+  if(!topbar||!dh) return;
+  dh.style.top=topbar.offsetHeight+'px';
+}
+window.addEventListener('resize',syncDayHeadersOffset);
+window.addEventListener('load',syncDayHeadersOffset);
+
 function changeMonth(d){cur.setMonth(cur.getMonth()+d);renderAll();}
 function goToday(){cur=new Date();renderAll();}
 
@@ -1822,15 +1834,17 @@ function goToday(){cur=new Date();renderAll();}
   const daysEl=document.getElementById('days');
   let startY=0,mMoved=false,dragging=false,suppressClick=false;
 
-  daysEl.addEventListener('mousedown',e=>{
-    if(e.button!==0) return;
+  daysEl.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='mouse'||e.button!==0) return;
     startY=e.clientY;
     mMoved=false;dragging=true;
     daysEl.style.transition='none';
+    daysEl.style.userSelect='none';
+    e.preventDefault();
   });
 
-  window.addEventListener('mousemove',e=>{
-    if(!dragging) return;
+  window.addEventListener('pointermove',e=>{
+    if(!dragging||e.pointerType!=='mouse') return;
     const dy=e.clientY-startY;
     if(Math.abs(dy)>10){
       mMoved=true;
@@ -1839,9 +1853,10 @@ function goToday(){cur=new Date();renderAll();}
     }
   });
 
-  window.addEventListener('mouseup',e=>{
-    if(!dragging) return;
+  window.addEventListener('pointerup',e=>{
+    if(!dragging||e.pointerType!=='mouse') return;
     dragging=false;
+    daysEl.style.userSelect='';
     const totalDy=e.clientY-startY;
     if(mMoved && Math.abs(totalDy)>60){
       suppressClick=true;
@@ -3802,6 +3817,7 @@ async function wfEnterMain() {
   const navSub = document.querySelector('.nav-sub');
   updateNavSub();
   loadLocal(); renderLegend(); renderCal();
+  syncDayHeadersOffset();
   if (SB) {
     await loadFromSb();
     await loadDiary();
