@@ -558,6 +558,10 @@
         </div>
         <div class="field-label" style="margin-top:10px;">매칭규칙 메모 (선택)</div>
         <textarea id="newMakerNote" placeholder="예: 메이커품번(Maker P/N) 기준으로 LG품번/품목코드가 산지별로 복수 등록되어 있어 매칭 시 메이커품번 교차조회 필요" style="width:100%;min-height:56px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;"></textarea>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--text);">
+          <input type="checkbox" id="newMakerLotManual">
+          수기 LOT 필수 (바코드라벨 없는 유효기간 관리 대상 — 예: 켐트로스 실리콘류)
+        </label>
       </div>
     </div>
     <div class="maker-table-wrap">
@@ -566,11 +570,12 @@
         <thead><tr>
           <th style="width:44px;">순번<div class="col-resizer"></div></th>
           <th style="width:110px;">메이커명<div class="col-resizer"></div></th>
-          <th style="width:260px;">매칭규칙 메모<div class="col-resizer"></div></th>
+          <th style="width:220px;">매칭규칙 메모<div class="col-resizer"></div></th>
+          <th style="width:90px;">수기LOT필수<div class="col-resizer"></div></th>
           <th style="width:100px;">등록일<div class="col-resizer"></div></th>
           <th>관리</th>
         </tr></thead>
-        <tbody id="makerTbody"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
+        <tbody id="makerTbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -862,6 +867,16 @@
   function custDisplay(customer, extraCategory) {
     const c = customer || '-';
     return extraCategory ? `${c}/${extraCategory}` : c;
+  }
+
+  // ── 수기 LOT 입력 필수 메이커(켐트로스 등, 바코드라벨 없는 유효기간 관리 대상) ──
+  let lotManualMakerSet = new Set();
+  let lotManualMakerLoaded = false;
+  async function ensureLotManualMakers() {
+    if (lotManualMakerLoaded) return;
+    const rows = await sbGet('scan_required_makers', 'is_active=eq.true&lot_manual_required=eq.true&select=maker');
+    lotManualMakerSet = new Set((Array.isArray(rows) ? rows : []).map(r => r.maker));
+    lotManualMakerLoaded = true;
   }
 
   let itemsMaster = [];
@@ -1266,6 +1281,7 @@
 
     await ensureItemsMaster();
     await ensureMakerPnMaster();
+    await ensureLotManualMakers();
 
     const items = await sbGet('ship_lot_item', 'ship_schedule_id=eq.' + sid + '&order=id');
     if (!Array.isArray(items)) {
@@ -1309,13 +1325,19 @@
     }
     document.getElementById('itemTbody2').innerHTML = itemRows.map(r => {
       const isManual = r.check_type === 'manual';
+      const needsLot = isManual && lotManualMakerSet.has(r.maker);
       const isActive = r.item_code === activeItemCode && !r.is_done;
       const cls = (r.is_done?'row-done':(r.qty_scanned>0?'row-progress':'')) + (isActive?' active':'');
-      const badge = isManual ? '<span class="item-badge manual">수기</span>' : '<span class="item-badge barcode">바코드</span>';
+      const badge = isManual ? (needsLot ? '<span class="item-badge manual">수기+LOT</span>' : '<span class="item-badge manual">수기</span>') : '<span class="item-badge barcode">바코드</span>';
       const brand = r.maker || '-';
-      const rightPart = isManual
-        ? (r.is_done ? `<span style="font-size:10px;color:var(--accent3);">✓${r.checked_by||''}</span>` : `<button class="manual-confirm-btn" onclick="manualConfirm(${r.id})">확인완료</button>`)
-        : `${(r.qty_scanned||0).toLocaleString()}/${(r.qty_required||0).toLocaleString()}`;
+      const rightPart = !isManual
+        ? `${(r.qty_scanned||0).toLocaleString()}/${(r.qty_required||0).toLocaleString()}`
+        : (r.is_done
+            ? `<span style="font-size:10px;color:var(--accent3);">✓${r.checked_by||''}${r.lot_no?` (LOT:${r.lot_no})`:''}</span>`
+            : (needsLot
+                ? `<input type="text" id="lotNoInput_${r.id}" placeholder="LOT NO 입력" style="width:90px;font-size:11px;padding:3px 6px;margin-right:4px;">
+                   <button class="manual-confirm-btn" onclick="manualConfirmWithLot(${r.id})">완료</button>`
+                : `<button class="manual-confirm-btn" onclick="manualConfirm(${r.id})">확인완료</button>`));
       return `<tr class="${cls}">
         <td class="mono">${r.item_code}</td>
         <td>${r.description||''}</td>
@@ -1410,9 +1432,39 @@
     const now = new Date().toISOString();
     await sbPatch('ship_lot_item', itemId, { is_done: true, checked_by: workerName, checked_at: now, qty_scanned: row.qty_required });
     row.is_done = true; row.checked_by = workerName; row.qty_scanned = row.qty_required;
+    await sbPost('ship_lot_log', {
+      ship_schedule_id: currentSid, item_code: row.item_code, scan_type: '수기확인',
+      raw_scan: null, parsed_pn: row.item_code, parsed_qty: row.qty_required,
+      matched_lg_pn: null, match_method: null, pair_status: '완결',
+      scanned_at: now, scanned_by: workerName
+    });
     showToast(`✓ ${row.item_code} 수기확인 완료 (${workerName})`);
     renderItemList();
     updateProgress();
+    renderScanResultList();
+  }
+
+  // 켐트로스 등 바코드라벨 없는 유효기간 관리 품목 — LOT NO 수기입력 필수
+  async function manualConfirmWithLot(itemId) {
+    if (!workerName) { showToast('⚠ 작업자를 먼저 선택해주세요', true); return; }
+    const row = itemRows.find(r => r.id === itemId);
+    if (!row) return;
+    const lotInput = document.getElementById('lotNoInput_' + itemId);
+    const lotNo = lotInput ? lotInput.value.trim() : '';
+    if (!lotNo) { showToast('⚠ LOT NO를 입력해주세요 (바코드라벨이 없는 품목이라 필수입니다)', true); return; }
+    const now = new Date().toISOString();
+    await sbPatch('ship_lot_item', itemId, { is_done: true, checked_by: workerName, checked_at: now, qty_scanned: row.qty_required, lot_no: lotNo });
+    row.is_done = true; row.checked_by = workerName; row.qty_scanned = row.qty_required; row.lot_no = lotNo;
+    await sbPost('ship_lot_log', {
+      ship_schedule_id: currentSid, item_code: row.item_code, scan_type: '수기확인',
+      raw_scan: lotNo, parsed_pn: row.item_code, parsed_qty: row.qty_required, parsed_lot: lotNo,
+      matched_lg_pn: null, match_method: null, pair_status: '완결',
+      scanned_at: now, scanned_by: workerName
+    });
+    showToast(`✓ ${row.item_code} 수기확인 완료 (LOT:${lotNo}, ${workerName})`);
+    renderItemList();
+    updateProgress();
+    renderScanResultList();
   }
 
   function updateProgress() {
@@ -2543,14 +2595,14 @@
   }
 
   async function loadScanMakers() {
-    document.getElementById('makerTbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr>';
+    document.getElementById('makerTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">불러오는 중...</td></tr>';
     const rows = await sbGet('scan_required_makers', 'is_active=eq.true&order=created_at.desc');
     scanMakersList = Array.isArray(rows) ? rows : [];
     renderMakerTable();
   }
   function renderMakerTable() {
     if (scanMakersList.length === 0) {
-      document.getElementById('makerTbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">등록된 메이커가 없습니다. 좌측에서 추가해주세요.</td></tr>';
+      document.getElementById('makerTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">등록된 메이커가 없습니다. 좌측에서 추가해주세요.</td></tr>';
       return;
     }
     document.getElementById('makerTbody').innerHTML = scanMakersList.map((m,i) => {
@@ -2563,6 +2615,9 @@
       const noteCell = isEditing
         ? `<textarea class="maker-edit-input" id="editMakerNote_${m.id}" style="width:100%;min-height:44px;font-size:11px;">${noteValue}</textarea>`
         : `<span style="font-size:11.5px;color:var(--muted);white-space:normal;">${m.match_note ? m.match_note.replace(/</g,'&lt;') : '-'}</span>`;
+      const lotManualCell = isEditing
+        ? `<input type="checkbox" id="editMakerLotManual_${m.id}" ${m.lot_manual_required?'checked':''}>`
+        : (m.lot_manual_required ? '<span style="color:var(--accent);font-weight:700;">필수</span>' : '<span style="color:var(--muted);">-</span>');
       const dateStr = m.created_at ? new Date(m.created_at).toLocaleDateString('ko-KR') : '-';
       const actionCell = isEditing
         ? `<button class="btn btn-primary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="saveMakerEdit(${m.id})">저장</button>
@@ -2573,6 +2628,7 @@
         <td class="mono">${scanMakersList.length-i}</td>
         <td>${nameCell}</td>
         <td style="white-space:normal;">${noteCell}</td>
+        <td style="text-align:center;">${lotManualCell}</td>
         <td class="mono">${dateStr}</td>
         <td>${actionCell}</td>
       </tr>`;
@@ -2581,8 +2637,10 @@
   async function addScanMaker() {
     const input = document.getElementById('newMakerInput');
     const noteInput = document.getElementById('newMakerNote');
+    const lotManualInput = document.getElementById('newMakerLotManual');
     const val = input.value.trim();
     const note = noteInput.value.trim();
+    const lotManual = lotManualInput.checked;
     if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
     if (scanMakersList.some(m => m.maker === val)) { showToast('⚠ 이미 등록된 메이커입니다', true); return; }
 
@@ -2598,17 +2656,19 @@
     if (Array.isArray(existing) && existing.length > 0) {
       const row = existing[0];
       if (!confirm(`"${val}"은(는) 예전에 삭제(비활성화)된 메이커명입니다.\n다시 활성화하시겠습니까?`)) return;
-      await sbPatch('scan_required_makers', row.id, { is_active: true, match_note: note || row.match_note || null });
-      input.value = ''; noteInput.value = '';
+      await sbPatch('scan_required_makers', row.id, { is_active: true, match_note: note || row.match_note || null, lot_manual_required: lotManual });
+      input.value = ''; noteInput.value = ''; lotManualInput.checked = false;
       showToast(`✓ "${val}" 재활성화되었습니다`);
+      lotManualMakerLoaded = false;
       loadScanMakers();
       return;
     }
 
-    const result = await sbPost('scan_required_makers', { maker: val, is_active: true, match_note: note || null, created_at: new Date().toISOString() });
+    const result = await sbPost('scan_required_makers', { maker: val, is_active: true, match_note: note || null, lot_manual_required: lotManual, created_at: new Date().toISOString() });
     if (Array.isArray(result) && result.length > 0) {
-      input.value = ''; noteInput.value = '';
+      input.value = ''; noteInput.value = ''; lotManualInput.checked = false;
       showToast(`✓ "${val}" 등록되었습니다`);
+      lotManualMakerLoaded = false;
       loadScanMakers();
     } else {
       const errMsg = (result && result.message) ? result.message : JSON.stringify(result).slice(0,150);
@@ -2620,6 +2680,7 @@
   async function saveMakerEdit(id) {
     const val = document.getElementById('editMakerInput_'+id).value.trim();
     const note = document.getElementById('editMakerNote_'+id).value.trim();
+    const lotManual = document.getElementById('editMakerLotManual_'+id).checked;
     if (!val) { showToast('⚠ 메이커명을 입력해주세요', true); return; }
     if (scanMakersList.some(m => m.maker === val && m.id !== id)) { showToast('⚠ 이미 등록된 메이커명입니다', true); return; }
 
@@ -2629,10 +2690,11 @@
       return;
     }
 
-    const result = await sbPatch('scan_required_makers', id, { maker: val, match_note: note || null });
+    const result = await sbPatch('scan_required_makers', id, { maker: val, match_note: note || null, lot_manual_required: lotManual });
     if (Array.isArray(result) && result.length > 0) {
       showToast('✓ 수정되었습니다');
       editingMakerId = null;
+      lotManualMakerLoaded = false;
       loadScanMakers();
     } else {
       const errMsg = (result && result.message) ? result.message : JSON.stringify(result).slice(0,150);
@@ -2643,6 +2705,7 @@
     if (!confirm('이 메이커를 삭제(비활성화)하시겠습니까?')) return;
     await sbPatch('scan_required_makers', id, { is_active: false });
     showToast('삭제되었습니다');
+    lotManualMakerLoaded = false;
     loadScanMakers();
   }
 

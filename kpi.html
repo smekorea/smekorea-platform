@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMEKOREA KPI 프로세스</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#eef2f8;--surface:#fff;--surface2:#eef2f8;--border:#d7e0ee;--border2:#b0c4de;
+    --navy:#182338;--navy2:#22314f;
+    --accent:#c8001e;--accent2:#1a56db;--accent3:#0e9f6e;--warn:#d97706;--purple:#6d28d9;
+    --text:#1a2233;--muted:#7a8baa;
+    --shadow:0 2px 10px rgba(20,30,60,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+
+  .topbar{background:var(--navy);padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-badge{background:var(--purple);color:#fff;font-weight:900;font-size:12px;padding:8px 12px;border-radius:6px;letter-spacing:1px;}
+  .brand-title{color:#fff;font-size:19px;font-weight:800;}
+  .brand-sub{color:#8fa3c7;font-size:11px;margin-top:2px;}
+  .top-right{display:flex;align-items:center;gap:10px;}
+  .top-btn{background:rgba(255,255,255,0.08);color:#c9d6ec;border:1px solid rgba(255,255,255,0.15);padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;}
+  .top-btn:hover{background:rgba(255,255,255,0.16);color:#fff;}
+  .clock{font-family:monospace;color:#5b9bff;font-size:19px;letter-spacing:1px;}
+
+  .tabbar{background:#fff;display:flex;gap:4px;padding:10px 24px;border-bottom:1px solid var(--border);}
+  .tabbtn{padding:8px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:20px;background:transparent;transition:all 0.15s;}
+  .tabbtn:hover{color:var(--text);}
+  .tabbtn.active{color:#fff;background:var(--purple);}
+  .tabbtn.disabled{color:#c3cadb;cursor:not-allowed;}
+  .tabpanel{display:none;padding:0 24px 20px;}
+  .tabpanel.active{display:block;}
+
+  .btn{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid;transition:all 0.2s;}
+  .hist-table-wrap{background:var(--surface);border-radius:9px;overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 380px);box-shadow:var(--shadow);}
+  .hist-table-wrap table.dtab thead th{position:sticky;top:0;z-index:2;}
+  table.dtab{border-collapse:collapse;table-layout:fixed;}
+  table.dtab th{position:relative;user-select:none;background:var(--navy);color:#c9d6ec;padding:8px;font-size:10px;font-weight:700;text-align:left;border-bottom:2px solid var(--navy2);cursor:pointer;white-space:nowrap;overflow:hidden;}
+  table.dtab td{padding:7px 8px;font-size:12px;border-right:1px solid var(--border);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  table.dtab td:last-child{border-right:none;}
+  table.dtab tbody tr{border-bottom:1px solid var(--border);}
+  table.dtab tbody tr:nth-child(even){background:rgba(109,40,217,0.02);}
+  .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+  .mono{font-family:'Noto Sans KR',sans-serif;font-size:13.5px;}
+
+  input[type=date], select{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--text);}
+
+  .kpi-period-btn{border:none;background:transparent;padding:7px 16px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text);border-left:1.5px solid var(--border);}
+  .kpi-period-btn:first-child{border-left:none;}
+  .kpi-period-btn.active{background:var(--purple);color:#fff;}
+  .kpi-card{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .kpi-card-lbl{font-size:12px;color:var(--muted);margin-bottom:6px;}
+  .kpi-card-val{font-size:20px;font-weight:800;color:var(--text);}
+  .kpi-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;}
+  .kpi-bar-name{width:60px;flex-shrink:0;color:var(--text);}
+  .kpi-bar-track{flex:1;background:var(--surface2);border-radius:4px;height:18px;position:relative;overflow:hidden;}
+  .kpi-bar-fill{height:100%;background:var(--purple);border-radius:4px;}
+  .kpi-bar-val{width:100px;flex-shrink:0;text-align:right;font-family:'Courier New',monospace;color:var(--text);}
+  .kpi-person-row{cursor:pointer;}
+  .kpi-person-row:hover{background:rgba(109,40,217,0.06);}
+  .kpi-drill-row td{background:var(--surface2);padding:0 !important;}
+  .kpi-drill-table{width:100%;font-size:11.5px;border-collapse:collapse;}
+  .kpi-drill-table th{background:var(--border2);color:var(--text);padding:5px 8px;text-align:left;font-weight:700;}
+  .kpi-drill-table td{padding:5px 8px;border-bottom:1px solid var(--border);color:#111827;}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.2);opacity:0;pointer-events:none;transition:all 0.25s;z-index:9999;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.error{background:var(--accent);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-badge">KPI</div>
+    <div><div class="brand-title">KPI 프로세스</div><div class="brand-sub">부서 · 프로세스별 실적 지표</div></div>
+  </div>
+  <div class="top-right">
+    <a class="top-btn" href="index.html">🏠 메인으로</a>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<div class="tabbar">
+  <div class="tabbtn active" id="tabbtn-ship" onclick="switchTab('ship')">📦 출하팀 실적</div>
+  <div class="tabbtn disabled" title="추후 추가 예정">⚙️ 제조팀 실적 (준비중)</div>
+  <div class="tabbtn disabled" title="추후 추가 예정">🧾 자재구매팀 실적 (준비중)</div>
+</div>
+
+<div class="tabpanel active" id="tab-ship">
+  <div style="padding:16px;">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
+      <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;">
+        <button class="kpi-period-btn active" id="kpiPeriodBtn-day" onclick="setKpiPeriod('day')">일</button>
+        <button class="kpi-period-btn" id="kpiPeriodBtn-week" onclick="setKpiPeriod('week')">주</button>
+        <button class="kpi-period-btn" id="kpiPeriodBtn-month" onclick="setKpiPeriod('month')">월</button>
+      </div>
+      <input type="date" id="kpiDate" onchange="loadKpiData()">
+      <select id="kpiPersonFilter" onchange="renderKpiAll()">
+        <option value="">담당자 전체</option>
+        <option value="박형호">박형호</option>
+        <option value="김재옥">김재옥</option>
+        <option value="최혜영">최혜영</option>
+        <option value="송윤석">송윤석</option>
+        <option value="박현길">박현길</option>
+      </select>
+      <span id="kpiRangeLabel" style="margin-left:auto;font-size:12px;color:var(--muted);"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">
+      <div class="kpi-card"><div class="kpi-card-lbl">처리건수</div><div class="kpi-card-val" id="kpiCardCount">-</div></div>
+      <div class="kpi-card"><div class="kpi-card-lbl">출하금액</div><div class="kpi-card-val" id="kpiCardAmount">-</div></div>
+      <div class="kpi-card"><div class="kpi-card-lbl">평균 소요시간</div><div class="kpi-card-val" id="kpiCardTime">-</div></div>
+      <div class="kpi-card"><div class="kpi-card-lbl">부피</div><div class="kpi-card-val" id="kpiCardVolume">-</div></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">담당자별 출하금액</div>
+    <div id="kpiBarChart" style="margin-bottom:20px;"></div>
+
+    <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">담당자별 실적 상세 (행 클릭 시 건별 내역)</div>
+    <div class="hist-table-wrap">
+      <table class="dtab" id="kpiTable">
+        <thead><tr>
+          <th style="width:100px;">담당자<div class="col-resizer"></div></th>
+          <th style="width:90px;text-align:right;">출하건수<div class="col-resizer"></div></th>
+          <th style="width:90px;text-align:right;">품목종류<div class="col-resizer"></div></th>
+          <th style="width:130px;text-align:right;">출하금액<div class="col-resizer"></div></th>
+          <th style="width:100px;text-align:right;">평균소요<div class="col-resizer"></div></th>
+          <th style="text-align:right;">부피</th>
+        </tr></thead>
+        <tbody id="kpiTbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SB_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11eHVocmJzYnJzdG1ycnZsdXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNDIwMzMsImV4cCI6MjA5MDgxODAzM30.3Ehqr4l-wcaTXkZNpjHs7K_nr7i8M7gel5DcOG-PPRU';
+  const SB_HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+  async function sbGet(table, params) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table + '?' + params, { headers: SB_HEADERS });
+    try { return await res.json(); } catch(e) { return { message: 'JSON 파싱 실패: ' + e.message }; }
+  }
+
+  function showToast(msg, isError){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(()=>{ t.className='toast'; }, 3000);
+  }
+
+  function fmtDT(v) {
+    if (!v) return '-';
+    const d = new Date(v);
+    if (isNaN(d)) return '-';
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  function switchTab(tab) {
+    ['ship'].forEach(t => {
+      document.getElementById('tabbtn-'+t).classList.toggle('active', t===tab);
+      document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    });
+  }
+
+  function tickClock(){
+    const n = new Date();
+    document.getElementById('clock').textContent = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  }
+  setInterval(tickClock, 1000); tickClock();
+
+  // ══ 담당자 실적(KPI) — 출하팀 ══
+  let kpiPeriod = 'day';
+  let kpiScheduleData = []; // 기간 내 완료건 가공데이터 {id, person, customer, ship_date, minutes, amount, itemCount, box, pl}
+  let kpiExpanded = {}; // 담당자별 드릴다운 펼침 상태
+
+  function initKpiTab() {
+    const dateInput = document.getElementById('kpiDate');
+    if (!dateInput.value) {
+      const now = new Date();
+      dateInput.value = now.toISOString().slice(0,10);
+    }
+    loadKpiData();
+  }
+
+  function setKpiPeriod(p) {
+    kpiPeriod = p;
+    ['day','week','month'].forEach(x => {
+      document.getElementById('kpiPeriodBtn-'+x).classList.toggle('active', x===p);
+    });
+    loadKpiData();
+  }
+
+  // pack_done("6BOX","8PL") → 개수비례 추가시간(분): BOX 개당 3분, PL(파렛트) 개당 10분
+  function parsePackInfo(packDone) {
+    const s = String(packDone || '').trim();
+    const m = s.match(/^(\d+)(BOX|PL)$/i);
+    if (!m) return { minutes: 0, box: 0, pl: 0 };
+    const cnt = parseInt(m[1], 10) || 0;
+    const unit = m[2].toUpperCase();
+    if (unit === 'BOX') return { minutes: cnt * 3, box: cnt, pl: 0 };
+    return { minutes: cnt * 10, box: 0, pl: cnt };
+  }
+
+  function getKpiRange() {
+    const dateVal = document.getElementById('kpiDate').value;
+    const base = dateVal ? new Date(dateVal + 'T00:00:00') : new Date();
+    let start, end;
+    if (kpiPeriod === 'day') {
+      start = new Date(base); end = new Date(base); end.setDate(end.getDate()+1);
+    } else if (kpiPeriod === 'week') {
+      const day = base.getDay(); // 0=일 ... 6=토, 월요일 시작 기준
+      const diffToMon = (day === 0 ? -6 : 1 - day);
+      start = new Date(base); start.setDate(start.getDate()+diffToMon);
+      end = new Date(start); end.setDate(end.getDate()+7);
+    } else {
+      start = new Date(base.getFullYear(), base.getMonth(), 1);
+      end = new Date(base.getFullYear(), base.getMonth()+1, 1);
+    }
+    return { start, end };
+  }
+
+  async function loadKpiData() {
+    document.getElementById('kpiTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
+    const { start, end } = getKpiRange();
+    const label = kpiPeriod==='day' ? start.toLocaleDateString('ko-KR')
+      : kpiPeriod==='week' ? `${start.toLocaleDateString('ko-KR')} ~ ${new Date(end-1).toLocaleDateString('ko-KR')}`
+      : `${start.getFullYear()}년 ${start.getMonth()+1}월`;
+    document.getElementById('kpiRangeLabel').textContent = label;
+
+    const startIso = start.toISOString(), endIso = end.toISOString();
+    const schedules = await sbGet('ship_schedule',
+      `lot_status=eq.완료&lot_completed_at=gte.${startIso}&lot_completed_at=lt.${endIso}&lot_completed_by=not.is.null&select=id,lot_completed_by,lot_started_at,lot_completed_at,pack_done,customer,ship_date`);
+    const rows = Array.isArray(schedules) ? schedules : [];
+
+    if (!Array.isArray(schedules)) {
+      showToast('⚠ 데이터 조회 실패: ' + (schedules && schedules.message ? schedules.message : JSON.stringify(schedules).slice(0,150)), true);
+    }
+
+    if (rows.length === 0) {
+      kpiScheduleData = [];
+      renderKpiAll();
+      return;
+    }
+
+    // 해당 출하지시들의 품목(금액/종류수) 일괄 조회
+    const ids = rows.map(r => r.id);
+    let itemAgg = {}; // ship_schedule_id -> { amount, itemCount }
+    const chunkSize = 100;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i+chunkSize);
+      const inList = chunk.join(',');
+      const items = await sbGet('ship_lot_item', `ship_schedule_id=in.(${inList})&select=ship_schedule_id,amount`);
+      if (Array.isArray(items)) {
+        items.forEach(it => {
+          const key = it.ship_schedule_id;
+          if (!itemAgg[key]) itemAgg[key] = { amount: 0, itemCount: 0 };
+          itemAgg[key].amount += (parseFloat(it.amount) || 0);
+          itemAgg[key].itemCount += 1;
+        });
+      }
+    }
+
+    kpiScheduleData = rows.map(r => {
+      const started = r.lot_started_at ? new Date(r.lot_started_at) : null;
+      const completed = r.lot_completed_at ? new Date(r.lot_completed_at) : null;
+      const baseMinutes = (started && completed) ? Math.max(0, (completed - started) / 60000) : 0;
+      const packInfo = parsePackInfo(r.pack_done);
+      const agg = itemAgg[r.id] || { amount: 0, itemCount: 0 };
+      return {
+        id: r.id, person: r.lot_completed_by, customer: r.customer, ship_date: r.ship_date,
+        started_at: r.lot_started_at, completed_at: r.lot_completed_at,
+        minutes: baseMinutes + packInfo.minutes, box: packInfo.box, pl: packInfo.pl,
+        amount: agg.amount, itemCount: agg.itemCount
+      };
+    });
+
+    renderKpiAll();
+  }
+
+  function fmtMinutes(min) {
+    const m = Math.round(min);
+    if (m < 60) return m + '분';
+    return Math.floor(m/60) + '시간 ' + (m%60) + '분';
+  }
+  function fmtWon(n) { return '₩' + Math.round(n||0).toLocaleString(); }
+
+  function renderKpiAll() {
+    const personFilter = document.getElementById('kpiPersonFilter').value;
+    const data = personFilter ? kpiScheduleData.filter(d => d.person === personFilter) : kpiScheduleData;
+
+    // 요약카드
+    const totalSchedules = data.length;
+    const totalItems = data.reduce((s,d)=>s+d.itemCount,0);
+    const totalAmount = data.reduce((s,d)=>s+d.amount,0);
+    const avgMinutes = totalSchedules ? data.reduce((s,d)=>s+d.minutes,0)/totalSchedules : 0;
+    const totalBox = data.reduce((s,d)=>s+d.box,0);
+    const totalPl = data.reduce((s,d)=>s+d.pl,0);
+    document.getElementById('kpiCardCount').textContent = `${totalSchedules}건 / ${totalItems}종`;
+    document.getElementById('kpiCardAmount').textContent = fmtWon(totalAmount);
+    document.getElementById('kpiCardTime').textContent = totalSchedules ? fmtMinutes(avgMinutes) : '-';
+    document.getElementById('kpiCardVolume').textContent = `${totalBox}BOX ${totalPl}PL`;
+
+    // 담당자별 집계 (필터와 무관하게 전체 인원 기준으로 만든 뒤, 선택 시 해당 인원만 표시)
+    const byPerson = {};
+    kpiScheduleData.forEach(d => {
+      if (!byPerson[d.person]) byPerson[d.person] = { person: d.person, schedules: [], amount:0, itemCount:0, minutesSum:0, box:0, pl:0 };
+      const g = byPerson[d.person];
+      g.schedules.push(d); g.amount += d.amount; g.itemCount += d.itemCount; g.minutesSum += d.minutes; g.box += d.box; g.pl += d.pl;
+    });
+    let personList = Object.values(byPerson);
+    if (personFilter) personList = personList.filter(p => p.person === personFilter);
+    personList.sort((a,b) => b.amount - a.amount);
+
+    // 막대그래프 (출하금액 기준)
+    const maxAmount = Math.max(1, ...personList.map(p=>p.amount));
+    document.getElementById('kpiBarChart').innerHTML = personList.length === 0
+      ? '<div style="color:var(--muted);font-size:12px;padding:8px 0;">데이터 없음</div>'
+      : personList.map(p => `
+        <div class="kpi-bar-row">
+          <div class="kpi-bar-name">${p.person}</div>
+          <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.max(2,(p.amount/maxAmount*100))}%;"></div></div>
+          <div class="kpi-bar-val">${fmtWon(p.amount)}</div>
+        </div>`).join('');
+
+    // 상세 테이블 (드릴다운 포함)
+    if (personList.length === 0) {
+      document.getElementById('kpiTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">해당 기간에 완료된 출하지시가 없습니다</td></tr>';
+      return;
+    }
+    document.getElementById('kpiTbody').innerHTML = personList.map(p => {
+      const avgMin = p.schedules.length ? p.minutesSum / p.schedules.length : 0;
+      const expanded = !!kpiExpanded[p.person];
+      const mainRow = `<tr class="kpi-person-row" onclick="toggleKpiDrill('${p.person}')">
+        <td><b>${expanded?'▼ ':'▶ '}${p.person}</b></td>
+        <td style="text-align:right;" class="mono">${p.schedules.length}건</td>
+        <td style="text-align:right;" class="mono">${p.itemCount}종</td>
+        <td style="text-align:right;" class="mono">${fmtWon(p.amount)}</td>
+        <td style="text-align:right;" class="mono">${fmtMinutes(avgMin)}</td>
+        <td style="text-align:right;" class="mono">${p.box}BOX ${p.pl}PL</td>
+      </tr>`;
+      if (!expanded) return mainRow;
+      const drillRows = p.schedules.slice().sort((a,b)=> new Date(b.completed_at)-new Date(a.completed_at)).map(d => `
+        <tr>
+          <td>${d.ship_date||'-'}</td>
+          <td>${d.customer||'-'}</td>
+          <td>${d.started_at?fmtDT(d.started_at):'-'} ~ ${d.completed_at?fmtDT(d.completed_at):'-'}</td>
+          <td style="text-align:right;">${d.itemCount}종</td>
+          <td style="text-align:right;">${fmtWon(d.amount)}</td>
+          <td style="text-align:right;">${fmtMinutes(d.minutes)}</td>
+          <td style="text-align:right;">${d.box?d.box+'BOX':''}${d.pl?d.pl+'PL':''}${(!d.box&&!d.pl)?'-':''}</td>
+        </tr>`).join('');
+      return mainRow + `<tr class="kpi-drill-row"><td colspan="6">
+        <table class="kpi-drill-table"><thead><tr>
+          <th>출하일</th><th>거래처</th><th>작업시간(시작~완료)</th><th style="text-align:right;">품목종류</th><th style="text-align:right;">금액</th><th style="text-align:right;">소요시간</th><th style="text-align:right;">부피</th>
+        </tr></thead><tbody>${drillRows}</tbody></table>
+      </td></tr>`;
+    }).join('');
+  }
+
+  function toggleKpiDrill(person) {
+    kpiExpanded[person] = !kpiExpanded[person];
+    renderKpiAll();
+  }
+
+  // ══ 독립 컬럼 리사이즈 ══
+  function applyTableWidth(table) {
+    let sum = 0;
+    table.querySelectorAll('th').forEach(th => { sum += parseInt(th.style.width) || th.offsetWidth || 0; });
+    table.style.width = sum + 'px';
+  }
+  function initColResize(tableId, storageKey) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    table.style.tableLayout = 'fixed';
+    const ths = table.querySelectorAll('th');
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch(e) { saved = {}; }
+    ths.forEach((th, i) => {
+      const inlineW = parseInt(th.style.width) || 0;
+      const w = saved[i] || inlineW || th.offsetWidth || 100;
+      th.style.width = w + 'px';
+    });
+    applyTableWidth(table);
+    ths.forEach((th, i) => {
+      const resizer = th.querySelector('.col-resizer');
+      if (!resizer) return;
+      resizer.onmousedown = (e) => {
+        e.preventDefault();
+        const startX = e.pageX; const startW = th.offsetWidth;
+        function onMove(ev) {
+          const w = Math.max(30, startW + (ev.pageX - startX));
+          th.style.width = w + 'px';
+          applyTableWidth(table);
+        }
+        function onUp() {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          const widths = {};
+          table.querySelectorAll('th').forEach((t,idx) => { widths[idx] = t.offsetWidth; });
+          localStorage.setItem(storageKey, JSON.stringify(widths));
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      };
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    initColResize('kpiTable', 'kpi_ship_col_v1');
+    initKpiTab();
+  });
+</script>
+</body>
+</html>

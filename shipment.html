@@ -1582,15 +1582,17 @@
       const itemCode = String(r[1] || '').trim();
       const desc = String(r[2] || '').trim();
       const qtyRaw = String(r[3] || '').trim(); // 예: "20,000EA"
+      const priceRaw = String(r[4] || '').trim();
       const supplyRaw = String(r[5] || '').trim();
       const maker = brandColIdx >= 0 ? String(r[brandColIdx] || '').trim() : '';
       if (!itemCode && !desc && !qtyRaw) continue; // 완전 빈행은 무시
       if (!itemCode) { warnings.push(`⚠ ${i+1}행: 품목코드가 없어 제외됨 (품명: ${desc||'-'})`); continue; }
       const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.]/g, '')) || 0;
       if (qtyNum <= 0) warnings.push(`⚠ ${itemCode}: 수량 인식 실패 또는 0 (원본값: "${qtyRaw}")`);
+      const unitPriceNum = parseFloat(String(priceRaw).replace(/[^0-9.-]/g, '')) || 0;
       const supplyNum = parseFloat(String(supplyRaw).replace(/[^0-9.-]/g, '')) || 0;
       sumSupply += supplyNum;
-      rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum, maker });
+      rawItems.push({ item_code: itemCode, description: desc, qty_required: qtyNum, maker, unit_price: unitPriceNum, amount: supplyNum });
     }
     if (brandColIdx < 0) warnings.push('ℹ 거래명세표에 "브랜드명" 컬럼이 없어, items 마스터 조회 방식으로 구분 판정합니다.');
 
@@ -1604,6 +1606,7 @@
       if (map.has(it.item_code)) {
         const ex = map.get(it.item_code);
         ex.qty_required += it.qty_required;
+        ex.amount = (ex.amount||0) + (it.amount||0);
         ex._dupCount = (ex._dupCount||1) + 1;
       } else {
         map.set(it.item_code, { ...it, _dupCount: 1 });
@@ -1672,13 +1675,17 @@
       }
     }
 
-    const makerRows = await sbGet('scan_required_makers', 'is_active=eq.true&select=maker');
-    const scanMakers = new Set((Array.isArray(makerRows) ? makerRows : []).map(r => r.maker));
+    const makerRows = await sbGet('scan_required_makers', 'is_active=eq.true&select=maker,lot_manual_required');
+    const allActive = Array.isArray(makerRows) ? makerRows : [];
+    // lot_manual_required=true인 메이커(예: 켐트로스)는 바코드가 아니라 수기+LOT입력 대상이므로 바코드 대상에서 제외
+    const scanMakers = new Set(allActive.filter(r => !r.lot_manual_required).map(r => r.maker));
+    const lotManualMakers = new Set(allActive.filter(r => r.lot_manual_required).map(r => r.maker));
 
     return items.map(it => {
       const maker = it.maker || makerMap[it.item_code];
       const checkType = (maker && scanMakers.has(maker)) ? 'barcode' : 'manual';
-      return { ...it, check_type: checkType };
+      const lotManualRequired = !!(maker && lotManualMakers.has(maker));
+      return { ...it, check_type: checkType, lot_manual_required: lotManualRequired };
     });
   }
 
@@ -1706,6 +1713,10 @@
     if (lotRequired && (!parsedLotItems || parsedLotItems.length === 0)) {
       showToast('⚠ 거래명세표 엑셀을 첨부 후 "이 내용으로 등록 진행" 버튼으로 확정해주세요', true);
       return;
+    }
+    if (!lotRequired) {
+      const proceedWithoutLot = confirm('⚠ 거래명세표를 등록하지 않으면 이 출하건은 담당자 실적(KPI) 집계에서 빠집니다.\n그래도 거래명세표 없이 등록하시겠습니까?');
+      if (!proceedWithoutLot) return;
     }
 
     const btn = document.getElementById('inputSaveBtn');
@@ -1745,7 +1756,9 @@
             qty_scanned: 0,
             is_done: false,
             check_type: it.check_type,
-            maker: it.maker || null
+            maker: it.maker || null,
+            unit_price: it.unit_price || null,
+            amount: it.amount || null
           }));
           const itemResult = await sbPost('ship_lot_item', itemBody);
           if (!Array.isArray(itemResult) || itemResult.length !== itemBody.length) {
@@ -1857,7 +1870,8 @@
         await fetch(SB_URL + '/rest/v1/ship_lot_log?ship_schedule_id=eq.' + editTargetId, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
         const itemBody = editLotItemsToSave.map(it => ({
           ship_schedule_id: editTargetId, item_code: it.item_code, description: it.description,
-          qty_required: it.qty_required, qty_scanned: 0, is_done: false, check_type: it.check_type, maker: it.maker || null
+          qty_required: it.qty_required, qty_scanned: 0, is_done: false, check_type: it.check_type, maker: it.maker || null,
+          unit_price: it.unit_price || null, amount: it.amount || null
         }));
         await sbPost('ship_lot_item', itemBody);
         await sbPatch('ship_schedule', editTargetId, { lot_status: '대기', lot_started_at: null, lot_started_by: null, lot_completed_at: null, lot_completed_by: null, lot_force_reason: null });
