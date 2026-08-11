@@ -1494,14 +1494,10 @@
       }
     }
 
-    // 3차 폴백: 이번 거래명세서와 무관하게, 해당 메이커품번의 ERP품목코드가 1개로 특정되면 그걸로 확정
-    //          2개 이상이면 어느 것인지 확정할 수 없어 매칭 보류(수기확인 필요)
-    if (makerId) {
-      const codes = [...(makerIdToItemCodes[makerId] || [])];
-      if (codes.length === 1) {
-        return { item_code: codes[0], lg_pn: target, scanned_pn: target, match_method: '마스터폴백', maker_pn: makerPnOfTarget };
-      }
-    }
+    // ⛔ 3차 폴백(마스터폴백) 제거 (2026-08-11) — 이번 거래명세서와 무관한 품목이
+    //    전체 메이커품번 마스터에서 우연히 1개로 특정돼 "완료"로 오매칭되는 사고 확인
+    //    (ship_schedule_id=987/988 등 실사례 — 마스터폴백 로그 전건이 이번 거래명세서 무관 품목이었음)
+    //    1·2차에서 못 찾으면 미매칭으로 처리한다(아래 return null).
 
     return null;
   }
@@ -1699,7 +1695,7 @@
         await accumulateQty(itemCode, qty);
         finishScan('qr', true, '✓ 인식 완료', `${item.maker_pn || itemCode} +${qty.toLocaleString()}개`);
       } else {
-        finishScan('qr', false, '미매칭 품번', raw);
+        finishScan('qr', false, '거래명세표에 없는 품번입니다', raw);
       }
 
     } else {
@@ -1724,7 +1720,7 @@
             const row = itemRows.find(r => r.item_code === itemCode);
             finishScan('barcode', false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
           } else {
-            finishScan('barcode', !!itemCode, itemCode ? '✓ 인식 완료' : '미매칭 품번', itemCode ? `${item.maker_pn || itemCode} +${qty.toLocaleString()}개` : raw);
+            finishScan('barcode', !!itemCode, itemCode ? '✓ 인식 완료' : '거래명세표에 없는 품번입니다', itemCode ? `${item.maker_pn || itemCode} +${qty.toLocaleString()}개` : raw);
           }
         } else {
           const log = await sbPost('ship_lot_log', {
@@ -1761,7 +1757,7 @@
           } else {
             const ok = !!pnItemCode;
             const info = ok ? `${pnMakerPn || pnItemCode} +${pnQty.toLocaleString()}개` : raw;
-            finishScan('barcode', ok, ok ? '✓ 인식 완료' : '미매칭 품번', info);
+            finishScan('barcode', ok, ok ? '✓ 인식 완료' : '거래명세표에 없는 품번입니다', info);
           }
         } else {
           const log = await sbPost('ship_lot_log', {
