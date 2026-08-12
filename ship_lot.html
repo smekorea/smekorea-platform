@@ -732,7 +732,29 @@
   </div>
 </div>
 
-<!-- 강제완료 확인 모달 -->
+<!-- 켐트로스 등 수기 LOT 등록 모달 -->
+<div class="modal-overlay" id="lotModal">
+  <div class="modal" style="width:520px;max-width:95vw;">
+    <div class="modal-header">
+      <div class="modal-title">📋 LOT NO 등록 — <span id="lotModalItemCode"></span></div>
+      <button class="modal-close" onclick="closeLotModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;" id="lotModalItemDesc"></div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">등록된 LOT <span id="lotModalProgress" style="font-weight:400;color:var(--muted);"></span></div>
+      <div id="lotModalRows" style="margin-bottom:12px;"></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input type="text" id="lotModalNoInput" placeholder="LOT NO" style="flex:1.4;">
+        <input type="number" id="lotModalQtyInput" placeholder="수량" style="flex:1;">
+        <button class="btn btn-primary" style="width:auto;padding:8px 14px;" onclick="addLotEntry()">+ 추가</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeLotModal()">닫기</button>
+      <button class="btn btn-primary" id="lotModalCompleteBtn" onclick="completeLotItem()">완료 처리</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="forceModal">
   <div class="modal" style="width:720px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;">
     <div class="modal-header" style="cursor:move;">
@@ -1289,6 +1311,15 @@
       itemRows = [];
     } else {
       itemRows = items;
+      const lotNeedIds = items.filter(it => it.check_type === 'manual' && lotManualMakerSet.has(it.maker)).map(it => it.id);
+      if (lotNeedIds.length > 0) {
+        const lots = await sbGet('ship_lot_item_lot', `ship_lot_item_id=in.(${lotNeedIds.join(',')})&select=ship_lot_item_id`);
+        if (Array.isArray(lots)) {
+          const cnt = {};
+          lots.forEach(l => { cnt[l.ship_lot_item_id] = (cnt[l.ship_lot_item_id]||0) + 1; });
+          itemRows.forEach(r => { r.lot_count = cnt[r.id] || 0; });
+        }
+      }
     }
     const logs = await sbGet('ship_lot_log', 'ship_schedule_id=eq.' + sid + '&order=id.desc&limit=1000');
     logRows = Array.isArray(logs) ? logs : [];
@@ -1333,10 +1364,9 @@
       const rightPart = !isManual
         ? `${(r.qty_scanned||0).toLocaleString()}/${(r.qty_required||0).toLocaleString()}`
         : (r.is_done
-            ? `<span style="font-size:10px;color:var(--accent3);">✓${r.checked_by||''}${r.lot_no?` (LOT:${r.lot_no})`:''}</span>`
+            ? `<span style="font-size:10px;color:var(--accent3);">✓${r.checked_by||''}${(r.lot_count||0)>0?` (LOT ${r.lot_count}건)`:''}</span>`
             : (needsLot
-                ? `<input type="text" id="lotNoInput_${r.id}" placeholder="LOT NO 입력" style="width:90px;font-size:11px;padding:3px 6px;margin-right:4px;">
-                   <button class="manual-confirm-btn" onclick="manualConfirmWithLot(${r.id})">완료</button>`
+                ? `<button class="manual-confirm-btn" onclick="openLotModal(${r.id})">${(r.qty_scanned||0)>0?`LOT 등록 (${(r.qty_scanned||0).toLocaleString()}/${(r.qty_required||0).toLocaleString()})`:'LOT 등록'}</button>`
                 : `<button class="manual-confirm-btn" onclick="manualConfirm(${r.id})">확인완료</button>`));
       return `<tr class="${cls}">
         <td class="mono">${r.item_code}</td>
@@ -1445,23 +1475,95 @@
   }
 
   // 켐트로스 등 바코드라벨 없는 유효기간 관리 품목 — LOT NO 수기입력 필수
-  async function manualConfirmWithLot(itemId) {
+  // ── 켐트로스 등 수기 LOT 다중등록 모달 ──
+  let currentLotItemId = null;
+  let currentLotEntries = []; // 이번 아이템의 등록된 LOT 목록 [{id, lot_no, qty}]
+
+  async function openLotModal(itemId) {
     if (!workerName) { showToast('⚠ 작업자를 먼저 선택해주세요', true); return; }
     const row = itemRows.find(r => r.id === itemId);
     if (!row) return;
-    const lotInput = document.getElementById('lotNoInput_' + itemId);
-    const lotNo = lotInput ? lotInput.value.trim() : '';
-    if (!lotNo) { showToast('⚠ LOT NO를 입력해주세요 (바코드라벨이 없는 품목이라 필수입니다)', true); return; }
+    currentLotItemId = itemId;
+    document.getElementById('lotModalItemCode').textContent = row.item_code;
+    document.getElementById('lotModalItemDesc').textContent = `${row.description||''} (필요수량 ${(row.qty_required||0).toLocaleString()})`;
+    document.getElementById('lotModalNoInput').value = '';
+    document.getElementById('lotModalQtyInput').value = '';
+    const lots = await sbGet('ship_lot_item_lot', `ship_lot_item_id=eq.${itemId}&order=id`);
+    currentLotEntries = Array.isArray(lots) ? lots : [];
+    renderLotModal();
+    document.getElementById('lotModal').classList.add('show');
+    setTimeout(()=>document.getElementById('lotModalNoInput').focus(), 50);
+  }
+
+  function closeLotModal() {
+    document.getElementById('lotModal').classList.remove('show');
+    currentLotItemId = null;
+    currentLotEntries = [];
+  }
+
+  function renderLotModal() {
+    const row = itemRows.find(r => r.id === currentLotItemId);
+    if (!row) return;
+    const total = currentLotEntries.reduce((s,l)=>s+(parseFloat(l.qty)||0),0);
+    const required = row.qty_required || 0;
+    document.getElementById('lotModalProgress').textContent = `(합계 ${total.toLocaleString()} / ${required.toLocaleString()})`;
+    document.getElementById('lotModalRows').innerHTML = currentLotEntries.length === 0
+      ? '<div style="font-size:12px;color:var(--muted);padding:8px 0;">등록된 LOT이 없습니다</div>'
+      : currentLotEntries.map(l => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+          <span style="flex:1.4;">${l.lot_no}</span>
+          <span style="flex:1;text-align:right;" class="mono">${(l.qty||0).toLocaleString()}</span>
+          <button class="btn btn-ghost" style="width:auto;padding:3px 9px;font-size:11px;color:var(--accent);" onclick="removeLotEntry(${l.id})">삭제</button>
+        </div>`).join('');
+    const completeBtn = document.getElementById('lotModalCompleteBtn');
+    const canComplete = total >= required && required > 0;
+    completeBtn.disabled = !canComplete;
+    completeBtn.style.opacity = canComplete ? '1' : '0.45';
+    completeBtn.style.cursor = canComplete ? 'pointer' : 'not-allowed';
+  }
+
+  async function addLotEntry() {
+    const noInput = document.getElementById('lotModalNoInput');
+    const qtyInput = document.getElementById('lotModalQtyInput');
+    const lotNo = noInput.value.trim();
+    const qty = parseFloat(qtyInput.value);
+    if (!lotNo) { showToast('⚠ LOT NO를 입력해주세요', true); return; }
+    if (!qty || qty <= 0) { showToast('⚠ 수량을 정확히 입력해주세요', true); return; }
     const now = new Date().toISOString();
-    await sbPatch('ship_lot_item', itemId, { is_done: true, checked_by: workerName, checked_at: now, qty_scanned: row.qty_required, lot_no: lotNo });
-    row.is_done = true; row.checked_by = workerName; row.qty_scanned = row.qty_required; row.lot_no = lotNo;
+    const result = await sbPost('ship_lot_item_lot', { ship_lot_item_id: currentLotItemId, lot_no: lotNo, qty, created_by: workerName, created_at: now });
+    if (!Array.isArray(result) || result.length === 0) {
+      showToast('⚠ LOT 등록 실패 — 다시 시도해주세요', true);
+      return;
+    }
+    currentLotEntries.push(result[0]);
+    const row = itemRows.find(r => r.id === currentLotItemId);
     await sbPost('ship_lot_log', {
-      ship_schedule_id: currentSid, item_code: row.item_code, scan_type: '수기확인',
-      raw_scan: lotNo, parsed_pn: row.item_code, parsed_qty: row.qty_required, parsed_lot: lotNo,
+      ship_schedule_id: currentSid, item_code: row.item_code, scan_type: '수기입력',
+      raw_scan: lotNo, parsed_pn: row.item_code, parsed_qty: qty, parsed_lot: lotNo,
       matched_lg_pn: null, match_method: null, pair_status: '완결',
       scanned_at: now, scanned_by: workerName
     });
-    showToast(`✓ ${row.item_code} 수기확인 완료 (LOT:${lotNo}, ${workerName})`);
+    noInput.value = ''; qtyInput.value = '';
+    renderLotModal();
+    noInput.focus();
+  }
+
+  async function removeLotEntry(lotRowId) {
+    await fetch(SB_URL + '/rest/v1/ship_lot_item_lot?id=eq.' + lotRowId, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+    currentLotEntries = currentLotEntries.filter(l => l.id !== lotRowId);
+    renderLotModal();
+  }
+
+  async function completeLotItem() {
+    const row = itemRows.find(r => r.id === currentLotItemId);
+    if (!row) return;
+    const total = currentLotEntries.reduce((s,l)=>s+(parseFloat(l.qty)||0),0);
+    if (total < (row.qty_required||0)) { showToast('⚠ 등록된 LOT 수량 합계가 필요수량보다 적습니다', true); return; }
+    const now = new Date().toISOString();
+    await sbPatch('ship_lot_item', row.id, { is_done: true, checked_by: workerName, checked_at: now, qty_scanned: total });
+    row.is_done = true; row.checked_by = workerName; row.qty_scanned = total; row.lot_count = currentLotEntries.length;
+    showToast(`✓ ${row.item_code} LOT 등록 완료 (${currentLotEntries.length}건, ${workerName})`);
+    closeLotModal();
     renderItemList();
     updateProgress();
     renderScanResultList();
