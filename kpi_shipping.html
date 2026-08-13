@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMEKOREA KPI 프로세스</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   :root {
     --bg:#eef2f8;--surface:#fff;--surface2:#eef2f8;--border:#d7e0ee;--border2:#b0c4de;
@@ -76,7 +77,7 @@
 <div class="topbar">
   <div class="brand">
     <div class="brand-badge">KPI</div>
-    <div><div class="brand-title">KPI 프로세스</div><div class="brand-sub">부서 · 프로세스별 실적 지표</div></div>
+    <div><div class="brand-title">KPI 프로세스 - 출하팀</div><div class="brand-sub">부서 · 프로세스별 실적 지표</div></div>
   </div>
   <div class="top-right">
     <a class="top-btn" href="index.html">🏠 메인으로</a>
@@ -85,10 +86,64 @@
 </div>
 
 <div class="tabbar">
-  <div class="tabbtn active" id="tabbtn-ship" onclick="switchTab('ship')">📦 출하팀 실적</div>
+  <div class="tabbtn active" id="tabbtn-integrated" onclick="switchTab('integrated')">📊 통합실적</div>
+  <div class="tabbtn" id="tabbtn-ship" onclick="switchTab('ship')">📦 세부실적</div>
+  <div class="tabbtn" id="tabbtn-settings" onclick="switchTab('settings')">⚙ 설정</div>
 </div>
 
-<div class="tabpanel active" id="tab-ship">
+<div class="tabpanel active" id="tab-integrated">
+  <div style="padding:16px;">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
+      <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;">
+        <button class="kpi-period-btn active" id="intPeriodBtn-day" onclick="setIntPeriod('day')">일</button>
+        <button class="kpi-period-btn" id="intPeriodBtn-week" onclick="setIntPeriod('week')">주</button>
+        <button class="kpi-period-btn" id="intPeriodBtn-month" onclick="setIntPeriod('month')">월</button>
+        <button class="kpi-period-btn" id="intPeriodBtn-year" onclick="setIntPeriod('year')">년</button>
+      </div>
+      <input type="date" id="intDate" onchange="loadIntegratedTab()">
+      <span id="intRangeLabel" style="margin-left:auto;font-size:12px;color:var(--muted);"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-bottom:20px;">
+      <div style="background:var(--surface);padding:14px 16px;">
+        <div style="font-size:11px;color:var(--muted);">총 처리건수</div>
+        <div style="font-size:24px;font-weight:800;margin-top:4px;" id="intCardCount">-</div>
+      </div>
+      <div style="background:var(--surface);padding:14px 16px;">
+        <div style="font-size:11px;color:var(--muted);">총 출하금액</div>
+        <div style="font-size:24px;font-weight:800;margin-top:4px;" id="intCardAmount">-</div>
+      </div>
+      <div style="background:var(--surface);padding:14px 16px;">
+        <div style="font-size:11px;color:var(--muted);">평균 처리시간</div>
+        <div style="font-size:24px;font-weight:800;margin-top:4px;" id="intCardTime">-</div>
+      </div>
+      <div style="background:var(--surface);padding:14px 16px;">
+        <div style="font-size:11px;color:var(--muted);">라벨작업 비중</div>
+        <div style="font-size:24px;font-weight:800;margin-top:4px;" id="intCardLabel">-</div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:1px;background:var(--surface);padding:8px 14px;border-left:3px solid var(--purple);">실적 추이 (최근 30일) — 처리건수 · 출하금액</div>
+    <div style="background:var(--surface);padding:14px;margin-bottom:20px;border-top:1px solid var(--border);">
+      <div style="position:relative;height:200px;"><canvas id="intTrendChart"></canvas></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:1px;background:var(--border);">
+      <div style="background:var(--surface);">
+        <div style="font-size:12px;font-weight:800;padding:8px 14px;border-left:3px solid #1D9E75;border-bottom:1px solid var(--border);">담당자별 업무량 비교</div>
+        <div style="padding:14px;position:relative;height:180px;"><canvas id="intPersonChart"></canvas></div>
+      </div>
+      <div style="background:var(--surface);">
+        <div style="font-size:12px;font-weight:800;padding:8px 14px;border-left:3px solid #D85A30;border-bottom:1px solid var(--border);">담당자별 평균처리시간 순위</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;" id="intRankTable">
+          <tbody><tr><td style="padding:14px;color:var(--muted);text-align:center;">조회 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tabpanel" id="tab-ship">
   <div style="padding:16px;">
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
       <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;">
@@ -135,6 +190,64 @@
   </div>
 </div>
 
+<div class="tabpanel" id="tab-settings">
+  <div style="padding:16px;max-width:760px;">
+    <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">공통 포장기준시간</div>
+    <div class="kpi-card" style="margin-bottom:24px;">
+      <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;">
+        <div>
+          <div class="kpi-card-lbl">BOX당 포장시간(분)</div>
+          <input type="number" id="setBoxMin" style="width:100px;" min="0" step="0.5">
+        </div>
+        <div>
+          <div class="kpi-card-lbl">PL당 포장시간(분)</div>
+          <input type="number" id="setPlMin" style="width:100px;" min="0" step="0.5">
+        </div>
+        <button class="btn" style="background:var(--purple);color:#fff;border-color:var(--purple);" onclick="saveTimeSettings()">저장</button>
+      </div>
+    </div>
+
+    <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">매출처별 라벨부착 규정</div>
+    <div class="kpi-card" style="margin-bottom:16px;">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div>
+          <div class="kpi-card-lbl">매출처명</div>
+          <input type="text" id="labelCustomer" placeholder="매출처명" style="width:140px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;">
+        </div>
+        <div>
+          <div class="kpi-card-lbl">라벨필요여부</div>
+          <select id="labelRequired" style="width:90px;">
+            <option value="true">필요</option>
+            <option value="false">불필요</option>
+          </select>
+        </div>
+        <div>
+          <div class="kpi-card-lbl">BOX당 라벨시간(분)</div>
+          <input type="number" id="labelMinutes" style="width:100px;" min="0" step="0.5" value="0">
+        </div>
+        <div style="flex:1;min-width:140px;">
+          <div class="kpi-card-lbl">메모</div>
+          <input type="text" id="labelMemo" placeholder="메모(선택)" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;">
+        </div>
+        <button class="btn" style="background:var(--purple);color:#fff;border-color:var(--purple);" onclick="addLabelRule()">등록</button>
+      </div>
+    </div>
+
+    <div class="hist-table-wrap" style="max-height:none;">
+      <table class="dtab" id="labelRuleTable">
+        <thead><tr>
+          <th style="width:160px;">매출처명</th>
+          <th style="width:90px;">라벨필요</th>
+          <th style="width:120px;text-align:right;">BOX당시간(분)</th>
+          <th>메모</th>
+          <th style="width:70px;">삭제</th>
+        </tr></thead>
+        <tbody id="labelRuleTbody"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -146,6 +259,19 @@
     const res = await fetch(SB_URL + '/rest/v1/' + table + '?' + params, { headers: SB_HEADERS });
     try { return await res.json(); } catch(e) { return { message: 'JSON 파싱 실패: ' + e.message }; }
   }
+  async function sbPost(table, body) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table, { method:'POST', headers: SB_HEADERS, body: JSON.stringify(body) });
+    try { return await res.json(); } catch(e) { return { message: 'JSON 파싱 실패: ' + e.message }; }
+  }
+  async function sbPatchWhere(table, whereQuery, body) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table + '?' + whereQuery, { method:'PATCH', headers: SB_HEADERS, body: JSON.stringify(body) });
+    try { return await res.json(); } catch(e) { return { message: 'JSON 파싱 실패: ' + e.message }; }
+  }
+  async function sbDeleteWhere(table, whereQuery) {
+    const res = await fetch(SB_URL + '/rest/v1/' + table + '?' + whereQuery, { method:'DELETE', headers: SB_HEADERS });
+    try { return await res.json(); } catch(e) { return { message: 'JSON 파싱 실패: ' + e.message }; }
+  }
+  function isSbError(r) { return !Array.isArray(r) && r && r.message; }
 
   function showToast(msg, isError){
     const t = document.getElementById('toast');
@@ -162,10 +288,12 @@
   }
 
   function switchTab(tab) {
-    ['ship'].forEach(t => {
+    ['integrated','ship','settings'].forEach(t => {
       document.getElementById('tabbtn-'+t).classList.toggle('active', t===tab);
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     });
+    if (tab === 'integrated' && !intLoadedOnce) { intLoadedOnce = true; loadIntegratedTab(); }
+    if (tab === 'settings' && !settingsLoadedOnce) { settingsLoadedOnce = true; loadSettingsTab(); }
   }
 
   function tickClock(){
@@ -174,17 +302,251 @@
   }
   setInterval(tickClock, 1000); tickClock();
 
+  // ══ 통합실적/설정 공통 상태 ══
+  let intLoadedOnce = false, settingsLoadedOnce = false;
+  let timeSettings = { box_pack_min: 3, pl_pack_min: 10 };
+  let labelRuleMap = {}; // customer_name -> { required, minutes }
+  let labelRuleRows = [];
+  let intPeriod = 'day';
+  let intTrendChartObj = null, intPersonChartObj = null;
+
+  async function ensureSettingsLoaded() {
+    const rows = await sbGet('kpi_time_setting', 'select=setting_key,setting_value');
+    if (Array.isArray(rows)) {
+      rows.forEach(r => { timeSettings[r.setting_key] = parseFloat(r.setting_value) || 0; });
+    }
+    const labelRows = await sbGet('customer_label_rule', 'select=customer_name,label_required,label_minutes_per_box');
+    labelRuleMap = {};
+    if (Array.isArray(labelRows)) {
+      labelRows.forEach(r => { labelRuleMap[r.customer_name] = { required: !!r.label_required, minutes: parseFloat(r.label_minutes_per_box)||0 }; });
+    }
+  }
+
+  function parsePackInfoWithSettings(packDone, customer) {
+    const s = String(packDone || '').trim();
+    const m = s.match(/^(\d+)(BOX|PL)$/i);
+    if (!m) return { minutes: 0, box: 0, pl: 0 };
+    const cnt = parseInt(m[1], 10) || 0;
+    const unit = m[2].toUpperCase();
+    if (unit === 'PL') return { minutes: cnt * (timeSettings.pl_pack_min||0), box: 0, pl: cnt };
+    let minutes = cnt * (timeSettings.box_pack_min||0);
+    const rule = labelRuleMap[customer];
+    if (rule && rule.required) minutes += cnt * rule.minutes;
+    return { minutes, box: cnt, pl: 0 };
+  }
+
+  function getIntRange() {
+    const dateVal = document.getElementById('intDate').value;
+    const base = dateVal ? new Date(dateVal + 'T00:00:00') : new Date();
+    let start, end;
+    if (intPeriod === 'day') {
+      start = new Date(base); end = new Date(base); end.setDate(end.getDate()+1);
+    } else if (intPeriod === 'week') {
+      const day = base.getDay();
+      const diffToMon = (day === 0 ? -6 : 1 - day);
+      start = new Date(base); start.setDate(start.getDate()+diffToMon);
+      end = new Date(start); end.setDate(end.getDate()+7);
+    } else if (intPeriod === 'month') {
+      start = new Date(base.getFullYear(), base.getMonth(), 1);
+      end = new Date(base.getFullYear(), base.getMonth()+1, 1);
+    } else {
+      start = new Date(base.getFullYear(), 0, 1);
+      end = new Date(base.getFullYear()+1, 0, 1);
+    }
+    return { start, end };
+  }
+
+  function setIntPeriod(p) {
+    intPeriod = p;
+    ['day','week','month','year'].forEach(x => {
+      document.getElementById('intPeriodBtn-'+x).classList.toggle('active', x===p);
+    });
+    loadIntegratedTab();
+  }
+
+  async function fetchScheduleAgg(start, end) {
+    const startIso = start.toISOString(), endIso = end.toISOString();
+    const schedules = await sbGet('ship_schedule',
+      `lot_status=eq.완료&lot_completed_at=gte.${startIso}&lot_completed_at=lt.${endIso}&lot_completed_by=not.is.null&select=id,lot_completed_by,lot_started_at,lot_completed_at,pack_done,customer,ship_date`);
+    const rows = Array.isArray(schedules) ? schedules : [];
+    if (rows.length === 0) return [];
+    const ids = rows.map(r => r.id);
+    let itemAgg = {};
+    const chunkSize = 100;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i+chunkSize);
+      const items = await sbGet('ship_lot_item', `ship_schedule_id=in.(${chunk.join(',')})&select=ship_schedule_id,amount`);
+      if (Array.isArray(items)) {
+        items.forEach(it => {
+          const key = it.ship_schedule_id;
+          if (!itemAgg[key]) itemAgg[key] = { amount: 0, itemCount: 0 };
+          itemAgg[key].amount += (parseFloat(it.amount) || 0);
+          itemAgg[key].itemCount += 1;
+        });
+      }
+    }
+    return rows.map(r => {
+      const started = r.lot_started_at ? new Date(r.lot_started_at) : null;
+      const completed = r.lot_completed_at ? new Date(r.lot_completed_at) : null;
+      const baseMinutes = (started && completed) ? Math.max(0, (completed - started) / 60000) : 0;
+      const packInfo = parsePackInfoWithSettings(r.pack_done, r.customer);
+      const agg = itemAgg[r.id] || { amount: 0, itemCount: 0 };
+      const rule = labelRuleMap[r.customer];
+      const labeled = !!(rule && rule.required && packInfo.box > 0);
+      return {
+        id: r.id, person: r.lot_completed_by, customer: r.customer, ship_date: r.ship_date,
+        completed_at: r.lot_completed_at,
+        minutes: baseMinutes + packInfo.minutes, box: packInfo.box, pl: packInfo.pl, labeled,
+        amount: agg.amount, itemCount: agg.itemCount
+      };
+    });
+  }
+
+  async function loadIntegratedTab() {
+    await ensureSettingsLoaded();
+    const { start, end } = getIntRange();
+    const label = intPeriod==='day' ? start.toLocaleDateString('ko-KR')
+      : intPeriod==='week' ? `${start.toLocaleDateString('ko-KR')} ~ ${new Date(end-1).toLocaleDateString('ko-KR')}`
+      : intPeriod==='month' ? `${start.getFullYear()}년 ${start.getMonth()+1}월`
+      : `${start.getFullYear()}년`;
+    document.getElementById('intRangeLabel').textContent = label;
+
+    const data = await fetchScheduleAgg(start, end);
+
+    const totalCount = data.length;
+    const totalAmount = data.reduce((s,d)=>s+d.amount,0);
+    const avgMinutes = totalCount ? data.reduce((s,d)=>s+d.minutes,0)/totalCount : 0;
+    const labeledCount = data.filter(d=>d.labeled).length;
+    document.getElementById('intCardCount').textContent = totalCount + '건';
+    document.getElementById('intCardAmount').textContent = fmtWon(totalAmount);
+    document.getElementById('intCardTime').textContent = totalCount ? fmtMinutes(avgMinutes) : '-';
+    document.getElementById('intCardLabel').textContent = totalCount ? Math.round(labeledCount/totalCount*100) + '%' : '-';
+
+    // 담당자별 집계
+    const byPerson = {};
+    data.forEach(d => {
+      if (!byPerson[d.person]) byPerson[d.person] = { person: d.person, count:0, minutesSum:0 };
+      byPerson[d.person].count++; byPerson[d.person].minutesSum += d.minutes;
+    });
+    const personList = Object.values(byPerson);
+
+    // 담당자별 업무량 비교 차트
+    if (intPersonChartObj) intPersonChartObj.destroy();
+    const ctxP = document.getElementById('intPersonChart');
+    intPersonChartObj = new Chart(ctxP, {
+      type: 'bar',
+      data: { labels: personList.map(p=>p.person), datasets: [{ data: personList.map(p=>p.count), backgroundColor:'#639922', barThickness:18 }] },
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#e1e0d9'},ticks:{precision:0}}, y:{grid:{display:false}} } }
+    });
+
+    // 담당자별 평균처리시간 순위 (짧을수록 상단)
+    const ranked = personList.map(p=>({ person:p.person, count:p.count, avg: p.minutesSum/p.count })).sort((a,b)=>a.avg-b.avg);
+    document.getElementById('intRankTable').innerHTML = ranked.length ? `
+      <tr style="color:var(--muted);font-size:10px;"><td style="padding:6px 14px;">담당자</td><td style="padding:6px 14px;">건수</td><td style="padding:6px 14px;text-align:right;">평균처리</td></tr>
+      ${ranked.map((r,i)=>`<tr style="border-top:1px solid var(--border);">
+        <td style="padding:7px 14px;">${r.person}</td>
+        <td style="padding:7px 14px;">${r.count}</td>
+        <td style="padding:7px 14px;text-align:right;font-weight:700;color:${i===0?'#173404':i===ranked.length-1?'#791F1F':'inherit'};">${fmtMinutes(r.avg)}</td>
+      </tr>`).join('')}` : '<tr><td style="padding:14px;color:var(--muted);text-align:center;">데이터 없음</td></tr>';
+
+    await loadTrendChart();
+  }
+
+  async function loadTrendChart() {
+    const end = new Date(); end.setDate(end.getDate()+1); end.setHours(0,0,0,0);
+    const start = new Date(end); start.setDate(start.getDate()-30);
+    const data = await fetchScheduleAgg(start, end);
+    const days = [];
+    for (let i=0;i<30;i++){ const d=new Date(start); d.setDate(d.getDate()+i); days.push(d); }
+    const countByDay = days.map(d => {
+      const ds = d.toDateString();
+      return data.filter(x => x.completed_at && new Date(x.completed_at).toDateString()===ds).length;
+    });
+    const amountByDay = days.map(d => {
+      const ds = d.toDateString();
+      return Math.round(data.filter(x => x.completed_at && new Date(x.completed_at).toDateString()===ds).reduce((s,x)=>s+x.amount,0)/1000000);
+    });
+    if (intTrendChartObj) intTrendChartObj.destroy();
+    const ctx = document.getElementById('intTrendChart');
+    intTrendChartObj = new Chart(ctx, {
+      data: { labels: days.map(d=>d.getDate()), datasets: [
+        { type:'bar', label:'처리건수', data: countByDay, backgroundColor:'#b4b2a9', yAxisID:'y', order:2 },
+        { type:'line', label:'출하금액(백만)', data: amountByDay, borderColor:'#3C3489', borderWidth:2, pointRadius:0, tension:0, yAxisID:'y1', order:1 }
+      ]},
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, y1:{display:false,position:'right'}, x:{ ticks:{maxTicksLimit:10,font:{size:10}}, grid:{display:false} } } }
+    });
+  }
+
+  // ══ 설정 탭 ══
+  async function loadSettingsTab() {
+    await ensureSettingsLoaded();
+    document.getElementById('setBoxMin').value = timeSettings.box_pack_min;
+    document.getElementById('setPlMin').value = timeSettings.pl_pack_min;
+    await loadLabelRules();
+  }
+
+  async function saveTimeSettings() {
+    const boxVal = parseFloat(document.getElementById('setBoxMin').value) || 0;
+    const plVal = parseFloat(document.getElementById('setPlMin').value) || 0;
+    const r1 = await sbPatchWhere('kpi_time_setting', 'setting_key=eq.box_pack_min', { setting_value: boxVal, updated_at: new Date().toISOString() });
+    const r2 = await sbPatchWhere('kpi_time_setting', 'setting_key=eq.pl_pack_min', { setting_value: plVal, updated_at: new Date().toISOString() });
+    if (isSbError(r1) || isSbError(r2)) { showToast('⚠ 저장 실패', true); return; }
+    timeSettings.box_pack_min = boxVal; timeSettings.pl_pack_min = plVal;
+    showToast('저장되었습니다');
+  }
+
+  async function loadLabelRules() {
+    const rows = await sbGet('customer_label_rule', 'select=id,customer_name,label_required,label_minutes_per_box,memo&order=customer_name');
+    labelRuleRows = Array.isArray(rows) ? rows : [];
+    renderLabelRules();
+  }
+
+  function renderLabelRules() {
+    document.getElementById('labelRuleTbody').innerHTML = labelRuleRows.length ? labelRuleRows.map(r => `
+      <tr>
+        <td>${r.customer_name}</td>
+        <td>${r.label_required ? '필요' : '불필요'}</td>
+        <td style="text-align:right;">${r.label_minutes_per_box ?? 0}</td>
+        <td>${r.memo || ''}</td>
+        <td><button class="btn" style="padding:4px 10px;font-size:11px;border-color:var(--accent);color:var(--accent);" onclick="deleteLabelRule(${r.id})">삭제</button></td>
+      </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">등록된 매출처 규정이 없습니다</td></tr>';
+  }
+
+  async function addLabelRule() {
+    const customer = document.getElementById('labelCustomer').value.trim();
+    if (!customer) { showToast('매출처명을 입력하세요', true); return; }
+    const required = document.getElementById('labelRequired').value === 'true';
+    const minutes = parseFloat(document.getElementById('labelMinutes').value) || 0;
+    const memo = document.getElementById('labelMemo').value.trim();
+    const result = await sbPost('customer_label_rule', { customer_name: customer, label_required: required, label_minutes_per_box: minutes, memo: memo || null });
+    if (isSbError(result)) { showToast('⚠ 등록 실패: ' + result.message, true); return; }
+    document.getElementById('labelCustomer').value = '';
+    document.getElementById('labelMinutes').value = '0';
+    document.getElementById('labelMemo').value = '';
+    showToast('등록되었습니다');
+    await loadLabelRules();
+  }
+
+  async function deleteLabelRule(id) {
+    if (!confirm('삭제하시겠습니까?')) return;
+    const result = await sbDeleteWhere('customer_label_rule', 'id=eq.' + id);
+    if (isSbError(result)) { showToast('⚠ 삭제 실패', true); return; }
+    showToast('삭제되었습니다');
+    await loadLabelRules();
+  }
+
   // ══ 담당자 실적(KPI) — 출하팀 ══
   let kpiPeriod = 'day';
   let kpiScheduleData = []; // 기간 내 완료건 가공데이터 {id, person, customer, ship_date, minutes, amount, itemCount, box, pl}
   let kpiExpanded = {}; // 담당자별 드릴다운 펼침 상태
 
-  function initKpiTab() {
+  async function initKpiTab() {
     const dateInput = document.getElementById('kpiDate');
     if (!dateInput.value) {
       const now = new Date();
       dateInput.value = now.toISOString().slice(0,10);
     }
+    await ensureSettingsLoaded();
     loadKpiData();
   }
 
@@ -194,17 +556,6 @@
       document.getElementById('kpiPeriodBtn-'+x).classList.toggle('active', x===p);
     });
     loadKpiData();
-  }
-
-  // pack_done("6BOX","8PL") → 개수비례 추가시간(분): BOX 개당 3분, PL(파렛트) 개당 10분
-  function parsePackInfo(packDone) {
-    const s = String(packDone || '').trim();
-    const m = s.match(/^(\d+)(BOX|PL)$/i);
-    if (!m) return { minutes: 0, box: 0, pl: 0 };
-    const cnt = parseInt(m[1], 10) || 0;
-    const unit = m[2].toUpperCase();
-    if (unit === 'BOX') return { minutes: cnt * 3, box: cnt, pl: 0 };
-    return { minutes: cnt * 10, box: 0, pl: cnt };
   }
 
   function getKpiRange() {
@@ -270,7 +621,7 @@
       const started = r.lot_started_at ? new Date(r.lot_started_at) : null;
       const completed = r.lot_completed_at ? new Date(r.lot_completed_at) : null;
       const baseMinutes = (started && completed) ? Math.max(0, (completed - started) / 60000) : 0;
-      const packInfo = parsePackInfo(r.pack_done);
+      const packInfo = parsePackInfoWithSettings(r.pack_done, r.customer);
       const agg = itemAgg[r.id] || { amount: 0, itemCount: 0 };
       return {
         id: r.id, person: r.lot_completed_by, customer: r.customer, ship_date: r.ship_date,
@@ -413,6 +764,9 @@
 
   window.addEventListener('DOMContentLoaded', () => {
     initColResize('kpiTable', 'kpi_ship_col_v1');
+    document.getElementById('intDate').value = new Date().toISOString().slice(0,10);
+    intLoadedOnce = true;
+    loadIntegratedTab();
     initKpiTab();
   });
 </script>
