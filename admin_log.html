@@ -426,6 +426,31 @@ tr.dragging{opacity:.45;}
   </div>
 </div>
 
+<!-- 매입·매출 등록현황 상세 모달 -->
+<div class="modal-overlay" id="tradeSummaryModal">
+  <div class="modal-box" style="width:640px;">
+    <div class="modal-hdr">
+      <div class="modal-title">📊 매입·매출 등록현황 상세</div>
+      <button class="modal-close" onclick="closeTradeSummaryModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px;">📥 매입 (purchase_data)</div>
+          <div class="tbl-wrap" style="max-height:420px;"><table class="up-table"><thead><tr><th>연월</th><th class="right">건수</th></tr></thead><tbody id="tradeSummaryPurchaseBody"></tbody></table></div>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px;">📤 매출 (sales_data)</div>
+          <div class="tbl-wrap" style="max-height:420px;"><table class="up-table"><thead><tr><th>연월</th><th class="right">건수</th></tr></thead><tbody id="tradeSummarySalesBody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-cancel" onclick="closeTradeSummaryModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- 해외매출처 추가/수정 모달 -->
 <div class="modal-overlay" id="exportModal">
   <div class="modal-box" style="width:460px;">
@@ -752,6 +777,7 @@ tr.dragging{opacity:.45;}
       </select>
       <select id="trade-year" style="width:90px;height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 8px;font-size:13px;color:var(--text);background:#f8fafc;outline:none;"></select>
       <select id="trade-month" style="width:70px;height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 8px;font-size:13px;color:var(--text);background:#f8fafc;outline:none;"></select>
+      <span style="font-size:11px;color:var(--muted);">(조회·다운로드 전용)</span>
       <div style="width:1px;height:24px;background:var(--border);"></div>
       <label class="up-btn up-btn-primary" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
         📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" id="tradeFileInput" onchange="loadTradeExcel(event)" style="display:none;">
@@ -762,9 +788,14 @@ tr.dragging{opacity:.45;}
       <button class="up-btn up-btn-secondary" onclick="loadTradeCurrentData()">🔍 현재 데이터 조회</button>
       <button class="up-btn up-btn-secondary" onclick="downloadTradeData()">⬇ 기간 데이터 다운로드</button>
     </div>
-    <div class="up-info">💡 선택한 년/월의 기존 데이터를 삭제 후 새 데이터를 등록합니다.<br>
-      📂 <b>엑셀 업로드</b>: 화면 전용 양식(거래일자·전표번호·품목코드·품명·수량·단가·공급가액·부가세·합계금액·거래처·브랜드) 헤더의 <b>해당 월 1개월치</b> 파일만 올려주세요.<br>
-      📋 <b>붙여넣기</b>: ERP에서 받은 원본 누적 파일(년·월·구분·일자·품목코드·품명 및 규격·수량·단가·공급가액·부가세·합 계·구매처명/판매처명·브랜드명) 형식 그대로 복사해서 붙여넣으면 됩니다. 여러 달 데이터가 섞여 있어도 <b>선택한 연/월에 해당하는 행만 자동으로 걸러져</b> 등록됩니다.
+    <div class="up-info">💡 등록 시 <b>데이터 안의 년/월 값을 기준으로 자동 판별</b>해 해당 연/월의 기존 데이터를 삭제 후 새 데이터를 등록합니다. (상단 연/월 선택은 "현재 데이터 조회"·"기간 데이터 다운로드"에만 사용됩니다)<br>
+      📂 <b>엑셀 업로드</b>: ERP 원본 누적 파일을 그대로 올리면 됩니다. 시트명에 "구매/매입"·"매출/판매"가 포함되어 있으면 자동 인식하며, 매입·매출 두 시트가 한 파일에 있어도 한 번에 처리됩니다. 여러 달이 섞여 있어도 각 행의 연/월 기준으로 자동 그룹핑되어 각각 등록됩니다.<br>
+      📋 <b>붙여넣기</b>: ERP 원본 형식(년·월·구분·일자·품목코드·품명 및 규격·수량·단가·공급가액·부가세·합 계·구매처명/판매처명·브랜드명) 그대로 복사해서 붙여넣으면 됩니다. 상단 매입/매출 선택에 맞는 시트 내용만 붙여넣어 주세요.<br>
+      ⚠️ 년/월/품목코드/구분(거래일자) 값이 비어있거나 형식이 이상한 행이 하나라도 있으면 <b>전체 등록이 차단</b>되고 문제 위치가 화면에 표시됩니다.
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">
+      <div id="tradeRegSummary" style="font-size:12.5px;color:var(--text);">등록현황 불러오는 중...</div>
+      <button class="up-btn up-btn-secondary" onclick="openTradeSummaryModal()">📊 상세보기</button>
     </div>
   </div>
 
@@ -777,6 +808,13 @@ tr.dragging{opacity:.45;}
       <button class="up-btn up-btn-primary" onclick="previewTradePaste()">🔍 미리보기</button>
       <button class="up-btn up-btn-secondary" onclick="document.getElementById('tradePasteText').value='';document.getElementById('tradePasteForm').style.display='none';">취소</button>
     </div>
+  </div>
+
+  <!-- 등록 불가 - 오류 목록 -->
+  <div class="up-section" id="tradeErrorSection" style="display:none;border:1.5px solid var(--accent);">
+    <div class="up-section-title" style="color:var(--accent);">⚠ 등록 불가 — 데이터 오류</div>
+    <div class="up-info" style="border-left-color:var(--accent);background:rgba(200,0,30,.04);">아래 문제를 원본에서 수정한 후 다시 시도해주세요. 문제 행이 하나라도 있으면 전체 등록이 차단됩니다 (DB는 변경되지 않았습니다).</div>
+    <div class="tbl-wrap"><table class="up-table"><thead><tr><th style="width:90px;">출처</th><th style="width:60px;">구분</th><th style="width:80px;">행번호</th><th style="width:120px;">품목코드</th><th>오류 내용</th></tr></thead><tbody id="tradeErrorBody"></tbody></table></div>
   </div>
 
   <!-- 조회 결과 -->
@@ -832,6 +870,7 @@ tr.dragging{opacity:.45;}
       </div>
     </div>
     <div class="up-stat" id="tradePreviewStat"></div>
+    <div id="tradeGroupSummary"></div>
     <div class="up-preview"><table class="up-table"><thead id="tradePreviewHead"></thead><tbody id="tradePreviewBody"></tbody></table></div>
   </div>
 </div>
@@ -1187,6 +1226,7 @@ function switchTab(t) {
   if(t==='alias'     && _aliasData.length===0)      loadAliasData();
   if(t==='maker'     && _makerData.length===0)      loadMakerData();
   if(t==='logistics' && _logisticsData.length===0)  loadLogisticsData();
+  if(t==='trade')     loadTradeSummary();
   if(t==='emp'       && _empData.length===0)        loadEmpData();
   if(t==='log'       && allLogs.length===0)         loadLog();
   if(t==='ui') loadUITab();
@@ -2205,7 +2245,83 @@ function exportExcel() {
 // ════════════════════════════════════════════════════
 // ── 매입·매출 탭 ──
 // ════════════════════════════════════════════════════
-let _tradeRows = [];
+let _tradePending = {purchase:[], sales:[]};   // 파싱/검증 통과 후 등록 대기 중인 데이터 (연/월별 자동 그룹핑 대상)
+let _tradeSummaryCache = {purchase:[], sales:[]};
+
+function ymSortKey(yLabel, mLabel) {
+  const y = parseInt(String(yLabel).replace('년','')) || 0;
+  const m = parseInt(String(mLabel).replace('월','')) || 0;
+  return y*100+m;
+}
+
+function groupByYm(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r.year+' '+r.month;
+    if(!map[key]) map[key] = {year:r.year, month:r.month, cnt:0, qty:0, amt:0};
+    map[key].cnt++; map[key].qty += (r.qty||0); map[key].amt += (r.supply_amt||0);
+  });
+  return Object.values(map).sort((a,b)=>ymSortKey(a.year,a.month)-ymSortKey(b.year,b.month));
+}
+
+function tradeParseNum(v) {
+  if(v==null || v==='') return null;
+  const n = parseFloat(String(v).replace(/,/g,''));
+  return isNaN(n) ? null : n;
+}
+
+function tradeParseDateCell(v) {
+  if(v==null || v==='') return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  const n = parseFloat(s);
+  if(!isNaN(n) && n > 20000 && n < 90000) {
+    const d = new Date(Math.round((n - 25569)*86400*1000));
+    return d.toISOString().slice(0,10);
+  }
+  return null;
+}
+
+// 시트명으로 매입/매출 자동 판별
+function detectTradeSheetType(sheetName) {
+  if(/구매|매입|purchase/i.test(sheetName)) return 'purchase';
+  if(/매출|판매|sales/i.test(sheetName)) return 'sales';
+  return null;
+}
+
+// ERP 원본 헤더(년/월/구분/일자/품목코드/품명 및 규격/수량/단가/공급가액/부가세/합 계/구매처명 또는 판매처명/브랜드명)
+// 키를 가진 단일 행 객체 r을 DB insert용 row로 변환. 문제가 있으면 {error:true, ...} 반환
+function mapErpTradeRow(r, type, rowNum) {
+  const yr = (r['년']==null?'':String(r['년'])).trim();
+  const mo = (r['월']==null?'':String(r['월'])).trim();
+  const item = (r['품목코드']==null?'':String(r['품목코드'])).trim();
+  const gubun = r['구분'];
+  if(!yr)   return {error:true, rowNum, item_code:item||'(빈값)', reason:'년 값이 비어있습니다'};
+  if(!mo)   return {error:true, rowNum, item_code:item||'(빈값)', reason:'월 값이 비어있습니다'};
+  if(!item) return {error:true, rowNum, item_code:'(빈값)', reason:'품목코드가 비어있습니다'};
+  if(gubun==null || gubun==='') return {error:true, rowNum, item_code:item, reason:'구분(거래일자) 값이 비어있습니다'};
+  const trade_date = tradeParseDateCell(gubun);
+  if(!trade_date) return {error:true, rowNum, item_code:item, reason:'구분(거래일자) 값을 날짜로 인식할 수 없습니다: "'+gubun+'"'};
+
+  const row = {
+    year: yr, month: mo,
+    trade_date,
+    slip_no:     (r['일자']==null?'':String(r['일자'])).trim() || null,
+    item_code:   item,
+    description: (r['품명 및 규격']==null?'':String(r['품명 및 규격'])).trim() || null,
+    qty:         tradeParseNum(r['수량']),
+    unit_price:  tradeParseNum(r['단가']),
+    supply_amt:  tradeParseNum(r['공급가액']),
+    vat:         tradeParseNum(r['부가세']),
+    total_amt:   tradeParseNum(r['합 계']),
+    brand:       (r['브랜드명']==null?'':String(r['브랜드명'])).trim() || null,
+  };
+  if(type==='purchase') row.supplier = (r['구매처명']==null?'':String(r['구매처명'])).trim() || null;
+  else row.customer = (r['판매처명']==null?'':String(r['판매처명'])).trim() || null;
+  return {error:false, row};
+}
 
 function initYearMonth() {
   const now = new Date();
@@ -2234,6 +2350,7 @@ function initYearMonth() {
 function tradeTypeChange() {
   const t = document.getElementById('trade-type').value;
   document.getElementById('td-partner-label').textContent = t === 'purchase' ? '공급처 *' : '매출처 *';
+  if(_tradePending.purchase.length || _tradePending.sales.length) renderTradePreview();
 }
 
 function openTradeDirectInput() {
@@ -2243,15 +2360,14 @@ function openTradeDirectInput() {
 
 function addTradeDirectRow() {
   const type = document.getElementById('trade-type').value;
-  const year = document.getElementById('trade-year').value;
-  const month = document.getElementById('trade-month').value;
   const date = document.getElementById('td-date').value;
   const qty  = parseFloat(document.getElementById('td-qty').value) || 0;
   const partner = document.getElementById('td-partner').value.trim();
   if(!date || !qty || !partner) { alert('거래일자, 수량, 거래처는 필수입니다.'); return; }
 
+  const d = new Date(date);
   const row = {
-    year: year.slice(-2)+'년', month: parseInt(month)+'월',
+    year: String(d.getFullYear()).slice(-2)+'년', month: (d.getMonth()+1)+'월',
     trade_date:  date,
     slip_no:     document.getElementById('td-slip').value.trim() || null,
     item_code:   document.getElementById('td-item').value.trim() || null,
@@ -2266,7 +2382,7 @@ function addTradeDirectRow() {
   if(type === 'purchase') row.supplier = partner;
   else row.customer = partner;
 
-  _tradeRows.push(row);
+  _tradePending[type].push(row);
   renderTradePreview();
   // 폼 초기화
   ['td-date','td-slip','td-item','td-desc','td-qty','td-price','td-supply','td-vat','td-partner','td-brand']
@@ -2275,40 +2391,35 @@ function addTradeDirectRow() {
 
 function loadTradeExcel(e) {
   const file = e.target.files[0]; if(!file) return;
-  const type  = document.getElementById('trade-type').value;
-  const year  = document.getElementById('trade-year').value;
-  const month = document.getElementById('trade-month').value;
   const reader = new FileReader();
   reader.onload = ev => {
     const wb = XLSX.read(ev.target.result, {type:'array', cellDates:true});
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, {defval:null});
-    _tradeRows = rows.map(r => {
-      const base = {
-        year: year.slice(-2)+'년', month: parseInt(month)+'월',
-        trade_date:  r['거래일자']||r['trade_date']||null,
-        slip_no:     r['전표번호']||r['slip_no']||null,
-        item_code:   r['품목코드']||r['item_code']||null,
-        description: r['품명']||r['description']||null,
-        qty:         parseFloat(r['수량']||r['qty'])||null,
-        unit_price:  parseFloat(r['단가']||r['unit_price'])||null,
-        supply_amt:  parseFloat(r['공급가액']||r['supply_amt'])||null,
-        vat:         parseFloat(r['부가세']||r['vat'])||null,
-        total_amt:   parseFloat(r['합계금액']||r['total_amt'])||null,
-        brand:       r['브랜드']||r['brand']||null,
-      };
-      if(type==='purchase') base.supplier = r['공급처']||r['거래처']||r['supplier']||null;
-      else base.customer = r['매출처']||r['거래처']||r['customer']||null;
-      // trade_date 날짜 포맷 처리
-      if(base.trade_date instanceof Date) {
-        base.trade_date = base.trade_date.toISOString().slice(0,10);
-      } else if(typeof base.trade_date === 'number') {
-        const d = new Date(Math.round((base.trade_date - 25569)*86400*1000));
-        base.trade_date = d.toISOString().slice(0,10);
-      }
-      return base;
+    // 시트명 기준 매입/매출 자동 배정
+    const sheetAssign = {};
+    wb.SheetNames.forEach(name => {
+      const t = detectTradeSheetType(name);
+      if(t && !sheetAssign[t]) sheetAssign[t] = name;
     });
-    renderTradePreview();
+    if(Object.keys(sheetAssign).length === 0) {
+      if(wb.SheetNames.length >= 2) { sheetAssign.purchase = wb.SheetNames[0]; sheetAssign.sales = wb.SheetNames[1]; }
+      else { sheetAssign[document.getElementById('trade-type').value] = wb.SheetNames[0]; }
+    }
+
+    const errors = [];
+    const staged = {purchase:[], sales:[]};
+    Object.keys(sheetAssign).forEach(type => {
+      const sheetName = sheetAssign[type];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:null});
+      rows.forEach((r,i) => {
+        if(!r['품목코드'] && !r['구분']) return; // 완전 빈 행 스킵
+        const res = mapErpTradeRow(r, type, i+2); // 엑셀 실제 행번호(헤더=1행)
+        if(res.error) errors.push({sheet:sheetName, type, ...res});
+        else staged[type].push(res.row);
+      });
+    });
+
+    finishTradeParse(staged, errors, Object.values(sheetAssign).join(', '));
   };
   reader.readAsArrayBuffer(file);
   e.target.value = '';
@@ -2319,164 +2430,192 @@ function openTradePasteInput() {
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
-// ERP 원본 누적 파일 헤더(년/월/구분/일자/품목코드/품명 및 규격/수량/단가/공급가액/부가세/합 계/구매처명 또는 판매처명/브랜드명)
-// 텍스트를 파싱해 선택된 연/월에 해당하는 행만 걸러 _tradeRows를 채움
+function pasteTextToRows(text) {
+  const lines = text.replace(/\r/g,'').split('\n').filter(l => l.trim() !== '');
+  if(lines.length < 2) return null;
+  const header = lines[0].split('\t').map(h => h.trim());
+  const required = ['년','월','구분','일자','품목코드'];
+  const missing = required.filter(h => !header.includes(h));
+  if(missing.length) return {headerError: '헤더에 다음 항목이 없습니다: ' + missing.join(', ')};
+  const rows = lines.slice(1).map(line => {
+    const cells = line.split('\t');
+    const obj = {};
+    header.forEach((h,i) => obj[h] = cells[i] !== undefined ? cells[i] : null);
+    return obj;
+  });
+  return {header, rows};
+}
+
+// ERP 원본 헤더(년/월/구분/일자/품목코드/품명 및 규격/수량/단가/공급가액/부가세/합 계/구매처명 또는 판매처명/브랜드명)
+// 텍스트를 파싱해 연/월별 자동 그룹핑 대상으로 스테이징함 (선택 연월 필터링 없음 — 데이터 자체의 연/월을 그대로 사용)
 function previewTradePaste() {
   const text = document.getElementById('tradePasteText').value;
   if(!text || !text.trim()) { alert('붙여넣은 내용이 없습니다.'); return; }
-  const type  = document.getElementById('trade-type').value;
-  const year  = document.getElementById('trade-year').value;
-  const month = document.getElementById('trade-month').value;
-  const yLabel = year.slice(-2)+'년';
-  const mLabel = parseInt(month)+'월';
+  const type = document.getElementById('trade-type').value;
 
-  const lines = text.replace(/\r/g,'').split('\n').filter(l => l.trim() !== '');
-  if(lines.length < 2) { alert('헤더와 데이터가 포함된 범위를 붙여넣어 주세요.'); return; }
-  const headerCells = lines[0].split('\t').map(h => h.trim());
-  const idx = name => headerCells.indexOf(name);
-  const iYear = idx('년'), iMonth = idx('월'), iGubun = idx('구분'), iIlja = idx('일자'),
-        iItem = idx('품목코드'), iDesc = idx('품명 및 규격'), iQty = idx('수량'), iPrice = idx('단가'),
-        iSupply = idx('공급가액'), iVat = idx('부가세'), iTotal = idx('합 계'),
-        iPartner = type === 'purchase' ? idx('구매처명') : idx('판매처명'), iBrand = idx('브랜드명');
-
-  if(iYear<0 || iMonth<0 || iGubun<0 || iIlja<0 || iItem<0 || iPartner<0) {
-    alert('헤더 형식이 맞지 않습니다. (선택된 구분: ' + (type==='purchase'?'매입':'매출') + ')\n필요 헤더: 년, 월, 구분, 일자, 품목코드, 품명 및 규격, 수량, 단가, 공급가액, 부가세, 합 계, ' + (type==='purchase'?'구매처명':'판매처명') + ', 브랜드명\n\n※ 매입/매출 상단 선택이 붙여넣은 데이터와 맞는지 확인해주세요.');
+  const parsed = pasteTextToRows(text);
+  if(!parsed) { alert('헤더와 데이터가 포함된 범위를 붙여넣어 주세요.'); return; }
+  if(parsed.headerError) {
+    alert('헤더 형식이 맞지 않습니다.\n' + parsed.headerError + '\n\n필요 헤더: 년, 월, 구분, 일자, 품목코드, 품명 및 규격, 수량, 단가, 공급가액, 부가세, 합 계, ' + (type==='purchase'?'구매처명':'판매처명') + ', 브랜드명');
+    return;
+  }
+  const partnerCol = type === 'purchase' ? '구매처명' : '판매처명';
+  if(!parsed.header.includes(partnerCol)) {
+    alert(`헤더에 "${partnerCol}" 컬럼이 없습니다. (현재 선택: ${type==='purchase'?'매입':'매출'})\n※ 상단 매입/매출 선택이 붙여넣은 데이터와 맞는지 확인해주세요.`);
     return;
   }
 
-  const parseNum = v => { const n = parseFloat(String(v).replace(/,/g,'')); return isNaN(n) ? null : n; };
-  const parseDateCell = v => {
-    if(!v) return null;
-    v = String(v).trim();
-    // "2026-07-01" / "2026-07-01 0:00:00" 등 → 앞 10자리만 사용
-    const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
-    if(m) return m[1];
-    // 엑셀 시리얼 번호로 붙여넣기 되는 경우
-    const n = parseFloat(v);
-    if(!isNaN(n) && n > 20000 && n < 90000) {
-      const d = new Date(Math.round((n - 25569)*86400*1000));
-      return d.toISOString().slice(0,10);
-    }
-    return v || null;
-  };
+  const errors = [];
+  const staged = {purchase:[], sales:[]};
+  parsed.rows.forEach((r,i) => {
+    if(!r['품목코드'] && !r['구분']) return; // 완전 빈 행 스킵
+    const res = mapErpTradeRow(r, type, i+2);
+    if(res.error) errors.push({sheet:'붙여넣기', type, ...res});
+    else staged[type].push(res.row);
+  });
 
-  const partnerKey = type === 'purchase' ? 'supplier' : 'customer';
-  const allRows = [];
-  for(let i=1; i<lines.length; i++) {
-    const c = lines[i].split('\t');
-    if(!c[iItem] && !c[iGubun]) continue; // 완전 빈 행 스킵
-    const row = {
-      _year: (c[iYear]||'').trim(),
-      _month: (c[iMonth]||'').trim(),
-      year: yLabel, month: mLabel,
-      trade_date:  parseDateCell(c[iGubun]),
-      slip_no:     (c[iIlja]||'').trim() || null,
-      item_code:   (c[iItem]||'').trim() || null,
-      description: iDesc>=0 ? ((c[iDesc]||'').trim() || null) : null,
-      qty:         iQty>=0 ? parseNum(c[iQty]) : null,
-      unit_price:  iPrice>=0 ? parseNum(c[iPrice]) : null,
-      supply_amt:  iSupply>=0 ? parseNum(c[iSupply]) : null,
-      vat:         iVat>=0 ? parseNum(c[iVat]) : null,
-      total_amt:   iTotal>=0 ? parseNum(c[iTotal]) : null,
-      brand:       iBrand>=0 ? ((c[iBrand]||'').trim() || null) : null,
-    };
-    row[partnerKey] = iPartner>=0 ? ((c[iPartner]||'').trim() || null) : null;
-    allRows.push(row);
-  }
+  finishTradeParse(staged, errors, '붙여넣기');
+}
 
-  // 선택된 연/월과 일치하는 행만 필터링 (사고 방지 핵심 로직)
-  const filtered = allRows.filter(r => r._year === yLabel && r._month === mLabel)
-    .map(r => { const {_year,_month,...rest} = r; return rest; });
-
-  if(!filtered.length) {
-    alert(`붙여넣은 ${allRows.length.toLocaleString()}행 중 [${yLabel} ${mLabel}]에 해당하는 데이터가 없습니다.\n화면에서 선택한 연/월이 맞는지 확인해주세요.`);
-    return;
-  }
-
-  const excluded = allRows.length - filtered.length;
-  let msg = `붙여넣은 총 ${allRows.length.toLocaleString()}행 중 [${yLabel} ${mLabel}] 해당 ${filtered.length.toLocaleString()}건만 필터링되어 등록 예정입니다.`;
-  if(excluded > 0) msg += `\n(나머지 ${excluded.toLocaleString()}건은 다른 연월이라 자동 제외되었습니다.)`;
-  alert(msg);
-
-  _tradeRows = filtered;
+function finishTradeParse(staged, errors, sourceLabel) {
+  if(errors.length) { showTradeErrors(errors, sourceLabel); return; }
+  if(!staged.purchase.length && !staged.sales.length) { alert('등록할 데이터가 없습니다.'); return; }
+  _tradePending = staged;
+  document.getElementById('tradeErrorSection').style.display = 'none';
   renderTradePreview();
   document.getElementById('tradePasteForm').style.display = 'none';
   document.getElementById('tradePasteText').value = '';
 }
 
+function showTradeErrors(errors, sourceLabel) {
+  document.getElementById('tradePreviewSection').style.display = 'none';
+  const section = document.getElementById('tradeErrorSection');
+  section.style.display = '';
+  document.getElementById('tradeErrorBody').innerHTML = errors.map(e => `<tr>
+    <td>${e.sheet||sourceLabel}</td><td>${e.type==='purchase'?'매입':'매출'}</td>
+    <td class="mono">${e.rowNum}행</td><td class="mono">${e.item_code||'-'}</td><td>${e.reason}</td>
+  </tr>`).join('');
+  section.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
 function renderTradePreview() {
-  if(!_tradeRows.length) return;
-  const type = document.getElementById('trade-type').value;
+  const hasData = _tradePending.purchase.length || _tradePending.sales.length;
+  if(!hasData) return;
+  document.getElementById('tradeErrorSection').style.display = 'none';
   document.getElementById('tradePreviewSection').style.display = '';
-  // 헤더
+
+  // 연월별 그룹 요약 (매입/매출 각각)
+  const groupsHtml = ['purchase','sales'].filter(t => _tradePending[t].length).map(t => {
+    const groups = groupByYm(_tradePending[t]);
+    const rowsHtml = groups.map(g => `<tr>
+      <td>${g.year} ${g.month}</td>
+      <td class="right mono">${g.cnt.toLocaleString()}</td>
+      <td class="right mono">${g.qty.toLocaleString()}</td>
+      <td class="right mono">${Math.round(g.amt).toLocaleString()}</td>
+    </tr>`).join('');
+    return `<div style="margin-bottom:12px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${t==='purchase'?'📥 매입':'📤 매출'} — ${groups.length}개월 / 총 ${_tradePending[t].length.toLocaleString()}건</div>
+      <div class="tbl-wrap" style="max-height:200px;"><table class="up-table"><thead><tr><th>연월</th><th class="right">건수</th><th class="right">수량</th><th class="right">공급가액</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    </div>`;
+  }).join('');
+  document.getElementById('tradeGroupSummary').innerHTML = groupsHtml;
+
+  // 총계 (한줄)
+  const totalCnt = _tradePending.purchase.length + _tradePending.sales.length;
+  document.getElementById('tradePreviewStat').innerHTML = `<div class="trade-stat-line">
+    ${_tradePending.purchase.length?`<div class="tsl-item">매입<b>${_tradePending.purchase.length.toLocaleString()}건</b></div>`:''}
+    ${_tradePending.sales.length?`<div class="tsl-item">매출<b>${_tradePending.sales.length.toLocaleString()}건</b></div>`:''}
+    <div class="tsl-item">합계<b>${totalCnt.toLocaleString()}건</b></div>
+  </div>`;
+
+  // 항목 단위 미리보기 (현재 매입/매출 토글로 선택된 쪽만, 최대 200행)
+  const type = document.getElementById('trade-type').value;
+  const rowsForType = _tradePending[type] || [];
   const partnerCol = type === 'purchase' ? '공급처' : '매출처';
   document.getElementById('tradePreviewHead').innerHTML = `<tr>
-    <th>거래일자</th><th>전표번호</th><th>품목코드</th><th>품명</th>
+    <th>연월</th><th>거래일자</th><th>전표번호</th><th>품목코드</th><th>품명</th>
     <th>수량</th><th>단가</th><th>공급가액</th><th>부가세</th><th>${partnerCol}</th><th>브랜드</th>
   </tr>`;
-  // 합계
-  const totalQty = _tradeRows.reduce((s,r)=>s+(r.qty||0),0);
-  const totalAmt = _tradeRows.reduce((s,r)=>s+(r.supply_amt||0),0);
-  document.getElementById('tradePreviewStat').innerHTML = `
-    <div class="up-stat-card"><b>${_tradeRows.length.toLocaleString()}</b>건</div>
-    <div class="up-stat-card"><b>${totalQty.toLocaleString()}</b>총 수량</div>
-    <div class="up-stat-card"><b>${Math.round(totalAmt).toLocaleString()}</b>원 공급가액</div>`;
-  // 바디 (최대 200행 미리보기)
   const fmt = v => v!=null?Number(v).toLocaleString():'-';
-  document.getElementById('tradePreviewBody').innerHTML = _tradeRows.slice(0,200).map(r => {
-    const partner = type==='purchase'?(r.supplier||'-'):(r.customer||'-');
-    return `<tr>
-      <td>${r.trade_date||'-'}</td><td>${r.slip_no||'-'}</td>
-      <td>${r.item_code||'-'}</td><td>${r.description||'-'}</td>
-      <td style="text-align:right;">${fmt(r.qty)}</td>
-      <td style="text-align:right;">${fmt(r.unit_price)}</td>
-      <td style="text-align:right;">${fmt(r.supply_amt)}</td>
-      <td style="text-align:right;">${fmt(r.vat)}</td>
-      <td>${partner}</td><td>${r.brand||'-'}</td>
-    </tr>`;
-  }).join('') + (_tradeRows.length>200?`<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:8px;">... 외 ${_tradeRows.length-200}건 (미리보기 200건 제한)</td></tr>`:'');
+  if(!rowsForType.length) {
+    document.getElementById('tradePreviewBody').innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:12px;">${type==='purchase'?'매입':'매출'} 데이터가 없습니다. (상단 토글에서 반대쪽을 선택하면 확인 가능)</td></tr>`;
+  } else {
+    document.getElementById('tradePreviewBody').innerHTML = rowsForType.slice(0,200).map(r => {
+      const partner = type==='purchase'?(r.supplier||'-'):(r.customer||'-');
+      return `<tr>
+        <td class="mono">${r.year} ${r.month}</td>
+        <td>${r.trade_date||'-'}</td><td>${r.slip_no||'-'}</td>
+        <td>${r.item_code||'-'}</td><td>${r.description||'-'}</td>
+        <td style="text-align:right;">${fmt(r.qty)}</td>
+        <td style="text-align:right;">${fmt(r.unit_price)}</td>
+        <td style="text-align:right;">${fmt(r.supply_amt)}</td>
+        <td style="text-align:right;">${fmt(r.vat)}</td>
+        <td>${partner}</td><td>${r.brand||'-'}</td>
+      </tr>`;
+    }).join('') + (rowsForType.length>200?`<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:8px;">... 외 ${rowsForType.length-200}건 (미리보기 200건 제한)</td></tr>`:'');
+  }
 }
 
 function clearTradePreview() {
-  _tradeRows = [];
+  _tradePending = {purchase:[], sales:[]};
   document.getElementById('tradePreviewSection').style.display = 'none';
+  document.getElementById('tradeErrorSection').style.display = 'none';
 }
 
 async function submitTradeData() {
-  if(!_tradeRows.length) { alert('등록할 데이터가 없습니다.'); return; }
-  const type  = document.getElementById('trade-type').value;
-  const year  = document.getElementById('trade-year').value;
-  const month = document.getElementById('trade-month').value;
-  const table = type === 'purchase' ? 'purchase_data' : 'sales_data';
-  const ym = `${year}-${month}`;
+  const types = ['purchase','sales'].filter(t => _tradePending[t].length);
+  if(!types.length) { alert('등록할 데이터가 없습니다.'); return; }
 
-  if(!confirm(`[${type==='purchase'?'매입':'매출'}] ${year}년 ${parseInt(month)}월 데이터 ${_tradeRows.length}건을 등록합니다.
-기존 해당 월 데이터는 삭제됩니다.`)) return;
+  const planByType = {};
+  let confirmMsg = '다음 데이터를 등록합니다.\n각 연/월의 기존 데이터는 삭제 후 재등록됩니다.\n\n';
+  types.forEach(t => {
+    const groups = groupByYm(_tradePending[t]);
+    planByType[t] = groups;
+    confirmMsg += `[${t==='purchase'?'매입':'매출'}] ${groups.length}개월 / 총 ${_tradePending[t].length.toLocaleString()}건\n`;
+    confirmMsg += groups.map(g => `  - ${g.year} ${g.month}: ${g.cnt.toLocaleString()}건`).join('\n') + '\n';
+  });
+  if(!confirm(confirmMsg)) return;
 
   const btn = document.getElementById('tradeSubmitBtn');
   btn.disabled = true; btn.textContent = '처리 중...';
 
   try {
-    // 해당 월 삭제 (DB 실제 포맷: "YY년"/"M월")
-    await sb.from(table).delete().eq('year', year.slice(-2)+'년').eq('month', parseInt(month)+'월');
-    // 청크 단위 insert (500건)
-    const CHUNK = 500;
-    for(let i=0; i<_tradeRows.length; i+=CHUNK) {
-      const {error} = await sb.from(table).insert(_tradeRows.slice(i,i+CHUNK));
-      if(error) throw error;
+    const resultLines = [];
+    const submittedYm = {purchase:new Set(), sales:new Set()};
+    for(const t of types) {
+      const table = t === 'purchase' ? 'purchase_data' : 'sales_data';
+      const groups = planByType[t];
+      for(const g of groups) {
+        const rowsForYm = _tradePending[t].filter(r => r.year===g.year && r.month===g.month);
+        await sb.from(table).delete().eq('year', g.year).eq('month', g.month);
+        const CHUNK = 500;
+        for(let i=0; i<rowsForYm.length; i+=CHUNK) {
+          const {error} = await sb.from(table).insert(rowsForYm.slice(i,i+CHUNK));
+          if(error) throw error;
+        }
+        submittedYm[t].add(g.year+' '+g.month);
+      }
+      resultLines.push(`[${t==='purchase'?'매입':'매출'}] ${groups.length}개월 / ${_tradePending[t].length.toLocaleString()}건 등록 완료`);
     }
-    let msg = `✓ ${_tradeRows.length}건 등록 완료`;
+
     // 반대쪽(매입↔매출) 같은 연/월 데이터 존재 여부 확인
-    const otherTable = type === 'purchase' ? 'sales_data' : 'purchase_data';
-    const otherLabel  = type === 'purchase' ? '매출' : '매입';
-    const {count: otherCount} = await sb.from(otherTable).select('id', {count:'exact', head:true})
-      .eq('year', year.slice(-2)+'년').eq('month', parseInt(month)+'월');
-    if(!otherCount) {
-      msg += `\n\n⚠ 아직 ${year}년 ${parseInt(month)}월 ${otherLabel}자료 업로드가 안 되었습니다.`;
+    const warnSet = new Set();
+    for(const t of types) {
+      const otherT = t === 'purchase' ? 'sales' : 'purchase';
+      const otherTable = otherT === 'purchase' ? 'purchase_data' : 'sales_data';
+      for(const ymKey of submittedYm[t]) {
+        const [y,m] = ymKey.split(' ');
+        const {count} = await sb.from(otherTable).select('id', {count:'exact', head:true}).eq('year', y).eq('month', m);
+        if(!count) warnSet.add(`⚠ ${y} ${m} ${otherT==='purchase'?'매입':'매출'}자료 업로드가 안 되었습니다.`);
+      }
     }
+
+    let msg = '✓ 등록 완료\n\n' + resultLines.join('\n');
+    if(warnSet.size) msg += '\n\n' + [...warnSet].join('\n');
     alert(msg);
     clearTradePreview();
     document.getElementById('tradeDirectForm').style.display = 'none';
+    loadTradeSummary();
   } catch(e) {
     alert('등록 실패: ' + e.message);
   }
@@ -2484,14 +2623,59 @@ async function submitTradeData() {
 }
 
 function downloadTradeTemplate() {
-  const type = document.getElementById('trade-type').value;
-  const partnerCol = type === 'purchase' ? '공급처' : '매출처';
-  const header = ['거래일자','전표번호','품목코드','품명','수량','단가','공급가액','부가세','합계금액', partnerCol,'브랜드'];
-  const ws = XLSX.utils.aoa_to_sheet([header, ['2026-06-01','SL-001','A001','테스트품목',100,1000,100000,10000,110000,'거래처명','SAMSUNG']]);
-  ws['!cols'] = header.map(()=>({wch:14}));
+  const headerP = ['년','월','구분','일자','품목코드','품명 및 규격','수량','단가','공급가액','부가세','합 계','구매처명','브랜드명'];
+  const headerS = ['년','월','구분','일자','품목코드','품명 및 규격','수량','단가','공급가액','부가세','합 계','판매처명','브랜드명'];
+  const sampleP = ['26년','7월','2026-07-01','26/07/01-1','A001','테스트품목 규격',100,1000,100000,10000,110000,'구매처명','SAMSUNG'];
+  const sampleS = ['26년','7월','2026-07-01','26/07/01-1','A001','테스트품목 규격',100,1000,100000,10000,110000,'판매처명','SAMSUNG'];
+  const wsP = XLSX.utils.aoa_to_sheet([headerP, sampleP]); wsP['!cols'] = headerP.map(()=>({wch:14}));
+  const wsS = XLSX.utils.aoa_to_sheet([headerS, sampleS]); wsS['!cols'] = headerS.map(()=>({wch:14}));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, type==='purchase'?'매입':'매출');
-  XLSX.writeFile(wb, `SME_${type==='purchase'?'매입':'매출'}_업로드양식.xlsx`);
+  XLSX.utils.book_append_sheet(wb, wsP, '구매현황DATA');
+  XLSX.utils.book_append_sheet(wb, wsS, '매출현황DATA');
+  XLSX.writeFile(wb, 'SME_매입매출_업로드양식.xlsx');
+}
+
+// ── 등록현황 요약 / 상세 모달 ──
+async function loadTradeSummary() {
+  const el = document.getElementById('tradeRegSummary');
+  if(!el) return;
+  el.textContent = '등록현황 불러오는 중...';
+  try {
+    const [{data:pData, error:pErr}, {data:sData, error:sErr}] = await Promise.all([
+      sb.rpc('trade_month_summary', {p_table:'purchase_data'}),
+      sb.rpc('trade_month_summary', {p_table:'sales_data'})
+    ]);
+    if(pErr || sErr) { el.textContent = '등록현황 조회 실패: ' + (pErr?.message||sErr?.message||''); return; }
+    _tradeSummaryCache = {purchase: pData||[], sales: sData||[]};
+    el.innerHTML = tradeSummaryLineHtml('purchase', pData) + ' &nbsp;/&nbsp; ' + tradeSummaryLineHtml('sales', sData);
+  } catch(e) {
+    el.textContent = '등록현황 조회 실패: ' + e.message;
+  }
+}
+
+function tradeSummaryLineHtml(type, rows) {
+  const label = type === 'purchase' ? '매입' : '매출';
+  if(!rows || !rows.length) return `<b>${label}</b>: 등록된 데이터 없음`;
+  const sorted = [...rows].sort((a,b)=>ymSortKey(a.year,a.month)-ymSortKey(b.year,b.month));
+  const first = sorted[0], last = sorted[sorted.length-1];
+  const total = rows.reduce((s,r)=>s+Number(r.cnt||0),0);
+  return `<b>📌 ${label}</b>: ${first.year} ${first.month} ~ ${last.year} ${last.month} (${total.toLocaleString()}건)`;
+}
+
+function openTradeSummaryModal() {
+  const render = (type, elId) => {
+    const rows = [..._tradeSummaryCache[type]].sort((a,b)=>ymSortKey(a.year,a.month)-ymSortKey(b.year,b.month));
+    document.getElementById(elId).innerHTML = rows.length
+      ? rows.map(r=>`<tr><td>${r.year} ${r.month}</td><td class="right mono">${Number(r.cnt).toLocaleString()}</td></tr>`).join('')
+      : '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:10px;">데이터 없음</td></tr>';
+  };
+  render('purchase', 'tradeSummaryPurchaseBody');
+  render('sales', 'tradeSummarySalesBody');
+  document.getElementById('tradeSummaryModal').classList.add('show');
+}
+
+function closeTradeSummaryModal() {
+  document.getElementById('tradeSummaryModal').classList.remove('show');
 }
 
 async function loadTradeCurrentData() {
