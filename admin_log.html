@@ -2930,10 +2930,10 @@ function renderStockPreview() {
   if(!_stockRows.length) return;
   document.getElementById('stockPreviewSection').style.display = '';
   const totalAmt = _stockRows.reduce((s,r)=>s+(r.stock_amount||0),0);
-  const lgAmt    = _stockRows.filter(r=>r.supply_type==='LG사급품').reduce((s,r)=>s+(r.stock_amount||0),0);
-  const dtAmt    = _stockRows.filter(r=>r.supply_type==='직거래품').reduce((s,r)=>s+(r.stock_amount||0),0);
-  const lgCnt    = _stockRows.filter(r=>r.supply_type==='LG사급품').length;
-  const dtCnt    = _stockRows.filter(r=>r.supply_type==='직거래품').length;
+  const lgAmt    = _stockRows.filter(r=>normalizeSupplyKey(r.supply_type)==='LG사급').reduce((s,r)=>s+(r.stock_amount||0),0);
+  const dtAmt    = _stockRows.filter(r=>normalizeSupplyKey(r.supply_type)==='직거래').reduce((s,r)=>s+(r.stock_amount||0),0);
+  const lgCnt    = _stockRows.filter(r=>normalizeSupplyKey(r.supply_type)==='LG사급').length;
+  const dtCnt    = _stockRows.filter(r=>normalizeSupplyKey(r.supply_type)==='직거래').length;
   // 포함된 월 목록
   const yms = [...new Set(_stockRows.map(r=>r.ym))].sort();
   document.getElementById('stockPreviewStat').innerHTML = `
@@ -2999,46 +2999,68 @@ function clearStockPreview() {
   document.getElementById('stockPreviewSection').style.display = 'none';
 }
 
+// 공급유형 정규화 — 공백 제거 후 "사급" 포함이면 LG사급 그룹, "직거래" 포함이면 직거래 그룹으로 통일 인식
+// (원본 파일마다 "LG사급"/"LG 사급"처럼 공백 유무가 섞여 있어도 같은 그룹으로 판단)
+function normalizeSupplyKey(v) {
+  const s = String(v||'').replace(/\s/g,'');
+  if(s.includes('사급')) return 'LG사급';
+  if(s.includes('직거래')) return '직거래';
+  return s || '기타';
+}
+
 async function submitStockData() {
   if(!_stockRows.length) { alert('등록할 데이터가 없습니다.'); return; }
 
-  // 파일에 포함된 월 목록
-  const ymsInFile = [...new Set(_stockRows.map(r=>r.ym))].sort();
+  // 파일에 포함된 (연월+공급유형그룹) 조합 목록 — 직거래팀/사급팀이 같은 달을 각자 따로 올려도
+  // 서로 다른 조합으로 인식되도록 월 단위가 아닌 월+공급유형 단위로 판단
+  const comboMap = new Map();
+  _stockRows.forEach(r => {
+    const nk = normalizeSupplyKey(r.supply_type);
+    const key = r.ym + '|' + nk;
+    if(!comboMap.has(key)) comboMap.set(key, {ym:r.ym, normKey:nk, label:`${r.ym}(${nk})`});
+  });
+  const combos = [...comboMap.values()];
+  const ymsInFile = [...new Set(combos.map(c=>c.ym))];
 
-  // DB에 이미 존재하는 월 확인
-  const existingYms = [];
+  // DB에 이미 존재하는 (연월+공급유형그룹) 조합 확인
+  const existingCombos = [];
   for(const ym of ymsInFile) {
-    const {data} = await sb.from('stock_inventory').select('ym').eq('ym', ym).limit(1);
-    if(data && data.length > 0) existingYms.push(ym);
+    const {data} = await sb.from('stock_inventory').select('supply_type').eq('ym', ym);
+    const existingKeys = new Set((data||[]).map(d => normalizeSupplyKey(d.supply_type)));
+    combos.filter(c => c.ym === ym && existingKeys.has(c.normKey)).forEach(c => existingCombos.push(c));
   }
-  const newYms = ymsInFile.filter(ym => !existingYms.includes(ym));
+  const newCombos = combos.filter(c => !existingCombos.some(e => e.ym===c.ym && e.normKey===c.normKey));
 
   // 안내 메시지 구성
   let msg = '';
-  if(existingYms.length > 0 && newYms.length > 0) {
-    msg = `📋 업로드 파일 포함 월: ${ymsInFile.join(', ')}\n\n`;
-    msg += `⏭ 이미 등록된 월 (건너뜀): ${existingYms.join(', ')}\n`;
-    msg += `✅ 신규 등록할 월: ${newYms.join(', ')}\n`;
-    msg += `\n신규 월 데이터만 등록하시겠습니까?`;
-  } else if(existingYms.length > 0 && newYms.length === 0) {
-    alert(`⚠ 업로드 파일의 모든 월(${existingYms.join(', ')})이 이미 DB에 등록되어 있습니다.\n신규 등록할 월이 없습니다.`);
+  if(existingCombos.length > 0 && newCombos.length > 0) {
+    msg = `📋 업로드 파일 포함: ${combos.map(c=>c.label).join(', ')}\n\n`;
+    msg += `⏭ 이미 등록됨 (건너뜀): ${existingCombos.map(c=>c.label).join(', ')}\n`;
+    msg += `✅ 신규 등록할 항목: ${newCombos.map(c=>c.label).join(', ')}\n`;
+    msg += `\n신규 항목만 등록하시겠습니까?`;
+  } else if(existingCombos.length > 0 && newCombos.length === 0) {
+    alert(`⚠ 업로드 파일의 모든 항목(${existingCombos.map(c=>c.label).join(', ')})이 이미 DB에 등록되어 있습니다.\n신규 등록할 항목이 없습니다.`);
     return;
   } else {
-    msg = `재고조사 ${newYms.join(', ')} 데이터를 등록합니다.\n`;
-    msg += `등록할 월의 기존 데이터는 삭제 후 새로 등록됩니다.\n\n계속하시겠습니까?`;
+    msg = `재고조사 ${newCombos.map(c=>c.label).join(', ')} 데이터를 등록합니다.\n`;
+    msg += `등록할 항목의 기존 데이터는 삭제 후 새로 등록됩니다.\n\n계속하시겠습니까?`;
   }
   if(!confirm(msg)) return;
 
-  // 신규 월 데이터만 필터
-  const rowsToInsert = _stockRows.filter(r => newYms.includes(r.ym));
+  // 신규 항목 데이터만 필터
+  const rowsToInsert = _stockRows.filter(r => newCombos.some(c => c.ym===r.ym && c.normKey===normalizeSupplyKey(r.supply_type)));
   if(!rowsToInsert.length) { alert('등록할 데이터가 없습니다.'); return; }
 
   const btn = document.getElementById('stockSubmitBtn');
   btn.disabled = true; btn.textContent = '처리 중...';
   try {
-    // 신규 월만 삭제 후 재삽입
-    for(const ym of newYms) {
-      await sb.from('stock_inventory').delete().eq('ym', ym);
+    // 신규 항목만 (연월+공급유형그룹 단위로) 삭제 후 재삽입 — 다른 팀의 기존 데이터는 건드리지 않음
+    for(const c of newCombos) {
+      let q = sb.from('stock_inventory').delete().eq('ym', c.ym);
+      if(c.normKey === 'LG사급')      q = q.ilike('supply_type', '%사급%');
+      else if(c.normKey === '직거래') q = q.ilike('supply_type', '%직거래%');
+      else                            q = q.eq('supply_type', c.normKey);
+      await q;
     }
     const CHUNK = 500;
     for(let i=0; i<rowsToInsert.length; i+=CHUNK) {
@@ -3046,8 +3068,8 @@ async function submitStockData() {
       if(error) throw error;
     }
     let resultMsg = `✅ 등록 완료\n\n`;
-    if(existingYms.length > 0) resultMsg += `⏭ 건너뜀 (이미 존재): ${existingYms.join(', ')}\n`;
-    resultMsg += `✅ 신규 등록: ${newYms.join(', ')} — ${rowsToInsert.length.toLocaleString()}건`;
+    if(existingCombos.length > 0) resultMsg += `⏭ 건너뜀 (이미 존재): ${existingCombos.map(c=>c.label).join(', ')}\n`;
+    resultMsg += `✅ 신규 등록: ${newCombos.map(c=>c.label).join(', ')} — ${rowsToInsert.length.toLocaleString()}건`;
     alert(resultMsg);
     clearStockPreview();
     document.getElementById('stockDirectForm').style.display = 'none';
@@ -3118,7 +3140,7 @@ async function loadStockCurrentData() {
   document.getElementById('stock-current-tbody').innerHTML = rows.map(r=>`
     <tr>
       <td class="mono">${r.ym||''}</td>
-      <td><span class="badge ${r.supply_type==='LG사급품'?'b-lg':'b-dt'}">${r.supply_type||''}</span></td>
+      <td><span class="badge ${normalizeSupplyKey(r.supply_type)==='LG사급'?'b-lg':'b-dt'}">${r.supply_type||''}</span></td>
       <td>${r.brand||''}</td>
       <td class="mono">${r.item_code||''}</td>
       <td>${r.description||''}</td>
