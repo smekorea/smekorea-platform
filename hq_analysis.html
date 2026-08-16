@@ -169,7 +169,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .tv-table tbody tr:nth-child(even){background:#f8fafc;}
 .tv-table tbody tr:nth-child(even) td:first-child{background:#f8fafc;}
 .tv-table tbody tr:nth-child(odd) td:first-child{background:#fff;}
-.col-resizer{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:10;}
+.col-resizer{position:absolute;right:-5px;top:0;bottom:0;width:12px;cursor:col-resize;z-index:10;touch-action:none;}
 .col-resizer:hover{background:rgba(26,86,219,0.3);}
 .sort-icon{margin-left:3px;font-size:9px;color:var(--accent2);}
 .period-badge{font-size:10px;color:var(--accent2);background:#eef3fc;padding:3px 9px;border-radius:10px;font-weight:700;white-space:nowrap;font-family:'Share Tech Mono',monospace;}
@@ -1697,6 +1697,7 @@ function initColResize(tableId,storageKey){
   // ⚠️ th에 직접 width를 주면 여러 컬럼(특히 4개 이상 고정 텍스트열이 앞에 오는 품목별 등)에서
   // 드래그 시 컬럼별로 폭이 어긋나는 드리프트가 발생함 → colgroup/col 로 폭을 관리(CSS 스펙 권장 방식)
   table.querySelectorAll(':scope > colgroup').forEach(cg=>cg.remove());
+  table.style.width='';
   const colgroup=document.createElement('colgroup');
   const cols=[];
   ths.forEach((th,i)=>{
@@ -1708,24 +1709,46 @@ function initColResize(tableId,storageKey){
   });
   table.insertBefore(colgroup,table.firstChild);
   ths.forEach(th=>{th.style.width='';th.style.minWidth='';});
+  // ⚠️ 핵심 원인(실브라우저 실측 확인): 거래처명·품명및규격처럼 긴 텍스트(white-space:nowrap)가 든 셀은
+  // table의 width가 auto인 상태에서는 table-layout:fixed여도 col 폭보다 내용 폭이 우선돼서 "줄여지지 않는" 것처럼 보임.
+  // → table 자체에 명시적 width(=컬럼폭 합계)를 지정해줘야 col 폭이 실제로 강제 적용됨.
+  const syncTableWidth=()=>{
+    const sum=cols.reduce((a,c)=>a+(parseInt(c.style.width,10)||0),0);
+    table.style.width=sum+'px';
+  };
+  syncTableWidth();
   ths.forEach((th,i)=>{
     if(th.querySelector('.col-resizer')) return;
     const resizer=document.createElement('div');
     resizer.className='col-resizer';
     th.appendChild(resizer);
-    let startX=0,startW=0;
-    const onMove=(e)=>{const w=Math.max(40,startW+(e.clientX-startX));cols[i].style.width=w+'px';};
-    const onUp=()=>{
-      const ws=cols.map(c=>parseInt(c.style.width,10)||120);
-      try{localStorage.setItem(storageKey,JSON.stringify(ws));}catch(e){}
-      window.removeEventListener('mousemove',onMove);
-      window.removeEventListener('mouseup',onUp);
+    let startX=0,startW=0,dragging=false;
+    // ⚠️ 마우스 이벤트만 쓰면 모바일/터치 환경에서 드래그가 아예 동작하지 않음(리사이즈가 "안 되는" 것처럼 보임)
+    // → Pointer Events(마우스+터치+펜 통합) + setPointerCapture 로 교체
+    const onMove=(e)=>{
+      if(!dragging) return;
+      const w=Math.max(32,startW+(e.clientX-startX));
+      cols[i].style.width=w+'px';
+      syncTableWidth();
     };
-    resizer.addEventListener('mousedown',(e)=>{
+    const onUp=(e)=>{
+      if(!dragging) return;
+      dragging=false;
+      const ws=cols.map(c=>parseInt(c.style.width,10)||120);
+      try{localStorage.setItem(storageKey,JSON.stringify(ws));}catch(err){}
+      try{resizer.releasePointerCapture(e.pointerId);}catch(err){}
+      resizer.removeEventListener('pointermove',onMove);
+      resizer.removeEventListener('pointerup',onUp);
+      resizer.removeEventListener('pointercancel',onUp);
+    };
+    resizer.addEventListener('pointerdown',(e)=>{
       e.preventDefault();e.stopPropagation();
+      dragging=true;
       startX=e.clientX;startW=parseInt(cols[i].style.width,10)||th.offsetWidth;
-      window.addEventListener('mousemove',onMove);
-      window.addEventListener('mouseup',onUp);
+      try{resizer.setPointerCapture(e.pointerId);}catch(err){}
+      resizer.addEventListener('pointermove',onMove);
+      resizer.addEventListener('pointerup',onUp);
+      resizer.addEventListener('pointercancel',onUp);
     });
   });
 }
