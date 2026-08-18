@@ -1083,6 +1083,19 @@ function checkAlerts() {
 // EBR12345678-TOP / EBR12345678_TOP / EBR12345678TOP
 // EBR850649_57_TOP / EBR850649_57TOP 모두 허용
 // ══════════════════════════════════
+// 엑셀 날짜 셀(서식이 날짜인 경우 숫자로 읽힘) 안전 변환 → YYYY-MM-DD 문자열
+function excelDateToStr(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  if (typeof v === 'number') {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return String(v).trim();
+}
+
 function parseBarcodeVal(val) {
   if (!val) return null;
   // TOP / BOT / 단면 허용
@@ -1334,7 +1347,7 @@ async function uploadLM(input) {
           machine_program: iProgram >= 0 ? String(r[iProgram] || '').trim() || null : null,
           active:   iActive  >= 0 ? String(r[iActive]  || 'Y').trim() : 'Y',
           manager:  iManager >= 0 ? String(r[iManager] || '').trim() || null : null,
-          reg_date: iDate    >= 0 ? String(r[iDate]    || '').trim() || null : null,
+          reg_date: iDate    >= 0 ? (excelDateToStr(r[iDate]) || null) : null,
           note:     iNote    >= 0 ? String(r[iNote]    || '').trim() || null : null,
         });
       }
