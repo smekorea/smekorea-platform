@@ -120,6 +120,8 @@
   .scan-result-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:auto;border:1px solid var(--border);border-radius:8px;}
   .scan-result-scroll table.dtab thead th{position:sticky;top:0;z-index:2;}
   #scanResultTable thead th{background:#B7C0CE;color:#1F2430;font-size:11px;}
+  .scan-sel-col{display:none;}
+  #scanResultTable.sel-mode .scan-sel-col{display:table-cell;}
   #scanResultTable td.mono{font-family:'Noto Sans KR',sans-serif;font-size:13.5px;color:#111827;letter-spacing:-0.3px;}
   .item-table-scroll table.dtab thead th{position:sticky;top:0;z-index:2;}
   #itemTbody2 tr.row-done{background:rgba(14,159,110,0.08);color:var(--muted);}
@@ -414,12 +416,17 @@
       <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;">
         <div class="card-hd">
           <span>📄 스캔 결과 내역</span>
-          <button class="col-select-btn" onclick="openScanColModal()">🔧 컬럼선택</button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="col-select-btn" id="scanSelExecBtn" style="display:none;background:rgba(255,90,90,0.35);" onclick="deleteSelectedScanRows()">🗑 삭제 (<span id="scanSelCount">0</span>)</button>
+            <button class="col-select-btn" id="scanSelToggleBtn" onclick="toggleScanSelMode()">☑ 선택삭제</button>
+            <button class="col-select-btn" onclick="openScanColModal()">🔧 컬럼선택</button>
+          </div>
         </div>
         <div class="card-body" style="padding:0;flex:1;min-height:0;display:flex;flex-direction:column;">
           <div class="scan-result-scroll">
             <table class="dtab" id="scanResultTable">
               <thead><tr>
+                <th class="scan-sel-col" style="width:30px;"><input type="checkbox" id="scanSelectAllCb" onchange="toggleScanSelectAll(this.checked)"></th>
                 <th style="width:96px;" data-col="time">시각<div class="col-resizer"></div></th>
                 <th style="width:58px;" data-col="type">타입<div class="col-resizer"></div></th>
                 <th data-col="raw">원본값<div class="col-resizer"></div></th>
@@ -429,7 +436,7 @@
                 <th style="width:60px;" data-col="result">결과<div class="col-resizer"></div></th>
                 <th style="width:100px;" data-col="action">관리<div class="col-resizer"></div></th>
               </tr></thead>
-              <tbody id="scanResultTbody"><tr><td colspan="8" style="text-align:center;padding:16px;color:var(--muted);">스캔 기록 없음</td></tr></tbody>
+              <tbody id="scanResultTbody"><tr><td colspan="9" style="text-align:center;padding:16px;color:var(--muted);">스캔 기록 없음</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -2417,11 +2424,13 @@
     const tbody = document.getElementById('scanResultTbody');
     if (!tbody) return;
     if (!logRows || logRows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--muted);">스캔 기록 없음</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--muted);">스캔 기록 없음</td></tr>';
       return;
     }
     tbody.innerHTML = logRows.slice(0, 200).map(r => {
       const isEditing = editingLogId === r.id;
+      const selChecked = scanSelectedIds.has(r.id) ? 'checked' : '';
+      const selCell = `<td class="scan-sel-col" style="text-align:center;"><input type="checkbox" class="scan-row-check" data-id="${r.id}" ${selChecked} onchange="toggleScanSelectOne(${r.id}, this.checked)"></td>`;
       // 타입: QR / 바코드 2종만 표시 (품번단독·LOT단독은 내부 scan_type은 유지, 배지 표기만 통일)
       const typeTag = r.scan_type==='QR' ? '<span class="tag-scan tag-qr">QR</span>'
         : '<span class="tag-scan tag-b1">바코드</span>';
@@ -2450,6 +2459,7 @@
         : `<button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;" onclick="editScanRow(${r.id})">수정</button>
            <button class="btn btn-ghost" style="width:auto;padding:3px 8px;font-size:10px;color:var(--accent);" onclick="deleteScanRow(${r.id})">삭제</button>`;
       return `<tr>
+        ${selCell}
         <td class="mono" style="font-size:11.5px;" data-col="time">${timeStr}</td>
         <td data-col="type">${typeTag}</td>
         <td class="mono" data-col="raw">${rawCell}</td>
@@ -2586,7 +2596,73 @@
       await refreshItemListForSchedule(currentSid);
     }
     showToast('✓ 삭제 및 수량 재계산 완료');
-  }  async function recalcItemProgress(sid, itemCode) {
+  }
+
+  // ══ 스캔 결과 내역 — 선택삭제(토글 모드) ══
+  let scanSelMode = false;
+  let scanSelectedIds = new Set();
+
+  function toggleScanSelMode() {
+    scanSelMode = !scanSelMode;
+    const table = document.getElementById('scanResultTable');
+    const toggleBtn = document.getElementById('scanSelToggleBtn');
+    const execBtn = document.getElementById('scanSelExecBtn');
+    if (scanSelMode) {
+      table.classList.add('sel-mode');
+      toggleBtn.textContent = '✕ 선택취소';
+      execBtn.style.display = 'inline-block';
+    } else {
+      table.classList.remove('sel-mode');
+      toggleBtn.textContent = '☑ 선택삭제';
+      execBtn.style.display = 'none';
+      scanSelectedIds.clear();
+      updateScanSelCount();
+      const selAllCb = document.getElementById('scanSelectAllCb');
+      if (selAllCb) selAllCb.checked = false;
+      renderScanResultList();
+    }
+  }
+
+  function toggleScanSelectOne(id, checked) {
+    if (checked) scanSelectedIds.add(id); else scanSelectedIds.delete(id);
+    updateScanSelCount();
+  }
+
+  function toggleScanSelectAll(checked) {
+    if (checked) logRows.slice(0, 200).forEach(r => scanSelectedIds.add(r.id));
+    else scanSelectedIds.clear();
+    document.querySelectorAll('.scan-row-check').forEach(cb => { cb.checked = checked; });
+    updateScanSelCount();
+  }
+
+  function updateScanSelCount() {
+    const el = document.getElementById('scanSelCount');
+    if (el) el.textContent = scanSelectedIds.size;
+  }
+
+  async function deleteSelectedScanRows() {
+    if (scanSelectedIds.size === 0) { showToast('⚠ 삭제할 항목을 먼저 선택해주세요', true); return; }
+    if (!confirm(`선택한 ${scanSelectedIds.size}건의 스캔 기록을 삭제하시겠습니까?\n연결된 품목의 진행상태도 함께 재계산됩니다.\n이 작업은 되돌릴 수 없습니다.`)) return;
+    const ids = Array.from(scanSelectedIds);
+    const deletedRows = logRows.filter(r => scanSelectedIds.has(r.id));
+    const affected = new Set(deletedRows.map(r => r.item_code).filter(Boolean));
+
+    const ok = await sbDelete('ship_lot_log', ids);
+    if (!ok) { showToast('⚠ 삭제 중 오류가 발생했습니다', true); return; }
+
+    logRows = logRows.filter(r => !scanSelectedIds.has(r.id));
+    scanSelectedIds.clear();
+    updateScanSelCount();
+    renderScanResultList();
+
+    for (const ic of affected) await recalcItemProgress(currentSid, ic);
+    if (affected.size > 0) await refreshItemListForSchedule(currentSid);
+
+    toggleScanSelMode(); // 삭제 완료 후 선택모드 자동 종료
+    showToast(`✓ ${ids.length}건 삭제 및 수량 재계산 완료`);
+  }
+
+  async function recalcItemProgress(sid, itemCode) {
     const rows = await sbGet('ship_lot_log', `ship_schedule_id=eq.${sid}&item_code=eq.${itemCode}&pair_status=eq.완결&select=parsed_qty`);
     const total = Array.isArray(rows) ? rows.reduce((s, r) => s + (Number(r.parsed_qty) || 0), 0) : 0;
     const itemRowsDb = await sbGet('ship_lot_item', `ship_schedule_id=eq.${sid}&item_code=eq.${itemCode}&select=id,qty_required,check_type`);
@@ -3166,7 +3242,7 @@
   initColResize('histTable', 'shiplot_hist_col_v1');
   initColResize('makerTable', 'shiplot_maker_col_v1');
   initColResize('itemDtab', 'shiplot_item_col_v1');
-  initColResize('scanResultTable', 'shiplot_scanresult_col_v1');
+  initColResize('scanResultTable', 'shiplot_scanresult_col_v2');
   initColResize('mpnTable', 'shiplot_mpn_col_v1');
   loadSnd();
 </script>

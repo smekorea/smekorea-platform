@@ -1330,6 +1330,28 @@
     }
   }
 
+  // ── 출하지시 중복등록 감지: 매출처+출하일자+품목구성(품목코드+수량) 완전일치 검사 ──
+  async function checkDuplicateSchedule(items, customer, shipDate) {
+    if (!customer || !shipDate || !items || items.length === 0) return [];
+    try {
+      const candidates = await sbGet('ship_schedule',
+        `customer=eq.${encodeURIComponent(customer)}&ship_date=eq.${shipDate}&select=id,customer,ship_date,manager,input_by,created_at,ship_done`);
+      if (!Array.isArray(candidates) || candidates.length === 0) return [];
+      const newSet = new Set(items.map(it => it.item_code + '|' + it.qty_required));
+      const dups = [];
+      for (const c of candidates) {
+        const existItems = await sbGet('ship_lot_item', `ship_schedule_id=eq.${c.id}&select=item_code,qty_required`);
+        if (!Array.isArray(existItems) || existItems.length !== items.length) continue;
+        const existSet = new Set(existItems.map(it => it.item_code + '|' + it.qty_required));
+        if (existSet.size !== newSet.size) continue;
+        let allMatch = true;
+        for (const k of newSet) { if (!existSet.has(k)) { allMatch = false; break; } }
+        if (allMatch) dups.push(c);
+      }
+      return dups;
+    } catch (e) { return []; }
+  }
+
   async function handleLotFileSelect(file) {
     if (!file) return;
     parsedLotItems = null;
@@ -1354,7 +1376,9 @@
       }
       checkCustomerMismatch(parsed.warnings, parsed.customer);
       const enriched = await enrichCheckType(parsed.items);
-      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount };
+      const custForDup = (parsed.customer || document.getElementById('inCustomer').value.trim());
+      const dupSchedules = await checkDuplicateSchedule(enriched, custForDup, document.getElementById('inShipDate').value);
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, dupSchedules };
       renderLotPreview();
     } catch(e) {
       pendingLotPreview = null;
@@ -1386,7 +1410,9 @@
       }
       checkCustomerMismatch(parsed.warnings, parsed.customer);
       const enriched = await enrichCheckType(parsed.items);
-      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount };
+      const custForDup = (parsed.customer || document.getElementById('inCustomer').value.trim());
+      const dupSchedules = await checkDuplicateSchedule(enriched, custForDup, document.getElementById('inShipDate').value);
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, dupSchedules };
       renderLotPreview();
     } catch(e) {
       pendingLotPreview = null;
@@ -1404,12 +1430,20 @@
 
   function renderLotPreview() {
     if (!pendingLotPreview) return;
-    const { enriched, warnings, customer, slipNo, amount } = pendingLotPreview;
+    const { enriched, warnings, customer, slipNo, amount, dupSchedules } = pendingLotPreview;
     const totalQty = enriched.reduce((s,it)=>s+it.qty_required,0);
     const barcodeCnt = enriched.filter(it=>it.check_type==='barcode').length;
     const manualCnt = enriched.length - barcodeCnt;
     const warnHtml = warnings.length
       ? `<div class="lot-preview-warn-list">${warnings.map(w=>`<div class="lot-preview-warn-item">${w}</div>`).join('')}</div>`
+      : '';
+    const dupHtml = (dupSchedules && dupSchedules.length)
+      ? `<div class="lot-preview-warn-list" style="background:#FFF3CD;border:1px solid #F5C518;border-radius:6px;padding:8px;margin-top:6px;">
+          ${dupSchedules.map(d => {
+            const dt = d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : '-';
+            return `<div class="lot-preview-warn-item" style="color:#8a6100;font-weight:700;">⚠ 동일 매출처·출하일자·품목구성으로 이미 등록된 건이 있습니다 — 등록자: ${d.input_by||'-'} · 담당: ${d.manager||'-'} · 등록일시: ${dt} · 상태: ${d.ship_done||'-'}</div>`;
+          }).join('')}
+        </div>`
       : '';
     const confirmed = parsedLotItems !== null;
     document.getElementById('lotPreviewArea').innerHTML = `<div class="lot-preview">
@@ -1422,8 +1456,10 @@
         ${slipNo ? `<span>🧾 전표번호: ${slipNo}</span>` : ''}
         ${amount !== null && amount !== undefined ? `<span>💰 금액: ${Math.round(amount).toLocaleString()}</span>` : ''}
         ${warnings.length ? `<span class="warn">⚠ 확인필요 ${warnings.length}건</span>` : ''}
+        ${dupSchedules && dupSchedules.length ? `<span class="warn">⚠ 중복의심 ${dupSchedules.length}건</span>` : ''}
       </div>
       ${warnHtml}
+      ${dupHtml}
       <div style="margin-top:8px;display:flex;gap:8px;">
         ${confirmed
           ? `<span style="color:var(--accent3);font-weight:700;font-size:12px;">✓ 이 내용으로 확정되었습니다</span>`
