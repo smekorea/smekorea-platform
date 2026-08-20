@@ -208,6 +208,17 @@ tr.dragging{opacity:.45;}
 .ui-range{flex:1;-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;background:var(--border);outline:none;}
 .ui-range::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent2);border:2px solid #fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2);}
 .ui-val{font-family:'Noto Sans KR',sans-serif;font-size:11px;color:var(--muted);width:50px;text-align:right;flex-shrink:0;}
+.al-chip-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.al-chip{display:inline-flex;align-items:center;gap:4px;background:#eef4ff;border:1px solid #c7d8f5;border-radius:6px;padding:3px 4px 3px 9px;font-size:12.5px;color:#1a2233;}
+.al-chip-txt{cursor:pointer;font-weight:600;}
+.al-chip-txt:hover{text-decoration:underline;color:#1a56db;}
+.al-chip-x{cursor:pointer;color:#c8001e;font-weight:800;padding:0 4px;border-radius:4px;line-height:1;}
+.al-chip-x:hover{background:#fee2e2;}
+.al-chip-ok{cursor:pointer;color:#15803d;font-weight:800;padding:0 4px;line-height:1;}
+.al-chip-ok:hover{background:#dcfce7;border-radius:4px;}
+.al-chip-input{border:1.5px solid #1a56db;border-radius:5px;padding:2px 6px;font-size:12.5px;font-family:'Noto Sans KR',sans-serif;min-width:150px;outline:none;}
+.al-add-btn{background:#fff;border:1.5px dashed #b9c6da;color:#64748b;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.al-add-btn:hover{border-color:#1a56db;color:#1a56db;background:#f5f8ff;}
 </style>
 </head>
 <body>
@@ -229,7 +240,7 @@ tr.dragging{opacity:.45;}
   <button class="tab-btn" id="tab-export-btn"           onclick="switchTab('export')">🌍 해외매출처</button>
   <button class="tab-btn" id="tab-partners-btn"         onclick="switchTab('partners')">🤝 거래처 정보</button>
   <button class="tab-btn" id="tab-master-btn"           onclick="switchTab('master')">📦 재고운영기준</button>
-  <button class="tab-btn" id="tab-alias-btn"            onclick="switchTab('alias')">🏷️ 메이커 Alias</button>
+  <button class="tab-btn" id="tab-alias-btn"            onclick="switchTab('alias')">🏷️ 동일메이커관리</button>
   <button class="tab-btn" id="tab-maker-btn"            onclick="switchTab('maker')">🔧 메이커 납기</button>
   <button class="tab-btn" id="tab-logistics-btn"        onclick="switchTab('logistics')">🚢 물류 리드타임</button>
   <button class="tab-btn" id="tab-trade-btn"            onclick="switchTab('trade')">📊 매입·매출</button>
@@ -655,26 +666,33 @@ tr.dragging{opacity:.45;}
 <!-- ══════════════════════════════════════════════════ -->
 <div id="tab-alias" class="content" style="display:none;">
   <div class="up-section">
-    <div class="up-section-title">🏷️ 메이커명 통일 매핑 (maker_alias) <span style="font-size:12px;font-weight:400;color:var(--muted);" id="alias-count-label"></span></div>
+    <div class="up-section-title">🏷️ 동일메이커관리 <span style="font-size:12px;font-weight:400;color:var(--muted);" id="alias-count-label"></span></div>
     <div class="up-toolbar">
       <button class="up-btn up-btn-primary" onclick="openAliasAddModal()">+ 신규 추가</button>
-      <input type="text" id="alias-search" placeholder="기준명 / alias 검색..." oninput="renderAliasTable()" style="height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;color:var(--text);background:#f8fafc;outline:none;width:200px;">
+      <select id="alias-filter" onchange="renderAliasTable()" style="height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 8px;font-size:13px;background:#f8fafc;font-family:'Noto Sans KR',sans-serif;">
+        <option value="all">전체 메이커</option>
+        <option value="multi">표기 2개 이상</option>
+        <option value="single">단일표기</option>
+        <option value="unreg">미등록(실적만 있음)</option>
+      </select>
+      <input type="text" id="alias-search" placeholder="메이커명 / 표기 검색..." oninput="renderAliasTable()" style="height:36px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;color:var(--text);background:#f8fafc;outline:none;width:200px;">
       <div style="margin-left:auto;display:flex;gap:8px;">
         <button class="up-btn up-btn-green" onclick="downloadAliasExcel()">⬇ 다운로드</button>
         <label class="up-btn up-btn-secondary" style="cursor:pointer;">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" onchange="uploadAliasExcel(event)" style="display:none;"></label>
       </div>
     </div>
-    <div class="up-info">💡 alias는 쉼표(,)로 구분하여 여러 개 입력. 엑셀 업로드 시 전체 교체됩니다.</div>
+    <div class="up-info">💡 <b>매입·매출에 실제 사용된 메이커 전체</b>를 표시합니다. 같은 회사가 여러 표기로 갈린 경우 [+ 표기추가]로 묶어주세요(개수 제한 없음). 표기를 클릭하면 수정, ×로 삭제됩니다. <b>단일표기 메이커는 등록 없이도 정상 집계</b>되며, 표기가 갈릴 때만 등록이 필요합니다.</div>
   </div>
   <div class="tbl-wrap">
     <table id="alias-table">
       <thead><tr>
-        <th style="width:50px;">#</th>
-        <th style="width:200px;">기준명 (standard_name)</th>
-        <th>alias (표기명, 쉼표 구분)</th>
-        <th class="center" style="width:120px;">관리</th>
+        <th style="width:50px;">No</th>
+        <th style="width:180px;">대표 메이커명</th>
+        <th>동일 메이커 표기</th>
+        <th style="width:150px;">사용실적 / 기간</th>
+        <th class="center" style="width:110px;">관리</th>
       </tr></thead>
-      <tbody id="alias-tbody"><tr><td colspan="4"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="alias-tbody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -689,7 +707,7 @@ tr.dragging{opacity:.45;}
     <div class="modal-body">
       <input type="hidden" id="am-id">
       <div class="form-group"><label>기준명 <span class="req">*</span></label><input id="am-std" placeholder="예) SAMSUNG"></div>
-      <div class="form-group"><label>alias (쉼표로 구분)</label><input id="am-alias" placeholder="예) 삼성,Samsung Electronics,SAMSUNG CO."></div>
+      <div class="form-group"><label>동일메이커 표기 <span style="font-weight:400;color:var(--muted);font-size:11px;">(1개만 입력 — 추가 표기는 목록에서 [+ 표기추가])</span></label><input id="am-alias" placeholder="예) SAMSUNG ELECTRONICS"></div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeAliasModal()">취소</button>
@@ -3391,13 +3409,21 @@ function closeStockSummaryModal() {
 // ════════════════════════════════════════════════════
 let _aliasData = [], _makerData = [];
 
+let _brandUsage = {};
 async function loadAliasData() {
   const tbody = document.getElementById('alias-tbody');
-  tbody.innerHTML = '<tr><td colspan="4"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
-  const {data, error} = await sb.from('maker_alias').select('*').order('standard_name');
-  if(error){tbody.innerHTML=`<tr><td colspan="4" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
-  _aliasData = data || [];
-  document.getElementById('alias-count-label').textContent = `(${_aliasData.length}개)`;
+  tbody.innerHTML = '<tr><td colspan="5"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  const [aliasRes, usageRes] = await Promise.all([
+    sb.from('maker_alias').select('*').order('standard_name'),
+    sb.rpc('brand_usage_summary')
+  ]);
+  if(aliasRes.error){tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:red;padding:20px;">${aliasRes.error.message}</td></tr>`;return;}
+  _aliasData = aliasRes.data || [];
+  _brandUsage = {};
+  (usageRes.data||[]).forEach(r=>{
+    _brandUsage[(r.brand||'').trim()] = {p:Number(r.p_cnt)||0, s:Number(r.s_cnt)||0, ym1:r.ym_min||'', ym2:r.ym_max||''};
+  });
+  if(usageRes.error) console.warn('사용실적 로드 실패', usageRes.error);
   renderAliasTable();
 }
 
@@ -3413,43 +3439,136 @@ async function loadMakerData() {
 
 function renderAliasTable() {
   const search = (document.getElementById('alias-search')?.value||'').trim().toLowerCase();
-  const rows = _aliasData.filter(r =>
-    !search || (r.standard_name||'').toLowerCase().includes(search) || (r.alias||'').toLowerCase().includes(search)
-  );
-  document.getElementById('alias-tbody').innerHTML = rows.map((r,i) => `
-    <tr id="alias-row-${r.id}">
+  const filter = document.getElementById('alias-filter')?.value || 'all';
+  // ① maker_alias 등록분을 대표명 기준으로 그룹화
+  const groups = {};
+  _aliasData.forEach(r => {
+    const std = (r.standard_name||'').trim();
+    if(!std) return;
+    if(!groups[std]) groups[std] = [];
+    if((r.alias||'').trim()) groups[std].push({id:r.id, alias:(r.alias||'').trim()});
+  });
+  // ② 실제 사용된 브랜드 중 어디에도 안 묶인 것을 대표명으로 추가(미등록 메이커)
+  const mappedAlias = new Set();
+  Object.values(groups).forEach(arr => arr.forEach(x => mappedAlias.add(x.alias)));
+  Object.keys(_brandUsage).forEach(b => {
+    if(!b) return;
+    if(groups[b]) return;              // 이미 대표명으로 존재
+    if(mappedAlias.has(b)) return;     // 다른 대표명의 표기로 등록됨
+    groups[b] = [];                    // 단일표기(미등록) 메이커
+  });
+  // ③ 대표명별 사용실적 합산(대표명 + 소속 표기들)
+  const usageOf = std => {
+    const keys = [std, ...(groups[std]||[]).map(x=>x.alias)];
+    let p=0,s=0,ym1='',ym2='';
+    keys.forEach(k=>{
+      const u=_brandUsage[k]; if(!u) return;
+      p+=u.p; s+=u.s;
+      if(u.ym1 && (!ym1 || u.ym1<ym1)) ym1=u.ym1;
+      if(u.ym2 && (!ym2 || u.ym2>ym2)) ym2=u.ym2;
+    });
+    return {p,s,ym1,ym2,used:p+s};
+  };
+  const esc = s2 => String(s2==null?'':s2).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  let stdList = Object.keys(groups).filter(std => {
+    const cnt = groups[std].length;
+    const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
+    if(filter==='multi'  && cnt < 1) return false;
+    if(filter==='single' && cnt >= 1) return false;
+    if(filter==='unreg'  && isReg) return false;
+    if(!search) return true;
+    if(std.toLowerCase().includes(search)) return true;
+    return groups[std].some(x => (x.alias||'').toLowerCase().includes(search));
+  });
+  // 사용실적 많은 순 정렬(실적 없는 항목은 뒤로)
+  stdList.sort((a,b)=>{
+    const d = usageOf(b).used - usageOf(a).used;
+    return d !== 0 ? d : a.localeCompare(b);
+  });
+  document.getElementById('alias-tbody').innerHTML = stdList.map((std,i) => {
+    const items = groups[std];
+    const u = usageOf(std);
+    const chips = items.map(x => `
+      <span class="al-chip" id="al-chip-${x.id}">
+        <span class="al-chip-txt" onclick="editAliasChip(${x.id})" title="클릭하여 수정">${esc(x.alias)}</span>
+        <span class="al-chip-x" onclick="deleteAliasRow(${x.id},'${esc(x.alias).replace(/'/g,"\\'")}')" title="삭제">×</span>
+      </span>`).join('');
+    const single = items.length ? '' : '<span style="color:var(--muted);font-size:11.5px;">단일표기</span>';
+    const usageHtml = u.used
+      ? `<div style="font-size:11.5px;color:#1a2233;">매입 ${u.p.toLocaleString()} · 매출 ${u.s.toLocaleString()}</div>
+         <div style="font-size:10.5px;color:var(--muted);">${esc(u.ym1)}~${esc(u.ym2)}</div>`
+      : '<span style="font-size:11.5px;color:var(--muted);">실적 없음</span>';
+    const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
+    return `<tr>
       <td class="center mono">${i+1}</td>
-      <td style="font-weight:700;">${r.standard_name||''}</td>
-      <td>${(r.alias||'').split(',').map(a=>a.trim()).filter(Boolean).join(', ')||'—'}</td>
-      <td class="center">
-        <button class="row-btn row-btn-edit" onclick="editAliasRow(${r.id})">수정</button>
-        <button class="row-btn row-btn-del" onclick="deleteAliasRow(${r.id},'${(r.standard_name||'').replace(/'/g,"\\'")}')">삭제</button>
+      <td style="font-weight:700;">${esc(std)}</td>
+      <td>
+        <div class="al-chip-wrap">${chips}${single}
+          <button class="al-add-btn" onclick="addAliasChip('${esc(std).replace(/'/g,"\\'")}')">+ 표기추가</button>
+        </div>
       </td>
-    </tr>`).join('');
-  setTimeout(()=>initColResize('alias-table','al_alias'),50);
+      <td>${usageHtml}</td>
+      <td class="center">
+        ${isReg ? `<button class="row-btn row-btn-del" onclick="deleteAliasGroup('${esc(std).replace(/'/g,"\\'")}')">매핑 해제</button>` : '<span style="color:var(--muted);font-size:11px;">—</span>'}
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">해당 조건의 메이커가 없습니다</td></tr>';
+  const multiCnt = Object.keys(groups).filter(k=>groups[k].length>0).length;
+  document.getElementById('alias-count-label').textContent =
+    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개)`;
+  setTimeout(()=>initColResize('alias-table','al_alias_v3'),50);
 }
 
-function editAliasRow(id) {
-  const r = _aliasData.find(x=>x.id===id);
-  if(!r) return;
-  const row = document.getElementById('alias-row-'+id);
-  row.cells[2].innerHTML = `<input class="mk-input" style="width:100%;" id="alias-val-${id}" value="${(r.alias||'').replace(/"/g,'&quot;')}" placeholder="alias (쉼표 구분)">`;
-  row.cells[3].innerHTML = `
-    <button class="row-btn row-btn-save" onclick="saveAlias(${id})">저장</button>
-    <button class="row-btn row-btn-cancel" onclick="renderAliasTable()">취소</button>`;
+// 표기 1개 인라인 수정
+function editAliasChip(id){
+  const r=_aliasData.find(x=>x.id===id); if(!r) return;
+  const chip=document.getElementById('al-chip-'+id); if(!chip) return;
+  chip.innerHTML=`<input class="al-chip-input" id="al-inp-${id}" value="${String(r.alias||'').replace(/"/g,'&quot;')}"
+      onkeydown="if(event.key==='Enter')saveAlias(${id});if(event.key==='Escape')renderAliasTable();">
+    <span class="al-chip-ok" onclick="saveAlias(${id})">✓</span>
+    <span class="al-chip-x" onclick="renderAliasTable()">✕</span>`;
+  const inp=document.getElementById('al-inp-'+id); inp.focus(); inp.select();
+}
+
+// 표기 1개 추가(기준명은 고정)
+async function addAliasChip(std){
+  const val=prompt(`[${std}] 와 동일한 회사의 다른 표기를 입력하세요.\n\n※ 매입·매출 자료에 실제로 쓰인 표기와 정확히 같아야 합니다.\n   예) SWITCH KOREA, (주)스위치코리아`,'');
+  if(val===null) return;
+  const v=val.trim();
+  if(!v){ alert('표기를 입력해주세요.'); return; }
+  if(v===std){ alert('대표 메이커명과 동일한 표기는 등록할 필요가 없습니다.\n(자동으로 대표명이 적용됩니다)'); return; }
+  const dup=_aliasData.find(r=>(r.alias||'').trim()===v);
+  if(dup){ alert(`이미 [${dup.standard_name}] 에 등록된 표기입니다.\n같은 표기를 두 곳에 등록하면 집계가 중복됩니다.`); return; }
+  const {error}=await sb.from('maker_alias').insert({standard_name:std, alias:v});
+  if(error){ alert('추가 실패: '+error.message); return; }
+  await loadAliasData();
+}
+
+// 기준명 전체(그 기준명의 모든 표기) 삭제
+async function deleteAliasGroup(std){
+  const items=_aliasData.filter(r=>(r.standard_name||'').trim()===std);
+  if(!confirm(`[${std}] 의 표기 매핑 ${items.length}건을 모두 해제하시겠습니까?\n\n해제하면 각 표기가 별도 메이커로 집계됩니다.`)) return;
+  const ids=items.map(r=>r.id);
+  const {error}=await sb.from('maker_alias').delete().in('id', ids);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  await loadAliasData();
 }
 
 async function deleteAliasRow(id, name) {
-  if(!confirm(`[${name}] alias를 삭제하시겠습니까?`)) return;
+  if(!confirm(`표기 [${name}] 를 삭제하시겠습니까?`)) return;
   const {error} = await sb.from('maker_alias').delete().eq('id', id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _aliasData = _aliasData.filter(x=>x.id!==id);
-  document.getElementById('alias-count-label').textContent=`(${_aliasData.length}개)`;
   renderAliasTable();
 }
 
 async function saveAlias(id) {
-  const val = document.getElementById('alias-val-'+id).value.trim();
+  const el = document.getElementById('al-inp-'+id);
+  if(!el) return;
+  const val = el.value.trim();
+  if(!val){ alert('표기를 입력해주세요. (삭제하려면 × 버튼을 사용하세요)'); return; }
+  const dup=_aliasData.find(r=>r.id!==id && (r.alias||'').trim()===val);
+  if(dup){ alert(`이미 [${dup.standard_name}] 에 등록된 표기입니다.`); return; }
   const {error} = await sb.from('maker_alias').update({alias: val}).eq('id', id);
   if(error) { alert('저장 실패: '+error.message); return; }
   const row = _aliasData.find(r=>r.id===id);
@@ -3792,6 +3911,18 @@ function uploadAliasExcel(e){
       alias:String(r['alias']||r['메이커명']||'').trim(),
     })).filter(r=>r.standard_name);
     if(!_aliasUpRows.length){alert('데이터가 없습니다.');return;}
+    // 중복 표기 사전 검사 (DB 유니크 제약 위반 방지 + 집계 중복 방지)
+    const seen={}, dups=[];
+    _aliasUpRows.forEach(r=>{
+      const a=(r.alias||'').trim();
+      if(!a) return;
+      if(seen[a]) dups.push(`${a}  →  ${seen[a]} / ${r.standard_name}`);
+      else seen[a]=r.standard_name;
+    });
+    if(dups.length){
+      alert(`⚠ 같은 표기가 두 개 이상의 기준명에 등록되어 있습니다.\n같은 표기를 중복 등록하면 집계가 2배로 잡힙니다.\n\n${dups.slice(0,10).join('\n')}${dups.length>10?`\n...외 ${dups.length-10}건`:''}\n\n엑셀에서 중복을 정리한 뒤 다시 업로드해주세요.`);
+      return;
+    }
     if(!confirm(`메이커 Alias ${_aliasUpRows.length}건을 등록합니다.\n기존 전체 데이터가 삭제됩니다.`)) return;
     submitAliasData();
   };
