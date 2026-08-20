@@ -687,9 +687,9 @@ tr.dragging{opacity:.45;}
     <table id="alias-table">
       <thead><tr>
         <th style="width:50px;">No</th>
-        <th style="width:180px;">대표 메이커명</th>
-        <th>동일 메이커 표기</th>
-        <th style="width:150px;">사용실적 / 기간</th>
+        <th style="width:180px;cursor:pointer;" onclick="sortAliasTable('name')" title="클릭하여 정렬 (한글 → 영문 순)">대표 메이커명 <span id="al-sort-name"></span></th>
+        <th style="cursor:pointer;" onclick="sortAliasTable('chips')" title="클릭하여 표기 수로 정렬">동일 메이커 표기 <span id="al-sort-chips"></span></th>
+        <th style="width:150px;cursor:pointer;" onclick="sortAliasTable('usage')" title="클릭하여 사용실적으로 정렬">사용실적 / 기간 <span id="al-sort-usage">↓</span></th>
         <th class="center" style="width:110px;">관리</th>
       </tr></thead>
       <tbody id="alias-tbody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
@@ -3437,6 +3437,21 @@ async function loadMakerData() {
   renderMakerTable();
 }
 
+// ── 동일메이커관리 정렬 (기본: 사용실적 많은 순) ──
+let _alSortKey='usage', _alSortAsc=false;
+function sortAliasTable(key){
+  if(_alSortKey===key) _alSortAsc=!_alSortAsc;
+  else { _alSortKey=key; _alSortAsc=(key==='name'); }  // 이름은 오름차순, 숫자는 내림차순부터
+  renderAliasTable();
+}
+// 한글 먼저, 영문(기타) 나중으로 묶어서 정렬
+function alNameCmp(a,b){
+  const isKo = s => /^[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(String(s||'').trim());
+  const ka=isKo(a), kb=isKo(b);
+  if(ka!==kb) return ka ? -1 : 1;
+  return String(a).localeCompare(String(b), 'ko');
+}
+
 function renderAliasTable() {
   const search = (document.getElementById('alias-search')?.value||'').trim().toLowerCase();
   const filter = document.getElementById('alias-filter')?.value || 'all';
@@ -3480,10 +3495,21 @@ function renderAliasTable() {
     if(std.toLowerCase().includes(search)) return true;
     return groups[std].some(x => (x.alias||'').toLowerCase().includes(search));
   });
-  // 사용실적 많은 순 정렬(실적 없는 항목은 뒤로)
+  // 정렬: 대표명 / 표기수 / 사용실적
+  const dir = _alSortAsc ? 1 : -1;
   stdList.sort((a,b)=>{
-    const d = usageOf(b).used - usageOf(a).used;
-    return d !== 0 ? d : a.localeCompare(b);
+    if(_alSortKey==='name')  return alNameCmp(a,b) * dir;
+    if(_alSortKey==='chips'){
+      const d=(groups[a].length-groups[b].length)*dir;
+      return d!==0 ? d : alNameCmp(a,b);
+    }
+    const d=(usageOf(a).used-usageOf(b).used)*dir;
+    return d!==0 ? d : alNameCmp(a,b);
+  });
+  // 헤더 정렬 아이콘
+  ['name','chips','usage'].forEach(k=>{
+    const el=document.getElementById('al-sort-'+k);
+    if(el) el.textContent = (k===_alSortKey) ? (_alSortAsc?'↑':'↓') : '';
   });
   document.getElementById('alias-tbody').innerHTML = stdList.map((std,i) => {
     const items = groups[std];
