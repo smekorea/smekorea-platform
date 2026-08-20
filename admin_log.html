@@ -2526,7 +2526,161 @@ function finishTradeParse(staged, errors, sourceLabel) {
   renderTradePreview();
   document.getElementById('tradePasteForm').style.display = 'none';
   document.getElementById('tradePasteText').value = '';
+  // ── 처음 등장하는 브랜드명 감지 (미리보기는 유지한 채 경고) ──
+  checkNewBrands();
 }
+
+// ══════════════════════════════════════════
+//  신규 브랜드명 감지 + 추천 기준명
+// ══════════════════════════════════════════
+let _newBrandList = [];
+function normBrand(s){
+  return String(s||'').toLowerCase()
+    .replace(/\(주\)|㈜|주식회사|\(유\)|유한회사/g,'')
+    .replace(/co\.,?\s*ltd\.?|corporation|corp\.?|inc\.?|company/g,'')
+    .replace(/[\s\-_.,()]/g,'');
+}
+async function fetchAllCol(table, col, filterCol, filterVals){
+  // 1,000행 제한 회피 페이지네이션
+  let out=[], pg=0;
+  while(true){
+    let q=sb.from(table).select(col).range(pg*1000,(pg+1)*1000-1);
+    if(filterCol && filterVals && filterVals.length) q=q.in(filterCol, filterVals);
+    const {data,error}=await q;
+    if(error) throw error;
+    if(!data||!data.length) break;
+    out=out.concat(data); pg++;
+    if(data.length<1000) break;
+  }
+  return out;
+}
+async function checkNewBrands(){
+  try{
+    // 1) 업로드 데이터의 브랜드 목록
+    const staged=[..._tradePending.purchase.map(r=>({...r,_t:'purchase'})),..._tradePending.sales.map(r=>({...r,_t:'sales'}))];
+    const upBrands=[...new Set(staged.map(r=>(r.brand||'').trim()).filter(Boolean))];
+    if(!upBrands.length) return;
+    // 2) 기존에 쓰인 브랜드 + alias/기준명 수집
+    const [aliasRows, pB, sB] = await Promise.all([
+      sb.from('maker_alias').select('standard_name,alias').then(r=>r.data||[]),
+      fetchAllCol('purchase_data','brand'),
+      fetchAllCol('sales_data','brand')
+    ]);
+    const known=new Set(), knownNorm=new Map(); // norm -> 대표표기
+    const addKnown=v=>{
+      const t=String(v||'').trim(); if(!t) return;
+      known.add(t);
+      const n=normBrand(t); if(n && !knownNorm.has(n)) knownNorm.set(n,t);
+    };
+    aliasRows.forEach(r=>{
+      addKnown(r.standard_name);
+      String(r.alias||'').split(',').forEach(a=>addKnown(a));
+    });
+    pB.forEach(r=>addKnown(r.brand));
+    sB.forEach(r=>addKnown(r.brand));
+    const stdNames=[...new Set(aliasRows.map(r=>(r.standard_name||'').trim()).filter(Boolean))];
+    // 3) 미등록(=과거에 한 번도 안 쓰인) 브랜드만 추림
+    const unknown=upBrands.filter(b=>!known.has(b));
+    if(!unknown.length) return;
+    // 4) 추천 기준명 산출
+    const results=[];
+    for(const b of unknown){
+      const rows=staged.filter(r=>(r.brand||'').trim()===b);
+      const pCnt=rows.filter(r=>r._t==='purchase').length, sCnt=rows.filter(r=>r._t==='sales').length;
+      const yms=[...new Set(rows.map(r=>`${r.year} ${r.month}`))];
+      let rec=null, why='';
+      // (a) 정규화 일치
+      const n=normBrand(b);
+      if(knownNorm.has(n)){ rec=knownNorm.get(n); why='표기정규화 일치'; }
+      // (b) 품목코드 겹침
+      if(!rec){
+        const codes=[...new Set(rows.map(r=>r.item_code).filter(Boolean))].slice(0,80);
+        if(codes.length){
+          const [pm,sm]=await Promise.all([
+            sb.from('purchase_data').select('brand,item_code').in('item_code',codes).limit(2000).then(r=>r.data||[]),
+            sb.from('sales_data').select('brand,item_code').in('item_code',codes).limit(2000).then(r=>r.data||[])
+          ]);
+          const tally={};
+          [...pm,...sm].forEach(r=>{
+            const bb=(r.brand||'').trim();
+            if(!bb||bb===b) return;
+            tally[bb]=tally[bb]||new Set(); tally[bb].add(r.item_code);
+          });
+          const best=Object.entries(tally).sort((x,y)=>y[1].size-x[1].size)[0];
+          if(best && best[1].size>0){ rec=best[0]; why=`품목코드 ${best[1].size}개 일치`; }
+        }
+      }
+      // (c) 거래처명 동일
+      if(!rec){
+        const partners=[...new Set(rows.map(r=>r.supplier||r.customer).filter(Boolean))].slice(0,30);
+        if(partners.length){
+          const [pp,ss]=await Promise.all([
+            sb.from('purchase_data').select('brand,supplier').in('supplier',partners).limit(1500).then(r=>r.data||[]),
+            sb.from('sales_data').select('brand,customer').in('customer',partners).limit(1500).then(r=>r.data||[])
+          ]);
+          const tally={};
+          [...pp,...ss].forEach(r=>{ const bb=(r.brand||'').trim(); if(bb&&bb!==b) tally[bb]=(tally[bb]||0)+1; });
+          const best=Object.entries(tally).sort((x,y)=>y[1]-x[1])[0];
+          if(best){ rec=best[0]; why='거래처명 일치'; }
+        }
+      }
+      // 추천값이 alias인 경우 기준명으로 승격
+      if(rec){
+        const hit=aliasRows.find(r=>String(r.alias||'').split(',').map(x=>x.trim()).includes(rec));
+        if(hit) rec=hit.standard_name;
+      }
+      results.push({brand:b,pCnt,sCnt,yms,rec,why});
+    }
+    _newBrandList=results;
+    showNewBrandModal(results, stdNames);
+  }catch(e){ console.warn('신규 브랜드 감지 실패', e); }
+}
+function showNewBrandModal(list, stdNames){
+  const body=list.map(r=>{
+    const recHtml=r.rec
+      ? `<span style="font-weight:700;color:#1a56db;">${r.rec}</span><div style="font-size:11px;color:var(--muted);">${r.why}</div>`
+      : '<span style="color:var(--muted);">— 유사 메이커 없음</span>';
+    const cnt=[r.pCnt?`매입 ${r.pCnt.toLocaleString()}`:'',r.sCnt?`매출 ${r.sCnt.toLocaleString()}`:''].filter(Boolean).join(' · ');
+    return `<tr>
+      <td style="font-weight:700;">${r.brand}</td>
+      <td style="white-space:nowrap;">${cnt}건</td>
+      <td style="white-space:nowrap;font-size:11px;">${r.yms.join(', ')}</td>
+      <td>${recHtml}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('nbBody').innerHTML=body;
+  document.getElementById('nbCount').textContent=list.length;
+  document.getElementById('newBrandModal').style.display='flex';
+}
+function closeNewBrandModal(){ document.getElementById('newBrandModal').style.display='none'; }
+function nbCancelUpload(){
+  closeNewBrandModal();
+  clearTradePreview();
+  document.getElementById('tradeDirectForm').style.display='none';
+  alert('업로드를 취소했습니다. 데이터는 등록되지 않았습니다.');
+}
+async function recheckNewBrands(){
+  try{
+    const cands=_newBrandList.map(r=>r.brand);
+    if(!cands.length) return [];
+    const aliasRows=await sb.from('maker_alias').select('standard_name,alias').then(r=>r.data||[]);
+    const known=new Set();
+    aliasRows.forEach(r=>{
+      if(r.standard_name) known.add(String(r.standard_name).trim());
+      String(r.alias||'').split(',').forEach(a=>{ const t=a.trim(); if(t) known.add(t); });
+    });
+    return cands.filter(b=>!known.has(b));
+  }catch(e){ console.warn('재검사 실패',e); return []; }
+}
+
+function nbGoAlias(){
+  closeNewBrandModal();
+  switchTab('alias');
+  setTimeout(()=>{
+    alert('메이커 Alias에서 매핑을 추가/수정한 뒤,\n[📊 매입·매출] 탭으로 돌아가 등록을 진행하세요.\n(파싱한 데이터는 유지됩니다)');
+  },200);
+}
+
 
 function showTradeErrors(errors, sourceLabel) {
   document.getElementById('tradePreviewSection').style.display = 'none';
@@ -2600,6 +2754,7 @@ function renderTradePreview() {
 
 function clearTradePreview() {
   _tradePending = {purchase:[], sales:[]};
+  _newBrandList = [];
   document.getElementById('tradePreviewSection').style.display = 'none';
   document.getElementById('tradeErrorSection').style.display = 'none';
 }
@@ -2607,6 +2762,17 @@ function clearTradePreview() {
 async function submitTradeData() {
   const types = ['purchase','sales'].filter(t => _tradePending[t].length);
   if(!types.length) { alert('등록할 데이터가 없습니다.'); return; }
+
+  // ── 등록 직전 재검사: Alias를 수정하고 돌아온 경우 반영됨 ──
+  if(_newBrandList.length){
+    const stillNew = await recheckNewBrands();
+    if(stillNew.length){
+      const msg = '⚠ 아직 매핑되지 않은 신규 브랜드명이 있습니다.\n\n'
+        + stillNew.map(b=>'  · '+b).join('\n')
+        + '\n\n이대로 등록하면 별도 메이커로 집계됩니다.\n계속 진행하시겠습니까?';
+      if(!confirm(msg)) return;
+    }
+  }
 
   const planByType = {};
   let confirmMsg = '다음 데이터를 등록합니다.\n각 연/월의 기존 데이터는 삭제 후 재등록됩니다.\n\n';
@@ -3285,12 +3451,10 @@ async function deleteAliasRow(id, name) {
 async function saveAlias(id) {
   const val = document.getElementById('alias-val-'+id).value.trim();
   const {error} = await sb.from('maker_alias').update({alias: val}).eq('id', id);
-  if(!error) {
-    const row = _aliasData.find(r=>r.id===id);
-    if(row) row.alias = val;
-    const ok = document.getElementById('alias-ok-'+id);
-    ok.style.display='inline'; setTimeout(()=>ok.style.display='none', 2000);
-  } else alert('저장 실패: '+error.message);
+  if(error) { alert('저장 실패: '+error.message); return; }
+  const row = _aliasData.find(r=>r.id===id);
+  if(row) row.alias = val;
+  renderAliasTable();
 }
 
 async function addAlias() {
@@ -3801,5 +3965,35 @@ function initColResize(tableId, storageKey) {
 
 loadItemsData();
 </script>
+<!-- 신규 브랜드명 감지 경고 모달 -->
+<div id="newBrandModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);align-items:center;justify-content:center;z-index:99999;">
+  <div style="background:#fff;border-radius:14px;width:860px;max-width:96vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px 24px;font-family:'Noto Sans KR',sans-serif;">
+    <div style="font-size:17px;font-weight:800;color:#b45309;margin-bottom:6px;">⚠ 처음 등장하는 브랜드명 <span id="nbCount">0</span>건</div>
+    <div style="font-size:12.5px;color:#475569;line-height:1.6;margin-bottom:14px;">
+      아래 브랜드명은 <b>기존 매입·매출 자료와 메이커 Alias 어디에도 없는 새 표기</b>입니다.<br>
+      기존 메이커의 다른 표기(한글/영문, (주) 유무 등)일 수 있으며, <b>Alias에 등록하지 않으면 별도 메이커로 집계</b>됩니다.
+    </div>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        <thead><tr style="background:#f1f5f9;">
+          <th style="padding:9px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">브랜드명</th>
+          <th style="padding:9px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">건수</th>
+          <th style="padding:9px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">발생 연월</th>
+          <th style="padding:9px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">추천 기준명</th>
+        </tr></thead>
+        <tbody id="nbBody"></tbody>
+      </table>
+    </div>
+    <div style="font-size:11.5px;color:#64748b;margin-top:10px;">
+      ※ 추천은 <b>표기정규화 · 품목코드 · 거래처명</b> 대조 결과로, 참고용입니다. 실제 동일 메이커인지 확인 후 등록하세요.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+      <button onclick="nbCancelUpload()" style="padding:10px 18px;border-radius:8px;border:1.5px solid #f0a9b3;background:#fff;color:#c8001e;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">업로드 취소</button>
+      <button onclick="nbGoAlias()" style="padding:10px 18px;border-radius:8px;border:none;background:#1a56db;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">🏷️ 메이커 Alias로 이동</button>
+      <button onclick="closeNewBrandModal()" style="padding:10px 18px;border-radius:8px;border:1.5px solid #d0daea;background:#fff;color:#334155;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">확인하고 계속</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
