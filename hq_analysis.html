@@ -169,6 +169,14 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .tv-table tbody tr:nth-child(even){background:#f8fafc;}
 .tv-table tbody tr:nth-child(even) td:first-child{background:#f8fafc;}
 .tv-table tbody tr:nth-child(odd) td:first-child{background:#fff;}
+.exp-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-right:7px;border:1px solid #b9c6da;border-radius:4px;background:#fff;color:#1a56db;font-size:12px;font-weight:800;line-height:1;cursor:pointer;vertical-align:middle;user-select:none;}
+.exp-btn:hover{background:#1a56db;color:#fff;border-color:#1a56db;}
+.exp-btn.exp-open{background:#1a56db;color:#fff;border-color:#1a56db;}
+.tv-table tbody tr.det-row{background:#f4f7fb !important;}
+.tv-table tbody tr.det-row td{font-size:11px;color:#334155;border-bottom:1px dashed #dbe3ee;}
+.tv-table tbody tr.det-row td:first-child{background:#f4f7fb !important;padding-left:30px;}
+.det-code{font-weight:700;color:#1a2233;}
+.det-desc{color:#64748b;}
 .col-resizer{position:absolute;right:-5px;top:0;bottom:0;width:12px;cursor:col-resize;z-index:10;touch-action:none;}
 .col-resizer:hover{background:rgba(26,86,219,0.3);}
 .sort-icon{margin-left:3px;font-size:9px;color:var(--accent2);}
@@ -1497,6 +1505,58 @@ function buildSumChart(allKeys,sMap,pMap,isAmt,isYear){
   const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;">${grid}${bars}${labels}${xlabels}</svg>`;
   return `<div class="tv-wrap" style="overflow-x:auto;padding:12px;">${svg}</div>`;
 }
+// ── 매출처/매입처/메이커별 피벗표 — 품번별 세부내역 펼침(+/-) ──
+let _pivotDetail={};
+function togglePivotDetail(tblId,idx,ev){
+  if(ev) ev.stopPropagation();
+  const d=_pivotDetail[tblId];
+  if(!d) return;
+  const btn=document.getElementById('expb_'+tblId+'_'+idx);
+  const baseRow=document.getElementById('exprow_'+tblId+'_'+idx);
+  if(!btn||!baseRow) return;
+  const opened=btn.textContent==='−';
+  // 이미 열려있으면 해당 세부행만 제거(다른 거래처의 펼침 상태는 유지)
+  if(opened){
+    document.querySelectorAll('tr[data-det="'+tblId+'_'+idx+'"]').forEach(tr=>tr.remove());
+    btn.textContent='+'; btn.classList.remove('exp-open');
+    return;
+  }
+  const nm=d.entities[idx];
+  const items=d.byEntityItem[nm]||{};
+  const keys=d.allKeys;
+  const valOf=(o)=>d.isAmt?(o?.amt||0):(o?.qty||0);
+  const codeTotal=c=>keys.reduce((a,k)=>a+valOf(items[c].per[k]),0);
+  const codes=Object.keys(items).sort((a,b)=>codeTotal(b)-codeTotal(a));
+  const entTotal=codes.reduce((a,c)=>a+codeTotal(c),0);
+  const colSpanFront=1;
+  let html='';
+  codes.forEach(c=>{
+    const tot=codeTotal(c);
+    const pct=entTotal>0?(tot/entTotal*100):0;
+    const cells=keys.map(k=>{
+      const o=items[c].per[k];
+      return '<td class="num">'+(o?(d.isAmt?fmtFull(o.amt):o.qty.toLocaleString()):'-')+'</td>';
+    }).join('');
+    let diffCells='';
+    if(d.hasDiff){
+      const pv=valOf(items[c].per[d.prevKey]),cv=valOf(items[c].per[d.curKey]);
+      const df=cv-pv;const rate=pv>0?(df/pv*100):(cv>0?100:0);
+      const dc=df>0?'#c8001e':df<0?'#1a56db':'var(--muted)';
+      diffCells='<td class="num" style="color:'+dc+';">'+(df>=0?'+':'')+fmtFull(df)+'</td><td class="num" style="color:'+dc+';">'+(pv>0?(rate>=0?'+':'')+rate.toFixed(1)+'%':'-')+'</td>';
+    }
+    const desc=(items[c].desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const nameCell='<td class="left det-name" title="'+c+' '+desc+'"><span class="det-code">'+c+'</span>'+(desc?'<span class="det-desc"> · '+desc+'</span>':'')+'</td>';
+    html+='<tr class="det-row" data-det="'+tblId+'_'+idx+'">'+nameCell+cells+diffCells
+      +'<td class="num" style="font-weight:700;color:'+d.color+';background:#eef2f8;">'+fmtFull(tot)+'</td>'
+      +'<td class="num" style="color:var(--muted);background:#eef2f8;">'+pct.toFixed(1)+'%</td></tr>';
+  });
+  if(!codes.length){
+    const span=colSpanFront+keys.length+(d.hasDiff?2:0)+2;
+    html='<tr class="det-row" data-det="'+tblId+'_'+idx+'"><td class="left" colspan="'+span+'" style="color:var(--muted);">세부 품번 데이터 없음</td></tr>';
+  }
+  baseRow.insertAdjacentHTML('afterend',html);
+  btn.textContent='−'; btn.classList.add('exp-open');
+}
 function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
   const {fS,fP,from,to,isAmt,isYear,type,brand,pcode,sellers,buyers,isEstimated}=ctx;
   function getPKey(r){const yr=String(r['년']||'').replace('년','').trim();const mo=String(r['월']||'').replace('월','').trim().padStart(2,'0');if(isYear)return yr+'년';return yr+'.'+mo;}
@@ -1506,11 +1566,20 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
   const buildTable=(rows,nameField,label,color,idSuffix)=>{
     if(!rows.length) return {html:'<div style="color:var(--muted);font-size:12px;padding:16px;">데이터 없음</div>',excel:[]};
     const byEntity={};
+    const byEntityItem={};
     rows.forEach(r=>{
       const nm=r[nameField]||'-';const k=getPKey(r);
       if(!byEntity[nm])byEntity[nm]={};
       if(!byEntity[nm][k])byEntity[nm][k]={amt:0,qty:0};
       byEntity[nm][k].amt+=Number(r['공급가액'])||0;byEntity[nm][k].qty+=Number(r['수량'])||0;
+      // ── 품번별 세부내역(펼침용) 집계 ──
+      const code=r['품목코드']||'(품번미상)';
+      if(!byEntityItem[nm])byEntityItem[nm]={};
+      if(!byEntityItem[nm][code])byEntityItem[nm][code]={desc:r['품명 및 규격']||'',per:{}};
+      const it=byEntityItem[nm][code];
+      if(!it.desc&&r['품명 및 규격'])it.desc=r['품명 및 규격'];
+      if(!it.per[k])it.per[k]={amt:0,qty:0};
+      it.per[k].amt+=Number(r['공급가액'])||0;it.per[k].qty+=Number(r['수량'])||0;
     });
     const allKeys=[...new Set(rows.map(getPKey))].sort();
     const entityTotal=nm=>allKeys.reduce((a,k)=>a+(isAmt?(byEntity[nm][k]?.amt||0):(byEntity[nm][k]?.qty||0)),0);
@@ -1523,6 +1592,9 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
     const curKey=hasDiff?allKeys[allKeys.length-1]:null;
     const getKV=(nm,k)=>isAmt?(byEntity[nm][k]?.amt||0):(byEntity[nm][k]?.qty||0);
     const diffThHtml=hasDiff?'<th class="num" style="background:#fff4e0;color:#8a6d1f;">증감액('+prevKey+'→'+curKey+')</th><th class="num" style="background:#fff4e0;color:#8a6d1f;">증감률</th>':'';
+    const tblId='tvPivot_'+(idSuffix||nameField);
+    // 펼침용 세부데이터를 전역에 등록(따옴표·특수문자 안전을 위해 인덱스로만 참조)
+    _pivotDetail[tblId]={entities,byEntityItem,allKeys,isAmt,hasDiff,prevKey,curKey,color};
     const rowsHtml=entities.map((nm,i)=>{
       const tot=entityTotal(nm);
       const pct=grandTotal>0?(tot/grandTotal*100):0;
@@ -1534,7 +1606,8 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
         const dColor=d>0?'#c8001e':d<0?'#1a56db':'var(--muted)';
         diffCells='<td class="num" style="font-weight:700;color:'+dColor+';">'+(d>=0?'+':'')+fmtFull(d)+'</td><td class="num" style="font-weight:700;color:'+dColor+';">'+(pv>0?(rate>=0?'+':'')+rate.toFixed(1)+'%':'-')+'</td>';
       }
-      return '<tr><td class="left" title="'+nm+'">'+nm+'</td>'+cells+diffCells+'<td class="num" style="font-weight:800;color:'+color+';background:#f8f9fb;">'+fmtFull(tot)+'</td><td class="num" style="font-weight:700;color:var(--muted);background:#f8f9fb;">'+pct.toFixed(1)+'%</td></tr>';
+      const expBtn='<span class="exp-btn" id="expb_'+tblId+'_'+i+'" onclick="togglePivotDetail(\''+tblId+'\','+i+',event)">+</span>';
+      return '<tr id="exprow_'+tblId+'_'+i+'"><td class="left" title="'+nm+'">'+expBtn+nm+'</td>'+cells+diffCells+'<td class="num" style="font-weight:800;color:'+color+';background:#f8f9fb;">'+fmtFull(tot)+'</td><td class="num" style="font-weight:700;color:var(--muted);background:#f8f9fb;">'+pct.toFixed(1)+'%</td></tr>';
     }).join('');
     const totRowCells=allKeys.map(k=>{const s=entities.reduce((a,nm)=>a+(isAmt?(byEntity[nm][k]?.amt||0):(byEntity[nm][k]?.qty||0)),0);return '<td class="num" style="font-weight:800;">'+fmtFull(s)+'</td>';}).join('');
     let totDiffCells='';
@@ -1543,8 +1616,8 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
       const d=cv-pv;const rate=pv>0?(d/pv*100):0;
       totDiffCells='<td class="num" style="font-weight:800;">'+(d>=0?'+':'')+fmtFull(d)+'</td><td class="num" style="font-weight:800;">'+(pv>0?(rate>=0?'+':'')+rate.toFixed(1)+'%':'-')+'</td>';
     }
-    const html='<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:'+color+';">'+label+' ('+entities.length+'개사)</div>'
-      +'<div class="tv-wrap"><table class="tv-table" id="tvPivot_'+(idSuffix||nameField)+'"><thead><tr><th class="left">거래처</th>'+thCols+diffThHtml+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th><th class="num" style="background:#d0daea;color:#1a2233;">비중%</th></tr></thead><tbody>'
+    const html='<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:'+color+';">'+label+' ('+entities.length+'개사) <span style="font-size:10px;font-weight:600;color:var(--muted);">— 거래처명 앞 [+] 클릭 시 품번별 세부내역</span></div>'
+      +'<div class="tv-wrap"><table class="tv-table" id="'+tblId+'"><thead><tr><th class="left">거래처</th>'+thCols+diffThHtml+'<th class="num" style="background:#d0daea;color:#1a2233;">합계</th><th class="num" style="background:#d0daea;color:#1a2233;">비중%</th></tr></thead><tbody>'
       +rowsHtml
       +'<tr style="background:#f0f2f5;border-top:2px solid #c0cce0;"><td style="font-weight:800;">전체합계</td>'+totRowCells+totDiffCells+'<td class="num" style="font-weight:800;">'+fmtFull(grandTotal)+'</td><td class="num" style="font-weight:800;">100.0%</td></tr>'
       +'</tbody></table></div>';
@@ -1554,7 +1627,7 @@ function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
       const diffVals=hasDiff?(()=>{const pv=getKV(nm,prevKey),cv=getKV(nm,curKey);const d=cv-pv;const rate=pv>0?(d/pv*100):0;return [d,(pv>0?rate.toFixed(1)+'%':'-')];})():[];
       excel.push([nm,...allKeys.map(k=>isAmt?(byEntity[nm][k]?.amt||0):(byEntity[nm][k]?.qty||0)),...diffVals,tot,pct.toFixed(1)+'%']);
     });
-    return {html,excel,tableId:'tvPivot_'+(idSuffix||nameField)};
+    return {html,excel,tableId:tblId};
   };
   let html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted);flex-wrap:wrap;"><span>조회기간 <strong style="color:var(--text);">'+from.slice(0,4)+'.'+from.slice(4)+' ~ '+to.slice(0,4)+'.'+to.slice(4)+'</strong></span><span>단위 <strong style="color:var(--accent2);">'+(isYear?'년별':'월별')+'</strong></span></div>';
   html+='<div style="display:flex;flex-direction:column;gap:20px;">';
