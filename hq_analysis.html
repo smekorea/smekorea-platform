@@ -667,8 +667,9 @@ function startFullLoad(){
   document.getElementById('loadOverlay').classList.remove('hide');
   document.getElementById('ld-title').textContent='전체 데이터 로딩 중...';
   document.getElementById('ld-sub').innerHTML='매입·매출 전체 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요';
-  document.getElementById('ld-p-cnt').textContent='0건';
-  document.getElementById('ld-s-cnt').textContent='0건';
+  const P_TOTAL=_dbTotalP||120000,S_TOTAL=_dbTotalS||320000;
+  document.getElementById('ld-p-cnt').textContent=`0 / ${P_TOTAL.toLocaleString()}건 (0%)`;
+  document.getElementById('ld-s-cnt').textContent=`0 / ${S_TOTAL.toLocaleString()}건 (0%)`;
   document.getElementById('ld-p-bar').classList.remove('indeterminate');
   document.getElementById('ld-s-bar').classList.remove('indeterminate');
   document.getElementById('ld-p-bar').style.width='0%';
@@ -690,7 +691,7 @@ async function doFullLoad(){
   btn.disabled=true;btn.textContent='로드 중...';
   try{
     await loadLGBrands();await loadItemMakerMap();
-    const P_TOTAL=120000,S_TOTAL=320000;
+    const P_TOTAL=_dbTotalP||120000,S_TOTAL=_dbTotalS||320000;
     document.getElementById('ld-status').textContent='매입 데이터 로드 중...';
     _rawPAll=[];let page=0;
     while(true){
@@ -699,11 +700,12 @@ async function doFullLoad(){
         .order('trade_date',{ascending:true}).order('id',{ascending:true}).range(page*1000,(page+1)*1000-1);
       if(error) throw error;if(!data||!data.length) break;
       _rawPAll=[..._rawPAll,...data.map(r=>mapRow(r,'purchase_data'))];
-      document.getElementById('ld-p-cnt').textContent=_rawPAll.length.toLocaleString()+'건';
-      document.getElementById('ld-p-bar').style.width=Math.min(Math.round(_rawPAll.length/P_TOTAL*100),99)+'%';
+      const pPct=Math.min(Math.round(_rawPAll.length/P_TOTAL*100),99);
+      document.getElementById('ld-p-cnt').textContent=`${_rawPAll.length.toLocaleString()} / ${P_TOTAL.toLocaleString()}건 (${pPct}%)`;
+      document.getElementById('ld-p-bar').style.width=pPct+'%';
       if(data.length<1000) break;page++;
     }
-    document.getElementById('ld-p-cnt').textContent=_rawPAll.length.toLocaleString()+'건 완료';
+    document.getElementById('ld-p-cnt').textContent=`${_rawPAll.length.toLocaleString()} / ${P_TOTAL.toLocaleString()}건 완료 (100%)`;
     document.getElementById('ld-p-bar').style.width='100%';
     document.getElementById('ld-status').textContent='매출 데이터 로드 중...';
     _rawSAll=[];page=0;
@@ -713,11 +715,12 @@ async function doFullLoad(){
         .order('trade_date',{ascending:true}).order('id',{ascending:true}).range(page*1000,(page+1)*1000-1);
       if(error) throw error;if(!data||!data.length) break;
       _rawSAll=[..._rawSAll,...data.map(r=>mapRow(r,'sales_data'))];
-      document.getElementById('ld-s-cnt').textContent=_rawSAll.length.toLocaleString()+'건';
-      document.getElementById('ld-s-bar').style.width=Math.min(Math.round(_rawSAll.length/S_TOTAL*100),99)+'%';
+      const sPct=Math.min(Math.round(_rawSAll.length/S_TOTAL*100),99);
+      document.getElementById('ld-s-cnt').textContent=`${_rawSAll.length.toLocaleString()} / ${S_TOTAL.toLocaleString()}건 (${sPct}%)`;
+      document.getElementById('ld-s-bar').style.width=sPct+'%';
       if(data.length<1000) break;page++;
     }
-    document.getElementById('ld-s-cnt').textContent=_rawSAll.length.toLocaleString()+'건 완료';
+    document.getElementById('ld-s-cnt').textContent=`${_rawSAll.length.toLocaleString()} / ${S_TOTAL.toLocaleString()}건 완료 (100%)`;
     document.getElementById('ld-s-bar').style.width='100%';
     const {from,to}=getFT();
     rawP=_rawPAll.filter(r=>inPer(r,from,to));
@@ -738,29 +741,42 @@ async function loadFromSupabase(){
   const info=document.getElementById('uploadInfo');
   btn.disabled=true;btn.textContent='로드 중...';
   info.textContent='기간 데이터 조회 중...';
-  // ── 진행현황 오버레이 (전체다운로드와 동일한 UI 재사용, 총 건수를 모르므로 인디터미닛 바) ──
+  // ── 진행현황 오버레이 (전체로드와 동일한 형식: N / 총건수(X%)) ──
   const ov=document.getElementById('loadOverlay');
   const pBar=document.getElementById('ld-p-bar'),sBar=document.getElementById('ld-s-bar');
   const pCnt=document.getElementById('ld-p-cnt'),sCnt=document.getElementById('ld-s-cnt');
   const ldStatus=document.getElementById('ld-status');
   document.getElementById('ld-title').textContent='기간 데이터 로딩 중...';
   document.getElementById('ld-sub').innerHTML='선택하신 기간의 매입·매출 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요';
-  pCnt.textContent='0건';sCnt.textContent='0건';
+  pCnt.textContent='건수 확인 중...';sCnt.textContent='건수 확인 중...';
   pBar.classList.add('indeterminate');sBar.classList.add('indeterminate');
-  ldStatus.textContent='매입 데이터 조회 중...';
+  ldStatus.textContent='건수 확인 중...';
   ov.classList.remove('hide');
   try{
     await loadLGBrands();await loadItemMakerMap();
     const {from,to}=getFT();
+    const fy=from.slice(0,4),fm=from.slice(4,6);
+    const ty=to.slice(0,4),tm=to.slice(4,6);
+    const fromDate=`${fy}-${fm}-01`;
+    const lastDay=new Date(parseInt(ty),parseInt(tm),0).getDate();
+    const toDate=`${ty}-${tm}-${String(lastDay).padStart(2,'0')}`;
+    // ── 기간 내 실제 총 건수 선확인(매입/매출 각각) → 전체로드와 동일한 방식으로 진행율 계산 ──
+    let pTotal=null,sTotal=null;
+    try{
+      const [{count:pc},{count:sc}]=await Promise.all([
+        sb.from('purchase_data_v').select('*',{count:'exact',head:true}).gte('trade_date',fromDate).lte('trade_date',toDate),
+        sb.from('sales_data_v').select('*',{count:'exact',head:true}).gte('trade_date',fromDate).lte('trade_date',toDate)
+      ]);
+      pTotal=pc||0;sTotal=sc||0;
+    }catch(ce){console.warn('기간 건수 확인 실패',ce);}
+    if(pTotal!=null){pBar.classList.remove('indeterminate');pBar.style.width='0%';pCnt.textContent=`0 / ${pTotal.toLocaleString()}건 (0%)`;}
+    if(sTotal!=null){sBar.classList.remove('indeterminate');sBar.style.width='0%';sCnt.textContent=`0 / ${sTotal.toLocaleString()}건 (0%)`;}
+    ldStatus.textContent='매입 데이터 조회 중...';
     const PAGE=1000;
-    async function fetchAll(table,from,to){
+    async function fetchAll(table,total){
       let all=[],pg=0;
-      const fy=from.slice(0,4),fm=from.slice(4,6);
-      const ty=to.slice(0,4),tm=to.slice(4,6);
-      const fromDate=`${fy}-${fm}-01`;
-      const lastDay=new Date(parseInt(ty),parseInt(tm),0).getDate();
-      const toDate=`${ty}-${tm}-${String(lastDay).padStart(2,'0')}`;
       const cntEl=table==='purchase_data'?pCnt:sCnt;
+      const barEl=table==='purchase_data'?pBar:sBar;
       while(true){
         const {data,error}=await sb.from(table+'_v')
           .select('id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,brand_std'+(table==='purchase_data'?',supplier':',customer'))
@@ -768,18 +784,24 @@ async function loadFromSupabase(){
           .range(pg*PAGE,(pg+1)*PAGE-1).order('trade_date',{ascending:true}).order('id',{ascending:true});
         if(error) throw error;if(!data||!data.length) break;
         all=[...all,...data.map(r=>mapRow(r,table))];
-        cntEl.textContent=all.length.toLocaleString()+'건';
+        if(total){
+          const pct=Math.min(Math.round(all.length/total*100),99);
+          cntEl.textContent=`${all.length.toLocaleString()} / ${total.toLocaleString()}건 (${pct}%)`;
+          barEl.style.width=pct+'%';
+        }else{
+          cntEl.textContent=all.length.toLocaleString()+'건';
+        }
         if(data.length<PAGE) break;pg++;
       }
       return all;
     }
-    rawP=await fetchAll('purchase_data',from,to);
+    rawP=await fetchAll('purchase_data',pTotal);
     pBar.classList.remove('indeterminate');pBar.style.width='100%';
-    pCnt.textContent=rawP.length.toLocaleString()+'건 완료';
+    pCnt.textContent=pTotal?`${rawP.length.toLocaleString()} / ${pTotal.toLocaleString()}건 완료 (100%)`:rawP.length.toLocaleString()+'건 완료';
     ldStatus.textContent='매출 데이터 조회 중...';
-    rawS=await fetchAll('sales_data',from,to);
+    rawS=await fetchAll('sales_data',sTotal);
     sBar.classList.remove('indeterminate');sBar.style.width='100%';
-    sCnt.textContent=rawS.length.toLocaleString()+'건 완료';
+    sCnt.textContent=sTotal?`${rawS.length.toLocaleString()} / ${sTotal.toLocaleString()}건 완료 (100%)`:rawS.length.toLocaleString()+'건 완료';
     ldStatus.textContent='✅ 완료!';
     loaded=true;
     const f=`${from.slice(0,4)}.${from.slice(4,6)}`,t=`${to.slice(0,4)}.${to.slice(4,6)}`;
