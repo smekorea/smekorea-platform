@@ -132,7 +132,7 @@
     border:1px solid var(--border);border-radius:12px;
     overflow:auto;flex:1;
   }
-  table{width:100%;border-collapse:collapse;font-size:14px;white-space:nowrap;}
+  table{width:auto;border-collapse:collapse;font-size:14px;white-space:nowrap;}
   thead th{
     background:#e8edf5;padding:11px 13px;text-align:left;
     font-weight:800;color:#3a4a6a;
@@ -554,22 +554,22 @@
     <table id="poTable">
       <thead>
         <tr>
-          <th>구분<div class="col-resizer"></div></th>
-          <th>법인<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('type')" style="cursor:pointer;">구분 <span id="pm-sort-type"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('entity')" style="cursor:pointer;">법인 <span id="pm-sort-entity"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="sortPO('date')" style="cursor:pointer;">주문일자 <span id="pm-sort-date"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="sortPO('pono')" style="cursor:pointer;">PO No. <span id="pm-sort-pono"></span><div class="col-resizer"></div></th>
-          <th>Maker P/N<div class="col-resizer"></div></th>
-          <th>Maker<div class="col-resizer"></div></th>
-          <th>LG P/N<div class="col-resizer"></div></th>
-          <th class="td-right">주문수량<div class="col-resizer"></div></th>
-          <th class="td-right">출하수량<div class="col-resizer"></div></th>
-          <th class="td-right">잔량<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('mkpn')" style="cursor:pointer;">Maker P/N <span id="pm-sort-mkpn"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('maker')" style="cursor:pointer;">Maker <span id="pm-sort-maker"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('lgpn')" style="cursor:pointer;">LG P/N <span id="pm-sort-lgpn"></span><div class="col-resizer"></div></th>
+          <th class="sortable td-right" onclick="sortPO('qty')" style="cursor:pointer;">주문수량 <span id="pm-sort-qty"></span><div class="col-resizer"></div></th>
+          <th class="sortable td-right" onclick="sortPO('shipped')" style="cursor:pointer;">출하수량 <span id="pm-sort-shipped"></span><div class="col-resizer"></div></th>
+          <th class="sortable td-right" onclick="sortPO('remain')" style="cursor:pointer;">잔량 <span id="pm-sort-remain"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="sortPO('etd')" style="cursor:pointer;">ETD요청 <span id="pm-sort-etd">↑</span><div class="col-resizer"></div></th>
-          <th>ETA(자동)<div class="col-resizer"></div></th>
-          <th>운송<div class="col-resizer"></div></th>
-          <th>출하현황<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('eta')" style="cursor:pointer;">ETA(자동) <span id="pm-sort-eta"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('mode')" style="cursor:pointer;">운송 <span id="pm-sort-mode"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('resp')" style="cursor:pointer;">출하현황 <span id="pm-sort-resp"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="sortPO('hqdate')" style="cursor:pointer;">출하일 <span id="pm-sort-hqdate"></span><div class="col-resizer"></div></th>
-          <th>메이커납기<div class="col-resizer"></div></th>
+          <th class="sortable" onclick="sortPO('mkcommit')" style="cursor:pointer;">메이커납기 <span id="pm-sort-mkcommit"></span><div class="col-resizer"></div></th>
         </tr>
       </thead>
       <tbody id="poTableBody">
@@ -771,11 +771,14 @@
   let filteredData = [];
   let selectedRow = null;
   let poSortKey = 'etd', poSortAsc = true;
+  const PO_SORT_KEYS = ['type','entity','date','pono','mkpn','maker','lgpn',
+                        'qty','shipped','remain','etd','eta','mode','resp','hqdate','mkcommit'];
+  const PO_NUMKEYS   = ['qty','shipped','remain'];
 
   function sortPO(key){
     if(poSortKey===key){ poSortAsc=!poSortAsc; }
     else { poSortKey=key; poSortAsc=true; }
-    ['date','pono','etd','hqdate'].forEach(k=>{
+    PO_SORT_KEYS.forEach(k=>{
       const el=document.getElementById('pm-sort-'+k);
       if(el) el.textContent=k===poSortKey?(poSortAsc?'↑':'↓'):'';
     });
@@ -1003,10 +1006,26 @@
   function renderTable(data) {
     filteredData = data;
     // 정렬 적용
-    const getV=r=>poSortKey==='date'?(r.date||''):poSortKey==='pono'?(r.pono||''):poSortKey==='etd'?(r.etd||''):poSortKey==='hqdate'?(r.hqdate||''):'';
-    data=[...data].sort((a,b)=>poSortAsc?getV(a).localeCompare(getV(b)):getV(b).localeCompare(getV(a)));
+    const poSortVal=(r)=>{
+      switch(poSortKey){
+        case 'type':    return r.action_type||'신규';
+        case 'remain':  return Math.max(0,(r.qty||0)-(r.shipped||0));
+        case 'qty':     return r.qty||0;
+        case 'shipped': return r.shipped||0;
+        case 'eta':     return calcETA(r.etd, r.entity, r.mode)||'';
+        case 'resp':    return r.resp==='unordered'?0:r.resp==='pending'?1:r.resp==='complete'?2:3;
+        default:        return r[poSortKey]||'';
+      }
+    };
+    const poIsNum = PO_NUMKEYS.includes(poSortKey) || poSortKey==='resp';
+    data=[...data].sort((a,b)=>{
+      const va=poSortVal(a), vb=poSortVal(b);
+      if(poIsNum) return poSortAsc ? (va-vb) : (vb-va);
+      return poSortAsc ? String(va).localeCompare(String(vb),'ko')
+                       : String(vb).localeCompare(String(va),'ko');
+    });
     // 아이콘 갱신
-    ['date','pono','etd','hqdate'].forEach(k=>{
+    PO_SORT_KEYS.forEach(k=>{
       const el=document.getElementById('pm-sort-'+k);
       if(el) el.textContent=k===poSortKey?(poSortAsc?'↑':'↓'):'';
     });
