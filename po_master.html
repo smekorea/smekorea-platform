@@ -57,6 +57,17 @@
     transition:all 0.18s;
   }
   .back-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  /* ── 화면이동 네비게이션 표준 (SMERP 공통) — [← 뒤로][⌂ 홈] 2버튼 고정 ── */
+  .nav-group{display:flex;align-items:center;gap:6px;}
+  .nav-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    height:32px;padding:0 14px;border-radius:7px;font-size:12px;font-weight:700;
+    text-decoration:none;cursor:pointer;white-space:nowrap;
+    font-family:'Noto Sans KR',sans-serif;transition:all .18s;}
+  .nav-back{background:transparent;border:1.5px solid var(--border);color:var(--muted);}
+  .nav-back:hover{background:var(--surface);color:var(--text);border-color:var(--accent2);}
+  .nav-home{background:var(--accent2);border:1.5px solid var(--accent2);color:#fff;}
+  .nav-home:hover{filter:brightness(1.08);}
+
 
   /* ── 요약 KPI ── */
   .kpi-bar{
@@ -313,7 +324,10 @@
   </div>
   <div class="topbar-right">
     <div class="hq-badge">● 본사 전용 · HQ ONLY</div>
-    <a class="back-btn" href="po_hub.html">← PO 허브</a>
+    <div class="nav-group">
+      <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
+      <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
+    </div>
   </div>
 </div>
 
@@ -407,14 +421,18 @@
           <div style="font-size:13px;font-weight:700;">미리보기 — <span id="hqRowCount" style="color:var(--accent2);">0</span>행 · <span id="hqErrCount">0</span>건 오류</div>
           <div id="hqErrBadge" style="display:none;font-size:12px;padding:4px 10px;border-radius:6px;background:rgba(200,0,30,0.08);color:var(--accent);border:1px solid rgba(200,0,30,0.2);font-weight:600;"></div>
         </div>
+        <div id="hqSwapWarn" style="display:none;margin-bottom:12px;padding:12px 16px;border-radius:10px;background:rgba(200,0,30,0.06);border:1.5px solid rgba(200,0,30,0.35);">
+          <div style="font-size:13px;font-weight:800;color:var(--accent);margin-bottom:4px;">⚠ 품번 컬럼이 서로 바뀐 것으로 보입니다</div>
+          <div id="hqSwapWarnMsg" style="font-size:12px;color:#1a2233;line-height:1.6;"></div>
+        </div>
         <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;">
           <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">
             <thead>
               <tr style="background:#f0f4f9;">
                 <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">#</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">법인</th>
-                <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker P/N</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">LG P/N</th>
+                <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">Maker P/N</th>
                 <th style="padding:9px 12px;text-align:right;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">출하수량</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">운송</th>
                 <th style="padding:9px 12px;text-align:left;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);">인보이스 No.</th>
@@ -1463,6 +1481,7 @@
     document.getElementById('hqFileSelected').style.display = 'flex';
     document.getElementById('hqParseBtn').style.display = 'flex';
     document.getElementById('hqPreviewWrap').style.display = 'none';
+    { const _sw=document.getElementById('hqSwapWarn'); if(_sw) _sw.style.display='none'; }
     hqData = []; hqDistributed = [];
   }
 
@@ -1471,6 +1490,7 @@
     document.getElementById('hqFileSelected').style.display = 'none';
     document.getElementById('hqParseBtn').style.display = 'none';
     document.getElementById('hqPreviewWrap').style.display = 'none';
+    { const _sw=document.getElementById('hqSwapWarn'); if(_sw) _sw.style.display='none'; }
     document.getElementById('hqFileInput').value = '';
   }
 
@@ -1504,7 +1524,7 @@
   // ── 새 양식 다운로드 ──
   function downloadNewTemplate() {
     const wb = XLSX.utils.book_new();
-    const headers = ['법인','Maker P/N','LG P/N','출하수량','운송구분(VSL/AIR)','인보이스No.','출하일(YYYY-MM-DD)','판매단가(KRW)','비고'];
+    const headers = ['법인','LG P/N','Maker P/N','출하수량','운송구분(VSL/AIR)','인보이스No.','출하일(YYYY-MM-DD)','판매단가(KRW)','비고'];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     ws['!cols'] = headers.map((h,i) => ({wch: [10,18,18,10,16,16,18,14,14][i]}));
     XLSX.utils.book_append_sheet(wb, ws, '본사_출하입력');
@@ -1523,30 +1543,58 @@
       const ws  = wb.Sheets[wb.SheetNames[0]];
       const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
 
-      // 새 양식 헤더 감지: 0:법인 1:Maker P/N 2:LG P/N 3:출하수량 ...
-      let headerRow = -1;
-      for (let i = 0; i < Math.min(5, raw.length); i++) {
-        if (raw[i].some(c => String(c).includes('Maker P/N')) &&
-            raw[i].some(c => String(c).includes('출하수량'))) {
-          headerRow = i; break;
-        }
-      }
-      if (headerRow < 0) { showToast('⚠ SME_출하입력양식 파일을 확인해주세요', 'error'); btn.disabled=false; btn.textContent='🔍 미리보기 / Preview'; return; }
+      // ── 헤더명 기반 컬럼 탐색 (PO 업로드와 동일 방식) ──
+      // 열 순서·위치가 달라도, 중간에 열이 추가돼도 헤더 글자로 찾으므로 무관
+      const _norm = x => String(x||'').toLowerCase().replace(/[\s*.\/()\-_]/g, '');
+      const _findCol = (H, keys) => {
+        for (const k of keys) { const i = H.indexOf(_norm(k)); if (i >= 0) return i; }      // 1차: 완전일치
+        for (const k of keys) { const i = H.findIndex(h => h && h.includes(_norm(k))); if (i >= 0) return i; } // 2차: 부분일치
+        return -1;
+      };
+      const COLDEF = {
+        entity:   ['법인','entity'],
+        lgpn:     ['lgpn','lg품번'],
+        mkpn:     ['makerpn','메이커품번','메이커pn'],
+        shipqty:  ['출하수량','shipqty'],
+        mode:     ['운송구분','운송','transport','mode'],
+        invoice:  ['인보이스no','인보이스','invoiceno','invoice'],
+        shipdate: ['출하일','shipdate'],
+        price:    ['판매단가','salesprice','단가'],
+        remark:   ['비고','remark'],
+      };
 
-      const dataRows = raw.slice(headerRow + 1).filter(r => r.some(c => c !== '') && Number(r[3]) > 0);
+      // 헤더행 탐지: (Maker P/N 또는 LG P/N) + 출하수량 이 함께 있는 행
+      let headerRow = -1, ci = null;
+      for (let i = 0; i < Math.min(8, raw.length); i++) {
+        const H = (raw[i]||[]).map(_norm);
+        const c = {}; Object.keys(COLDEF).forEach(k => { c[k] = _findCol(H, COLDEF[k]); });
+        if ((c.mkpn >= 0 || c.lgpn >= 0) && c.shipqty >= 0) { headerRow = i; ci = c; break; }
+      }
+      if (headerRow < 0) {
+        showToast('⚠ 헤더를 찾을 수 없습니다 — SME_출하입력양식 파일인지 확인해주세요', 'error');
+        btn.disabled=false; btn.textContent='🔍 미리보기 / Preview'; return;
+      }
+      if (ci.mkpn < 0) {
+        showToast('⚠ [Maker P/N] 컬럼이 없습니다 — 양식을 다시 받아 사용해주세요', 'error');
+        btn.disabled=false; btn.textContent='🔍 미리보기 / Preview'; return;
+      }
+
+      const _gv = (r, i) => (i >= 0 ? r[i] : '');
+      const dataRows = raw.slice(headerRow + 1)
+        .filter(r => r.some(c => c !== '') && Number(_gv(r, ci.shipqty)) > 0);
       if (!dataRows.length) { showToast('⚠ 출하수량 컬럼에 값을 입력해주세요', 'warn'); btn.disabled=false; btn.textContent='🔍 미리보기 / Preview'; return; }
 
       hqData = dataRows.map((r, idx) => ({
         row:        idx + 1,
-        entity:     String(r[0]||'').trim().toUpperCase(),
-        mkpn:       String(r[1]||'').trim(),
-        lgpn:       String(r[2]||'').trim(),
-        shipqty:    Number(r[3])||0,
-        mode:       String(r[4]||'').trim().toUpperCase().replace('VSSL','VSL'),
-        invoice:    String(r[5]||'').trim(),
-        shipdate:   formatDate(r[6]),
-        sales_price:Number(r[7])||null,
-        remark:     String(r[8]||'').trim(),
+        entity:     String(_gv(r, ci.entity)||'').trim().toUpperCase(),
+        mkpn:       String(_gv(r, ci.mkpn)||'').trim(),
+        lgpn:       String(_gv(r, ci.lgpn)||'').trim(),
+        shipqty:    Number(_gv(r, ci.shipqty))||0,
+        mode:       String(_gv(r, ci.mode)||'').trim().toUpperCase().replace('VSSL','VSL'),
+        invoice:    String(_gv(r, ci.invoice)||'').trim(),
+        shipdate:   formatDate(_gv(r, ci.shipdate)),
+        sales_price:Number(_gv(r, ci.price))||null,
+        remark:     String(_gv(r, ci.remark)||'').trim(),
       }));
 
       // DB 조회 → 분산결과 계산
@@ -1574,7 +1622,14 @@
         .order('etd_request', {ascending: true});
 
       if (!poGroup || !poGroup.length) {
-        result.push({...r, distRows:[], errMsg:'매칭 PO 없음'});
+        // ── 원인 판별: Maker P/N 칸의 값이 실은 LG 품번인지 역조회 (B·C열 뒤바뀜 감지) ──
+        const {data: swapChk} = await sb.from('po_data')
+          .select('id')
+          .eq('entity', r.entity)
+          .eq('lg_pn', r.mkpn)
+          .limit(1);
+        const isSwapped = !!(swapChk && swapChk.length);
+        result.push({...r, distRows:[], errMsg: isSwapped ? '품번 뒤바뀜' : '매칭 PO 없음'});
         continue;
       }
 
@@ -1647,6 +1702,7 @@
       if (!r.shipqty||r.shipqty<=0) errs.push('수량');
       if (!r.shipdate) errs.push('출하일');
       if (!r.mode||!['VSL','AIR'].includes(r.mode)) errs.push('운송(VSL/AIR)');
+      if (r.errMsg==='품번 뒤바뀜')  errs.push('품번 뒤바뀜');
       if (r.errMsg==='매칭 PO 없음') errs.push('PO없음');
       if (errs.length) errTotal++;
 
@@ -1663,7 +1719,9 @@
 
       // 분산결과 표시
       let distHtml = '—';
-      if (r.errMsg==='매칭 PO 없음') {
+      if (r.errMsg==='품번 뒤바뀜') {
+        distHtml = `<span style="color:#c8001e;font-size:11px;font-weight:700;">⚠ Maker P/N 칸에 LG품번 입력됨</span>`;
+      } else if (r.errMsg==='매칭 PO 없음') {
         distHtml = `<span style="color:#c8001e;font-size:11px;font-weight:700;">⚠ PO 없음</span>`;
       } else if (r.distRows && r.distRows.length) {
         distHtml = r.distRows.map(d => {
@@ -1676,8 +1734,8 @@
       return `<tr style="background:${bg};border-bottom:1px solid #f0f4f9;">
         <td style="padding:8px 12px;font-size:10px;color:var(--muted);">${r.row}</td>
         <td style="padding:8px 12px;">${r.entity||'—'}</td>
-        <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.mkpn||'—'}</td>
         <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.lgpn||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.mkpn||'—'}</td>
         <td style="padding:8px 12px;text-align:right;font-weight:700;">${r.shipqty?r.shipqty.toLocaleString():'—'}</td>
         <td style="padding:8px 12px;">${modeBadge}</td>
         <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.invoice||'—'}</td>
@@ -1692,9 +1750,26 @@
     document.getElementById('hqRowCount').textContent = hqDistributed.length;
     document.getElementById('hqErrCount').textContent = errTotal;
     document.getElementById('hqPreviewWrap').style.display = 'block';
+
+    // ── 품번 뒤바뀜 경고 배너 ──
+    const swapCnt = hqDistributed.filter(r => r.errMsg==='품번 뒤바뀜').length;
+    const swapBox = document.getElementById('hqSwapWarn');
+    if (swapCnt > 0) {
+      const sample = hqDistributed.find(r => r.errMsg==='품번 뒤바뀜');
+      document.getElementById('hqSwapWarnMsg').innerHTML =
+        `<b>${swapCnt}개 행</b>의 <b>Maker P/N</b> 칸에 LG 품번이 입력되어 있습니다.`
+        + (sample ? `<br>예) ${sample.row}행 — Maker P/N 칸: <b>${sample.mkpn}</b> (실제 LG 품번) / LG P/N 칸: <b>${sample.lgpn||'—'}</b> (실제 Maker 품번)` : '')
+        + `<br>엑셀에서 두 컬럼의 <b>값을 서로 바꾼 뒤</b> 다시 업로드해주세요.`;
+      swapBox.style.display = 'block';
+    } else {
+      swapBox.style.display = 'none';
+    }
+
     // PO없음 포함 오류 있으면 등록 차단
     document.getElementById('hqSubmitBtn').disabled = errTotal > 0;
-    if (errTotal > 0) {
+    if (swapCnt > 0) {
+      showToast(`⚠ 품번 뒤바뀜 ${swapCnt}건 — Maker P/N·LG P/N 값을 서로 바꿔 재업로드해주세요`, 'error');
+    } else if (errTotal > 0) {
       showToast(`⚠ ${errTotal}건 오류 확인 후 수정해주세요`, 'error');
     } else {
       showToast(`✓ ${hqDistributed.length}건 확인 완료. 등록 버튼을 눌러주세요`);
