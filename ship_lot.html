@@ -839,6 +839,17 @@
     // Supabase/PostgREST 에러 응답은 배열이 아니라 {code, message, ...} 형태로 옴
     return !Array.isArray(data) && data && (data.code || data.message);
   }
+  // 에러 응답에서 사람이 읽을 수 있는 사유 문자열 추출 (등록 실패 원인 즉시 파악용)
+  function sbErrMsg(data) {
+    if (Array.isArray(data)) return '반환값 없음';
+    if (!data) return '응답 없음';
+    const parts = [];
+    if (data.code) parts.push('[' + data.code + ']');
+    if (data.message) parts.push(data.message);
+    if (data.details) parts.push('(' + data.details + ')');
+    if (data.hint) parts.push('※ ' + data.hint);
+    return parts.length ? parts.join(' ') : JSON.stringify(data).slice(0, 200);
+  }
   async function sbPost(table, body) {
     const res = await fetch(SB_URL + '/rest/v1/' + table, { method:'POST', headers: SB_HEADERS, body: JSON.stringify(body) });
     return res.json();
@@ -3130,11 +3141,17 @@
       await fetch(SB_URL + '/rest/v1/maker_pn_itemcode_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
     } else {
       const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description });
-      if (!Array.isArray(result) || result.length === 0) { showToast('⚠ 등록 실패', true); return; }
+      if (!Array.isArray(result) || result.length === 0) { showToast('⚠ 등록 실패 — ' + sbErrMsg(result), true); return; }
       mid = result[0].id;
     }
-    if (lgVals.length) await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
-    if (icVals.length) await sbPost('maker_pn_itemcode_map', icVals.map(v => ({ maker_pn_id: mid, item_code: v })));
+    if (lgVals.length) {
+      const r = await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
+      if (!Array.isArray(r)) { showToast('⚠ LG품번 저장 실패 — ' + sbErrMsg(r), true); return; }
+    }
+    if (icVals.length) {
+      const r = await sbPost('maker_pn_itemcode_map', icVals.map(v => ({ maker_pn_id: mid, item_code: v })));
+      if (!Array.isArray(r)) { showToast('⚠ ERP품목코드 저장 실패 — ' + sbErrMsg(r), true); return; }
+    }
 
     showToast('✓ 저장되었습니다');
     closeMpnModal();
@@ -3183,6 +3200,7 @@
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     let added = 0, skipped = 0, conflictNoted = 0;
+    const errSamples = [];   // 실패 사유 샘플(최대 3건) — 원인 즉시 파악용
     for (const row of rows) {
       const makerPn = String(row['메이커품번']||'').trim();
       if (!makerPn || makerPn.indexOf('예시') === 0) continue;
@@ -3195,7 +3213,12 @@
       const hasConflict = lgVals.some(lg => mpnList.some(r => r.lg_pns.includes(lg)));
       if (hasConflict) conflictNoted++;
       const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description });
-      if (!Array.isArray(result) || result.length === 0) { skipped++; continue; }
+      if (!Array.isArray(result) || result.length === 0) {
+        skipped++;
+        if (errSamples.length < 3) errSamples.push(`${makerPn}: ${sbErrMsg(result)}`);
+        console.error('메이커품번 등록 실패:', makerPn, result);
+        continue;
+      }
       const mid = result[0].id;
       await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
       if (icVals.length) await sbPost('maker_pn_itemcode_map', icVals.map(v => ({ maker_pn_id: mid, item_code: v })));
@@ -3203,6 +3226,9 @@
     }
     evt.target.value = '';
     showToast(`✓ 업로드 완료 — 신규 ${added}건 등록${skipped ? `, 중복/오류 ${skipped}건 제외` : ''}${conflictNoted ? `, ⚠ LG품번 중복의심 ${conflictNoted}건(별도 확인 필요)` : ''}`);
+    if (errSamples.length > 0) {
+      setTimeout(() => showToast('⚠ 실패 사유 — ' + errSamples.join(' / '), true), 1200);
+    }
     invalidateMpnMasterCache();
     loadMpnData();
   }
