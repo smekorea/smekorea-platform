@@ -664,6 +664,9 @@ const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 
+// (v15.47) 전월 재고 공통 캐시 — initPage()가 아래에서 즉시 호출되므로 반드시 그 앞에 선언
+let _allStockCache=null;
+
 // 인증
 if(localStorage.getItem('sme_auth')==='1'){
   document.getElementById('pwOverlay').classList.add('hide');
@@ -705,7 +708,11 @@ async function initPage(){
   //   변동패턴·전월비교 탭도 같은 캐시를 쓰므로 이후 탭 전환 시 추가 조회가 없다.
   let ymSet=new Set();
   try{ (await fetchAllStock()).forEach(r=>ymSet.add(r.ym)); }
-  catch(e){ console.error('[stock] 월 목록 조회 실패',e); }
+  catch(e){
+    console.error('[stock] 월 목록 조회 실패',e);
+    const tb=document.getElementById('tblBody');
+    if(tb)tb.innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">⚠</div><div class="empty-text">재고 데이터를 불러오지 못했습니다<br><span style="font-size:11px;color:#c8001e;">${(e&&e.message)||e}</span></div></div></td></tr>`;
+  }
   if(ymSet.size){
     const months=[...ymSet].sort((a,b)=>b.localeCompare(a));
     const sel=document.getElementById('f_month');
@@ -1338,7 +1345,10 @@ function renderPattern(){
 // buildPatternAsync()(변동패턴)와 loadAllMonthsData()가 완전히 동일한 쿼리로
 // 전월 데이터를 각각 따로 받고 있어 같은 9,248행을 두 번 내려받고 있었음.
 // 한 번만 받아 캐시하고 두 곳이 공유한다.
-let _allStockCache=null;
+// ⚠️ 캐시 변수(_allStockCache) 선언은 이 아래가 아니라 파일 상단(인증 블록 앞)에 둔다.
+//    initPage()가 스크립트 상단에서 즉시 호출되는데 여기서 let 으로 선언하면
+//    TDZ(일시적 사각지대)에 걸려 "Cannot access '_allStockCache' before initialization"
+//    으로 조회가 통째로 실패한다(v15.47 배포 직후 실제 발생 — 기준월 목록이 비었음).
 async function fetchAllStock(){
   if(_allStockCache)return _allStockCache;
   const PAGE=1000;const all=[];let pg=0;
@@ -1346,7 +1356,7 @@ async function fetchAllStock(){
     const{data,error}=await sb.from('stock_inventory_v')
       .select('ym,item_code,brand,brand_std,description,supply_type,real_qty,stock_amount')
       .order('ym',{ascending:true}).range(pg*PAGE,(pg+1)*PAGE-1);
-    if(error){console.error('[stock] 전월 재고 로드 실패',error);break;}
+    if(error){console.error('[stock] 전월 재고 로드 실패',error);throw error;} // 조용히 빈 배열을 반환하지 않는다
     if(!data||!data.length)break;
     for(let k=0;k<data.length;k++)all.push(data[k]); // 배열 재할당 금지(O(n²))
     if(data.length<PAGE)break;
