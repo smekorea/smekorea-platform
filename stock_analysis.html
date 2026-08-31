@@ -794,37 +794,56 @@ async function runAnalysis(){
     const ey=toDt.getFullYear(), em=toDt.getMonth()+1;
     while(y<ey||(y===ey&&m<=em)){ ymPairs.push([String(y).slice(2)+'년', m+'월']); m++; if(m>12){m=1;y++;} }
   }
-  const yrList=[...new Set(ymPairs.map(x=>x[0]))];
-  const moList=[...new Set(ymPairs.map(x=>x[1]))];
-  let salesErr=null;
-  try{
-    const PAGE=1000; let pg=0;
+  // ⚠️ (v15.47-fix) .in('year',[...]).in('month',[...]) 로 한 번에 받는 방식은 실패한다.
+  //   PostgREST 는 GROUP BY 를 못 하므로 원본 행을 페이지네이션해야 하는데,
+  //   `where year in(..) and month in(..) order by id offset N` 은 idx_sales_ym 을 못 쓰고
+  //   PK 인덱스를 훑으며 조건에 안 맞는 232,957행을 걸어 지나간다 → 실측 3,922ms.
+  //   anon 의 statement_timeout 이 3초라 그대로 타임아웃(canceling statement due to statement timeout).
+  //   → 월 단위 .eq('year').eq('month') 로 쪼개면 Index Cond 로 잡혀 실측 161ms.
+  //   월 12개를 4개씩 병렬로 돌린다. (인덱스에 쿼리를 맞추는 원칙 — v15.47 표준)
+  const SALES_PAR=4, SALES_PAGE=1000, SALES_RETRY=3;
+  let salesErr=null, salesMissMonths=[];
+
+  async function fetchOneMonth(yLabel,mLabel){
+    let pg=0;
     while(true){
-      const{data,error}=await sb.from('sales_data').select('year,month,item_code,qty')
-        .in('year',yrList).in('month',moList)
-        .order('id',{ascending:true}).range(pg*PAGE,(pg+1)*PAGE-1);
-      if(error)throw error;
-      if(!data||!data.length)break;
-      // .in() 2개는 교차곱이라 기간 밖 (년,월) 조합이 섞일 수 있음 → 정확히 걸러낸다
-      //   예: 25.11~26.02 조회 시 yrList=[25년,26년], moList=[11월,12월,1월,2월]
-      //       → 25년1월·26년11월 같은 조합이 딸려오므로 아래 Set 으로 배제
-      const okSet=new Set(ymPairs.map(x=>x[0]+'|'+x[1]));
-      for(let k=0;k<data.length;k++){
-        const r=data[k];
-        if(!okSet.has(String(r.year)+'|'+String(r.month)))continue;
+      let rows=null;
+      for(let t=0;t<SALES_RETRY;t++){
+        try{
+          const{data,error}=await sb.from('sales_data').select('item_code,qty')
+            .eq('year',yLabel).eq('month',mLabel)
+            .order('id',{ascending:true}).range(pg*SALES_PAGE,(pg+1)*SALES_PAGE-1);
+          if(error)throw error;
+          rows=data||[];break;
+        }catch(err){
+          if(t===SALES_RETRY-1){console.warn('[stock] 매출 조회 실패',yLabel,mLabel,'p'+pg,err);salesErr=err;}
+          else await new Promise(r=>setTimeout(r,400*Math.pow(2,t)));
+        }
+      }
+      if(rows===null){salesMissMonths.push(yLabel+mLabel);return;} // 이 달만 포기하고 계속
+      for(let k=0;k<rows.length;k++){
+        const r=rows[k];
         salesMap[r.item_code]=(salesMap[r.item_code]||0)+(Number(r.qty)||0);
       }
-      if(data.length<PAGE)break;
+      if(rows.length<SALES_PAGE)break;
       pg++;
     }
-  }catch(e){ salesErr=e; console.error('[stock] 매출 집계 실패',e); }
-  if(salesErr){
+  }
+
+  for(let b=0;b<ymPairs.length;b+=SALES_PAR){
+    await Promise.all(ymPairs.slice(b,b+SALES_PAR).map(([y,m])=>fetchOneMonth(y,m)));
+  }
+
+  if(salesMissMonths.length){
     const pe=document.getElementById('salesPeriodLabel');
-    if(pe){pe.textContent='⚠ 매출 집계 실패 — 판매량 0으로 표시됩니다 ('+(salesErr.message||salesErr)+')';pe.style.color='#c8001e';}
+    if(pe){
+      pe.textContent='⚠ 매출 집계 일부 실패 ('+salesMissMonths.join(', ')+') — 해당 월 판매량이 빠졌습니다';
+      pe.style.color='#c8001e';
+    }
   }
 
   const matchedCnt=Object.keys(salesMap).length;
-  console.log(`[stock] 판매기간(년/월): ${yrList}/${moList} / stock품목: ${codes.length}개 / 매칭: ${matchedCnt}개`);
+  console.log(`[stock] 판매기간(년/월): ${ymPairs.map(x=>x[0]+x[1]).join(',')} / stock품목: ${codes.length}개 / 매칭: ${matchedCnt}개`);
   if(matchedCnt===0)console.warn('[stock] 매칭 0건 — item_code 불일치 가능성. stock 샘플:',codes.slice(0,5));
   _allResult=stockAll.map(r=>{
     const totalSales=salesMap[r.item_code]||0;
@@ -1189,7 +1208,7 @@ function renderRiskTable(){
 // 자연폭(auto 레이아웃) 측정 → 전체 컬럼 명시고정 → table-layout:fixed 전환 순으로 처리해야
 // 한 컬럼을 드래그해도 다른 컬럼 폭이 따라 변하지 않는 완전 독립 리사이즈가 보장된다.
 // (기존엔 table-layout이 auto로 남아있어서, 브라우저가 드래그된 컬럼 폭에 맞춰 다른 컬럼들을 자동으로 재분배했음)
-const COL_RESIZE_VER='v3';
+const COL_RESIZE_VER='v4'; // (v15.47) 전체폭 고정 방식 변경 — 기존 저장폭 무효화
 function initColResize(tableId,storageKey){
   const table=document.getElementById(tableId);
   if(!table)return;
@@ -1199,8 +1218,10 @@ function initColResize(tableId,storageKey){
     localStorage.setItem(verKey,COL_RESIZE_VER);
   }
   const ths=[...table.querySelectorAll('thead th')];
+  if(!ths.length)return;
   const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');
   // 1단계: 어떤 th에도 명시폭을 주기 전에 자연폭을 모두 먼저 측정
+  //   (이 시점의 table 은 CSS width:100% 라 컬럼이 컨테이너에 맞춰 자연스럽게 배분돼 있다)
   const naturalWidths=ths.map(th=>th.offsetWidth);
   // 2단계: 저장된 폭 또는 자연폭으로 전체 컬럼폭을 동시에 명시 고정
   ths.forEach((th,i)=>{
@@ -1208,18 +1229,35 @@ function initColResize(tableId,storageKey){
     th.style.width=w+'px';
     th.style.minWidth=w+'px';
   });
-  // 3단계: table-layout:fixed 전환 — 이후 각 컬럼폭은 서로 완전히 독립적으로 유지된다
+  // 3단계: table-layout:fixed 전환 + 전체 폭을 컬럼 폭 합계로 명시
+  //   ⚠️ CSS 의 table{width:100%} 를 반드시 px 합계로 덮어써야 한다.
+  //      100% 인 채로 두면 브라우저가 총폭을 컨테이너에 맞추려고
+  //      한 컬럼을 넓힐 때 나머지를 자동으로 줄여버려(재분배) "독립 리사이즈"가 깨진다.
+  //      이것이 표준(SME_컨텍스트)의 "table{width:100%} 금지 / 전체폭=컬럼합계" 항목.
+  const applyTotal=()=>{
+    let sum=0;ths.forEach(th=>{sum+=parseFloat(th.style.width)||th.offsetWidth;});
+    table.style.width=sum+'px';
+    table.style.minWidth=sum+'px';
+    table.style.maxWidth='none';
+  };
   table.style.tableLayout='fixed';
+  applyTotal();
   ths.forEach((th,i)=>{
     th.querySelector('.col-resizer')?.remove();
     const rsz=document.createElement('div');rsz.className='col-resizer';th.appendChild(rsz);
     let startX,startW;
     rsz.addEventListener('mousedown',e=>{
       startX=e.clientX;startW=th.offsetWidth;
-      const onMove=e=>{const nw=Math.max(40,startW+e.clientX-startX);th.style.width=nw+'px';th.style.minWidth=nw+'px';};
+      document.body.style.userSelect='none';
+      const onMove=ev=>{
+        const nw=Math.max(40,startW+ev.clientX-startX);
+        th.style.width=nw+'px';th.style.minWidth=nw+'px';
+        applyTotal();   // 드래그 중 전체 폭 실시간 재계산 — 다른 컬럼은 그대로 유지된다
+      };
       const onUp=()=>{
         const ws={};ths.forEach((t,idx)=>{ws[idx]=t.offsetWidth;});
         localStorage.setItem(storageKey,JSON.stringify(ws));
+        document.body.style.userSelect='';
         document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
       };
       document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
