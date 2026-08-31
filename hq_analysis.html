@@ -986,7 +986,7 @@ async function doFullLoad(){
     const sec=((Date.now()-t0)/1000).toFixed(1);
     document.getElementById('ld-status').textContent=miss?'⚠ 일부 실패':'✅ 완료!';
     info.textContent=(miss?`⚠ 일부 페이지 조회 실패 — 최대 ${miss.toLocaleString()}건 누락 가능(재로드 권장) · `:`✅ 전체 로드 완료(${sec}초) · `)
-      +`현재기간(${from.slice(0,4)}.${from.slice(4)}~${to.slice(0,4)}.${to.slice(4)}) 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건 (DB전체: 매입${_rawPAll.length.toLocaleString()}·매출${_rawSAll.length.toLocaleString()})`;
+      +`매입 ${_rawPAll.length.toLocaleString()}건 / 매출 ${_rawSAll.length.toLocaleString()}건`;
     info.style.color=miss?'#ea580c':'#059669';
     setModeBar(true);setPricePeriodInit();fillDrops();updateAll();
     Object.keys(P_PFX).forEach(sc=>clearDirty(sc));
@@ -1550,10 +1550,15 @@ function updCorpDetail(fS,fP,cbSrc){
     // ⚠️ (v15.46) 아래 추이 그래프는 상단 기간 바가 아니라 "올해" 고정 기준이다.
     //    총액(기간누적)과 그래프(올해)의 기준이 달라 "기간설정과 그래프 년월이 안 맞는다"는
     //    지적이 있었음 → 그래프에 별도 캡션을 달아 각각의 기준을 명확히 표기.
-    const trendCap=`<div style="font-size:10px;font-weight:700;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:6px;padding:1px 7px;display:inline-block;margin-bottom:4px;">📅 ${20+Number(curYear)}년 월별 공급추이 (기간설정과 무관·올해 고정)</div>`;
+    // ⚠️ curYear 는 2자리 문자열('26'). 산술 덧셈(20+Number)을 쓰면 46이 되므로 문자열 결합이어야 함.
+    const trendCap=`<div style="font-size:10px;font-weight:700;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:6px;padding:2px 8px;margin-bottom:6px;white-space:nowrap;">📅 20${curYear}년 월별 공급추이 · 위 기간설정과 무관하게 올해 고정</div>`;
     const maxV=Math.max(...months.map(m=>mSales[m]||0),1);
     const hasCur=months.some(m=>mSales[m]);
-    if(!hasCur){document.getElementById(`corp-${id}-trend`).innerHTML=trendCap+'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;">올해 데이터 없음</div>';return;}
+    // 초기 DOM 의 display:flex(중앙정렬 안내문용)를 렌더 시점에 block 으로 되돌린다.
+    // flex 상태로 두면 캡션 텍스트가 세로로 눌려 읽을 수 없게 됨(실제 발생 사례).
+    const _tEl=document.getElementById(`corp-${id}-trend`);
+    _tEl.style.display='block';_tEl.style.color='';
+    if(!hasCur){_tEl.innerHTML=trendCap+'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;">올해 데이터 없음</div>';return;}
     const W=400,H=130,pL=28,pR=8,pT=18,pB=26;const cW=W-pL-pR,cH=H-pT-pB;
     const colW=cW/(months.length-1),getX=i=>pL+i*colW,getY=v=>pT+cH*(1-v/maxV);
     const pts=months.map((m,i)=>({x:getX(i),y:getY(mSales[m]||0),v:mSales[m]||0}));
@@ -1564,7 +1569,7 @@ function updCorpDetail(fS,fP,cbSrc){
       if(i%3===0||i===11)mLbls+=`<text x="${p.x}" y="${H-4}" text-anchor="middle" font-size="8" font-weight="700" fill="#111827">${parseInt(months[i])}월</text>`;
     });
     const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;"><line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#9ca3af" stroke-width="1.5"/><path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" opacity="0.8" stroke-linejoin="round"/>${dots}${lbls}${mLbls}</svg>`;
-    document.getElementById(`corp-${id}-trend`).innerHTML=trendCap+svg;
+    _tEl.innerHTML=trendCap+svg;
     const itemMap={};
     cbSrc.filter(r=>getCorp(r)===key).forEach(r=>{const k=r['브랜드명']||'-';itemMap[k]=(itemMap[k]||0)+(Number(r['공급가액'])||0);});
     const topItems=Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
