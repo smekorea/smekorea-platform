@@ -93,6 +93,16 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .alert-banner.hide{display:none;}
 .alert-banner-title{font-size:12px;font-weight:700;color:var(--accent);flex-shrink:0;}
 .alert-list{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
+.alert-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 10px;border-radius:6px;background:#fff;border:1px solid #eee3cc;font-size:12px;}
+.alert-row .ag{font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;flex-shrink:0;}
+.alert-row .ag-danger{background:#fee2e2;color:#b91c1c;}
+.alert-row .ag-warn{background:#fff4e0;color:#a16207;}
+.alert-row .ag-watch{background:#eef2f8;color:#4b5568;}
+.alert-row .an{font-weight:800;color:#111827;min-width:130px;}
+.alert-row .av{font-weight:800;}
+.alert-row .ad{color:var(--muted);margin-left:auto;font-size:11px;}
+#alert-rest.hide{display:none;}
+#alert-rest{display:flex;}
 .alert-chip{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;background:rgba(200,0,30,0.08);color:var(--accent);border:1px solid rgba(200,0,30,0.2);}
 /* 순위 */
 .rank-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-light);}
@@ -303,13 +313,29 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
       <div id="kpi-risk-spark"></div>
     </div>
   </div>
-  <!-- 경영경고 토글 -->
+  <!-- (v15.47) 경영 요약 & 먼저 볼 것 — 기존 "경영경고 토글"(접힘 상태 칩 나열)을 대체.
+       기존 문제: 등급·금액·정렬이 전부 없어 30건이 같은 무게로 무작위 나열됐고,
+       가장 중요한 정보가 접혀 있어 아무도 보지 않았음. 상시 펼침으로 전환. -->
   <div style="padding:0 24px;">
-    <button id="alert-toggle-btn" onclick="toggleAlertBanner()" style="width:100%;text-align:left;padding:10px 16px;border:1.5px solid #f0c36d;border-radius:8px;background:#fffbf0;color:#8a6d1f;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
-      <span>⚠ 경영 경고</span><span id="alert-toggle-cnt" style="font-weight:400;color:var(--muted);">데이터 로드 후 표시</span><span style="margin-left:auto;" id="alert-toggle-arrow">▾</span>
-    </button>
-    <div class="alert-banner hide" id="alert-banner" style="margin-top:8px;">
-      <div class="alert-list" id="alert-list"></div>
+    <div id="exec-summary-box" style="border:1.5px solid #f0c36d;border-radius:10px;background:#fffdf7;overflow:hidden;">
+      <div style="padding:12px 16px;border-bottom:1px solid #f2e2bd;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;">
+          <span style="font-size:12px;font-weight:800;color:#8a6d1f;">📋 경영 요약</span>
+          <span class="kpi-basis" style="font-size:10px;font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;">-</span>
+        </div>
+        <div id="exec-summary-line" style="font-size:15px;font-weight:700;line-height:1.6;color:var(--text);">데이터 로드 후 표시</div>
+        <div id="exec-summary-sub" style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:5px;"></div>
+      </div>
+      <div style="padding:11px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:800;color:#8a6d1f;">⚠ 먼저 볼 것</span>
+          <span id="alert-grade-cnt" style="font-size:11px;color:var(--muted);"></span>
+          <button id="alert-more-btn" onclick="toggleAlertBanner()" style="margin-left:auto;padding:3px 10px;border:1px solid #e0cfa0;border-radius:6px;background:#fff;color:#8a6d1f;font-size:11px;font-weight:700;cursor:pointer;display:none;">전체 보기 <span id="alert-toggle-arrow">▾</span></button>
+        </div>
+        <div id="alert-top" style="display:flex;flex-direction:column;gap:5px;"></div>
+        <div id="alert-rest" class="hide" style="flex-direction:column;gap:5px;margin-top:5px;"></div>
+        <div id="alert-closing" style="margin-top:9px;"></div>
+      </div>
     </div>
   </div>
   <!-- SME 전체 올해 매출현황 (LG사급/직거래 구분) -->
@@ -866,7 +892,7 @@ async function startBackgroundLoad(){
   if(_bgLoading||_fullLoaded)return;
   _bgLoading=true;
   try{
-    await loadItemMakerMap();
+    await loadItemMakerMap();await loadClosingBasisSet(); // (v15.47) LG마감기준 제외 목록
     const t0=Date.now();
     const P_TOTAL=_dbTotalP||128000,S_TOTAL=_dbTotalS||352000;
     const tot=P_TOTAL+S_TOTAL;
@@ -953,7 +979,7 @@ async function doFullLoad(){
   const info=document.getElementById('uploadInfo');
   if(btn){btn.disabled=true;btn.textContent='로드 중...';}
   try{
-    await loadLGBrands();await loadItemMakerMap();
+    await loadLGBrands();await loadItemMakerMap();await loadClosingBasisSet(); // (v15.47)
     const t0=Date.now();
     const P_TOTAL=_dbTotalP||120000,S_TOTAL=_dbTotalS||320000;
     let _lastTick=0;
@@ -1503,31 +1529,135 @@ function updConcentration(fS){
 
 
 // ── 경영 경고 ──
-function updAlerts(fS,fP,bSrc,pSrc){
-  bSrc=bSrc||fS;pSrc=pSrc||fP;
-  const alerts=[];
+// ══════════════════════════════════════════════════════════════
+// (v15.47) 경영 요약 & 먼저 볼 것 — updAlerts 전면 재작성
+// ──────────────────────────────────────────────────────────────
+// 기존 문제(2026-08-31 실측):
+//  ① 등급이 없어 GAP율 4.9%(거의 정상)와 -34%(대규모 손실)가 같은 칩 한 개
+//  ② 금액이 없어 "GAP율 -28.3%"만 보이고 얼마 손해인지 알 수 없음
+//  ③ 정렬이 없어(객체 키 순서) 30건 중 중요한 것이 어디 있는지 알 수 없음
+//  ④ 기간이 요약탭 기간(기본 7년 누적)이라 액션 불가능한 숫자
+//  ⑤ 손실 1위 Glory Faith 는 partners.closing_basis='LG마감기준' 업체로
+//     "SME 재고 미보유 — LG 공급수량 기준 마감정산"이라 GAP 음수가 정상.
+//     stock_analysis 는 이미 제외하는데 경영경고만 포함해 오경보를 내고 있었음.
+// → 올해 고정 + 등급 3단계 + 손실액 내림차순 + LG마감기준 분리로 재작성.
+const ALERT_MIN_SALES = 500000000;   // 경고 대상 최소 매출(5억) — 기존 기준 유지
+const ALERT_LOW_GAP_PCT = 5;         // GAP율 이 값 미만이면 검토 대상
+const ALERT_DANGER_LOSS = 100000000; // 🔴위험 경계선(손실 1억)
+//   ↑ 2026.1~7 실측 기준 이 값에서 위험 2건/주의 5건/관찰 5건으로 갈려
+//     "먼저 볼 것 3건" 슬롯에 맞음. 회사 규모가 바뀌면 이 상수만 조정할 것.
+
+let _closingBasisSet = new Set();    // LG마감기준 매입처/브랜드명
+async function loadClosingBasisSet(){
+  try{
+    const {data,error}=await sb.from('partners').select('name,closing_basis');
+    if(error)throw error;
+    _closingBasisSet=new Set((data||[]).filter(r=>String(r.closing_basis||'').includes('LG마감기준'))
+                                       .map(r=>String(r.name||'').trim()).filter(Boolean));
+  }catch(e){console.warn('LG마감기준 목록 로드 실패',e);}
+}
+
+// 올해 기준 브랜드별 GAP 계산 → 등급 분류
+function buildAlertRows(){
+  const er=effRange();
+  if(!er)return {rows:[],closing:[],er:null};
   const bs={},bp={};
-  bSrc.forEach(r=>{const b=r['브랜드명']||'-';bs[b]=(bs[b]||0)+(Number(r['공급가액'])||0);});
-  pSrc.forEach(r=>{const b=r['브랜드명']||'-';bp[b]=(bp[b]||0)+(Number(r['공급가액'])||0);});
-  const brands=[...new Set([...Object.keys(bs),...Object.keys(bp)])];
-  brands.forEach(b=>{const sv=bs[b]||0,pv=bp[b]||0;if(sv>=500000000){const rate=sv>0?(sv-pv)/sv*100:0;if(rate<5)alerts.push(`⚠ ${b} GAP율 ${rate.toFixed(1)}%`);}});
-  const sc={};const total=fS.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
-  fS.forEach(r=>{const k=String(r['판매처명']||'-');sc[k]=(sc[k]||0)+(Number(r['공급가액'])||0);});
-  const sorted=Object.entries(sc).sort((a,b)=>b[1]-a[1]);
-  const top1pct=total>0?((sorted[0]?.[1]||0)/total*100):0;
-  if(top1pct>=30)alerts.push(`🔴 ${sorted[0]?.[0]} 의존도 ${top1pct.toFixed(1)}%`);
-  document.getElementById('alert-list').innerHTML=alerts.map(a=>`<span class="alert-chip">${a}</span>`).join('');
-  const cntEl=document.getElementById('alert-toggle-cnt');
-  cntEl.textContent=alerts.length>0?`${alerts.length}건 발견 (클릭해서 보기)`:'해당 없음';
-  document.getElementById('alert-toggle-btn').style.borderColor=alerts.length>0?'#f0c36d':'var(--border)';
-  document.getElementById('alert-toggle-btn').style.background=alerts.length>0?'#fffbf0':'var(--surface)';
+  srcS().forEach(r=>{if(!inPer(r,er.curFrom,er.curTo))return;const b=r['브랜드명']||'-';bs[b]=(bs[b]||0)+(Number(r['공급가액'])||0);});
+  srcP().forEach(r=>{if(!inPer(r,er.curFrom,er.curTo))return;const b=r['브랜드명']||'-';bp[b]=(bp[b]||0)+(Number(r['공급가액'])||0);});
+  const rows=[],closing=[];
+  Object.keys(bs).forEach(b=>{
+    const sv=bs[b]||0, pv=bp[b]||0;
+    if(sv<ALERT_MIN_SALES)return;
+    const gap=sv-pv, rate=sv>0?gap/sv*100:0;
+    if(rate>=ALERT_LOW_GAP_PCT)return;
+    const item={name:b,sv:sv,pv:pv,gap:gap,rate:rate};
+    if(_closingBasisSet.has(b.trim())){closing.push(item);return;} // 정산구조상 GAP 산출 대상 아님
+    item.grade = gap<=-ALERT_DANGER_LOSS ? 'danger' : (gap<0 ? 'warn' : 'watch');
+    rows.push(item);
+  });
+  rows.sort((a,b)=>a.gap-b.gap); // 손실 큰 순
+  return {rows,closing,er};
+}
+
+// 결론 문장 — 자동 생성이 아니라 사전 확정 문구 중 조건에 맞는 하나를 선택.
+// ⚠️ 문구를 코드가 조립하게 만들면 잘못된 결론을 경영진이 읽는 위험이 있어
+//    아래 4종 외의 표현은 만들지 않는다. 새 문구가 필요하면 여기에 추가할 것.
+function buildSummaryLine(er,lossTotal){
+  if(!er)return {main:'올해 데이터가 없습니다.',sub:''};
+  const sum=(src,f,t)=>src().filter(r=>inPer(r,f,t)).reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
+  const cs=sum(srcS,er.curFrom,er.curTo), cp=sum(srcP,er.curFrom,er.curTo);
+  const ps=sum(srcS,er.prevFrom,er.prevTo), pp=sum(srcP,er.prevFrom,er.prevTo);
+  const B=v=>(v/100000000).toFixed(1)+'억';
+  const curRate=cs>0?(cs-cp)/cs*100:0, prevRate=ps>0?(ps-pp)/ps*100:0;
+  const sGrow=ps>0?(cs-ps)/ps*100:null, pGrow=pp>0?(cp-pp)/pp*100:null;
+  const D='<span style="color:var(--accent);">', E='</span>';
+  let main;
+  if(sGrow===null||pGrow===null){
+    main=`올해 매출 ${B(cs)}, 매입 ${B(cp)}로 GAP율 ${curRate.toFixed(2)}%입니다.`;
+  }else if(sGrow<0){
+    main=`매출이 전년동기 대비 ${D}${Math.abs(sGrow).toFixed(1)}% 감소${E}했습니다. (${B(ps)} → ${B(cs)})`;
+  }else if(pGrow-sGrow>=3){
+    main=`매출은 ${sGrow.toFixed(1)}% 늘었지만 매입이 ${pGrow.toFixed(1)}% 늘어 `
+        +`${D}GAP율이 ${curRate.toFixed(2)}%로 ${Math.abs(curRate-prevRate).toFixed(1)}%p 하락${E}했습니다.`;
+  }else if(curRate<prevRate){
+    main=`매출 ${sGrow.toFixed(1)}%, 매입 ${pGrow.toFixed(1)}% 증가로 `
+        +`GAP율이 ${curRate.toFixed(2)}%로 ${Math.abs(curRate-prevRate).toFixed(1)}%p 하락했습니다.`;
+  }else{
+    main=`매출 ${sGrow.toFixed(1)}%, 매입 ${pGrow.toFixed(1)}% 증가로 GAP율 ${curRate.toFixed(2)}%를 유지하고 있습니다.`;
+  }
+  let sub='';
+  if(lossTotal<0){
+    const cur=cs-cp;
+    sub=`역마진 브랜드가 ${B(Math.abs(lossTotal))}을 잠식 중입니다. `
+       +`이들이 손익분기였다면 GAP은 ${B(cur)} → ${B(cur-lossTotal)}이 됩니다.`;
+  }
+  return {main,sub};
+}
+
+function updAlerts(fS,fP,bSrc,pSrc){
+  const {rows,closing,er}=buildAlertRows();
+  const B=v=>(v/100000000).toFixed(2)+'억';
+  const basis=er?effLabel(er,0):'-';
+  const lossTotal=rows.filter(r=>r.gap<0).reduce((a,r)=>a+r.gap,0);
+  const line=buildSummaryLine(er,lossTotal);
+  document.getElementById('exec-summary-line').innerHTML=line.main;
+  document.getElementById('exec-summary-sub').textContent=line.sub;
+  const nD=rows.filter(r=>r.grade==='danger').length;
+  const nW=rows.filter(r=>r.grade==='warn').length;
+  const nT=rows.filter(r=>r.grade==='watch').length;
+  document.getElementById('alert-grade-cnt').textContent=
+    rows.length?`${basis} · 위험 ${nD} · 주의 ${nW} · 관찰 ${nT}`:`${basis} · 해당 없음`;
+  const GL={danger:['ag-danger','위험'],warn:['ag-warn','주의'],watch:['ag-watch','관찰']};
+  const rowHtml=r=>{
+    const [cls,lbl]=GL[r.grade];
+    const col=r.gap<0?'var(--accent)':'var(--accent3)';
+    return `<div class="alert-row"><span class="ag ${cls}">${lbl}</span>`
+      +`<span class="an" title="${r.name}">${r.name}</span>`
+      +`<span class="av" style="color:${col};">GAP ${r.gap>=0?'+':''}${B(r.gap)} (${r.rate.toFixed(1)}%)</span>`
+      +`<span class="ad">매출 ${B(r.sv)} / 매입 ${B(r.pv)}</span></div>`;
+  };
+  const top=rows.slice(0,3), rest=rows.slice(3);
+  document.getElementById('alert-top').innerHTML=
+    rows.length?top.map(rowHtml).join(''):'<div style="font-size:12px;color:var(--muted);padding:4px 2px;">검토가 필요한 브랜드가 없습니다.</div>';
+  document.getElementById('alert-rest').innerHTML=rest.map(rowHtml).join('');
+  const moreBtn=document.getElementById('alert-more-btn');
+  moreBtn.style.display=rest.length?'block':'none';
+  moreBtn.innerHTML=`전체 ${rows.length}건 보기 <span id="alert-toggle-arrow">▾</span>`;
+  document.getElementById('alert-rest').classList.add('hide');
+  // LG마감기준 — 경고에서 제외하고 참고로만 표시(오경보 방지)
+  const cEl=document.getElementById('alert-closing');
+  cEl.innerHTML = closing.length
+    ? `<div style="font-size:11px;color:var(--muted);border-top:1px dashed #e0cfa0;padding-top:8px;">`
+      +`<span style="font-weight:700;color:#4b5568;">ℹ LG마감기준</span> — 정산 구조상 GAP 산출 대상이 아니라 경고에서 제외합니다. `
+      +closing.map(c=>`<span style="margin-left:6px;color:#4b5568;">${c.name} 매출 ${B(c.sv)} / 매입 ${B(c.pv)}</span>`).join(' ·')
+      +`</div>` : '';
 }
 function toggleAlertBanner(){
-  const banner=document.getElementById('alert-banner');
+  const rest=document.getElementById('alert-rest');
   const arrow=document.getElementById('alert-toggle-arrow');
-  const isHidden=banner.classList.contains('hide');
-  if(isHidden){banner.classList.remove('hide');arrow.textContent='▴';}
-  else{banner.classList.add('hide');arrow.textContent='▾';}
+  const hidden=rest.classList.contains('hide');
+  if(hidden){rest.classList.remove('hide');if(arrow)arrow.textContent='▴';}
+  else{rest.classList.add('hide');if(arrow)arrow.textContent='▾';}
 }
 
 // ── TAB2: 법인별 상세 ──
@@ -1539,34 +1669,59 @@ function updCorpDetail(fS,fP,cbSrc){
     {key:'SMEGLOBAL',id:'smeglobal',color:'var(--accent3)'},
   ];
   const {from,to}=getFT('corp');const pb=pbText(from,to);
-  const now=new Date();const curYear=String(now.getFullYear()).slice(2);
-  const months=['01','02','03','04','05','06','07','08','09','10','11','12'];
+  // ── (v15.47) 그래프를 선택 기간에 연동 ──
+  //  기존엔 if(y===curYear) 로 올해만 그리고 x축을 1~12월로 고정해, 헤더 총액(기간 기준)과
+  //  그래프(올해)의 기준이 달라 "기간을 바꿔도 그래프만 안 변한다"는 지적이 반복됐음.
+  //  다년 선택 시 월별 12칸으로는 표현이 안 되므로(전체기간이면 79칸) 자동 전환한다.
+  //   · 기간이 13개월 미만 → 월별 슬롯
+  //   · 13개월 이상       → 연도별 슬롯
+  const _fy=parseInt(from.slice(0,4),10), _fm=parseInt(from.slice(4),10);
+  const _ty=parseInt(to.slice(0,4),10),   _tm=parseInt(to.slice(4),10);
+  const spanM=(_ty-_fy)*12+(_tm-_fm)+1;
+  const byYear=spanM>12;
+  const slots=[];                       // 표시 슬롯 키 목록
+  if(byYear){ for(let y=_fy;y<=_ty;y++) slots.push(String(y)); }
+  else { let y=_fy,m=_fm; for(let k=0;k<spanM;k++){ slots.push(String(y)+String(m).padStart(2,'0')); m++; if(m>12){m=1;y++;} } }
+  // 해를 걸치는 월별 구간(예: 25.07~26.06)은 "7월 9월 … 1월 3월"처럼 보여 연도가 헷갈리므로
+  // 1월과 첫 슬롯에는 연도를 함께 표기한다.
+  const _crossYear = !byYear && _fy!==_ty;
+  const slotLabel = byYear
+    ? (k=>k.slice(2)+'년')
+    : (k=>{const m=parseInt(k.slice(4),10);return (_crossYear&&(m===1||k===slots[0]))?k.slice(2,4)+'.'+String(m).padStart(2,'0'):m+'월';});
+  const rangeCap  = byYear ? `${_fy}~${_ty} 연도별` : `${_fy}.${String(_fm).padStart(2,'0')}~${_ty}.${String(_tm).padStart(2,'0')} 월별`;
   corpDefs.forEach(({key,id,color})=>{
     const rows=fS.filter(r=>getCorp(r)===key);
     const totalSales=rows.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
     const mSales={};
-    rows.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(y===curYear){const m=String(r['월']||'').replace('월','').trim().padStart(2,'0');mSales[m]=(mSales[m]||0)+(Number(r['공급가액'])||0);}});
+    rows.forEach(r=>{
+      const yr=String(r['년']||'').replace('년','').trim();
+      const y4=yr.length===2?'20'+yr:yr;
+      const k=byYear?y4:(y4+String(r['월']||'').replace('월','').trim().padStart(2,'0'));
+      mSales[k]=(mSales[k]||0)+(Number(r['공급가액'])||0);
+    });
     document.getElementById(`corp-${id}-kpi`).innerHTML=`<div class="period-badge" style="margin-bottom:4px;display:inline-block;font-size:15px;padding:4px 12px;">기간누적 ${pb.replace(/^기준\s*/,'')}</div><div style="font-size:18px;font-weight:900;color:${color};">${fmt(totalSales)}</div><div style="font-size:10px;color:var(--muted);">${cntOf(rows).toLocaleString()}건</div>`;
-    // ⚠️ (v15.46) 아래 추이 그래프는 상단 기간 바가 아니라 "올해" 고정 기준이다.
-    //    총액(기간누적)과 그래프(올해)의 기준이 달라 "기간설정과 그래프 년월이 안 맞는다"는
-    //    지적이 있었음 → 그래프에 별도 캡션을 달아 각각의 기준을 명확히 표기.
-    // ⚠️ curYear 는 2자리 문자열('26'). 산술 덧셈(20+Number)을 쓰면 46이 되므로 문자열 결합이어야 함.
-    const trendCap=`<div style="font-size:10px;font-weight:700;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:6px;padding:2px 8px;margin-bottom:6px;white-space:nowrap;">📅 20${curYear}년 월별 공급추이 · 위 기간설정과 무관하게 올해 고정</div>`;
-    const maxV=Math.max(...months.map(m=>mSales[m]||0),1);
-    const hasCur=months.some(m=>mSales[m]);
+    const trendCap=`<div style="font-size:10px;font-weight:700;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:6px;padding:2px 8px;margin-bottom:6px;white-space:nowrap;display:inline-block;">📅 ${rangeCap} 공급추이</div>`;
+    const maxV=Math.max(...slots.map(k=>mSales[k]||0),1);
+    const hasCur=slots.some(k=>mSales[k]);
     // 초기 DOM 의 display:flex(중앙정렬 안내문용)를 렌더 시점에 block 으로 되돌린다.
     // flex 상태로 두면 캡션 텍스트가 세로로 눌려 읽을 수 없게 됨(실제 발생 사례).
     const _tEl=document.getElementById(`corp-${id}-trend`);
     _tEl.style.display='block';_tEl.style.color='';
-    if(!hasCur){_tEl.innerHTML=trendCap+'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;">올해 데이터 없음</div>';return;}
+    if(!hasCur){_tEl.innerHTML=trendCap+'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;">해당 기간 데이터 없음</div>';return;}
     const W=400,H=130,pL=28,pR=8,pT=18,pB=26;const cW=W-pL-pR,cH=H-pT-pB;
-    const colW=cW/(months.length-1),getX=i=>pL+i*colW,getY=v=>pT+cH*(1-v/maxV);
-    const pts=months.map((m,i)=>({x:getX(i),y:getY(mSales[m]||0),v:mSales[m]||0}));
+    const n=slots.length;
+    const colW=n>1?cW/(n-1):0, getX=i=>n>1?pL+i*colW:pL+cW/2, getY=v=>pT+cH*(1-v/maxV);
+    const pts=slots.map((k,i)=>({x:getX(i),y:getY(mSales[k]||0),v:mSales[k]||0}));
     const linePath=pts.filter(p=>p.v>0).map((p,j,arr)=>(p===arr[0]?'M':'L')+p.x+','+p.y).join(' ');
+    // 슬롯이 많으면 라벨·값이 겹치므로 표시 간격을 자동으로 벌린다(최대 8개 노출)
+    const step=Math.max(1,Math.ceil(n/8));
     let dots='',lbls='',mLbls='';
     pts.forEach((p,i)=>{
-      if(p.v>0){dots+=`<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" opacity="0.85"/>`;lbls+=`<text x="${p.x}" y="${p.y-8}" text-anchor="middle" font-size="5.5" fill="${color}" font-weight="700">${p.v>=100000000?(p.v/100000000).toFixed(1)+'억':p.v>0?Math.round(p.v/10000)+'만':''}</text>`;}
-      if(i%3===0||i===11)mLbls+=`<text x="${p.x}" y="${H-4}" text-anchor="middle" font-size="8" font-weight="700" fill="#111827">${parseInt(months[i])}월</text>`;
+      if(p.v>0){
+        dots+=`<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" opacity="0.85"/>`;
+        if(i%step===0||i===n-1)lbls+=`<text x="${p.x}" y="${p.y-8}" text-anchor="middle" font-size="5.5" fill="${color}" font-weight="700">${p.v>=100000000?(p.v/100000000).toFixed(1)+'억':Math.round(p.v/10000)+'만'}</text>`;
+      }
+      if(i%step===0||i===n-1)mLbls+=`<text x="${p.x}" y="${H-4}" text-anchor="middle" font-size="8" font-weight="700" fill="#111827">${slotLabel(slots[i])}</text>`;
     });
     const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;"><line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#9ca3af" stroke-width="1.5"/><path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" opacity="0.8" stroke-linejoin="round"/>${dots}${lbls}${mLbls}</svg>`;
     _tEl.innerHTML=trendCap+svg;
