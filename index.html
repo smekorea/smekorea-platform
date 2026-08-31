@@ -999,7 +999,7 @@ function handleTarget(t,n){
 }
 
 function openHQ(url,screen){
-  if(localStorage.getItem('sme_hq_auth')==='1'){sessionStorage.setItem('hq_auth','1');writeLog(localStorage.getItem('sme_user'),screen);location.href=url;return;}
+  if(localStorage.getItem('sme_hq_auth')==='1'){sessionStorage.setItem('hq_auth','1');writeLog(localStorage.getItem('sme_user'),screen);nav(url);return;}
   hqUrl=url;hqScreen=screen;
   document.getElementById('hqOverlaySub').textContent=`[${screen}] 경영 전용 비밀번호를 입력해주세요`;
   document.getElementById('hqPwInput').value='';document.getElementById('hqPwError').textContent='';
@@ -1011,12 +1011,29 @@ function checkHQPW(){
   const pw=document.getElementById('hqPwInput').value;
   if(pw!==PW_HQ){document.getElementById('hqPwError').textContent='⚠ 비밀번호가 올바르지 않습니다';document.getElementById('hqPwInput').value='';return;}
   localStorage.setItem('sme_hq_auth','1');sessionStorage.setItem('hq_auth','1');
-  closeHQOverlay();writeLog(localStorage.getItem('sme_user'),hqScreen);location.href=hqUrl;
+  closeHQOverlay();writeLog(localStorage.getItem('sme_user'),hqScreen);nav(hqUrl);
 }
 
 function closePW(){document.getElementById('pwOverlay').style.display='none';}
 function closeHQOverlay(){document.getElementById('hqOverlay').style.display='none';}
-function go(e,u){e.stopPropagation();location.href=u;}
+// ── (v15.46) 새 탭 고정 화면 ──
+// hq_analysis 는 진입 시 매입·매출 원본 48만 건을 메모리에 적재한다.
+// SMERP 는 SPA 가 아니라 개별 HTML 다중 페이지 구조라, 같은 탭에서 다른 메뉴로
+// 이동하면 JS 메모리(_rawPAll/_rawSAll)가 통째로 소멸해 재진입 시 전량 재다운로드가
+// 발생한다. 별도 탭으로 띄워 두면 다른 메뉴를 오가도 적재 상태가 유지된다.
+// ※ hq_analysis 의 경영전용 인증은 localStorage('sme_hq_auth') 기반이라
+//   새 탭에서도 그대로 유효함(sessionStorage 의존 아님 — 확인 완료).
+const NEWTAB_URLS=['hq_analysis.html'];
+function isNewTabUrl(u){return NEWTAB_URLS.some(x=>String(u).split('?')[0]===x);}
+function nav(u){
+  if(isNewTabUrl(u)){
+    const w=window.open(u,'_blank');
+    if(!w)location.href=u; // 팝업 차단 시 같은 탭으로 폴백
+    return;
+  }
+  location.href=u;
+}
+function go(e,u){e.stopPropagation();nav(u);}
 function goNew(e,u){e.stopPropagation();window.open(u,'_blank');}
 
 function mobileTab(key) {

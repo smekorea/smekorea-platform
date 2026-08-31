@@ -2971,14 +2971,31 @@ async function downloadTradeData() {
   const year  = document.getElementById('trade-year').value;
   const month = document.getElementById('trade-month').value;
   const table = type === 'purchase' ? 'purchase_data' : 'sales_data';
-  const startDate = `${year}-${month}-01`;
-  const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-  const endDate = `${year}-${month}-${String(lastDay).padStart(2,'0')}`;
-  const {data, error} = await sb.from(table).select('*').gte('trade_date',startDate).lte('trade_date',endDate).order('trade_date');
-  if(error||!data?.length) { alert('데이터가 없습니다.'); return; }
+  // ⚠️ (v15.46) 버그 2건 수정
+  //  ① 기존엔 trade_date 범위(gte/lte)로 걸렀는데, trade_date 는 실제 거래일이 아니라
+  //     월마감 일괄전표 일자라 회계 귀속월(year/month)과 어긋남 — 확인된 사실:
+  //     어긋난 행 100%가 말일이고 예외 없이 익월 태그(매출 39,124건/매입 15,953건),
+  //     일요일인 2025-08-31 에도 771건 존재 → 실제 거래일로 볼 수 없음.
+  //     그 결과 "26년1월" 다운로드 시 trade_date 가 2025-12-31 인 행이 통째로 누락됐음.
+  //     → 화면 조회(loadTradeCurrentData)와 동일하게 year/month 컬럼 기준으로 통일.
+  //  ② .range() 없이 select('*') 만 호출해 PostgREST 기본 상한 1,000건에 걸려
+  //     한 달치(약 5~6천건)가 항상 1,000건으로 잘려 받아졌음 → 페이지네이션 추가.
+  const yLabel = year.slice(-2)+'년', mLabel = parseInt(month)+'월';
+  let data = [];
+  const PAGE = 1000;
+  for(let from = 0; ; from += PAGE) {
+    const {data: page, error} = await sb.from(table).select('*')
+      .eq('year', yLabel).eq('month', mLabel)
+      .order('id').range(from, from + PAGE - 1);
+    if(error) { alert('조회 실패: '+error.message); return; }
+    data = data.concat(page || []);
+    if(!page || page.length < PAGE) break;
+  }
+  if(!data.length) { alert('데이터가 없습니다.'); return; }
   const partnerKey = type==='purchase'?'supplier':'customer';
   const rows = data.map(r => ({
-    '거래일자':r.trade_date,'전표번호':r.slip_no,'품목코드':r.item_code,'품명':r.description,
+    '년':r.year,'월':r.month,'거래일자(마감)':r.trade_date,'전표번호':r.slip_no,
+    '품목코드':r.item_code,'품명':r.description,
     '수량':r.qty,'단가':r.unit_price,'공급가액':r.supply_amt,'부가세':r.vat,'합계금액':r.total_amt,
     '거래처':r[partnerKey],'브랜드':r.brand
   }));

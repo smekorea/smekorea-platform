@@ -195,24 +195,14 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 </head>
 <body>
 
-<!-- 로드 방식 선택 팝업 -->
-<div class="load-overlay hide" id="selectOverlay">
-  <div class="load-box">
-    <div class="load-icon">📊</div>
-    <div class="load-title">데이터 로드 방식 선택</div>
-    <div class="load-sub">분석에 사용할 데이터 범위를 선택해주세요</div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
-      <button onclick="startFullLoad()" style="padding:16px 20px;border:2px solid #1a56db;border-radius:12px;background:#f0f4ff;color:#1a56db;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;text-align:left;" onmouseover="this.style.background='#1a56db';this.style.color='#fff';" onmouseout="this.style.background='#f0f4ff';this.style.color='#1a56db';">
-        🗄 전체 데이터 로드
-        <div style="font-size:11px;font-weight:400;margin-top:4px;opacity:0.8;" id="fullLoadCountText">매입/매출 전체 건수 확인 중...<br>기간 변경 시 즉시 반영 (재조회 없음)</div>
-      </button>
-      <button onclick="startPeriodLoad()" style="padding:16px 20px;border:2px solid #e5ddd4;border-radius:12px;background:#f7f4ef;color:#1a1612;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;text-align:left;" onmouseover="this.style.borderColor='#c8001e';this.style.color='#c8001e';" onmouseout="this.style.borderColor='#e5ddd4';this.style.color='#1a1612';">
-        📅 기간 선택 조회
-        <div style="font-size:11px;font-weight:400;margin-top:4px;opacity:0.8;">선택한 기간만 빠르게 조회<br>기간 변경 시 [데이터 로드] 버튼 필요</div>
-      </button>
-    </div>
-  </div>
-</div>
+<!-- (v15.46) 로드 방식 선택 팝업(전체/기간 2택) 제거 — 아래 사유로 전체로드 단일화
+     ① trade_date 는 실제 거래일이 아니라 월마감 일괄전표 일자로 확인됨
+        (어긋난 행 100%가 말일, 전부 익월 태그, 일요일 말일에도 771건 발생)
+        → 회계 귀속 기준은 년/월 컬럼이며, trade_date 기준 필터는 쓰면 안 됨
+     ② 기간조회만 서버에서 trade_date 로 걸러 전체로드와 수치가 어긋났음
+        (26년1~3월 기준 629건/3.5% 누락)
+     ③ 키셋 페이징 도입으로 전체로드가 10~20초로 단축돼 기간조회를 남길 실익이 없음
+     ※ 기간 select 는 이미 메모리에 적재된 데이터를 년/월로 거르는 용도로만 사용(inPer) -->
 <!-- 전체 로딩 진행 팝업 -->
 <div class="load-overlay hide" id="loadOverlay">
   <div class="load-box">
@@ -279,13 +269,14 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   <div class="upload-area">
     <div class="pdiv"></div>
     <div class="upload-info" id="uploadInfo">집계 조회 중...</div>
-    <button class="upload-btn" id="loadBtn" onclick="loadFromSupabase()" style="display:none;">🔄 데이터 로드</button>
+    <!-- (v15.46) [🔄 데이터 로드] 버튼 제거 — 기간조회 모드 폐지로 불필요.
+         재로드가 필요하면 모드바의 [🗄 전체 데이터 다시 로드] 사용 -->
   </div>
 </div>
 <!-- 모드 상태 바 -->
 <div id="loadModeBar" style="display:none;align-items:center;gap:10px;padding:7px 24px;border-bottom:1px solid #e5ddd4;">
   <span id="loadModeMsg" style="font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;"></span>
-  <button onclick="document.getElementById('selectOverlay').classList.remove('hide')" id="reloadBtn" style="padding:4px 12px;border:1.5px solid #c8001e;border-radius:6px;background:#fff;color:#c8001e;font-size:11px;font-weight:700;cursor:pointer;margin-left:auto;display:none;">🗄 전체 데이터 로드</button>
+  <button onclick="startFullLoad()" id="reloadBtn" style="padding:4px 12px;border:1.5px solid #c8001e;border-radius:6px;background:#fff;color:#c8001e;font-size:11px;font-weight:700;cursor:pointer;margin-left:auto;display:none;">🗄 전체 데이터 다시 로드</button>
 </div>
 <!-- 탭 -->
 <div class="tab-bar">
@@ -676,7 +667,7 @@ function mapRow(r,table){
     '품목코드':r.item_code,'품명 및 규격':r.description,
     '메이커P/N':_itemMakerMap[r.item_code]||'',
     '수량':r.qty,'단가':r.unit_price,
-    '공급가액':r.supply_amt,'부가세':r.vat,'합 계':r.total_amt,
+    '공급가액':r.supply_amt,
     '브랜드명':r.brand_std||r.brand,
     '구매처명':table==='purchase_data'?r.supplier:'',
     '판매처명':table==='sales_data'?r.customer:'',
@@ -757,50 +748,132 @@ function setBgBadge(txt,done){
   el.style.borderColor=done?'#a7e3c6':'#f0c36d';
 }
 
+// ══════════════════════════════════════════════════════════════
+// (v15.46) 원본 대량조회 — id 키셋 페이징 + 구간 병렬 + 페이지 재시도
+// ──────────────────────────────────────────────────────────────
+// ⚠️ 기존 방식의 치명적 성능 문제(2026-08-31 측정으로 확인):
+//   기존: .order('trade_date').order('id').range(page*1000, ...)
+//   → trade_date 에 인덱스가 없어 매 페이지 요청마다 35만 행을 디스크에서
+//     정렬(external merge, 22MB). 1페이지당 4,192ms × 353페이지 ≒ 24분.
+//     중간에 네트워크가 한 번만 끊겨도 throw → 전체 전멸(재시도 없음).
+//   변경: WHERE id > 커서 ORDER BY id LIMIT 1000 (PK 인덱스 스캔)
+//   → 1페이지당 1.97ms. OFFSET 방식과 달리 뒤로 갈수록 느려지지도 않음.
+// ⚠️ 배열 순서 의존성 없음을 확인하고 적용함 — 최신구매가/최신판매가는
+//    배열 순서가 아니라 날짜 최대값 비교(if(d>latestBuyDate))로 구하고,
+//    나머지 화면은 전부 키 기준 집계라 구간별 병렬 삽입으로 순서가 섞여도 무방.
+// ══════════════════════════════════════════════════════════════
+const RAW_PAGE=1000;        // 1회 조회 행수 (PostgREST 상한)
+const RAW_PAR=4;            // 구간 병렬 수 (429 방지를 위해 보수적으로 4)
+const RAW_RETRY=3;          // 페이지당 재시도 횟수
+const RAW_SKIP_LIMIT=5;     // 한 구간에서 이만큼 연속 실패하면 그 구간 포기
+const RAW_COLS_P='id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,brand,brand_std,supplier';
+const RAW_COLS_S='id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,brand,brand_std,customer';
+
+// id 최소/최대 조회 (PK 인덱스 — 즉시 반환)
+async function getIdRange(tbl){
+  try{
+    const [a,b]=await Promise.all([
+      sb.from(tbl).select('id').order('id',{ascending:true}).limit(1),
+      sb.from(tbl).select('id').order('id',{ascending:false}).limit(1)
+    ]);
+    if(a.error||b.error)return null;
+    if(!a.data||!a.data.length||!b.data||!b.data.length)return null;
+    return {min:a.data[0].id,max:b.data[0].id};
+  }catch(e){console.warn('[id 범위 조회 실패]',tbl,e);return null;}
+}
+
+// 한 id 구간을 키셋으로 훑는 워커 — 실패 페이지는 건너뛰고 계속 진행
+async function scanIdRange(tblView,cols,srcTable,lo,hi,out,onTick){
+  let cursor=lo-1,skipped=0,consecFail=0;
+  while(cursor<hi){
+    let rows=null;
+    for(let i=0;i<RAW_RETRY;i++){
+      try{
+        const {data,error}=await sb.from(tblView).select(cols)
+          .gt('id',cursor).lte('id',hi)
+          .order('id',{ascending:true}).limit(RAW_PAGE);
+        if(error)throw error;
+        rows=data||[];break;
+      }catch(err){
+        if(i===RAW_RETRY-1){console.warn('[페이지 조회 실패]',tblView,'cursor='+cursor,err);}
+        else await new Promise(r=>setTimeout(r,400*Math.pow(2,i)));
+      }
+    }
+    if(rows===null){
+      // 3회 재시도 후에도 실패 — 해당 구간만 건너뛰고 계속(전멸 방지)
+      skipped+=RAW_PAGE;cursor+=RAW_PAGE;consecFail++;
+      if(consecFail>=RAW_SKIP_LIMIT)break;
+      continue;
+    }
+    consecFail=0;
+    if(!rows.length)break;
+    for(let i=0;i<rows.length;i++)out.push(mapRow(rows[i],srcTable));
+    cursor=rows[rows.length-1].id;
+    if(onTick)onTick();
+    if(rows.length<RAW_PAGE)break;
+  }
+  return skipped;
+}
+
+// 테이블 전체를 id 구간 N개로 쪼개 병렬 로드 → 누락(추정)건수 반환
+async function loadRawKeyset(tbl,tblView,cols,srcTable,out,onTick){
+  const rg=await getIdRange(tbl);
+  if(!rg){ // 폴백: 구간분할 없이 단일 키셋 스캔
+    return await scanIdRange(tblView,cols,srcTable,0,Number.MAX_SAFE_INTEGER,out,onTick);
+  }
+  const span=rg.max-rg.min+1;
+  const par=Math.max(1,Math.min(RAW_PAR,Math.ceil(span/RAW_PAGE)));
+  const step=Math.ceil(span/par);
+  const jobs=[];
+  for(let i=0;i<par;i++){
+    const lo=rg.min+i*step;
+    if(lo>rg.max)break;
+    const hi=(i===par-1)?rg.max:Math.min(lo+step-1,rg.max);
+    jobs.push(scanIdRange(tblView,cols,srcTable,lo,hi,out,onTick));
+  }
+  const res=await Promise.all(jobs);
+  return res.reduce((a,b)=>a+b,0);
+}
+
 // ── (v15.43) 원본 백그라운드 로드 — 화면을 막지 않음 ──
 async function startBackgroundLoad(){
   if(_bgLoading||_fullLoaded)return;
   _bgLoading=true;
   try{
     await loadItemMakerMap();
+    const t0=Date.now();
     const P_TOTAL=_dbTotalP||128000,S_TOTAL=_dbTotalS||352000;
+    const tot=P_TOTAL+S_TOTAL;
+    let _lastTick=0;
     const upd=()=>{
       const done=_rawPAll.length+_rawSAll.length;
-      const tot=P_TOTAL+S_TOTAL;
       _bgPct=Math.min(Math.round(done/tot*100),99);
+      const now=Date.now();
+      if(now-_lastTick<200)return; // 배지 갱신 쓰로틀(렌더 부하 방지)
+      _lastTick=now;
       setBgBadge('상세 데이터 준비 중 '+_bgPct+'%');
     };
     upd();
-    _rawPAll=[];let page=0;
-    while(true){
-      const {data,error}=await sb.from('purchase_data_v')
-        .select('id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,brand_std,supplier')
-        .order('trade_date',{ascending:true}).order('id',{ascending:true}).range(page*1000,(page+1)*1000-1);
-      if(error) throw error;if(!data||!data.length) break;
-      _rawPAll=[..._rawPAll,...data.map(r=>mapRow(r,'purchase_data'))];
-      upd();
-      if(data.length<1000) break;page++;
-    }
-    _rawSAll=[];page=0;
-    while(true){
-      const {data,error}=await sb.from('sales_data_v')
-        .select('id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,brand_std,customer')
-        .order('trade_date',{ascending:true}).order('id',{ascending:true}).range(page*1000,(page+1)*1000-1);
-      if(error) throw error;if(!data||!data.length) break;
-      _rawSAll=[..._rawSAll,...data.map(r=>mapRow(r,'sales_data'))];
-      upd();
-      if(data.length<1000) break;page++;
-    }
+    // ⚠️ 배열 재할당([...a,...b]) 금지 — 페이지마다 전체 복사가 일어나 O(n²)가 되고,
+    //    35만 건 구간에서 브라우저 "응답 없음"의 직접 원인이 됨. push로만 누적할 것.
+    _rawPAll=[];_rawSAll=[];
+    const missP=await loadRawKeyset('purchase_data','purchase_data_v',RAW_COLS_P,'purchase_data',_rawPAll,upd);
+    const missS=await loadRawKeyset('sales_data','sales_data_v',RAW_COLS_S,'sales_data',_rawSAll,upd);
+    const miss=missP+missS;
     const {from,to}=getFT();
     rawP=_rawPAll.filter(r=>inPer(r,from,to));
     rawS=_rawSAll.filter(r=>inPer(r,from,to));
     loaded=true;_fullLoaded=true;
-    setBgBadge('✓ 전체 분석 가능',true);
+    const sec=((Date.now()-t0)/1000).toFixed(1);
+    if(miss)setBgBadge('⚠ 일부 누락 가능(최대 '+miss.toLocaleString()+'건) — 새로고침 권장');
+    else setBgBadge('✓ 전체 분석 가능 ('+sec+'초)',true);
     const info=document.getElementById('uploadInfo');
     if(info){
-      info.textContent=`✅ 전체 데이터 준비 완료 · 현재기간 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
-      info.style.color='#059669';
+      info.textContent=(miss?'⚠ 일부 페이지 조회 실패 — 최대 '+miss.toLocaleString()+'건 누락 가능(새로고침 권장) · ':'✅ 전체 데이터 준비 완료('+sec+'초) · ')
+        +`현재기간 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건`;
+      info.style.color=miss?'#ea580c':'#059669';
     }
+    setModeBar(true); // (v15.46) 완료 시 모드바를 '전체 로드 완료'로 전환
     fillDrops();setPricePeriodInit();updateAll();
     // 로드 대기 중이던 탭이 있으면 자동으로 열어줌
     if(_bgPendingTab==='trade'){_bgPendingTab='';renderResult();}
@@ -828,9 +901,10 @@ function clearWait(kind){
   if(box)box.style.display='none';
 }
 
-// ── 로드 방식 ──
+// ── 로드 방식 ── (v15.46) 전체로드 단일 경로
 function startFullLoad(){
-  document.getElementById('selectOverlay').classList.add('hide');
+  if(_bgLoading)return; // 백그라운드 로드 중 중복 실행 방지
+  _fullLoaded=false;    // 재로드 시 다시 채울 수 있도록 초기화
   document.getElementById('loadOverlay').classList.remove('hide');
   document.getElementById('ld-title').textContent='전체 데이터 로딩 중...';
   document.getElementById('ld-sub').innerHTML='매입·매출 전체 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요';
@@ -844,161 +918,74 @@ function startFullLoad(){
   document.getElementById('ld-status').textContent='LG브랜드 로드 중...';
   doFullLoad();
 }
-function startPeriodLoad(){
-  document.getElementById('selectOverlay').classList.add('hide');
-  _fullLoaded=false;
-  setModeBar(false);
-  const info=document.getElementById('uploadInfo');
-  info.textContent='📅 기간 선택 후 [데이터 로드] 버튼을 눌러주세요';
-  info.style.color='#ea580c';
-}
+// (v15.46) startPeriodLoad() / loadFromSupabase() 삭제 — 기간조회 모드 폐지.
+//   두 함수는 서버에서 trade_date 로 기간을 걸렀는데, trade_date 는 월마감 일괄전표
+//   일자라 회계 귀속월(년/월 컬럼)과 어긋나 전체로드 대비 수치가 달라졌음.
+//   기간 필터는 이제 전부 메모리상 inPer()(년/월 기준) 한 곳에서만 수행한다.
 async function doFullLoad(){
-  const btn=document.getElementById('loadBtn');
+  const btn=document.getElementById('reloadBtn'); // (v15.46) loadBtn 삭제 → reloadBtn 으로 대체
   const info=document.getElementById('uploadInfo');
-  btn.disabled=true;btn.textContent='로드 중...';
+  if(btn){btn.disabled=true;btn.textContent='로드 중...';}
   try{
     await loadLGBrands();await loadItemMakerMap();
+    const t0=Date.now();
     const P_TOTAL=_dbTotalP||120000,S_TOTAL=_dbTotalS||320000;
+    let _lastTick=0;
     document.getElementById('ld-status').textContent='매입 데이터 로드 중...';
-    _rawPAll=[];let page=0;
-    while(true){
-      const {data,error}=await sb.from('purchase_data_v')
-        .select('id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,brand_std,supplier')
-        .order('trade_date',{ascending:true}).order('id',{ascending:true}).range(page*1000,(page+1)*1000-1);
-      if(error) throw error;if(!data||!data.length) break;
-      _rawPAll=[..._rawPAll,...data.map(r=>mapRow(r,'purchase_data'))];
+    // ⚠️ push 누적만 사용(배열 재할당 금지) + id 키셋 병렬 로더 사용 — 상단 주석 참고
+    _rawPAll=[];_rawSAll=[];
+    const updP=()=>{
+      const now=Date.now();if(now-_lastTick<200)return;_lastTick=now;
       const pPct=Math.min(Math.round(_rawPAll.length/P_TOTAL*100),99);
       document.getElementById('ld-p-cnt').textContent=`${_rawPAll.length.toLocaleString()} / ${P_TOTAL.toLocaleString()}건 (${pPct}%)`;
       document.getElementById('ld-p-bar').style.width=pPct+'%';
-      if(data.length<1000) break;page++;
-    }
+    };
+    const missP=await loadRawKeyset('purchase_data','purchase_data_v',RAW_COLS_P,'purchase_data',_rawPAll,updP);
     document.getElementById('ld-p-cnt').textContent=`${_rawPAll.length.toLocaleString()} / ${P_TOTAL.toLocaleString()}건 완료 (100%)`;
     document.getElementById('ld-p-bar').style.width='100%';
     document.getElementById('ld-status').textContent='매출 데이터 로드 중...';
-    _rawSAll=[];page=0;
-    while(true){
-      const {data,error}=await sb.from('sales_data_v')
-        .select('id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,brand_std,customer')
-        .order('trade_date',{ascending:true}).order('id',{ascending:true}).range(page*1000,(page+1)*1000-1);
-      if(error) throw error;if(!data||!data.length) break;
-      _rawSAll=[..._rawSAll,...data.map(r=>mapRow(r,'sales_data'))];
+    _lastTick=0;
+    const updS=()=>{
+      const now=Date.now();if(now-_lastTick<200)return;_lastTick=now;
       const sPct=Math.min(Math.round(_rawSAll.length/S_TOTAL*100),99);
       document.getElementById('ld-s-cnt').textContent=`${_rawSAll.length.toLocaleString()} / ${S_TOTAL.toLocaleString()}건 (${sPct}%)`;
       document.getElementById('ld-s-bar').style.width=sPct+'%';
-      if(data.length<1000) break;page++;
-    }
+    };
+    const missS=await loadRawKeyset('sales_data','sales_data_v',RAW_COLS_S,'sales_data',_rawSAll,updS);
     document.getElementById('ld-s-cnt').textContent=`${_rawSAll.length.toLocaleString()} / ${S_TOTAL.toLocaleString()}건 완료 (100%)`;
     document.getElementById('ld-s-bar').style.width='100%';
+    const miss=missP+missS;
     const {from,to}=getFT();
     rawP=_rawPAll.filter(r=>inPer(r,from,to));
     rawS=_rawSAll.filter(r=>inPer(r,from,to));
     loaded=true;_fullLoaded=true;
-    document.getElementById('ld-status').textContent='✅ 완료!';
-    info.textContent=`✅ 전체 로드 완료 · 현재기간(${from.slice(0,4)}.${from.slice(4)}~${to.slice(0,4)}.${to.slice(4)}) 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건 (DB전체: 매입${_rawPAll.length.toLocaleString()}·매출${_rawSAll.length.toLocaleString()})`;
-    info.style.color='#059669';
+    const sec=((Date.now()-t0)/1000).toFixed(1);
+    document.getElementById('ld-status').textContent=miss?'⚠ 일부 실패':'✅ 완료!';
+    info.textContent=(miss?`⚠ 일부 페이지 조회 실패 — 최대 ${miss.toLocaleString()}건 누락 가능(재로드 권장) · `:`✅ 전체 로드 완료(${sec}초) · `)
+      +`현재기간(${from.slice(0,4)}.${from.slice(4)}~${to.slice(0,4)}.${to.slice(4)}) 매입 ${rawP.length.toLocaleString()}건 / 매출 ${rawS.length.toLocaleString()}건 (DB전체: 매입${_rawPAll.length.toLocaleString()}·매출${_rawSAll.length.toLocaleString()})`;
+    info.style.color=miss?'#ea580c':'#059669';
     setModeBar(true);setPricePeriodInit();fillDrops();updateAll();
   }catch(e){info.textContent='로드 실패: '+e.message;console.error(e);}
-  btn.disabled=false;btn.textContent='🔄 데이터 로드';
+  if(btn){btn.disabled=false;btn.textContent='🗄 전체 데이터 다시 로드';}
   document.getElementById('loadOverlay').classList.add('hide');
 }
 
-async function loadFromSupabase(){
-  if(_fullLoaded){applyPeriod();return;}
-  const btn=document.getElementById('loadBtn');
-  const info=document.getElementById('uploadInfo');
-  btn.disabled=true;btn.textContent='로드 중...';
-  info.textContent='기간 데이터 조회 중...';
-  // ── 진행현황 오버레이 (전체로드와 동일한 형식: N / 총건수(X%)) ──
-  const ov=document.getElementById('loadOverlay');
-  const pBar=document.getElementById('ld-p-bar'),sBar=document.getElementById('ld-s-bar');
-  const pCnt=document.getElementById('ld-p-cnt'),sCnt=document.getElementById('ld-s-cnt');
-  const ldStatus=document.getElementById('ld-status');
-  document.getElementById('ld-title').textContent='기간 데이터 로딩 중...';
-  document.getElementById('ld-sub').innerHTML='선택하신 기간의 매입·매출 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요';
-  pCnt.textContent='건수 확인 중...';sCnt.textContent='건수 확인 중...';
-  pBar.classList.add('indeterminate');sBar.classList.add('indeterminate');
-  ldStatus.textContent='건수 확인 중...';
-  ov.classList.remove('hide');
-  try{
-    await loadLGBrands();await loadItemMakerMap();
-    const {from,to}=getFT();
-    const fy=from.slice(0,4),fm=from.slice(4,6);
-    const ty=to.slice(0,4),tm=to.slice(4,6);
-    const fromDate=`${fy}-${fm}-01`;
-    const lastDay=new Date(parseInt(ty),parseInt(tm),0).getDate();
-    const toDate=`${ty}-${tm}-${String(lastDay).padStart(2,'0')}`;
-    // ── 기간 내 실제 총 건수 선확인(매입/매출 각각) → 전체로드와 동일한 방식으로 진행율 계산 ──
-    let pTotal=null,sTotal=null;
-    try{
-      const [{count:pc},{count:sc}]=await Promise.all([
-        sb.from('purchase_data_v').select('*',{count:'exact',head:true}).gte('trade_date',fromDate).lte('trade_date',toDate),
-        sb.from('sales_data_v').select('*',{count:'exact',head:true}).gte('trade_date',fromDate).lte('trade_date',toDate)
-      ]);
-      pTotal=pc||0;sTotal=sc||0;
-    }catch(ce){console.warn('기간 건수 확인 실패',ce);}
-    if(pTotal!=null){pBar.classList.remove('indeterminate');pBar.style.width='0%';pCnt.textContent=`0 / ${pTotal.toLocaleString()}건 (0%)`;}
-    if(sTotal!=null){sBar.classList.remove('indeterminate');sBar.style.width='0%';sCnt.textContent=`0 / ${sTotal.toLocaleString()}건 (0%)`;}
-    ldStatus.textContent='매입 데이터 조회 중...';
-    const PAGE=1000;
-    async function fetchAll(table,total){
-      let all=[],pg=0;
-      const cntEl=table==='purchase_data'?pCnt:sCnt;
-      const barEl=table==='purchase_data'?pBar:sBar;
-      while(true){
-        const {data,error}=await sb.from(table+'_v')
-          .select('id,year,month,trade_date,item_code,description,qty,unit_price,supply_amt,vat,total_amt,brand,brand_std'+(table==='purchase_data'?',supplier':',customer'))
-          .gte('trade_date',fromDate).lte('trade_date',toDate)
-          .range(pg*PAGE,(pg+1)*PAGE-1).order('trade_date',{ascending:true}).order('id',{ascending:true});
-        if(error) throw error;if(!data||!data.length) break;
-        all=[...all,...data.map(r=>mapRow(r,table))];
-        if(total){
-          const pct=Math.min(Math.round(all.length/total*100),99);
-          cntEl.textContent=`${all.length.toLocaleString()} / ${total.toLocaleString()}건 (${pct}%)`;
-          barEl.style.width=pct+'%';
-        }else{
-          cntEl.textContent=all.length.toLocaleString()+'건';
-        }
-        if(data.length<PAGE) break;pg++;
-      }
-      return all;
-    }
-    rawP=await fetchAll('purchase_data',pTotal);
-    pBar.classList.remove('indeterminate');pBar.style.width='100%';
-    pCnt.textContent=pTotal?`${rawP.length.toLocaleString()} / ${pTotal.toLocaleString()}건 완료 (100%)`:rawP.length.toLocaleString()+'건 완료';
-    ldStatus.textContent='매출 데이터 조회 중...';
-    rawS=await fetchAll('sales_data',sTotal);
-    sBar.classList.remove('indeterminate');sBar.style.width='100%';
-    sCnt.textContent=sTotal?`${rawS.length.toLocaleString()} / ${sTotal.toLocaleString()}건 완료 (100%)`:rawS.length.toLocaleString()+'건 완료';
-    ldStatus.textContent='✅ 완료!';
-    loaded=true;
-    const f=`${from.slice(0,4)}.${from.slice(4,6)}`,t=`${to.slice(0,4)}.${to.slice(4,6)}`;
-    const pPct=_dbTotalP?(rawP.length/_dbTotalP*100).toFixed(1):null;
-    const sPct=_dbTotalS?(rawS.length/_dbTotalS*100).toFixed(1):null;
-    info.textContent=`📅 기간조회(${f}~${t}) · 매입 ${rawP.length.toLocaleString()}건${pPct?'('+pPct+'%)':''} / 매출 ${rawS.length.toLocaleString()}건${sPct?'('+sPct+'%)':''}`;
-    info.style.color='#ea580c';
-    setModeBar(false);setPricePeriodInit();fillDrops();updateAll();
-  }catch(e){
-    info.textContent='로드 실패: '+e.message;console.error(e);
-    ldStatus.textContent='❌ 실패: '+e.message;
-    pBar.classList.remove('indeterminate');sBar.classList.remove('indeterminate');
-  }
-  btn.disabled=false;btn.textContent='🔄 데이터 로드';
-  ov.classList.add('hide');
-  pBar.style.width='0%';sBar.style.width='0%';
-}
 
+// (v15.46) 기간조회 모드 폐지 — isFull=true(전체로드 완료) 상태만 남음.
+// 인자는 기존 호출부 호환을 위해 유지하되, false 는 "아직 로드 중" 의미로만 쓴다.
 function setModeBar(isFull){
   const bar=document.getElementById('loadModeBar');
   const msg=document.getElementById('loadModeMsg');
+  const rb=document.getElementById('reloadBtn');
   bar.style.display='flex';
   if(isFull){
-    msg.textContent='✅ 전체 데이터 로드 완료 — 기간 변경 시 즉시 반영됩니다';
+    msg.textContent='✅ 전체 데이터 로드 완료 — 기간 변경 시 즉시 반영됩니다 (기준: 매입매출자료의 년/월)';
     msg.style.color='#059669';bar.style.background='#f0fdf4';
-    document.getElementById('reloadBtn').style.display='none';
+    if(rb)rb.style.display='block';
   } else {
-    msg.textContent='⚠ 기간 조회 모드 — 기간 변경 시 [데이터 로드] 버튼을 눌러주세요';
-    msg.style.color='#ea580c';bar.style.background='#fffbf5';
-    document.getElementById('reloadBtn').style.display='block';
+    msg.textContent='⏳ 전체 데이터 로드 중 — 완료되면 자동으로 반영됩니다';
+    msg.style.color='#9a6b00';bar.style.background='#fffbf5';
+    if(rb)rb.style.display='none';
   }
 }
 
@@ -2198,8 +2185,7 @@ let _dbTotalP=null,_dbTotalS=null;
     const {count:pc}=await sb.from('purchase_data').select('*',{count:'exact',head:true});
     const {count:sc}=await sb.from('sales_data').select('*',{count:'exact',head:true});
     _dbTotalP=pc;_dbTotalS=sc;
-    const el=document.getElementById('fullLoadCountText');
-    if(el&&pc!=null&&sc!=null)el.innerHTML=`매입 ${pc.toLocaleString()}건 + 매출 ${sc.toLocaleString()}건 전체 로드<br>기간 변경 시 즉시 반영 (재조회 없음)`;
+    // (v15.46) fullLoadCountText(선택팝업 내 안내문) DOM 삭제됨 — 건수는 진행 배지/모드바로 안내
   }catch(e){console.error('건수 조회 실패',e);}
   try{
     // ⚠️ (v15.21) trade_date 기준 정렬로 최소/최대 연월을 잡던 기존 방식은, 일부 레코드의 trade_date 값이
@@ -2234,10 +2220,10 @@ let _dbTotalP=null,_dbTotalS=null;
     }
   }catch(e){console.error('기간 기본값 자동설정 실패',e);}
   // ── (v15.43) 집계 즉시표시 → 원본 백그라운드 로드 ──
-  setModeBar(true);
+  // (v15.46) 기간조회 모드가 없어졌으므로 setModeBar(false)=로드중 상태를 그대로 사용
+  setModeBar(false);
   const mb=document.getElementById('loadModeMsg');
-  if(mb){mb.textContent='📊 집계 기준으로 표시 중 — 상세 데이터는 백그라운드에서 준비됩니다';mb.style.color='#9a6b00';}
-  document.getElementById('loadModeBar').style.background='#fffbf5';
+  if(mb)mb.textContent='📊 집계 기준으로 표시 중 — 상세 데이터는 백그라운드에서 준비됩니다';
   await loadAggregates();
   startBackgroundLoad();
 })();
