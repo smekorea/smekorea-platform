@@ -101,8 +101,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .alert-row .an{font-weight:800;color:#111827;min-width:130px;}
 .alert-row .av{font-weight:800;}
 .alert-row .ad{color:var(--muted);margin-left:auto;font-size:11px;}
-#alert-rest.hide{display:none;}
-#alert-rest{display:flex;}
+#alert-detail.hide{display:none;}
 .alert-chip{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;background:rgba(200,0,30,0.08);color:var(--accent);border:1px solid rgba(200,0,30,0.2);}
 /* 순위 */
 .rank-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-light);}
@@ -313,27 +312,29 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
       <div id="kpi-risk-spark"></div>
     </div>
   </div>
-  <!-- (v15.47) 경영 요약 & 먼저 볼 것 — 기존 "경영경고 토글"(접힘 상태 칩 나열)을 대체.
+  <!-- (v15.47) 브리핑 & 먼저 볼 것 — (탭 제목이 "경영 요약"이라 블록명은 "브리핑"으로 구분)
+       기존 "경영경고 토글"(접힘 상태 칩 나열)을 대체.
        기존 문제: 등급·금액·정렬이 전부 없어 30건이 같은 무게로 무작위 나열됐고,
-       가장 중요한 정보가 접혀 있어 아무도 보지 않았음. 상시 펼침으로 전환. -->
+       가장 중요한 정보가 접혀 있어 아무도 보지 않았음.
+       → 결론(브리핑)은 상시 노출, 상세 목록은 [보기]로 펼치는 2단 구조.
+         접힌 상태에서도 버튼에 "위험 2 · 주의 4"가 보이므로 심각도는 항상 인지된다. -->
   <div style="padding:0 24px;">
     <div id="exec-summary-box" style="border:1.5px solid #f0c36d;border-radius:10px;background:#fffdf7;overflow:hidden;">
-      <div style="padding:12px 16px;border-bottom:1px solid #f2e2bd;">
+      <div style="padding:12px 16px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;">
-          <span style="font-size:12px;font-weight:800;color:#8a6d1f;">📋 경영 요약</span>
+          <span style="font-size:12px;font-weight:800;color:#8a6d1f;">📋 브리핑</span>
           <span class="kpi-basis" style="font-size:10px;font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;">-</span>
+          <button id="alert-more-btn" onclick="toggleAlertBanner()" style="margin-left:auto;padding:4px 12px;border:1.5px solid #e0a800;border-radius:6px;background:#fff;color:#8a6d1f;font-size:11px;font-weight:800;cursor:pointer;display:none;white-space:nowrap;">먼저 볼 것 보기 <span id="alert-toggle-arrow">▾</span></button>
         </div>
         <div id="exec-summary-line" style="font-size:15px;font-weight:700;line-height:1.6;color:var(--text);">데이터 로드 후 표시</div>
         <div id="exec-summary-sub" style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:5px;"></div>
       </div>
-      <div style="padding:11px 16px;">
+      <div id="alert-detail" class="hide" style="padding:11px 16px;border-top:1px solid #f2e2bd;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <span style="font-size:12px;font-weight:800;color:#8a6d1f;">⚠ 먼저 볼 것</span>
           <span id="alert-grade-cnt" style="font-size:11px;color:var(--muted);"></span>
-          <button id="alert-more-btn" onclick="toggleAlertBanner()" style="margin-left:auto;padding:3px 10px;border:1px solid #e0cfa0;border-radius:6px;background:#fff;color:#8a6d1f;font-size:11px;font-weight:700;cursor:pointer;display:none;">전체 보기 <span id="alert-toggle-arrow">▾</span></button>
         </div>
         <div id="alert-top" style="display:flex;flex-direction:column;gap:5px;"></div>
-        <div id="alert-rest" class="hide" style="flex-direction:column;gap:5px;margin-top:5px;"></div>
         <div id="alert-closing" style="margin-top:9px;"></div>
       </div>
     </div>
@@ -1530,7 +1531,7 @@ function updConcentration(fS){
 
 // ── 경영 경고 ──
 // ══════════════════════════════════════════════════════════════
-// (v15.47) 경영 요약 & 먼저 볼 것 — updAlerts 전면 재작성
+// (v15.47) 브리핑 & 먼저 볼 것 — updAlerts 전면 재작성
 // ──────────────────────────────────────────────────────────────
 // 기존 문제(2026-08-31 실측):
 //  ① 등급이 없어 GAP율 4.9%(거의 정상)와 -34%(대규모 손실)가 같은 칩 한 개
@@ -1636,14 +1637,16 @@ function updAlerts(fS,fP,bSrc,pSrc){
       +`<span class="av" style="color:${col};">GAP ${r.gap>=0?'+':''}${B(r.gap)} (${r.rate.toFixed(1)}%)</span>`
       +`<span class="ad">매출 ${B(r.sv)} / 매입 ${B(r.pv)}</span></div>`;
   };
-  const top=rows.slice(0,3), rest=rows.slice(3);
+  // 접었다 펴도 상태가 유지되도록, 목록은 항상 전량 렌더하고 컨테이너만 토글한다.
   document.getElementById('alert-top').innerHTML=
-    rows.length?top.map(rowHtml).join(''):'<div style="font-size:12px;color:var(--muted);padding:4px 2px;">검토가 필요한 브랜드가 없습니다.</div>';
-  document.getElementById('alert-rest').innerHTML=rest.map(rowHtml).join('');
+    rows.length?rows.map(rowHtml).join(''):'<div style="font-size:12px;color:var(--muted);padding:4px 2px;">검토가 필요한 브랜드가 없습니다.</div>';
   const moreBtn=document.getElementById('alert-more-btn');
-  moreBtn.style.display=rest.length?'block':'none';
-  moreBtn.innerHTML=`전체 ${rows.length}건 보기 <span id="alert-toggle-arrow">▾</span>`;
-  document.getElementById('alert-rest').classList.add('hide');
+  const detail=document.getElementById('alert-detail');
+  const opened=!detail.classList.contains('hide');
+  // 접힌 상태에서도 심각도는 보이도록 버튼에 등급 요약을 함께 표시
+  const gradeTxt=rows.length?`위험 ${nD} · 주의 ${nW} · 관찰 ${nT}`:'해당 없음';
+  moreBtn.style.display=(rows.length||closing.length)?'block':'none';
+  moreBtn.innerHTML=`먼저 볼 것 ${gradeTxt} <span id="alert-toggle-arrow">${opened?'▴':'▾'}</span>`;
   // LG마감기준 — 경고에서 제외하고 참고로만 표시(오경보 방지)
   const cEl=document.getElementById('alert-closing');
   cEl.innerHTML = closing.length
@@ -1653,11 +1656,11 @@ function updAlerts(fS,fP,bSrc,pSrc){
       +`</div>` : '';
 }
 function toggleAlertBanner(){
-  const rest=document.getElementById('alert-rest');
+  const d=document.getElementById('alert-detail');
   const arrow=document.getElementById('alert-toggle-arrow');
-  const hidden=rest.classList.contains('hide');
-  if(hidden){rest.classList.remove('hide');if(arrow)arrow.textContent='▴';}
-  else{rest.classList.add('hide');if(arrow)arrow.textContent='▾';}
+  const hidden=d.classList.contains('hide');
+  if(hidden){d.classList.remove('hide');if(arrow)arrow.textContent='▴';}
+  else{d.classList.add('hide');if(arrow)arrow.textContent='▾';}
 }
 
 // ── TAB2: 법인별 상세 ──
