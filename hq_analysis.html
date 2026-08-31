@@ -71,6 +71,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .kpi-value.amber{color:var(--amber);}
 .kpi-sub{font-size:11px;color:var(--muted);font-weight:500;}
 .kpi-yoy{font-size:11px;font-weight:700;margin-top:5px;min-height:16px;}
+.kpi-basis{font-size:10px;}
 .yoy-up{color:var(--accent);}
 .yoy-dn{color:var(--accent3);}
 /* 법인 카드 */
@@ -178,10 +179,16 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .tv-table tbody tr:nth-child(odd) td:first-child{background:#fff;}
 .exp-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-right:7px;border:1px solid #b9c6da;border-radius:4px;background:#fff;color:#1a56db;font-size:12px;font-weight:800;line-height:1;cursor:pointer;vertical-align:middle;user-select:none;}
 .exp-btn:hover{background:#1a56db;color:#fff;border-color:#1a56db;}
-.exp-btn.exp-open{background:#1a56db;color:#fff;border-color:#1a56db;}
-.tv-table tbody tr.det-row{background:#f4f7fb !important;}
-.tv-table tbody tr.det-row td{font-size:11px;color:#334155;border-bottom:1px dashed #dbe3ee;}
-.tv-table tbody tr.det-row td:first-child{background:#f4f7fb !important;padding-left:30px;}
+.exp-btn.exp-open{background:#d4a017;color:#fff;border-color:#d4a017;}
+/* (v15.46) 펼친 세부내역 아이보리 전환 — 기존 #f4f7fb(회청색)는 짝수행 #f8fafc 와
+   거의 구분되지 않아 "선택한 업체가 어느 것인지 알기 어렵다"는 지적이 있었음.
+   아이보리 배경 + 좌측 금색 강조선으로 확실히 분리하고, 펼쳐진 부모 행도 함께 강조한다. */
+.tv-table tbody tr.det-row{background:#fdf6e5 !important;}
+.tv-table tbody tr.det-row td{font-size:11px;color:#4a3f2a;border-bottom:1px dashed #e5d5ad;}
+.tv-table tbody tr.det-row td:first-child{background:#fdf6e5 !important;padding-left:30px;border-left:3px solid #d4a017;}
+.tv-table tbody tr.exp-parent{background:#faf3e0 !important;}
+.tv-table tbody tr.exp-parent td{background:#faf3e0 !important;border-bottom:1px solid #e5d5ad;font-weight:700;}
+.tv-table tbody tr.exp-parent td:first-child{background:#faf3e0 !important;border-left:3px solid #d4a017;}
 .det-code{font-weight:700;color:#1a2233;}
 .det-desc{color:#64748b;}
 .col-resizer{position:absolute;right:-5px;top:0;bottom:0;width:12px;cursor:col-resize;z-index:10;touch-action:none;}
@@ -262,7 +269,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   <div class="pdiv"></div>
   <button class="q-btn" onclick="setQ('month',this)">당월</button>
   <button class="q-btn" onclick="setQ('quarter',this)">당분기</button>
-  <button class="q-btn active" onclick="setQ('year',this)">올해</button>
+  <button class="q-btn" onclick="setQ('year',this)">올해</button>
   <button class="q-btn" onclick="setQ('lastyear',this)">전년</button>
   <button class="q-btn" onclick="setQ('all',this)">전체</button>
   <button class="p-apply" onclick="applyPeriod()">적용</button>
@@ -272,6 +279,12 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
     <!-- (v15.46) [🔄 데이터 로드] 버튼 제거 — 기간조회 모드 폐지로 불필요.
          재로드가 필요하면 모드바의 [🗄 전체 데이터 다시 로드] 사용 -->
   </div>
+</div>
+<!-- (v15.46) 집계 RPC 실패 상시 경고 — 우측 상단 진행 배지에 덮이지 않도록 별도 줄 -->
+<div id="aggErrBar" style="display:none;align-items:center;gap:8px;padding:7px 24px;background:#fef2f2;border-bottom:1px solid #fca5a5;">
+  <span style="font-size:12px;font-weight:800;color:#b91c1c;">⚠ 집계 조회 실패</span>
+  <span id="aggErrMsg" style="font-size:11px;color:#991b1b;"></span>
+  <button onclick="location.reload()" style="margin-left:auto;padding:3px 10px;border:1.5px solid #b91c1c;border-radius:6px;background:#fff;color:#b91c1c;font-size:11px;font-weight:700;cursor:pointer;">↻ 새로고침</button>
 </div>
 <!-- 모드 상태 바 -->
 <div id="loadModeBar" style="display:none;align-items:center;gap:10px;padding:7px 24px;border-bottom:1px solid #e5ddd4;">
@@ -290,28 +303,28 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   <!-- KPI 5개 (전년대비) -->
   <div class="kpi-grid">
     <div class="kpi-card red">
-      <div class="kpi-label">매출현황</div>
+      <div class="kpi-label">매출현황 <span class="kpi-basis" style="font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;letter-spacing:0;">-</span></div>
       <div class="kpi-value red" id="kpi-s">-</div>
       <div class="kpi-sub" id="kpi-ss">데이터 로드 후 표시</div>
       <div class="kpi-yoy" id="kpi-s-yoy"></div>
       <div id="kpi-s-spark"></div>
     </div>
     <div class="kpi-card blue">
-      <div class="kpi-label">매입현황</div>
+      <div class="kpi-label">매입현황 <span class="kpi-basis" style="font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;letter-spacing:0;">-</span></div>
       <div class="kpi-value blue" id="kpi-p">-</div>
       <div class="kpi-sub" id="kpi-ps">-</div>
       <div class="kpi-yoy" id="kpi-p-yoy"></div>
       <div id="kpi-p-spark"></div>
     </div>
     <div class="kpi-card green">
-      <div class="kpi-label">매입매출 GAP</div>
+      <div class="kpi-label">매입매출 GAP <span class="kpi-basis" style="font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;letter-spacing:0;">-</span></div>
       <div class="kpi-value green" id="kpi-m">-</div>
       <div class="kpi-sub" id="kpi-ms">GAP율 -</div>
       <div class="kpi-yoy" id="kpi-m-yoy"></div>
       <div id="kpi-m-spark"></div>
     </div>
     <div class="kpi-card amber">
-      <div class="kpi-label">집중도 리스크</div>
+      <div class="kpi-label">집중도 리스크 <span class="kpi-basis" style="font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;letter-spacing:0;">-</span></div>
       <div class="kpi-value amber" id="kpi-risk">-</div>
       <div class="kpi-sub" id="kpi-risks">상위5사 비중</div>
       <div id="kpi-risk-spark"></div>
@@ -598,6 +611,7 @@ let _aggReady=false,_aggLoading=false;
 let _aggMonth=[],_aggPartner=[],_aggBrand=[];
 let _pS=[],_pP=[],_pBS=[],_pBP=[],_pCS=[];
 let _bgLoading=false,_bgPct=0,_bgPendingTab='';
+let _aggFailed=false; // (v15.46) 집계 RPC 실패 여부 — 실패해도 배지가 덮여 사라지던 문제 대응
 let _ysMode='year';
 
 // ── 법인 판별 ──
@@ -733,9 +747,22 @@ async function loadAggregates(){
     setPricePeriodInit();updateAll();
   }catch(e){
     console.error('[집계 로드 실패]',e);
-    setBgBadge('집계 조회 실패 — 상세 데이터 로드로 전환합니다');
+    // ⚠️ (v15.46) 기존엔 여기서 setBgBadge()로만 알렸는데, 곧바로 startBackgroundLoad()의
+    //    진행률 배지가 같은 자리를 덮어써서 실패 사실이 화면에서 사라졌음.
+    //    실제로 이 때문에 집계가 죽은 채 원본 폴백으로 도는 것을 아무도 모르고 있었음.
+    //    → 별도 경고줄로 상시 표시하고, 배지와 자리를 분리한다.
+    _aggFailed=true;
+    showAggError(e&&e.message?e.message:String(e));
   }
   _aggLoading=false;
+}
+
+// ── (v15.46) 집계 실패 상시 경고 (진행률 배지와 자리 분리) ──
+function showAggError(msg){
+  const bar=document.getElementById('aggErrBar');if(!bar)return;
+  bar.style.display='flex';
+  document.getElementById('aggErrMsg').textContent=
+    '집계 조회에 실패해 원본 데이터 기준으로 표시됩니다. 수치는 정상이나 초기 표시가 느려집니다. ('+msg+')';
 }
 
 // ── (v15.43) 우측 상단 진행 배지 ──
@@ -1012,7 +1039,23 @@ function setQ(type,el){
   else if(type==='lastyear'){ss('fromYear',y-1);ss('fromMonth','01');ss('toYear',y-1);ss('toMonth','12');}
   else{ss('fromYear',2019);ss('fromMonth','01');ss('toYear',y);ss('toMonth','12');}
 }
+// (v15.46) 빠른기간 버튼 상태 동기화 — 기존엔 [올해]에 active 가 HTML에 하드코딩돼 있어
+//   실제 기간이 2020.01~2026.07 인데도 [올해]가 켜져 보이는 상태 불일치가 있었음.
+function syncQBtn(){
+  const {from,to}=getFT();
+  const now=new Date(),y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0');
+  const want=
+    (from===y+m&&to===y+m)                       ? 'month'    :
+    (from===y+String(Math.floor(now.getMonth()/3)*3+1).padStart(2,'0')&&to===y+m) ? 'quarter' :
+    (from===y+'01'&&to===y+'12')                 ? 'year'     :
+    (from===(y-1)+'01'&&to===(y-1)+'12')         ? 'lastyear' : '';
+  document.querySelectorAll('.q-btn').forEach(b=>{
+    const t=(b.getAttribute('onclick')||'').match(/setQ\('([a-z]+)'/);
+    b.classList.toggle('active', !!want && !!t && t[1]===want);
+  });
+}
 function applyPeriod(){
+  syncQBtn();
   if(aggMode()){
     updateAll();
     const info=document.getElementById('uploadInfo');
@@ -1071,34 +1114,96 @@ function updateAll(){
 }
 
 // ── KPI (전년 동기 대비) ──
+// ══════════════════════════════════════════════════════════════
+// (v15.46) 올해 · 전년동기 범위 공통 산출
+// ──────────────────────────────────────────────────────────────
+// ⚠️ 기존 버그: 전년 비교를 shiftYear(from,-1)~shiftYear(to,-1) 로 계산했는데,
+//    to 가 항상 12월이라 "올해 1~7월 vs 전년 1~12월" 을 비교하고 있었음.
+//    실측(2026): 728.4억 vs 1062.7억 → ▼-31.5% 로 표시됐으나
+//    올바른 전년동기(2025.01~07)는 604.2억 → ▲+20.6% 로 부호가 반대였음.
+// → 올해 데이터가 실제로 존재하는 마지막 달(effTo)까지만 잡고,
+//   전년도 동일한 월범위로 잘라서 비교한다. 집계·원본 경로 모두 이 함수를 쓴다.
+// 반환: {curFrom, curTo, prevFrom, prevTo, year, lastM} — 데이터가 없으면 null
+function effRange(){
+  const y=String(new Date().getFullYear());
+  const from=y+'01';
+  let effTo='';
+  if(_aggMonth&&_aggMonth.length){
+    _aggMonth.forEach(r=>{
+      const ym=String(r.ym||'');
+      if(ym>=from&&ym<=y+'12'&&(Number(r.s_amt)||0)!==0&&ym>effTo)effTo=ym;
+    });
+  }else{
+    const src=_fullLoaded?_rawSAll:rawS;
+    src.forEach(r=>{
+      const yr=String(r['년']||'').replace('년','').trim();
+      const yy=yr.length===2?'20'+yr:yr;
+      if(yy!==y)return;
+      if(!(Number(r['공급가액'])||0))return;
+      const ym=yy+String(r['월']||'').replace('월','').trim().padStart(2,'0');
+      if(ym>effTo)effTo=ym;
+    });
+  }
+  if(!effTo)return null;
+  return {
+    curFrom:from, curTo:effTo,
+    prevFrom:shiftYear(from,-1), prevTo:shiftYear(effTo,-1),
+    year:y, lastM:parseInt(effTo.slice(4),10)
+  };
+}
+// 기준 표기용 — "2026년 1~7월"
+function effLabel(er,delta){
+  if(!er)return '';
+  const y=parseInt(er.year,10)+(delta||0);
+  return y+'년 1~'+er.lastM+'월';
+}
+
 function setYoY(id,cur,prev,isRate){
   const el=document.getElementById(id);if(!el)return;
   if(!prev||prev===0){el.innerHTML='';return;}
   const diff=cur-prev;const pct=diff/Math.abs(prev)*100;const up=diff>=0;
   const arrow=up?'▲':'▼';const cls2=up?'yoy-up':'yoy-dn';
-  const label=isRate?`<span class="${cls2}">${arrow}${Math.abs(diff).toFixed(1)}%p 전년비</span>`:
-    `<span class="${cls2}">${arrow}${Math.abs(pct).toFixed(1)}% (${fmt(Math.abs(diff))}) 전년비</span>`;
+  const label=isRate?`<span class="${cls2}">${arrow}${Math.abs(diff).toFixed(1)}%p 전년동기비</span>`:
+    `<span class="${cls2}">${arrow}${Math.abs(pct).toFixed(1)}% (${fmt(Math.abs(diff))}) 전년동기비</span>`;
   el.innerHTML=label;
 }
+// (v15.46) KPI 4카드는 상단 기간 바와 무관하게 "올해(당해년도)" 고정 기준.
+//  사용자 결정: 기간 바가 전체(2020.01~2026.07)일 때 4카드가 7년 누적으로 표시돼
+//  경영 판단에 쓸 수 없었고, 전년비도 2019~2025 대비라 의미가 없었음.
+//  → 올해 1~effTo월 실적 + 전년 동일 월범위 대비로 고정.
+//  인자 fS/fP 는 기존 호출부 호환을 위해 유지하되, 데이터가 없을 때의 폴백으로만 쓴다.
 function updKPI(fS,fP){
-  const ts=fS.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
-  const tp=fP.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
-  const mg=ts-tp;const mgRate=ts>0?(mg/ts*100):0;
-  const {from,to}=getFT();
-  const prevFrom=shiftYear(from,-1),prevTo=shiftYear(to,-1);
+  const er=effRange();
   const hasHist=_fullLoaded||aggMode();
-  const pyS=hasHist?srcS().filter(r=>inPer(r,prevFrom,prevTo)):[];
-  const pyP=hasHist?srcP().filter(r=>inPer(r,prevFrom,prevTo)):[];
+  let curS,curP,pyS,pyP;
+  if(er){
+    curS=srcS().filter(r=>inPer(r,er.curFrom,er.curTo));
+    curP=srcP().filter(r=>inPer(r,er.curFrom,er.curTo));
+    pyS=hasHist?srcS().filter(r=>inPer(r,er.prevFrom,er.prevTo)):[];
+    pyP=hasHist?srcP().filter(r=>inPer(r,er.prevFrom,er.prevTo)):[];
+  }else{ // 올해 데이터가 아직 없으면 기존 기간 기준으로 폴백
+    curS=fS;curP=fP;pyS=[];pyP=[];
+  }
+  const ts=curS.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
+  const tp=curP.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
+  const mg=ts-tp;const mgRate=ts>0?(mg/ts*100):0;
   const pyTs=pyS.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
   const pyTp=pyP.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
   const pyMg=pyTs-pyTp;const pyMgRate=pyTs>0?(pyMg/pyTs*100):0;
+  // 카드 상단에 기준 기간을 명시 (무슨 기간의 숫자인지 화면에서 바로 보이도록)
+  const basis=er?effLabel(er,0):'선택기간';
+  const prevBasis=er?effLabel(er,-1):'';
+  document.querySelectorAll('.kpi-basis').forEach(el=>{
+    el.textContent=basis;
+    el.title=prevBasis?('전년동기 비교기준: '+prevBasis):'';
+  });
   document.getElementById('kpi-s').textContent=fmtFull(ts);
-  document.getElementById('kpi-ss').textContent=cntOf(fS).toLocaleString()+'건';
+  document.getElementById('kpi-ss').textContent=cntOf(curS).toLocaleString()+'건';
   document.getElementById('kpi-p').textContent=fmtFull(tp);
-  document.getElementById('kpi-ps').textContent=cntOf(fP).toLocaleString()+'건';
+  document.getElementById('kpi-ps').textContent=cntOf(curP).toLocaleString()+'건';
   document.getElementById('kpi-m').textContent=fmtFull(mg);
   document.getElementById('kpi-ms').textContent='GAP율 '+mgRate.toFixed(3)+'%';
-  const sc={};fS.forEach(r=>{const k=String(r['판매처명']||'-');sc[k]=(sc[k]||0)+(Number(r['공급가액'])||0);});
+  const sc={};curS.forEach(r=>{const k=String(r['판매처명']||'-');sc[k]=(sc[k]||0)+(Number(r['공급가액'])||0);});
   const sorted=Object.values(sc).sort((a,b)=>b-a);
   const top5pct=ts>0?(sorted.slice(0,5).reduce((a,b)=>a+b,0)/ts*100):0;
   const top1pct=ts>0?((sorted[0]||0)/ts*100):0;
@@ -1107,7 +1212,7 @@ function updKPI(fS,fP){
   document.getElementById('kpi-risk').textContent=riskLv;
   document.getElementById('kpi-risk').style.color=riskColor;
   document.getElementById('kpi-risks').textContent='상위5사 '+top5pct.toFixed(1)+'%';
-  if(hasHist){setYoY('kpi-s-yoy',ts,pyTs);setYoY('kpi-p-yoy',tp,pyTp);setYoY('kpi-m-yoy',mgRate,pyMgRate,true);}
+  if(hasHist&&pyTs>0){setYoY('kpi-s-yoy',ts,pyTs);setYoY('kpi-p-yoy',tp,pyTp);setYoY('kpi-m-yoy',mgRate,pyMgRate,true);}
   else{['kpi-s-yoy','kpi-p-yoy','kpi-m-yoy'].forEach(id=>document.getElementById(id)&&(document.getElementById(id).innerHTML=''));}
   updKPISparklines();
 }
@@ -1168,26 +1273,33 @@ function updYearSummary(){
     headLabel=curYear+'년 누적 매출';badgeTxt='기준 '+curYear+'년 전체(달력기준)';
   }
   const lbl=document.getElementById('year-summary-label');if(lbl)lbl.textContent=badgeTxt;
+  // (v15.46) 전년동기 비교범위는 집계·원본 어느 경로든 effRange() 하나로 통일.
+  //   기존 원본 폴백 경로가 to(=12월)를 그대로 써서 "올해 1~7월 vs 전년 1~12월"을
+  //   비교했고, 그 결과 ▲+20.6% 여야 할 값이 ▼-31.5% 로 뒤집혀 표시됐음.
+  const _er=effRange();
+  let pf='',pt2='';
+  if(_ysMode==='period'){           // 선택기간 보기 — 그 기간을 그대로 1년 전으로 이동
+    pf=shiftYear(from,-1);pt2=shiftYear(to,-1);
+  }else if(_er){                    // 올해 보기 — 올해 데이터가 있는 마지막 달까지만
+    pf=_er.prevFrom;pt2=_er.prevTo;
+  }
   let lgAmt=0,dtAmt=0,cnt=0,prevTotal=0,prevOk=false;
   if(_aggMonth.length){
     // ── 집계 RPC 경로 (전체 다운로드 불필요) ──
-    let effTo='';
     _aggMonth.forEach(r=>{
       const ym=String(r.ym||'');
       if(ym>=from&&ym<=to){
         const a=Number(r.s_amt)||0;
         if(r.cls==='LG사급')lgAmt+=a;else dtAmt+=a;
         cnt+=Number(r.s_cnt)||0;
-        if(a!==0&&ym>effTo)effTo=ym;
       }
     });
-    if(effTo){
-      const pf=shiftYear(from,-1),pt2=shiftYear(effTo,-1);
+    if(pf&&pt2){
       _aggMonth.forEach(r=>{const ym=String(r.ym||'');if(ym>=pf&&ym<=pt2)prevTotal+=Number(r.s_amt)||0;});
       prevOk=prevTotal>0;
     }
   }else{
-    // ── 원본 경로 (집계 미도착 시 폴백) ──
+    // ── 원본 경로 (집계 미도착·실패 시 폴백) ──
     const src=_fullLoaded?_rawSAll:rawS;
     src.forEach(r=>{
       if(!inPer(r,from,to))return;
@@ -1195,8 +1307,7 @@ function updYearSummary(){
       if(cls(r)==='LG사급')lgAmt+=a;else dtAmt+=a;
       cnt+=(r._cnt!=null?r._cnt:1);
     });
-    if(_fullLoaded){
-      const pf=shiftYear(from,-1),pt2=shiftYear(to,-1);
+    if(_fullLoaded&&pf&&pt2){
       _rawSAll.forEach(r=>{if(inPer(r,pf,pt2))prevTotal+=Number(r['공급가액'])||0;});
       prevOk=prevTotal>0;
     }
@@ -1207,7 +1318,8 @@ function updYearSummary(){
   let yoyHtml='';
   if(prevOk){
     const diff=total-prevTotal;const pct=diff/prevTotal*100;const up=diff>=0;
-    yoyHtml=`<div style="font-size:11px;font-weight:800;margin-top:3px;color:${up?'#c8001e':'#1e7e4a'};">${up?'▲':'▼'} 전년동기 대비 ${up?'+':'-'}${Math.abs(pct).toFixed(1)}% (${fmtB(prevTotal)})</div>`;
+    const rng=pf&&pt2?` <span style="font-weight:600;color:var(--muted);">${pf.slice(2,4)}.${pf.slice(4)}~${pt2.slice(2,4)}.${pt2.slice(4)}</span>`:'';
+    yoyHtml=`<div style="font-size:11px;font-weight:800;margin-top:3px;color:${up?'#c8001e':'#1e7e4a'};">${up?'▲':'▼'} 전년동기 대비 ${up?'+':'-'}${Math.abs(pct).toFixed(1)}% (${fmtB(prevTotal)})${rng}</div>`;
   }
   el.innerHTML=`<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
     <div style="min-width:150px;"><div style="font-size:11px;color:var(--muted);">${headLabel}</div><div style="font-size:22px;font-weight:900;color:var(--accent);">${fmt(total)}</div><div style="font-size:10px;color:var(--muted);">${cnt.toLocaleString()}건</div>${yoyHtml}</div>
@@ -1453,10 +1565,14 @@ function updCorpDetail(fS,fP,cbSrc){
     const totalSales=rows.reduce((a,r)=>a+(Number(r['공급가액'])||0),0);
     const mSales={};
     rows.forEach(r=>{const y=String(r['년']||'').replace('년','').trim();if(y===curYear){const m=String(r['월']||'').replace('월','').trim().padStart(2,'0');mSales[m]=(mSales[m]||0)+(Number(r['공급가액'])||0);}});
-    document.getElementById(`corp-${id}-kpi`).innerHTML=`<div class="period-badge" style="margin-bottom:4px;display:inline-block;font-size:15px;padding:4px 12px;">${pb}</div><div style="font-size:18px;font-weight:900;color:${color};">${fmt(totalSales)}</div><div style="font-size:10px;color:var(--muted);">${cntOf(rows).toLocaleString()}건</div>`;
+    document.getElementById(`corp-${id}-kpi`).innerHTML=`<div class="period-badge" style="margin-bottom:4px;display:inline-block;font-size:15px;padding:4px 12px;">기간누적 ${pb.replace(/^기준\s*/,'')}</div><div style="font-size:18px;font-weight:900;color:${color};">${fmt(totalSales)}</div><div style="font-size:10px;color:var(--muted);">${cntOf(rows).toLocaleString()}건</div>`;
+    // ⚠️ (v15.46) 아래 추이 그래프는 상단 기간 바가 아니라 "올해" 고정 기준이다.
+    //    총액(기간누적)과 그래프(올해)의 기준이 달라 "기간설정과 그래프 년월이 안 맞는다"는
+    //    지적이 있었음 → 그래프에 별도 캡션을 달아 각각의 기준을 명확히 표기.
+    const trendCap=`<div style="font-size:10px;font-weight:700;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:6px;padding:1px 7px;display:inline-block;margin-bottom:4px;">📅 ${20+Number(curYear)}년 월별 공급추이 (기간설정과 무관·올해 고정)</div>`;
     const maxV=Math.max(...months.map(m=>mSales[m]||0),1);
     const hasCur=months.some(m=>mSales[m]);
-    if(!hasCur){document.getElementById(`corp-${id}-trend`).innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;">당년도 데이터 없음</div>';return;}
+    if(!hasCur){document.getElementById(`corp-${id}-trend`).innerHTML=trendCap+'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;">올해 데이터 없음</div>';return;}
     const W=400,H=130,pL=28,pR=8,pT=18,pB=26;const cW=W-pL-pR,cH=H-pT-pB;
     const colW=cW/(months.length-1),getX=i=>pL+i*colW,getY=v=>pT+cH*(1-v/maxV);
     const pts=months.map((m,i)=>({x:getX(i),y:getY(mSales[m]||0),v:mSales[m]||0}));
@@ -1467,7 +1583,7 @@ function updCorpDetail(fS,fP,cbSrc){
       if(i%3===0||i===11)mLbls+=`<text x="${p.x}" y="${H-4}" text-anchor="middle" font-size="8" font-weight="700" fill="#111827">${parseInt(months[i])}월</text>`;
     });
     const svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;overflow:visible;"><line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#9ca3af" stroke-width="1.5"/><path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" opacity="0.8" stroke-linejoin="round"/>${dots}${lbls}${mLbls}</svg>`;
-    document.getElementById(`corp-${id}-trend`).innerHTML=svg;
+    document.getElementById(`corp-${id}-trend`).innerHTML=trendCap+svg;
     const itemMap={};
     cbSrc.filter(r=>getCorp(r)===key).forEach(r=>{const k=r['브랜드명']||'-';itemMap[k]=(itemMap[k]||0)+(Number(r['공급가액'])||0);});
     const topItems=Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
@@ -1740,6 +1856,7 @@ function togglePivotDetail(tblId,idx,ev){
   if(opened){
     document.querySelectorAll('tr[data-det="'+tblId+'_'+idx+'"]').forEach(tr=>tr.remove());
     btn.textContent='+'; btn.classList.remove('exp-open');
+    baseRow.classList.remove('exp-parent'); // (v15.46) 부모 행 강조 해제
     return;
   }
   const nm=d.entities[idx];
@@ -1768,8 +1885,8 @@ function togglePivotDetail(tblId,idx,ev){
     const desc=(items[c].desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const nameCell='<td class="left det-name" title="'+c+' '+desc+'"><span class="det-code">'+c+'</span>'+(desc?'<span class="det-desc"> · '+desc+'</span>':'')+'</td>';
     html+='<tr class="det-row" data-det="'+tblId+'_'+idx+'">'+nameCell+cells+diffCells
-      +'<td class="num" style="font-weight:700;color:'+d.color+';background:#eef2f8;">'+fmtFull(tot)+'</td>'
-      +'<td class="num" style="color:var(--muted);background:#eef2f8;">'+pct.toFixed(1)+'%</td></tr>';
+      +'<td class="num" style="font-weight:700;color:'+d.color+';background:#f7edd6;">'+fmtFull(tot)+'</td>'
+      +'<td class="num" style="color:#7a6a45;background:#f7edd6;">'+pct.toFixed(1)+'%</td></tr>';
   });
   if(!codes.length){
     const span=colSpanFront+keys.length+(d.hasDiff?2:0)+2;
@@ -1777,6 +1894,7 @@ function togglePivotDetail(tblId,idx,ev){
   }
   baseRow.insertAdjacentHTML('afterend',html);
   btn.textContent='−'; btn.classList.add('exp-open');
+  baseRow.classList.add('exp-parent'); // (v15.46) 어느 업체를 펼쳤는지 부모 행까지 강조
 }
 function renderPivotTable(ctx,isPivotSeller,isPivotBuyer,isPivotBrand){
   const {fS,fP,from,to,isAmt,isYear,type,brand,pcode,sellers,buyers,isEstimated}=ctx;
@@ -2219,6 +2337,8 @@ let _dbTotalP=null,_dbTotalS=null;
       document.getElementById('toMonth').value=maxM;
     }
   }catch(e){console.error('기간 기본값 자동설정 실패',e);}
+  // (v15.46) 기간 기본값이 자동설정된 뒤 빠른기간 버튼 상태를 실제 기간에 맞춤
+  syncQBtn();
   // ── (v15.43) 집계 즉시표시 → 원본 백그라운드 로드 ──
   // (v15.46) 기간조회 모드가 없어졌으므로 setModeBar(false)=로드중 상태를 그대로 사용
   setModeBar(false);
