@@ -1064,10 +1064,11 @@ tr.dragging{opacity:.45;}
         <th style="width:110px;">휴대폰</th>
         <th class="center" style="width:80px;">WF비번</th>
         <th style="width:100px;">입사일</th>
+        <th style="width:100px;">퇴직일</th>
         <th style="width:100px;">근속</th>
         <th class="center" style="width:80px;">관리</th>
       </tr></thead>
-      <tbody id="emp-tbody"><tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="emp-tbody"><tr><td colspan="13"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
   <div class="up-info" style="margin-top:8px;">💡 직원 등록/수정 시 employees 테이블에 저장됩니다.</div>
@@ -1100,7 +1101,8 @@ tr.dragging{opacity:.45;}
       </div>
       <div class="modal-row">
         <div class="form-group"><label>WF 비번</label><div style="display:flex;gap:6px;align-items:center;"><input type="text" id="emp-in-wfpw" placeholder="4자리 숫자" maxlength="4" style="width:100px;font-family:'Noto Sans KR',sans-serif;letter-spacing:2px;"><button type="button" onclick="autoSetWfPw()" style="height:36px;padding:0 10px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">📱 휴대폰<br>자동설정</button></div><div style="font-size:10px;color:var(--muted);margin-top:3px;">비워두면 기존 비번 유지 / 초기값: 휴대폰 뒷4자리 또는 1111</div></div>
-        <div class="form-group" id="emp-active-group" style="display:none;"><label>재직 상태</label><select id="emp-in-active"><option value="true">재직중</option><option value="false">퇴직</option></select></div>
+        <div class="form-group" id="emp-active-group" style="display:none;"><label>재직 상태</label><select id="emp-in-active" onchange="toggleRetireDateField()"><option value="true">재직중</option><option value="false">퇴직</option></select></div>
+        <div class="form-group" id="emp-retire-group" style="display:none;"><label>퇴직일자 <span class="req">*</span></label><input type="date" id="emp-in-retiredate"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3823,44 +3825,74 @@ function calcTenure(joinDate) {
   return y>0 ? `${y}년 ${m}개월` : `${m}개월`;
 }
 
-function renderEmpTable() {
-  const entity = document.getElementById('emp-f-entity').value;
-  const dept   = document.getElementById('emp-f-dept').value;
-  const active = document.getElementById('emp-f-active').value;
-  const search = document.getElementById('emp-f-search').value.trim().toLowerCase();
-  const rows = _empData.filter(r => {
-    if(entity && r.entity!==entity) return false;
-    if(dept   && r.dept!==dept)     return false;
-    if(active==='true'  && r.active===false) return false;
-    if(active==='false' && r.active!==false) return false;
-    if(search && !(r.name||'').toLowerCase().includes(search)) return false;
-    return true;
-  });
-  const tbody = document.getElementById('emp-tbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';return;}
-  tbody.innerHTML = rows.map(r=>`
-    <tr class="${r.active===false?'opacity:0.45;':''}">
-      <td class="center mono">${r.emp_no||''}</td>
-      <td><span class="badge b-gray">${r.emp_type||''}</span></td>
-      <td><span class="badge ${({KOREA:'b-green',SMECN:'b-red',SMEGLOBAL:'b-amber',GSMEIN:'b-purple'})[r.entity]||'b-gray'}">${r.entity||''}</span></td>
-      <td style="font-weight:700;">${r.name||''}</td>
-      <td><span class="badge b-gray">${r.rank||''}</span></td>
-      <td><span class="badge b-dt">${r.dept||''}</span></td>
-      <td class="center">${r.gender||''}</td>
-      <td class="mono">${r.phone||''}</td>
-      <td class="center" style="font-family:'Noto Sans KR',sans-serif;letter-spacing:2px;color:var(--muted);">${r.wf_password ? '●'.repeat(Math.min(r.wf_password.length,4)) : '<span style="color:#ccc;font-size:11px;">미설정</span>'}</td>
-      <td class="mono">${r.join_date||''}</td>
-      <td class="mono" style="color:var(--accent2);font-weight:600;">${calcTenure(r.join_date)}</td>
-      <td class="center">
-        <button class="row-btn row-btn-edit" onclick="openEmpModal(${r.id})">수정</button>
-        ${r.active!==false
-          ? `<button class="row-btn row-btn-cancel" style="margin-top:3px;" onclick="retireEmp(${r.id},'${(r.name||'').replace(/'/g,"\\'")}')">퇴직</button>`
-          : `<span style="font-size:11px;color:var(--muted);">퇴직</span>`}
-      </td>
-    </tr>`).join('');
-  setTimeout(()=>initColResize('emp-table','al_emp'),50);
+function _empRowHtml(r, noLabel, isRetired) {
+  const EB = {KOREA:'b-green',SMECN:'b-red',SMEGLOBAL:'b-amber',GSMEIN:'b-purple'};
+  const trStyle  = isRetired ? 'style="opacity:0.5;background:#fafbfc;"' : '';
+  const noStyle  = isRetired ? 'color:var(--accent);font-size:11px;' : '';
+  const wfMask   = r.wf_password ? '\u25cf'.repeat(Math.min(r.wf_password.length,4)) : '<span style="color:#ccc;font-size:11px;">미설정</span>';
+  const retireCell = r.retire_date
+    ? `<span style="color:var(--accent);font-weight:600;">${r.retire_date}</span>`
+    : '<span style="color:#ccc;font-size:11px;">\u2014</span>';
+  const tenureCell = isRetired
+    ? '<span style="color:#bbb;font-size:11px;">\u2014</span>'
+    : `<span style="color:var(--accent2);font-weight:600;">${calcTenure(r.join_date)}</span>`;
+  const manageCell = isRetired
+    ? `<button class="row-btn row-btn-edit" onclick="openEmpModal(${r.id})">수정</button>`
+    : `<button class="row-btn row-btn-edit" onclick="openEmpModal(${r.id})">수정</button>
+       <button class="row-btn row-btn-cancel" style="margin-top:3px;" onclick="retireEmp(${r.id},'${(r.name||'').replace(/'/g,"\\'")}')">퇴직</button>`;
+  return `<tr ${trStyle}>
+    <td class="center mono" style="${noStyle}">${noLabel}</td>
+    <td><span class="badge b-gray">${r.emp_type||''}</span></td>
+    <td><span class="badge ${EB[r.entity]||'b-gray'}">${r.entity||''}</span></td>
+    <td style="font-weight:700;">${r.name||''}</td>
+    <td><span class="badge b-gray">${r.rank||''}</span></td>
+    <td><span class="badge b-dt">${r.dept||''}</span></td>
+    <td class="center">${r.gender||''}</td>
+    <td class="mono">${r.phone||''}</td>
+    <td class="center" style="font-family:'Noto Sans KR',sans-serif;letter-spacing:2px;color:var(--muted);">${wfMask}</td>
+    <td class="mono">${r.join_date||''}</td>
+    <td class="mono">${retireCell}</td>
+    <td class="mono">${tenureCell}</td>
+    <td class="center">${manageCell}</td>
+  </tr>`;
 }
 
+function renderEmpTable() {
+  const entity  = document.getElementById('emp-f-entity').value;
+  const dept    = document.getElementById('emp-f-dept').value;
+  const activeF = document.getElementById('emp-f-active').value;
+  const search  = document.getElementById('emp-f-search').value.trim().toLowerCase();
+  const tbody   = document.getElementById('emp-tbody');
+  const EMPTY13 = '<tr><td colspan="13"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';
+
+  function base(r) {
+    if(entity && r.entity!==entity) return false;
+    if(dept   && r.dept!==dept)     return false;
+    if(search && !(r.name||'').toLowerCase().includes(search)) return false;
+    return true;
+  }
+  const sorted      = [..._empData].sort((a,b)=>(a.emp_no||0)-(b.emp_no||0));
+  const activeRows  = sorted.filter(r=>r.active!==false && base(r));
+  const retiredRows = sorted.filter(r=>r.active===false && base(r));
+  let html = '';
+
+  if(activeF === 'true') {
+    if(!activeRows.length){ tbody.innerHTML=EMPTY13; return; }
+    html = activeRows.map((r,i)=>_empRowHtml(r, i+1, false)).join('');
+  } else if(activeF === 'false') {
+    if(!retiredRows.length){ tbody.innerHTML='<tr><td colspan="13"><div class="empty-state">퇴직자 데이터가 없습니다.</div></td></tr>'; return; }
+    html = retiredRows.map((r,i)=>_empRowHtml(r, `\ud1f4${i+1}`, true)).join('');
+  } else {
+    if(!activeRows.length && !retiredRows.length){ tbody.innerHTML=EMPTY13; return; }
+    html = activeRows.map((r,i)=>_empRowHtml(r, i+1, false)).join('');
+    if(retiredRows.length){
+      html += `<tr><td colspan="13" style="background:#f3f4f6;padding:7px 14px;font-size:11px;color:var(--muted);font-weight:700;border-top:2px solid var(--border);">\ud1f4\uc9c1\uc774\ub825 (${retiredRows.length}\uba85)</td></tr>`;
+      html += retiredRows.map((r,i)=>_empRowHtml(r, `\ud1f4${i+1}`, true)).join('');
+    }
+  }
+  tbody.innerHTML = html;
+  setTimeout(()=>initColResize('emp-table','al_emp_v4'),50);
+}
 function openEmpModal(id) {
   _empEditId = id || null;
   const r = id ? _empData.find(x=>x.id===id) : null;
@@ -3877,8 +3909,21 @@ function openEmpModal(id) {
   document.getElementById('emp-in-loginid').value  = r?.login_id   || '';
   document.getElementById('emp-in-wfpw').value = '';
   document.getElementById('emp-active-group').style.display = r ? 'flex' : 'none';
-  if(r) document.getElementById('emp-in-active').value = r.active===false?'false':'true';
+  document.getElementById('emp-retire-group').style.display = 'none';
+  if(r) {
+    document.getElementById('emp-in-active').value = r.active===false?'false':'true';
+    document.getElementById('emp-in-retiredate').value = r.retire_date||'';
+    toggleRetireDateField();
+  }
   document.getElementById('empModal').classList.add('show');
+}
+
+function toggleRetireDateField() {
+  const isRetired = document.getElementById('emp-in-active').value === 'false';
+  document.getElementById('emp-retire-group').style.display = isRetired ? 'flex' : 'none';
+  if(isRetired && !document.getElementById('emp-in-retiredate').value) {
+    document.getElementById('emp-in-retiredate').value = new Date().toISOString().slice(0,10);
+  }
 }
 
 function closeEmpModal() {
@@ -3916,7 +3961,17 @@ async function saveEmp() {
   };
   const wfpw = document.getElementById('emp-in-wfpw').value.trim();
   if(wfpw) payload.wf_password = wfpw;
-  if(_empEditId) payload.active = document.getElementById('emp-in-active').value==='true';
+  if(_empEditId) {
+    const isActive = document.getElementById('emp-in-active').value === 'true';
+    payload.active = isActive;
+    if(!isActive) {
+      const rd = document.getElementById('emp-in-retiredate').value;
+      if(!rd){alert('퇴직일자를 입력해주세요.');return;}
+      payload.retire_date = rd;
+    } else {
+      payload.retire_date = null; // 재직 복귀 시 퇴직일 초기화
+    }
+  }
   const btn = document.getElementById('empSaveBtn');
   btn.disabled=true; btn.textContent='저장 중...';
   let error;
@@ -3936,14 +3991,39 @@ async function saveEmp() {
 }
 
 async function retireEmp(id, name) {
-  if(!confirm(`[${name}] 을 퇴직 처리하시겠습니까?`)) return;
-  const {error}=await sb.from('employees').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
+  const today = new Date().toISOString().slice(0,10);
+  const dateStr = prompt(`[${name}] 퇴직일자를 입력하세요 (YYYY-MM-DD)`, today);
+  if(dateStr===null) return;
+  const trimmed = dateStr.trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)){
+    alert('날짜 형식이 올바르지 않습니다.\n예: ' + today);
+    return;
+  }
+  if(!confirm(`[${name}]을(를) ${trimmed} 자로 퇴직 처리합니다.\n이 작업은 되돌릴 수 있습니다 (수정 버튼으로 재직중으로 변경 가능).`)) return;
+  const {error}=await sb.from('employees').update({
+    active:false, retire_date:trimmed, updated_at:new Date().toISOString()
+  }).eq('id',id);
   if(error){alert('처리 실패: '+error.message);return;}
   _empData=[]; await loadEmpData();
 }
 
 function downloadEmpExcel() {
-  const rows = _empData.map(r=>({'No':r.emp_no,'채용구분':r.emp_type,'법인':r.entity,'성명':r.name,'직급':r.rank,'부서':r.dept,'성별':r.gender,'휴대폰':r.phone,'입사일':r.join_date,'근속':calcTenure(r.join_date),'재직':r.active===false?'퇴직':'재직중'}));
+  const sorted = [..._empData].sort((a,b)=>(a.emp_no||0)-(b.emp_no||0));
+  const actives  = sorted.filter(r=>r.active!==false);
+  const retireds = sorted.filter(r=>r.active===false);
+  const mapRow = (r, noLabel) => ({
+    'No': noLabel,
+    '채용구분': r.emp_type||'', '법인': r.entity||'', '성명': r.name||'',
+    '직급': r.rank||'', '부서': r.dept||'', '성별': r.gender||'',
+    '휴대폰': r.phone||'', '입사일': r.join_date||'',
+    '퇴직일': r.retire_date||'',
+    '근속': r.active===false ? '' : calcTenure(r.join_date),
+    '재직상태': r.active===false ? '퇴직' : '재직중'
+  });
+  const rows = [
+    ...actives.map((r,i)=>mapRow(r, i+1)),
+    ...retireds.map((r,i)=>mapRow(r, `퇴${i+1}`))
+  ];
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'직원명단');
   XLSX.writeFile(wb,'SME_직원명단_'+new Date().toISOString().slice(0,10)+'.xlsx');

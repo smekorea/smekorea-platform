@@ -148,8 +148,8 @@
     background:#e8edf5;padding:11px 13px;text-align:left;
     font-weight:800;color:#3a4a6a;
     font-family:'Noto Sans KR',sans-serif;font-size:13px;letter-spacing:0;
-    border-bottom:1px solid var(--border);position:sticky;top:0;
-    position:relative;user-select:none;
+    border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;
+    user-select:none;
   }
   thead th.sortable{cursor:pointer;user-select:none;}
   thead th.sortable:hover{color:var(--accent2);}
@@ -205,7 +205,7 @@
     max-height:0;transition:max-height 0.3s ease;
     flex-shrink:0;
   }
-  .detail-panel.show{display:block;max-height:420px;overflow-y:auto;}
+  .detail-panel.show{display:flex;flex-direction:column;max-height:420px;overflow:hidden;}
 
   .panel-head{
     display:flex;align-items:center;justify-content:space-between;
@@ -221,7 +221,7 @@
   }
   .panel-close:hover{color:var(--accent);}
 
-  .panel-body{padding:14px 20px;}
+  .panel-body{padding:14px 20px;overflow-y:auto;flex:1;min-height:0;}
   .panel-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
   .panel-grid-3{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
   .panel-sec{margin-bottom:12px;}
@@ -285,6 +285,12 @@
     border-bottom:1px solid var(--border);text-align:left;
   }
   .history-table td{padding:7px 10px;border-bottom:1px solid #f5f7fa;color:var(--text);}
+  /* 패널 출하이력 테이블: 독립리사이즈 + 틀고정 */
+  #panelHistTable{width:auto !important;border-collapse:collapse;font-size:11px;margin-top:8px;}
+  #panelHistTable th{
+    position:sticky;top:0;z-index:1;background:#f0f4f9;
+    user-select:none;overflow:hidden;text-overflow:ellipsis;
+  }
   .history-empty{text-align:center;padding:16px;color:var(--muted);font-size:12px;}
 
   /* 빈 상태 */
@@ -604,7 +610,16 @@
       <div class="panel-title">PO 상세 · 출하 입력</div>
       <div class="panel-pono" id="panelPono">—</div>
     </div>
-    <button class="panel-close" onclick="closePanel()">✕</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button onclick="openPanelNewWindow()" title="새 탭에서 열기"
+        style="display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:6px;
+               border:1.5px solid var(--border);background:var(--surface);color:var(--accent2);
+               font-size:11px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;
+               white-space:nowrap;transition:all .18s;"
+        onmouseover="this.style.borderColor='var(--accent2)'"
+        onmouseout="this.style.borderColor='var(--border)'">🔗 새창열기</button>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
   </div>
 
   <div class="panel-body">
@@ -703,20 +718,20 @@
           </div>
         </div>
         <!-- 출하이력 -->
-        <div>
+        <div style="overflow-x:auto;">
           <div style="font-size:10px;font-family:'Noto Sans KR',sans-serif;color:var(--muted);letter-spacing:1px;margin-bottom:6px;">SHIPMENT HISTORY</div>
-          <table class="history-table">
+          <table id="panelHistTable" class="history-table">
             <thead>
               <tr>
-                <th>인보이스 No.</th>
-                <th>출하일</th>
-                <th>수량</th>
-                <th>운송</th>
-                <th>잔량</th>
+                <th>인보이스 No.<div class="col-resizer"></div></th>
+                <th>출하일<div class="col-resizer"></div></th>
+                <th>수량<div class="col-resizer"></div></th>
+                <th>운송<div class="col-resizer"></div></th>
+                <th>잔량<div class="col-resizer"></div></th>
                 <th style="width:64px;text-align:center;">관리</th>
               </tr>
             </thead>
-            <tbody id="historyBody">
+            <tbody id="panelHistoryBody">
               <tr><td colspan="6" class="history-empty">출하이력 없음</td></tr>
             </tbody>
           </table>
@@ -766,6 +781,14 @@
   const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // 새창열기 탭: localStorage의 임시 auth 플래그로 세션 자동 설정 (3초 이내)
+  (function(){
+    const _nwa = localStorage.getItem('pm_newwin_auth');
+    if(_nwa && (Date.now()-parseInt(_nwa))<3000){
+      sessionStorage.setItem('po_auth','1');
+      localStorage.removeItem('pm_newwin_auth');
+    }
+  })();
   if (sessionStorage.getItem('po_auth') !== '1') { window.location.href = 'po_hub.html'; }
 
   // 법인별 운송기간 맵 (entities 테이블)
@@ -1183,14 +1206,14 @@
     document.getElementById('p-afterremain').textContent = '—';
 
     updateRespDisplay(r.resp);
-    loadHistory(r); // 출하이력 조회
+    loadPanelHistory(r); // 출하이력 조회 (패널 전용)
 
     document.getElementById('detailPanel').classList.add('show');
   }
 
-  // 출하이력 Supabase 조회
-  async function loadHistory(r) {
-    document.getElementById('historyBody').innerHTML =
+  // 출하이력 Supabase 조회 (패널 전용)
+  async function loadPanelHistory(r) {
+    document.getElementById('panelHistoryBody').innerHTML =
       '<tr><td colspan="6" class="history-empty">조회 중...</td></tr>';
     try {
       const groupIds = allData
@@ -1200,9 +1223,9 @@
         .select('id, invoice_no, ship_date, ship_qty, transport')
         .in('po_id', groupIds)
         .order('ship_date', {ascending:true});
-      renderHistory(ships||[], r.qty);
+      renderPanelHistory(ships||[], r.qty);
     } catch(e) {
-      document.getElementById('historyBody').innerHTML =
+      document.getElementById('panelHistoryBody').innerHTML =
         '<tr><td colspan="6" class="history-empty">이력 조회 실패</td></tr>';
     }
   }
@@ -1243,10 +1266,11 @@
   }
 
   // ── 출하이력 렌더 ──
-  function renderHistory(history, totalQty) {
-    const tbody = document.getElementById('historyBody');
+  function renderPanelHistory(history, totalQty) {
+    const tbody = document.getElementById('panelHistoryBody');
     if (!history.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="history-empty">출하이력 없음</td></tr>';
+      setTimeout(()=>initColResize('panelHistTable','pm_phist_v1'),30);
       return;
     }
     let cumShipped = 0;
@@ -1273,6 +1297,7 @@
         </td>
       </tr>`;
     }).join('');
+    setTimeout(()=>initColResize('panelHistTable','pm_phist_v1'),30);
   }
 
   // ── 출하 등록 (초과출하 자동분산) ──
@@ -1882,8 +1907,29 @@
   }
   window.addEventListener('resize', adjustLayout);
 
+  // 새창열기: 현재 행을 localStorage에 저장 후 새 탭 오픈
+  function openPanelNewWindow() {
+    if(!selectedRow){ showToast('먼저 PO 행을 선택해주세요','warn'); return; }
+    localStorage.setItem('pm_panel_open', JSON.stringify({
+      pono:selectedRow.pono, mkpn:selectedRow.mkpn, entity:selectedRow.entity,
+      ts:Date.now()
+    }));
+    localStorage.setItem('pm_newwin_auth', Date.now().toString());
+    window.open(location.pathname, '_blank');
+  }
+
   // 초기 로드
-  loadPO().then(() => { adjustLayout(); initColResize('poTable','pm_col_v2'); });
+  loadPO().then(() => {
+    adjustLayout();
+    initColResize('poTable','pm_col_v2');
+    // 새창열기로 열린 경우: 해당 PO 자동 선택 + 패널 오픈 (5초 이내)
+    const _ao = JSON.parse(localStorage.getItem('pm_panel_open')||'null');
+    if(_ao && (Date.now()-_ao.ts)<5000){
+      localStorage.removeItem('pm_panel_open');
+      const found = allData.find(r=>r.pono===_ao.pono && r.mkpn===_ao.mkpn && r.entity===_ao.entity);
+      if(found){ selectedRow=found; openPanel(found); }
+    }
+  });
 </script>
 <script>
   // ── 수정·취소 이력 (통합) ──
