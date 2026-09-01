@@ -630,11 +630,12 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
             <span id="brief-line" style="font-size:12px;color:var(--text-mute);margin-left:2px;"></span>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-            <button id="brief-over-btn" onclick="toggleBrief('over')" style="padding:6px 12px;border:1.5px solid #f0b9a0;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⚠ 과잉재고 <span id="brief-over-cnt" style="font-weight:600;"></span> <span id="brief-over-arrow">▾</span></button>
+            <button id="brief-over-btn" onclick="toggleBrief('over')" style="padding:6px 12px;border:1.5px solid #f0b9a0;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">📦 재고금액 상위 <span id="brief-over-cnt" style="font-weight:600;"></span> <span id="brief-over-arrow">▾</span></button>
             <button id="brief-under-btn" onclick="toggleBrief('under')" style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">ℹ 목표 미달 <span id="brief-under-cnt" style="font-weight:500;color:var(--text-mute);"></span> <span id="brief-under-arrow">▾</span></button>
           </div>
         </div>
         <div id="brief-over-panel" class="hide" style="padding:0 16px 12px;">
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고금액이 많은 상위 10개 메이커 (목표 유무 무관)</div>
           <div class="brief-head-row" style="color:#b45309;">
             <span style="min-width:130px;">메이커</span><span>목표</span><span>재고</span><span>차이금액</span><span style="min-width:52px;text-align:right;">달성률</span>
           </div>
@@ -1592,8 +1593,7 @@ function renderRisk(){
 
 // (v15.48) 재고 브리핑 — 월 선택 + 과잉/미달 각각 접힘. 금액은 원 단위 전체 표기.
 //  재고 화면은 매출과 부호 반대: 목표 초과=과잉재고=문제(빨강), 미달=재고감축=중립(회색).
-const BRIEF_MIN_TARGET=50000000; // 목표 5천만 미만은 노이즈라 제외
-const BRIEF_MAX_ROWS=10;         // 과잉/미달 각각 최대 10개
+const BRIEF_MAX_ROWS=10;         // 재고금액 상위 / 목표미달 각각 최대 10개
 let _briefOpen={over:false,under:false};
 
 async function renderStockBrief(){
@@ -1611,44 +1611,60 @@ async function renderStockBrief(){
   }
   const baseYm=(sel&&sel.value)||_allMonthsList[_allMonthsList.length-1];
 
+  // realByBrand: LG마감 포함 전체 재고(재고금액 상위 순위용).
+  //   Glory Faith 등 LG마감기준도 실제 재고가 쌓여 있으므로 상위 순위에는 포함한다.
+  //   미달 판정에서만 아래 _lgClosingExcludeSet 으로 걸러낸다.
   const realByBrand={};
   _allMonthsStock.forEach(r=>{
     if(r.ym!==baseYm)return;
     const b=normMaker(r.brand_std||r.brand||'');
-    if(_lgClosingExcludeSet.has(b))return;
     realByBrand[b]=(realByBrand[b]||0)+(Number(r.stock_amount)||0);
   });
-  const over=[],under=[];
+  // 목표 규칙을 표준명 기준 맵으로 (미달 판정 + 상위목록의 목표/달성률 표기용)
+  const ruleByBrand={};
   _goalRules.forEach(rule=>{
-    const tgt=Number(rule.target_amount)||0;
-    if(tgt<BRIEF_MIN_TARGET)return;
-    const b=normMaker(rule.brand);
-    const real=realByBrand[b]||0;
-    const pct=tgt>0?real/tgt*100:0;
-    const item={brand:rule.brand,tgt,real,pct,diff:real-tgt};
-    if(pct>130)over.push(item);
-    else if(pct<80)under.push(item);
+    const t=Number(rule.target_amount)||0;
+    if(t>0)ruleByBrand[normMaker(rule.brand)]={tgt:t,orig:rule.brand};
   });
-  over.sort((a,b)=>b.diff-a.diff);        // 초과금액 큰 순
-  under.sort((a,b)=>(a.diff)-(b.diff));    // 부족금액 큰 순(가장 많이 모자란 것 먼저)
+  // ── 재고금액 상위 10 (전체 메이커, 목표 무관) ──
+  //   재고금액 순위엔 LG마감기준(Glory Faith 등)도 포함한다 — 실제로 재고가 쌓여 있으므로.
+  const topStock=Object.keys(realByBrand)
+    .map(b=>{const real=realByBrand[b],r=ruleByBrand[b];
+             return {brand:(r&&r.orig)||b,real,tgt:r?r.tgt:0,
+                     pct:r&&r.tgt>0?real/r.tgt*100:null, diff:r?real-r.tgt:null};})
+    .filter(x=>x.real>0)
+    .sort((a,b)=>b.real-a.real)
+    .slice(0,BRIEF_MAX_ROWS);
+  // ── 목표 미달 (달성률 <100%, 목표 보유 브랜드, LG마감 제외 이미 반영) ──
+  const under=[];
+  Object.keys(ruleByBrand).forEach(b=>{
+    if(_lgClosingExcludeSet.has(b))return;
+    const tgt=ruleByBrand[b].tgt, real=realByBrand[b]||0, pct=real/tgt*100;
+    if(pct<100)under.push({brand:ruleByBrand[b].orig,tgt,real,pct,diff:real-tgt});
+  });
+  under.sort((a,b)=>a.diff-b.diff).splice(BRIEF_MAX_ROWS); // 부족금액 큰 순 10개
 
   const W=v=>Math.round(v).toLocaleString(); // 원 단위 전체
-  const overSum=over.reduce((a,r)=>a+r.diff,0);
-  document.getElementById('brief-line').textContent = over.length
-    ? `과잉 ${over.length}개 · 초과 ${W(overSum)}원 재고로 묶임`
-    : `과잉재고 브랜드 없음`;
-  document.getElementById('brief-over-cnt').textContent=`${over.length}`;
+  const topSum=topStock.reduce((a,r)=>a+r.real,0);
+  document.getElementById('brief-line').textContent=
+    `재고금액 상위 ${topStock.length}개 합계 ${W(topSum)}원 · 목표미달 ${under.length}개`;
+  document.getElementById('brief-over-cnt').textContent=`${topStock.length}`;
   document.getElementById('brief-under-cnt').textContent=`${under.length}`;
 
-  const row=r=>`<div class="brief-row"><span class="bn" title="${r.brand}">${r.brand}</span>`
+  // 재고금액 상위: 목표가 없으면 목표/차이/% 칸은 '—'
+  const rowTop=r=>`<div class="brief-row"><span class="bn" title="${r.brand}">${r.brand}</span>`
+    +`<span class="bv">${r.tgt?W(r.tgt):'—'}</span>`
+    +`<span class="bv">${W(r.real)}</span>`
+    +`<span class="bv" style="color:${r.diff==null?'#94A3B8':(r.diff>=0?'#EA7317':'#2563EB')};font-weight:700;">${r.diff==null?'—':(r.diff>=0?'+':'-')+W(Math.abs(r.diff))}</span>`
+    +`<span class="bv" style="font-weight:800;color:${r.pct==null?'#94A3B8':(r.pct>100?'#EA7317':'#2563EB')};">${r.pct==null?'—':Math.round(r.pct)+'%'}</span></div>`;
+  const rowUnder=r=>`<div class="brief-row"><span class="bn" title="${r.brand}">${r.brand}</span>`
     +`<span class="bv">${W(r.tgt)}</span>`
     +`<span class="bv">${W(r.real)}</span>`
-    +`<span class="bv" style="color:${r.diff>=0?'#b45309':'#2563EB'};font-weight:700;">${r.diff>=0?'+':'-'}${W(Math.abs(r.diff))}</span>`
-    +`<span class="bv" style="font-weight:800;color:${r.pct>=100?'#2563EB':'#DB2777'};">${Math.round(r.pct)}%</span></div>`;
+    +`<span class="bv" style="color:#2563EB;font-weight:700;">-${W(Math.abs(r.diff))}</span>`
+    +`<span class="bv" style="font-weight:800;color:#2563EB;">${Math.round(r.pct)}%</span></div>`;
   const empty='<div style="font-size:12px;color:var(--text-mute);padding:8px 2px;">해당 없음</div>';
-  document.getElementById('brief-over').innerHTML = over.length?over.slice(0,BRIEF_MAX_ROWS).map(row).join(''):empty;
-  document.getElementById('brief-under').innerHTML = under.length?under.slice(0,BRIEF_MAX_ROWS).map(row).join(''):empty;
-  // 접힘 상태 복원(월 변경 후에도 펼친 패널 유지)
+  document.getElementById('brief-over').innerHTML = topStock.length?topStock.map(rowTop).join(''):empty;
+  document.getElementById('brief-under').innerHTML = under.length?under.map(rowUnder).join(''):empty;
   applyBriefOpen('over');applyBriefOpen('under');
 }
 function applyBriefOpen(which){
@@ -1894,7 +1910,9 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       bars+=`<rect x="${x}" y="${yTop}" width="${bW}" height="${lgH}" fill="${isLatest?'#185FA5':'#2A78D6'}"/>`;
       bars+=`<rect x="${x}" y="${yTop+lgH}" width="${bW}" height="${dtH}" fill="${isLatest?'#D95926':'#EB6834'}" rx="0"/>`;
       const pct=targetVal>0?v.total/targetVal*100:0;
-      const pctColor=pct>=100?'#2563EB':'#DB2777'; // (v15.48) 달성=파랑 / 미달=분홍
+      // (v15.48-fix) 재고 관점: 목표 초과 = 과잉(주황) / 목표 이하 = 정상(파랑)
+      //   매출과 부호가 반대라 브리핑 과잉색(주황)과 방향을 맞춘다.
+      const pctColor=pct>100?'#EA7317':'#2563EB';
       // 전월대비는 "바로 앞 슬롯"이 아니라 "직전에 데이터가 있는 월" 기준
       let prev=null;for(let k=i-1;k>=0;k--){if(vals[k].has){prev=vals[k].total;break;}}
       const delta=prev!==null?v.total-prev:null;
