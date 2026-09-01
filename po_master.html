@@ -143,34 +143,40 @@
     border:1px solid var(--border);border-radius:12px;
     overflow:auto;flex:1;
   }
-  table{width:auto;border-collapse:collapse;font-size:14px;white-space:nowrap;}
+  table{width:auto;border-collapse:separate;border-spacing:0;font-size:14px;white-space:nowrap;}
   thead th{
     background:#e8edf5;padding:11px 13px;text-align:left;
     font-weight:800;color:#3a4a6a;
     font-family:'Noto Sans KR',sans-serif;font-size:13px;letter-spacing:0;
-    border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;
+    border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:3;
     user-select:none;
   }
   thead th.sortable{cursor:pointer;user-select:none;}
   thead th.sortable:hover{color:var(--accent2);}
   tbody tr{
-    border-bottom:1px solid #f0f4f9;cursor:pointer;
+    cursor:pointer;
     transition:background 0.1s;
   }
   tbody tr:hover{filter:brightness(0.97);}
   tbody tr.selected{background:rgba(26,86,219,0.05)!important;border-left:3px solid var(--accent2);}
   tbody tr.last{border-bottom:none;}
-  tbody td{padding:10px 13px;color:#1a2233;font-size:14px;border-right:1px solid #e8edf5;overflow:hidden;text-overflow:ellipsis;}
+  tbody td{padding:10px 13px;color:#1a2233;font-size:14px;border-right:1px solid #e8edf5;border-bottom:1px solid #f0f4f9;overflow:hidden;text-overflow:ellipsis;}
   tbody td:last-child{border-right:none;}
   thead th{overflow:hidden;text-overflow:ellipsis;}
-  #histTable th{position:relative;user-select:none;}
+  #histTable th{position:sticky;top:0;user-select:none;}
   .td-mono{font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:600;color:#2a3a5a;}
   .td-right{text-align:right;}
   .td-center{text-align:center;}
 
-  /* 리사이저블 컬럼 */
-  .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:1;}
-  .col-resizer:hover{background:rgba(26,86,219,0.15);}
+  /* 리사이저블 컬럼 — sticky th 내부에서도 정확히 잡히도록 z-index 상향 */
+  .col-resizer{
+    position:absolute;right:0;top:0;bottom:0;width:6px;
+    cursor:col-resize;z-index:10;touch-action:none;
+    background:transparent;
+  }
+  .col-resizer:hover{background:rgba(26,86,219,0.35);}
+  .col-resizer.dragging{background:var(--accent2);}
 
   /* 배지 */
   .badge{
@@ -562,7 +568,10 @@
     <div>
       <div class="table-title">PO 목록 <span class="table-count" id="tableCount"></span></div>
     </div>
-    <button class="btn-excel" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="btn-excel" style="color:var(--accent2);" onclick="openNewWindow()" title="이 화면을 새 탭에서 엽니다">🔗 새창열기</button>
+      <button class="btn-excel" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
+    </div>
   </div>
   <!-- 합계 바 -->
   <div id="pm-summary-bar" style="display:none;background:#f0f4f9;border:1px solid var(--border);border-radius:10px;padding:9px 18px;margin-bottom:12px;gap:16px;align-items:center;flex-wrap:wrap;">
@@ -1843,53 +1852,60 @@
 
   // ── 리사이저블 컬럼 (독립 컬럼 리사이즈) ──
   // 동작: 해당 컬럼만 조정 / 나머지 고정 / 테이블 전체폭 = 컬럼합계
+  // ── 리사이저블 컬럼 (독립 컬럼 리사이즈) ── v3: colgroup 기반
+  // th.style.width 방식은 table-layout:fixed 렌더링 시 서브픽셀 오차가
+  // 다른 컬럼으로 재분배되며 누적 드리프트를 일으킴 → colgroup<col>로 전환
   function initColResize(tableId, storageKey) {
     const table = document.getElementById(tableId);
-    if (!table) return;
+    if(!table) return;
+    const verKey = storageKey + ':v3';
     const ths = table.querySelectorAll('thead th');
-    const saved = JSON.parse(localStorage.getItem(storageKey)||'{}');
+    if(!ths.length) return;
 
-    // ① 모든 컬럼에 현재 px폭 명시 고정 (브라우저 자동배분 차단)
-    ths.forEach((th, i) => {
-      const w = saved[i] || th.offsetWidth;
-      th.style.width    = w + 'px';
-      th.style.minWidth = w + 'px';
-    });
+    let colgroup = table.querySelector('colgroup');
+    if(!colgroup){ colgroup = document.createElement('colgroup'); table.insertBefore(colgroup, table.firstChild); }
+    while(colgroup.children.length < ths.length) colgroup.appendChild(document.createElement('col'));
+    const cols = colgroup.querySelectorAll('col');
+    const saved = JSON.parse(localStorage.getItem(verKey)||'{}');
 
-    // ② table-layout:fixed + 전체폭 = 컬럼합계
+    // 자연폭 측정 전 table-layout을 auto로 되돌려 실제 컨텐츠 폭을 얻음
+    if(!Object.keys(saved).length){
+      table.style.tableLayout = 'auto';
+      table.style.width = 'auto';
+    }
+    const widths = [];
+    ths.forEach((th,i)=>{ widths[i] = Math.round(saved[i] || th.getBoundingClientRect().width); });
+
     table.style.tableLayout = 'fixed';
-    const updateTableWidth = () => {
+    const applyWidths = () => {
       let total = 0;
-      ths.forEach(th => { total += th.offsetWidth; });
-      table.style.width = total + 'px';
+      widths.forEach((w,i)=>{ if(cols[i]) cols[i].style.width = w+'px'; total += w; });
+      table.style.width = total + 'px';   // 전체폭 = 컬럼합계 (가변)
+      table.style.minWidth = total + 'px';
     };
-    updateTableWidth();
+    applyWidths();
 
-    ths.forEach((th, i) => {
-      let rsz = th.querySelector('.col-resizer');
-      if (!rsz) { rsz = document.createElement('div'); rsz.className='col-resizer'; th.appendChild(rsz); }
-
-      rsz.addEventListener('mousedown', e => {
-        const startX = e.clientX;
-        const startW = th.offsetWidth;
-
-        const onMove = e => {
-          const w = Math.max(50, startW + e.clientX - startX);
-          th.style.width    = w + 'px';
-          th.style.minWidth = w + 'px';
-          updateTableWidth(); // 전체폭 실시간 갱신
-        };
-        const onUp = () => {
-          const ws = {};
-          ths.forEach((t, idx) => { ws[idx] = t.offsetWidth; });
-          localStorage.setItem(storageKey, JSON.stringify(ws));
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-        e.preventDefault(); e.stopPropagation();
-      });
+    ths.forEach((th,i)=>{
+      if(!th.querySelector('.col-resizer')){
+        const r = document.createElement('div'); r.className='col-resizer'; th.appendChild(r);
+        r.addEventListener('mousedown', e => {
+          const sx = e.clientX, sw = widths[i];
+          r.classList.add('dragging');
+          document.body.style.cursor = 'col-resize';
+          const mv = e => { widths[i] = Math.max(50, sw + e.clientX - sx); applyWidths(); };
+          const up = () => {
+            r.classList.remove('dragging');
+            document.body.style.cursor = '';
+            const ws={}; widths.forEach((w,j)=>ws[j]=w);
+            localStorage.setItem(verKey, JSON.stringify(ws));
+            document.removeEventListener('mousemove',mv);
+            document.removeEventListener('mouseup',up);
+          };
+          document.addEventListener('mousemove',mv);
+          document.addEventListener('mouseup',up);
+          e.preventDefault(); e.stopPropagation();
+        });
+      }
     });
   }
 
@@ -1907,7 +1923,19 @@
   }
   window.addEventListener('resize', adjustLayout);
 
-  // 새창열기: 현재 행을 localStorage에 저장 후 새 탭 오픈
+  // 새창열기: 이 화면을 새 탭에서 그대로 오픈 (행 선택 여부 무관)
+  function openNewWindow() {
+    localStorage.setItem('pm_newwin_auth', Date.now().toString());
+    // 현재 선택된 PO가 있으면 새 탭에서도 같은 PO 패널 자동 오픈
+    if(selectedRow){
+      localStorage.setItem('pm_panel_open', JSON.stringify({
+        pono:selectedRow.pono, mkpn:selectedRow.mkpn, entity:selectedRow.entity, ts:Date.now()
+      }));
+    }
+    window.open(location.pathname, '_blank');
+  }
+
+  // 새창열기(패널 내부 버튼): 선택된 PO를 새 탭에서 오픈
   function openPanelNewWindow() {
     if(!selectedRow){ showToast('먼저 PO 행을 선택해주세요','warn'); return; }
     localStorage.setItem('pm_panel_open', JSON.stringify({
