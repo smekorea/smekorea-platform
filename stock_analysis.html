@@ -207,9 +207,11 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
 .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{font-family:var(--mono);font-size:11px;color:var(--text-mute);letter-spacing:0.08em;}
-.alert-brow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 10px;border-radius:6px;background:#fff;border:1px solid #eee3cc;font-size:12px;}
-#brief-under.hide{display:none;}
-#brief-under{display:flex;}
+.brief-head-row{display:grid;grid-template-columns:minmax(130px,1.4fr) 1fr 1fr 1fr 52px;gap:8px;font-size:10px;font-weight:700;padding:4px 8px;border-bottom:1px solid #eee3cc;}
+.brief-row{display:grid;grid-template-columns:minmax(130px,1.4fr) 1fr 1fr 1fr 52px;gap:8px;font-size:12px;padding:6px 8px;border-bottom:1px solid #f3f0e6;align-items:center;font-family:var(--mono);}
+.brief-row .bn{font-weight:800;color:#111827;font-family:var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.brief-row .bv{text-align:right;color:#334155;}
+#brief-over-panel.hide,#brief-under-panel.hide{display:none;}
 .empty-state{text-align:center;padding:50px 20px;color:var(--text-mute);}
 .empty-icon{font-size:32px;margin-bottom:10px;opacity:.4;}
 .empty-text{font-size:13px;line-height:1.9;}
@@ -618,30 +620,32 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
 
     <!-- ══ 탭5: 목표대비 분석 (기존 + 월별 트렌드) ══ -->
     <div class="tab-panel" id="tab-goal">
-      <!-- (v15.48) 재고 브리핑 — 과잉재고(돈 묶임) 위주 요약. 미달은 재고 감축이라 중립.
-           ⚠️ 재고 화면은 매출과 부호가 반대: "목표 초과 = 과잉재고 = 문제". -->
+      <!-- (v15.48) 재고 브리핑 — 월 선택 + 과잉/미달 각각 접힘(버튼) 구조.
+           재고 화면은 매출과 부호 반대: "목표 초과 = 과잉재고 = 문제". 미달은 재고감축이라 중립. -->
       <div id="stockBriefBox" style="border:1.5px solid #f0c36d;border-radius:10px;background:#fffdf7;overflow:hidden;margin-bottom:14px;display:none;">
         <div style="padding:12px 16px;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;">
-            <span style="font-size:12px;font-weight:800;color:#8a6d1f;">📋 재고 브리핑</span>
-            <span id="brief-basis" style="font-size:10px;font-weight:800;color:#9a6b00;background:#fffbf0;border:1px solid #f0c36d;border-radius:8px;padding:0 6px;">-</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:800;color:#8a6d1f;">📋 재고 브리핑</span>
+            <select id="brief-month" onchange="renderStockBrief()" style="font-size:12px;padding:4px 8px;border:1px solid #e0cfa0;border-radius:6px;background:#fff;font-family:var(--sans);font-weight:600;color:#8a6d1f;"></select>
+            <span id="brief-line" style="font-size:12px;color:var(--text-mute);margin-left:2px;"></span>
           </div>
-          <div id="brief-line" style="font-size:15px;font-weight:700;line-height:1.6;color:var(--text);">—</div>
-        </div>
-        <div style="padding:11px 16px;border-top:1px solid #f2e2bd;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-            <span style="font-size:12px;font-weight:800;color:#b45309;">⚠ 과잉재고</span>
-            <span id="brief-over-cnt" style="font-size:11px;color:var(--text-mute);"></span>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+            <button id="brief-over-btn" onclick="toggleBrief('over')" style="padding:6px 12px;border:1.5px solid #f0b9a0;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⚠ 과잉재고 <span id="brief-over-cnt" style="font-weight:600;"></span> <span id="brief-over-arrow">▾</span></button>
+            <button id="brief-under-btn" onclick="toggleBrief('under')" style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">ℹ 목표 미달 <span id="brief-under-cnt" style="font-weight:500;color:var(--text-mute);"></span> <span id="brief-under-arrow">▾</span></button>
           </div>
-          <div id="brief-over" style="display:flex;flex-direction:column;gap:5px;"></div>
         </div>
-        <div id="brief-under-wrap" style="padding:0 16px 11px;">
-          <button id="brief-under-btn" onclick="toggleUnderList()" style="width:100%;text-align:left;padding:7px 10px;border:1px solid #e5d5ad;border-radius:6px;background:#fff;color:#6b6152;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
-            <span>ℹ 목표 미달 <span id="brief-under-cnt" style="font-weight:400;color:var(--text-mute);"></span></span>
-            <span style="font-weight:400;color:var(--text-mute);">— 재고 감축이라 문제 아님, 참고용</span>
-            <span style="margin-left:auto;" id="brief-under-arrow">▾</span>
-          </button>
-          <div id="brief-under" class="hide" style="flex-direction:column;gap:4px;margin-top:6px;"></div>
+        <div id="brief-over-panel" class="hide" style="padding:0 16px 12px;">
+          <div class="brief-head-row" style="color:#b45309;">
+            <span style="min-width:130px;">메이커</span><span>목표</span><span>재고</span><span>차이금액</span><span style="min-width:52px;text-align:right;">달성률</span>
+          </div>
+          <div id="brief-over"></div>
+        </div>
+        <div id="brief-under-panel" class="hide" style="padding:0 16px 12px;">
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표보다 적음 — 재고 감축이라 문제 아님, 참고용</div>
+          <div class="brief-head-row" style="color:#475569;">
+            <span style="min-width:130px;">메이커</span><span>목표</span><span>재고</span><span>차이금액</span><span style="min-width:52px;text-align:right;">달성률</span>
+          </div>
+          <div id="brief-under"></div>
         </div>
       </div>
 
@@ -1586,74 +1590,80 @@ function renderRisk(){
   renderRiskTable();
 }
 
-// (v15.48) 재고 브리핑 — 과잉재고(달성률>130%) 위주. 미달은 재고감축이라 중립(접힘).
+// (v15.48) 재고 브리핑 — 월 선택 + 과잉/미달 각각 접힘. 금액은 원 단위 전체 표기.
+//  재고 화면은 매출과 부호 반대: 목표 초과=과잉재고=문제(빨강), 미달=재고감축=중립(회색).
+const BRIEF_MIN_TARGET=50000000; // 목표 5천만 미만은 노이즈라 제외
+const BRIEF_MAX_ROWS=10;         // 과잉/미달 각각 최대 10개
+let _briefOpen={over:false,under:false};
+
 async function renderStockBrief(){
   const box=document.getElementById('stockBriefBox');
   if(!box)return;
   await loadGoalRules();await loadMakerAlias();await loadLgClosingExclude();
   if(!_goalRules.length||!_allMonthsList.length){box.style.display='none';return;}
-  const baseYm=_allMonthsList[_allMonthsList.length-1]; // 최신월 고정
-  // 최신월 재고를 표준 브랜드명으로 집계
+  box.style.display='block';
+  // 월 선택 드롭다운 — 데이터 있는 월 내림차순, 최초엔 최신월
+  const sel=document.getElementById('brief-month');
+  if(sel && !sel.dataset.filled){
+    const opts=[..._allMonthsList].sort((a,b)=>b.localeCompare(a));
+    sel.innerHTML=opts.map(m=>{const[y,mo]=m.split('-');return `<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;}).join('');
+    sel.dataset.filled='1';
+  }
+  const baseYm=(sel&&sel.value)||_allMonthsList[_allMonthsList.length-1];
+
   const realByBrand={};
   _allMonthsStock.forEach(r=>{
     if(r.ym!==baseYm)return;
     const b=normMaker(r.brand_std||r.brand||'');
-    if(_lgClosingExcludeSet.has(b))return; // LG마감기준 제외(탭5 통일 기준)
+    if(_lgClosingExcludeSet.has(b))return;
     realByBrand[b]=(realByBrand[b]||0)+(Number(r.stock_amount)||0);
   });
-  const MIN_TARGET=50000000; // 목표 5천만 미만은 노이즈라 제외
   const over=[],under=[];
   _goalRules.forEach(rule=>{
     const tgt=Number(rule.target_amount)||0;
-    if(tgt<MIN_TARGET)return;
+    if(tgt<BRIEF_MIN_TARGET)return;
     const b=normMaker(rule.brand);
     const real=realByBrand[b]||0;
     const pct=tgt>0?real/tgt*100:0;
-    const item={brand:rule.brand,type:rule.supply_type,tgt,real,pct,diff:real-tgt};
+    const item={brand:rule.brand,tgt,real,pct,diff:real-tgt};
     if(pct>130)over.push(item);
     else if(pct<80)under.push(item);
   });
-  over.sort((a,b)=>b.diff-a.diff);       // 초과금액 큰 순
-  under.sort((a,b)=>a.pct-b.pct);        // 달성률 낮은 순
-  box.style.display='block';
-  const B=v=>v>=1e8?(v/1e8).toFixed(1)+'억':Math.round(v/1e4).toLocaleString()+'만';
-  const[by,bm]=baseYm.split('-');
-  document.getElementById('brief-basis').textContent=`${by}년 ${parseInt(bm)}월 기준`;
+  over.sort((a,b)=>b.diff-a.diff);        // 초과금액 큰 순
+  under.sort((a,b)=>(a.diff)-(b.diff));    // 부족금액 큰 순(가장 많이 모자란 것 먼저)
+
+  const W=v=>Math.round(v).toLocaleString(); // 원 단위 전체
   const overSum=over.reduce((a,r)=>a+r.diff,0);
-  document.getElementById('brief-line').innerHTML = over.length
-    ? `과잉재고 ${over.length}개 브랜드가 목표를 <span style="color:#b45309;">${B(overSum)} 초과</span>해 재고로 묶여 있습니다.`
-    : `목표를 크게 초과한 과잉재고 브랜드는 없습니다.`;
-  document.getElementById('brief-over-cnt').textContent=`${baseYm.slice(2)} · 달성률 130% 초과 · 초과금액 큰 순`;
-  const orow=r=>`<div class="alert-brow"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:#fee2e2;color:#b91c1c;">과잉</span>`
-    +`<span style="font-weight:800;color:#111827;min-width:120px;">${r.brand}</span>`
-    +`<span style="font-weight:800;color:#b45309;">+${B(r.diff)}</span>`
-    +`<span style="color:var(--text-mute);margin-left:auto;font-size:11px;">재고 ${B(r.real)} / 목표 ${B(r.tgt)} · ${Math.round(r.pct)}%</span></div>`;
-  document.getElementById('brief-over').innerHTML = over.length
-    ? over.map(orow).join('')
-    : '<div style="font-size:12px;color:var(--text-mute);padding:4px 2px;">해당 없음</div>';
-  const uwrap=document.getElementById('brief-under-wrap');
-  if(under.length){
-    uwrap.style.display='block';
-    document.getElementById('brief-under-cnt').textContent=`${under.length}건`;
-    const urow=r=>`<div class="alert-brow" style="background:#f8fafc;border-color:#e2e8f0;"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:#eef2f8;color:#4b5568;">미달</span>`
-      +`<span style="font-weight:700;color:#334155;min-width:120px;">${r.brand}</span>`
-      +`<span style="color:var(--text-mute);margin-left:auto;font-size:11px;">재고 ${B(r.real)} / 목표 ${B(r.tgt)} · ${Math.round(r.pct)}%</span></div>`;
-    document.getElementById('brief-under').innerHTML=under.map(urow).join('');
-    document.getElementById('brief-under').classList.add('hide');
-    document.getElementById('brief-under-arrow').textContent='▾';
-  }else{
-    uwrap.style.display='none';
-  }
+  document.getElementById('brief-line').textContent = over.length
+    ? `과잉 ${over.length}개 · 초과 ${W(overSum)}원 재고로 묶임`
+    : `과잉재고 브랜드 없음`;
+  document.getElementById('brief-over-cnt').textContent=`${over.length}`;
+  document.getElementById('brief-under-cnt').textContent=`${under.length}`;
+
+  const row=r=>`<div class="brief-row"><span class="bn" title="${r.brand}">${r.brand}</span>`
+    +`<span class="bv">${W(r.tgt)}</span>`
+    +`<span class="bv">${W(r.real)}</span>`
+    +`<span class="bv" style="color:${r.diff>=0?'#b45309':'#2563EB'};font-weight:700;">${r.diff>=0?'+':'-'}${W(Math.abs(r.diff))}</span>`
+    +`<span class="bv" style="font-weight:800;color:${r.pct>=100?'#2563EB':'#DB2777'};">${Math.round(r.pct)}%</span></div>`;
+  const empty='<div style="font-size:12px;color:var(--text-mute);padding:8px 2px;">해당 없음</div>';
+  document.getElementById('brief-over').innerHTML = over.length?over.slice(0,BRIEF_MAX_ROWS).map(row).join(''):empty;
+  document.getElementById('brief-under').innerHTML = under.length?under.slice(0,BRIEF_MAX_ROWS).map(row).join(''):empty;
+  // 접힘 상태 복원(월 변경 후에도 펼친 패널 유지)
+  applyBriefOpen('over');applyBriefOpen('under');
 }
-function toggleUnderList(){
-  const d=document.getElementById('brief-under');
-  const a=document.getElementById('brief-under-arrow');
-  const hidden=d.classList.contains('hide');
-  if(hidden){d.classList.remove('hide');if(a)a.textContent='▴';}
-  else{d.classList.add('hide');if(a)a.textContent='▾';}
+function applyBriefOpen(which){
+  const panel=document.getElementById('brief-'+which+'-panel');
+  const arrow=document.getElementById('brief-'+which+'-arrow');
+  if(!panel)return;
+  if(_briefOpen[which]){panel.classList.remove('hide');if(arrow)arrow.textContent='▴';}
+  else{panel.classList.add('hide');if(arrow)arrow.textContent='▾';}
+}
+function toggleBrief(which){
+  _briefOpen[which]=!_briefOpen[which];
+  applyBriefOpen(which);
 }
 
-// ── 목표대비 분석 (탭5) ── (원본 loadGoalRules + renderGoal 그대로 + 월별 트렌드 추가)
+// ── 목표대비 분석 (탭5) ──// ── 목표대비 분석 (탭5) ── (원본 loadGoalRules + renderGoal 그대로 + 월별 트렌드 추가)
 // (v15.48) maker_alias 정규화 로더 — brand_stock_rule 은 영문(TECHSHINE)인데
 //   재고의 brand_std 는 한글(테크샤인)이라 매칭이 안 돼 과잉재고가 누락됐음.
 //   관리자설정 > 동일메이커관리(maker_alias)의 alias→standard_name 으로 목표 브랜드를 정규화한다.
@@ -1849,7 +1859,7 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
   //  → 1~12월 고정 슬롯(미입력 월은 점선 빈칸) + 막대 높이 64→155px + 색상 정리.
   //  ※ 막대 안 금액 표기는 하단 "LG사급/직거래 달성률" 차트에 이미 있어 넣지 않는다(사용자 결정).
   function buildMainAmountChart(targetVal){
-    const totalW=680,padL=62,padR=14,padT=72,padB=40,chartH=155;
+    const totalW=680,padL=62,padR=14,padT=58,padB=36,chartH=93; // (v15.48) 세로 60% 축소
     const n=yearSlots.length;
     const slotW=(totalW-padL-padR)/n;
     const bW=Math.min(34,slotW*0.62);
@@ -1862,8 +1872,8 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
     if(targetVal>0){
       const ty=padT+chartH-(targetVal/maxV)*chartH;
       bars+=`<line x1="${padL}" y1="${ty}" x2="${totalW-padR}" y2="${ty}" stroke="#B91C1C" stroke-dasharray="5,4" stroke-width="1.5"/>`;
-      bars+=`<text x="${padL-6}" y="${ty-4}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" font-weight="700" fill="#B91C1C">목표</text>`;
-      bars+=`<text x="${padL-6}" y="${ty+11}" text-anchor="end" font-size="11" font-family="IBM Plex Mono" font-weight="700" fill="#B91C1C">${fmtA(targetVal)}</text>`;
+      bars+=`<text x="${padL-6}" y="${ty-4}" text-anchor="end" font-size="9" font-family="IBM Plex Mono" font-weight="700" fill="#B91C1C">목표</text>`;
+      bars+=`<text x="${padL-6}" y="${ty+10}" text-anchor="end" font-size="9.5" font-family="IBM Plex Mono" font-weight="700" fill="#B91C1C">${fmtA(targetVal)}</text>`;
     }
     yearSlots.forEach((m,i)=>{
       const v=vals[i];
@@ -1872,7 +1882,7 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       if(!v.has){
         // 미입력 월 — 점선 빈 슬롯으로 자리를 남겨 연간 진행 상황을 보여준다
         bars+=`<rect x="${x}" y="${padT+chartH-20}" width="${bW}" height="20" rx="4" fill="none" stroke="#D3D1C7" stroke-dasharray="3,3"/>`;
-        bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="9.5" font-family="IBM Plex Mono" fill="#94A3B8">${mLabel}</text>`;
+        bars+=`<text x="${x+bW/2}" y="${padT+chartH+15}" text-anchor="middle" font-size="8.5" font-family="IBM Plex Mono" fill="#94A3B8">${mLabel}</text>`;
         return;
       }
       const totalH=(v.total/maxV)*chartH;
@@ -1884,6 +1894,7 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       bars+=`<rect x="${x}" y="${yTop}" width="${bW}" height="${lgH}" fill="${isLatest?'#185FA5':'#2A78D6'}"/>`;
       bars+=`<rect x="${x}" y="${yTop+lgH}" width="${bW}" height="${dtH}" fill="${isLatest?'#D95926':'#EB6834'}" rx="0"/>`;
       const pct=targetVal>0?v.total/targetVal*100:0;
+      const pctColor=pct>=100?'#2563EB':'#DB2777'; // (v15.48) 달성=파랑 / 미달=분홍
       // 전월대비는 "바로 앞 슬롯"이 아니라 "직전에 데이터가 있는 월" 기준
       let prev=null;for(let k=i-1;k>=0;k--){if(vals[k].has){prev=vals[k].total;break;}}
       const delta=prev!==null?v.total-prev:null;
@@ -1892,17 +1903,16 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       const dNum=delta===null?'':(Math.abs(delta)/1e8).toFixed(1);
       const deltaStr=delta===null?'':(delta>0?`▲${dNum}`:(delta<0?`▼${dNum}`:'보합'));
       if(isLatest){
-        bars+=`<rect x="${x+bW/2-19}" y="${yTop-59}" width="38" height="14" rx="7" fill="#185FA5"/>`;
-        bars+=`<text x="${x+bW/2}" y="${yTop-49}" text-anchor="middle" font-size="8.5" font-family="IBM Plex Mono" fill="#fff" font-weight="700">최근</text>`;
+        bars+=`<rect x="${x+bW/2-16}" y="${yTop-50}" width="32" height="12" rx="6" fill="#185FA5"/>`;
+        bars+=`<text x="${x+bW/2}" y="${yTop-41}" text-anchor="middle" font-size="7.5" font-family="IBM Plex Mono" fill="#fff" font-weight="700">최근</text>`;
       }
-      bars+=`<text x="${x+bW/2}" y="${yTop-32}" text-anchor="middle" font-size="12" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${fmtA(v.total)}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${yTop-20}" text-anchor="middle" font-size="9.5" font-family="IBM Plex Mono" fill="${achColor(pct)}" font-weight="700">${Math.round(pct)}%</text>`;
-      if(deltaStr)bars+=`<text x="${x+bW/2}" y="${yTop-8}" text-anchor="middle" font-size="9" font-family="IBM Plex Mono" fill="#64748B" font-weight="600">${deltaStr}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${padT+chartH+16}" text-anchor="middle" font-size="9.5" font-family="IBM Plex Mono" fill="${isLatest?'#185FA5':'#334155'}" font-weight="${isLatest?'700':'600'}">${mLabel}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${yTop-27}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#0F172A" font-weight="700">${fmtA(v.total)}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${yTop-16}" text-anchor="middle" font-size="8.5" font-family="IBM Plex Mono" fill="${pctColor}" font-weight="700">${Math.round(pct)}%</text>`;
+      if(deltaStr)bars+=`<text x="${x+bW/2}" y="${yTop-6}" text-anchor="middle" font-size="7.5" font-family="IBM Plex Mono" fill="#64748B" font-weight="600">${deltaStr}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${padT+chartH+15}" text-anchor="middle" font-size="8.5" font-family="IBM Plex Mono" fill="${isLatest?'#185FA5':'#334155'}" font-weight="${isLatest?'700':'600'}">${mLabel}</text>`;
     });
     bars+=`<line x1="${padL}" y1="${padT+chartH}" x2="${totalW-padR}" y2="${padT+chartH}" stroke="#C3C2B7" stroke-width="1"/>`;
-    const missing=vals.filter(v=>!v.has).length;
-    if(missing)bars+=`<text x="${totalW-padR}" y="${padT+chartH+33}" text-anchor="end" font-size="9.5" font-family="IBM Plex Mono" fill="#94A3B8">점선 = 재고조사 미입력 ${missing}개월</text>`;
+    // (v15.48) "점선=재고조사 미입력" 문구 삭제(사용자 요청)
     return `<svg viewBox="0 0 ${totalW} ${padT+chartH+padB}" class="svg-chart" style="display:block;">${bars}</svg>`;
   }
 
