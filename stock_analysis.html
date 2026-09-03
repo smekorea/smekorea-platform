@@ -522,7 +522,7 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
       <div class="table-wrap">
         <div class="table-header">
           <div class="table-count">총 <b id="tbl_count">0</b>건</div>
-          <div class="table-note">재고개월수 = 실재고 ÷ 월평균(12M) &nbsp;|&nbsp; 악성: 12M판매=0 &nbsp; 관리: ≥4M(발주 조율 검토) &nbsp; 양호: &lt;4M</div>
+          <div class="table-note">재고개월수 = 실재고 ÷ 월평균(12M) &nbsp;|&nbsp; 악성: 12M판매=0 &amp; 최초매입 6M초과 &nbsp; 신규: 12M판매=0 &amp; 최초매입 6M이내 &nbsp; 관리: ≥4M(발주 조율 검토) &nbsp; 양호: &lt;4M</div>
         </div>
         <div class="tbl-scroll">
           <table id="tblMain" class="sticky-thead">
@@ -788,10 +788,14 @@ if(localStorage.getItem('sme_auth')==='1'){
 // 여기 한 곳만 바꾸면 상태판정·KPI·브리핑·위험재고가 모두 따라간다.
 const MANAGE_MONTHS=4;      // 관리대상 진입 기준(재고개월수, 이상)
 const PUR_RECENT_MONTHS=3;  // "매입 발생" 판정에 쓸 최근 매입 조회 개월수
+// (v15.55) 신규입고 유예기간 — 최초 매입이 이 개월수 이내면 아직 팔릴 시간이 없었다고 본다.
+//   이 값이 없으면 판매이력 0 인 품목이 전부 악성재고로 몰린다(9001-1408 사례).
+const NEW_ITEM_MONTHS=6;
 
 // ── 전역 데이터 ──
 let _acBrands=[], _acDescs=[], _acCodes=[];
 let _purRecent={};          // {item_code:{q1,a1,q3,a3}} 최근 1M/3M 매입 수량·금액
+let _purFirst={};           // {item_code:[최초매입일, 최종매입일]} — 신규입고 판정용
 let _salesByMonth={};       // {item_code:{'26년7월':qty,...}} 월별 판매수량 (무판매 개월수 산출용)
 let _ymLabels=[];           // 최근 12개월 라벨 배열 (과거→최근)
 let _allResult=[],_filtered=[],_curPage=1;
@@ -890,7 +894,7 @@ async function runAnalysis(){
   if(periodEl){periodEl.textContent=`판매기준: ${frDt.getFullYear()}.${String(frDt.getMonth()+1).padStart(2,'0')} ~ ${toDt.getFullYear()}.${String(toDt.getMonth()+1).padStart(2,'0')} (매입매출자료의 년/월 기준)`;periodEl.style.color='';}
   const codes=[...new Set(stockAll.map(r=>r.item_code))];
   const salesMap={};
-  _salesByMonth={}; _purRecent={}; _ymLabels=[];   // (v15.50) 기준월 변경 시 재집계
+  _salesByMonth={}; _purRecent={}; _purFirst={}; _ymLabels=[];   // (v15.50) 기준월 변경 시 재집계
 
   // ══════════════════════════════════════════════════════════════
   // (v15.47) 매출 집계 전면 재작성 — 품목코드 청크 반복 → 년/월 1회 집계
@@ -982,7 +986,7 @@ async function runAnalysis(){
   // trade_date 는 월마감 일괄전표 일자라 기간판정에 쓰면 안 된다(v15.46 규명).
   // ══════════════════════════════════════════════════════════════
   showLoading('매입 데이터 집계 중...');
-  await fetchRecentPurchase(ymPairs);
+  await Promise.all([fetchRecentPurchase(ymPairs), fetchFirstPurchase()]);
 
   _allResult=stockAll.map(r=>{
     const totalSales=salesMap[r.item_code]||0;
@@ -990,12 +994,17 @@ async function runAnalysis(){
     const realQty=Number(r.real_qty)||0;
     const stockMonths=avgMonthly>0?realQty/avgMonthly:null;
     const stockRatio=avgMonthly>0?realQty/avgMonthly*100:null;
-    // (v15.50) 등급 체계 교체 — 3개월까지 양호 / 4개월부터 관리(발주 조율 검토)
-    //   기존 과잉(>3M)·주의(2~3M)·적정(1~2M)·부족(<1M) 4단계는 회사 운영기준과 달라 폐기.
-    //   판정은 오직 재고개월수 4M 을 경계로 한다. 12M 무판매는 별도 악성재고.
+    // (v15.55) 최초 매입 이후 경과 개월수 — 매입 이력이 없으면 null
+    const newMonths=monthsSinceFirstPurchase(r.item_code);
+    // (v15.50) 등급 체계 — 3개월까지 양호 / 4개월부터 관리(발주 조율 검토)
+    // (v15.55) 신규입고 분기 복구 — 기존엔 `totalSales===0` 이 먼저 걸려서
+    //   avgMonthly===0 분기에 절대 도달하지 못했다(avgMonthly 는 totalSales/12 이므로 항상 동시에 0).
+    //   그 결과 두 달 전 처음 들어온 사급품까지 악성재고로 낙인찍혔다(9001-1408: 최초매입 2026-06-15,
+    //   매입수량 81,600 이 그대로 재고로 남아 있고 판매는 아직 0). 최초 매입일로 갈라준다.
     let state;
-    if(totalSales===0&&realQty>0)         state='악성재고';
-    else if(avgMonthly===0&&realQty>0)    state='신규입고';
+    if(totalSales===0&&realQty>0){
+      state = (newMonths!==null&&newMonths<=NEW_ITEM_MONTHS) ? '신규입고' : '악성재고';
+    }
     else if(realQty===0)                  state='양호';
     else if(stockMonths>=MANAGE_MONTHS)   state='관리';
     else                                  state='양호';
@@ -1008,12 +1017,40 @@ async function runAnalysis(){
       realQty,erpQty:Number(r.erp_qty)||0,
       price:Number(r.unit_price)||0,amount:Number(r.stock_amount)||0,
       totalSales,avgMonthly,stockMonths,stockRatio,state,
-      purQty1:pr.q1,purAmt1:pr.a1,purQty3:pr.q3,purAmt3:pr.a3,noSaleMonths
+      purQty1:pr.q1,purAmt1:pr.a1,purQty3:pr.q3,purAmt3:pr.a3,noSaleMonths,
+      firstPur:(_purFirst[r.item_code]||[null])[0], newMonths
     };
   });
   // 월별 데이터 캐시 리셋 (기준월 바뀔 수 있음)
   _allMonthsLoaded=false;
   applyFilter();
+}
+
+// ── (v15.55) 품목별 최초/최종 매입일 ──
+// 판매이력 0 인 재고가 "오래 안 팔린 악성재고"인지 "이제 막 들어온 신규입고"인지 가른다.
+// purchase_data 전량 집계라 PostgREST 1,000행 제한에 걸리고 seq scan 이면 2.2초가 나오므로,
+// idx_purchase_item_date(item_code,trade_date) 인덱스 + 단일 jsonb 반환 RPC 로 처리한다(약 0.4초).
+async function fetchFirstPurchase(){
+  try{
+    const{data,error}=await sb.rpc('item_first_purchase');
+    if(error)throw error;
+    _purFirst=data||{};
+  }catch(err){
+    console.warn('[stock] 최초매입일 조회 실패 — 신규입고 판정 없이 진행',err);
+    _purFirst={};   // 실패해도 분석은 계속. 이 경우 전부 악성재고로 잡히므로 아래 안내문에 표기
+  }
+}
+// 기준월 말일 대비 최초 매입 이후 경과 개월수. 매입 이력이 없으면 null.
+function monthsSinceFirstPurchase(code){
+  const v=_purFirst[code];
+  if(!v||!v[0])return null;
+  const fp=new Date(v[0]);
+  if(isNaN(fp))return null;
+  const base=document.getElementById('f_month').value||'';
+  const[by,bm]=base.split('-').map(Number);
+  if(!by||!bm)return null;
+  const baseEnd=new Date(by,bm,0);   // 기준월 말일
+  return (baseEnd.getFullYear()-fp.getFullYear())*12+(baseEnd.getMonth()-fp.getMonth());
 }
 
 // ── (v15.50) 최근 매입 집계 ──
@@ -1910,6 +1947,8 @@ function renderGoalSummary(realByBrand,ruleByBrand){
   const avgMonths=wa>0?wt/wa:null;
   const mngCnt=_allResult.filter(r=>r.state==='관리').length;
   const deadCnt=_allResult.filter(r=>r.state==='악성재고').length;
+  const newRows=_allResult.filter(r=>r.state==='신규입고');
+  const newAmt=newRows.reduce((s2,r)=>s2+(r.amount||0),0);
 
   el.innerHTML=
      `<b>전체 재고 ${_W(totalReal)}원</b> · 품목 ${_allResult.length.toLocaleString()}건`
@@ -1925,6 +1964,7 @@ function renderGoalSummary(realByBrand,ruleByBrand){
        : `목표금액이 설정된 메이커가 없습니다`)
     +`<br>└ 관리대상(${MANAGE_MONTHS}개월 이상) <b class="bs-act">${mngCnt.toLocaleString()}건</b>`
     +` · 악성재고 <b class="bs-act">${deadCnt.toLocaleString()}건</b>`
+    +(newRows.length?` · 신규입고 <b>${newRows.length.toLocaleString()}건</b> (${_W(newAmt)}원)`:'')
     +` <span style="font-size:11px;color:var(--text-mute);">— 아래 버튼에서 상세 확인</span>`;
 }
 
@@ -2218,7 +2258,8 @@ function renderDeadBrief(){
     :'<tr><td colspan="6" style="text-align:center;color:var(--text-mute);padding:12px;">악성재고 없음</td></tr>';
 
   document.getElementById('brief-dead-note').innerHTML=
-    `※ 악성재고 = 최근 12개월 판매수량 합계 0 + 실재고 보유<br>`
+    `※ 악성재고 = 최근 12개월 판매수량 합계 0 + 실재고 보유 + <b>최초 매입 후 ${NEW_ITEM_MONTHS}개월 초과</b><br>`
+   +`※ 최초 매입이 ${NEW_ITEM_MONTHS}개월 이내면 아직 팔릴 시간이 없었다고 보고 <b>신규입고</b>로 분류(악성재고에서 제외)<br>`
    +`※ 무판매 컬럼은 최근 달부터 연속으로 판매가 없는 개월수 (최대 12M)<br>`
    +`※ 브리핑 4개 블록은 모두 <b>탭 상단 필터의 분석기준월</b>을 따릅니다`;
 }
