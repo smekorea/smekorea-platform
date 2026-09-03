@@ -679,7 +679,7 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
           <div id="brief-summary" class="brief-sum" style="margin-top:10px;margin-bottom:0;"></div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
             <button id="brief-exceed-btn" onclick="toggleBrief('exceed')" style="padding:6px 12px;border:1.5px solid #f0b972;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⚠ 목표 초과 <span id="brief-exceed-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-exceed-arrow">▾</span></button>
-            <button id="brief-under-btn" onclick="toggleBrief('under')" style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">ℹ 목표 미달 <span id="brief-under-cnt" style="font-weight:500;color:var(--text-mute);"></span> <span class="brief-arw" id="brief-under-arrow">▾</span></button>
+            <button id="brief-under-btn" onclick="toggleBrief('under')" style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">ℹ 목표 이하 <span id="brief-under-cnt" style="font-weight:500;color:var(--text-mute);"></span> <span class="brief-arw" id="brief-under-arrow">▾</span></button>
             <button id="brief-over-btn" onclick="toggleBrief('over')" style="padding:6px 12px;border:1.5px solid #f0b9a0;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">📦 재고금액 상위 <span id="brief-over-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-over-arrow">▾</span></button>
             <button id="brief-order-btn" onclick="toggleBrief('order')" style="padding:6px 12px;border:1.5px solid #f5a3a3;border-radius:7px;background:#fff;color:#B91C1C;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⚠ 발주주의 <span id="brief-order-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-order-arrow">▾</span></button>
             <button id="brief-dead-btn" onclick="toggleBrief('dead')" style="padding:6px 12px;border:1.5px solid #cbb8b8;border-radius:7px;background:#fff;color:#5b4141;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⛔ 악성재고 <span id="brief-dead-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-dead-arrow">▾</span></button>
@@ -694,7 +694,7 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
           </table></div>
         </div>
         <div id="brief-under-panel" class="hide" style="padding:0 16px 12px;">
-          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표보다 적음 — 재고 감축이라 문제 아님, 참고용 · 부족금액 큰 순 상위 10개 표시 · <b>행을 클릭하면 품목이 펼쳐집니다</b></div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">달성률 100% 미만 전체 — 재고 감축이라 문제 아님, 참고용 · <b>요약의 적정(80~100%) 3개도 포함</b>됩니다 · 부족금액 큰 순 상위 10개 표시 · 행을 클릭하면 품목이 펼쳐집니다</div>
           <div class="btbl-wrap"><table class="btbl" id="brief-under-tbl">
             <thead><tr id="brief-under-head"></tr></thead>
             <tbody id="brief-under"></tbody>
@@ -1907,14 +1907,14 @@ async function renderStockBrief(){
     .filter(x=>x.real>0)
     .sort((a,b)=>b.real-a.real)
     .slice(0,BRIEF_MAX_ROWS);
-  // ── 목표 미달 (달성률 <100%, 목표 보유 브랜드, LG마감 제외) ──
+  // ── 목표 이하 (달성률 <100%, 목표 보유 브랜드, LG마감 제외) — 적정(80~100%) 포함 ──
   const under=[], exceed=[];
   Object.keys(ruleByBrand).forEach(b=>{
     if(isLgClosingExcluded(b))return;
     const tgt=ruleByBrand[b].tgt, real=realByBrand[b]||0, pct=real/tgt*100;
     const row={std:b,brand:ruleByBrand[b].orig,tgt,real,pct,diff:real-tgt};
     if(pct>100)      exceed.push(row);   // 과잉 — 조치 대상
-    else if(pct<100) under.push(row);    // 부족 — 참고용
+    else if(pct<100) under.push(row);    // 목표 이하 — 적정(80~100%)까지 포함, 참고용
   });
   // (v15.56) 버튼 숫자는 "전체 건수"로 통일한다.
   //   기존엔 미달만 splice(10) 후 표시 건수를 세서 요약(27개)과 버튼(10)이 어긋났다.
@@ -1989,13 +1989,25 @@ function renderGoalSummary(realByBrand,ruleByBrand){
      +(exclReal>0?` <span style="color:var(--text-mute);font-size:11px;">(LG마감기준 ${_W(exclReal)}원 포함)</span>`:''));
 
   if(tgtSum>0){
+    // (v15.57) ①보유와 ②실적이 왜 다른지 화면에서 바로 읽히게 한다.
+    //   ①은 전체 재고, ②는 "목표가 설정된 메이커 + LG마감기준 제외"만 집계하므로
+    //   차액 = LG마감기준분 + 목표 미설정 메이커분. 근거가 없으면 계산이 안 맞아 보인다.
+    const noRuleRows=_allResult.filter(r=>{
+      const b=normMaker(r.brand||'');
+      return !isLgClosingExcluded(b) && !ruleByBrand[b];
+    });
+    const noRuleAmt=noRuleRows.reduce((s2,r)=>s2+(r.amount||0),0);
+    const noRuleCnt=new Set(noRuleRows.map(r=>normMaker(r.brand||''))).size;
     h+=L('②','목표대비',
-        `목표 ${_W(tgtSum)}원 → 실적 ${_W(realSum)}원 · 달성률 <b style="color:${pctCol};font-size:14px;">${Math.round(pctAll)}%</b>`
-       +` <span style="font-size:11px;color:var(--text-mute);">(LG마감기준 제외)</span>`,true);
+        `목표 ${_W(tgtSum)}원 → 실적 ${_W(realSum)}원 · 달성률 <b style="color:${pctCol};font-size:14px;">${Math.round(pctAll)}%</b>`,true);
+    h+=SUB(`<span style="font-size:11px;">①보유 대비 제외분 — LG마감기준 ${_W(exclReal)}원`
+       +(noRuleAmt>0?` · 목표 미설정 ${noRuleCnt}개 메이커 ${_W(noRuleAmt)}원`:'')+`</span>`);
+    // 적정(80~100%)과 미달(<80%)은 둘 다 "목표 이하" 버튼 하나에 담긴다(합계 병기).
     h+=SUB(
         `초과 <b style="color:#EA7317;">${over}개</b>${overAmt>0?` (+${_W(overAmt)}원)`:''}`
        +` · 적정 <b style="color:#059669;">${good}개</b>`
-       +` · 미달 <b style="color:#2563EB;">${lack}개</b>${lackAmt>0?` (-${_W(lackAmt)}원)`:''}`);
+       +` · 미달 <b style="color:#2563EB;">${lack}개</b>${lackAmt>0?` (-${_W(lackAmt)}원)`:''}`
+       +` <span style="font-size:11px;color:var(--text-mute);">— 적정+미달 ${good+lack}개는 「목표 이하」에서 확인</span>`);
   }else{
     h+=L('②','목표대비','<span style="color:var(--text-mute);">목표금액이 설정된 메이커가 없습니다</span>',true);
   }
@@ -2096,7 +2108,7 @@ function sortBrief(kind,key){
   else renderDeadBrief();
 }
 
-// ── (v15.51) 재고금액 상위 / 목표 미달 — 정렬 + 행클릭 드릴다운 ──
+// ── (v15.51) 재고금액 상위 / 목표 초과·이하 — 정렬 + 행클릭 드릴다운 ──
 const _BRIEF_COLS_GOAL=[{k:'brand',t:'메이커',a:'left',w:190},{k:'tgt',t:'목표',a:'right',w:140},
   {k:'real',t:'재고',a:'right',w:140},{k:'diff',t:'차이금액',a:'right',w:140},
   {k:'pct',t:'달성률',a:'right',w:80},{k:'cnt',t:'품목',a:'center',w:70}];
