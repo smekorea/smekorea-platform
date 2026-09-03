@@ -678,6 +678,7 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
           <!-- (v15.51) 선택월 재고 요약 — 항상 표시(접기 없음). 버튼 리스트보다 위. -->
           <div id="brief-summary" class="brief-sum" style="margin-top:10px;margin-bottom:0;"></div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+            <button id="brief-exceed-btn" onclick="toggleBrief('exceed')" style="padding:6px 12px;border:1.5px solid #f0b972;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⚠ 목표 초과 <span id="brief-exceed-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-exceed-arrow">▾</span></button>
             <button id="brief-under-btn" onclick="toggleBrief('under')" style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">ℹ 목표 미달 <span id="brief-under-cnt" style="font-weight:500;color:var(--text-mute);"></span> <span class="brief-arw" id="brief-under-arrow">▾</span></button>
             <button id="brief-over-btn" onclick="toggleBrief('over')" style="padding:6px 12px;border:1.5px solid #f0b9a0;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">📦 재고금액 상위 <span id="brief-over-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-over-arrow">▾</span></button>
             <button id="brief-order-btn" onclick="toggleBrief('order')" style="padding:6px 12px;border:1.5px solid #f5a3a3;border-radius:7px;background:#fff;color:#B91C1C;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">⚠ 발주주의 <span id="brief-order-cnt" style="font-weight:600;"></span> <span class="brief-arw" id="brief-order-arrow">▾</span></button>
@@ -685,8 +686,15 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
             <button id="brief-collapse-btn" onclick="collapseAllBrief()" style="padding:6px 12px;border:1px solid #d5d9e0;border-radius:7px;background:#fff;color:#64748B;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;" title="펼쳐진 목록을 모두 접습니다">✕ 전체 숨기기</button>
           </div>
         </div>
+        <div id="brief-exceed-panel" class="hide" style="padding:0 16px 12px;">
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표를 넘음 — <b>과잉재고로 조치 대상</b> · 초과금액 큰 순 상위 10개 표시 · <b>행을 클릭하면 품목이 펼쳐집니다</b> · 컬럼명 클릭 시 정렬</div>
+          <div class="btbl-wrap"><table class="btbl" id="brief-exceed-tbl">
+            <thead><tr id="brief-exceed-head"></tr></thead>
+            <tbody id="brief-exceed"></tbody>
+          </table></div>
+        </div>
         <div id="brief-under-panel" class="hide" style="padding:0 16px 12px;">
-          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표보다 적음 — 재고 감축이라 문제 아님, 참고용 · <b>행을 클릭하면 품목이 펼쳐집니다</b></div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표보다 적음 — 재고 감축이라 문제 아님, 참고용 · 부족금액 큰 순 상위 10개 표시 · <b>행을 클릭하면 품목이 펼쳐집니다</b></div>
           <div class="btbl-wrap"><table class="btbl" id="brief-under-tbl">
             <thead><tr id="brief-under-head"></tr></thead>
             <tbody id="brief-under"></tbody>
@@ -1843,12 +1851,12 @@ function renderRisk(){
 //  재고 화면은 매출과 부호 반대: 목표 초과=과잉재고=문제(빨강), 미달=재고감축=중립(회색).
 const BRIEF_MAX_ROWS=10;         // 각 블록 최대 10개 메이커
 const BRIEF_DRILL_MAX=20;        // 메이커 드릴다운 최대 품목수
-let _briefOpen={over:false,under:false,order:false,dead:false};
+let _briefOpen={exceed:false,under:false,over:false,order:false,dead:false};
 let _briefDrill={};              // {'order|메이커':true} 열린 드릴다운
 // (v15.51) 블록별 정렬 상태 + 원본 데이터 캐시 — 컬럼명 클릭 시 정렬
-let _briefSort={over:{k:'real',asc:false},under:{k:'diff',asc:true},
+let _briefSort={exceed:{k:'diff',asc:false},under:{k:'diff',asc:true},over:{k:'real',asc:false},
                 order:{k:'amt',asc:false},dead:{k:'amt',asc:false}};
-let _briefTop=[], _briefUnder=[];
+let _briefTop=[], _briefUnder=[], _briefExceed=[];
 
 async function renderStockBrief(){
   const box=document.getElementById('stockBriefBox');
@@ -1869,7 +1877,7 @@ async function renderStockBrief(){
     basisEl.textContent=baseYm?`${by}년 ${parseInt(bm)}월 기준`:'기준월 미선택';
   }
   const hasGoal=_goalRules.length>0;
-  ['brief-over-btn','brief-under-btn'].forEach(id=>{
+  ['brief-over-btn','brief-under-btn','brief-exceed-btn'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.style.display=hasGoal?'flex':'none';
   });
@@ -1900,20 +1908,31 @@ async function renderStockBrief(){
     .sort((a,b)=>b.real-a.real)
     .slice(0,BRIEF_MAX_ROWS);
   // ── 목표 미달 (달성률 <100%, 목표 보유 브랜드, LG마감 제외) ──
-  const under=[];
+  const under=[], exceed=[];
   Object.keys(ruleByBrand).forEach(b=>{
     if(isLgClosingExcluded(b))return;
     const tgt=ruleByBrand[b].tgt, real=realByBrand[b]||0, pct=real/tgt*100;
-    if(pct<100)under.push({std:b,brand:ruleByBrand[b].orig,tgt,real,pct,diff:real-tgt});
+    const row={std:b,brand:ruleByBrand[b].orig,tgt,real,pct,diff:real-tgt};
+    if(pct>100)      exceed.push(row);   // 과잉 — 조치 대상
+    else if(pct<100) under.push(row);    // 부족 — 참고용
   });
-  under.sort((a,b)=>a.diff-b.diff).splice(BRIEF_MAX_ROWS); // 부족금액 큰 순 10개
+  // (v15.56) 버튼 숫자는 "전체 건수"로 통일한다.
+  //   기존엔 미달만 splice(10) 후 표시 건수를 세서 요약(27개)과 버튼(10)이 어긋났다.
+  //   발주주의·악성재고는 전체 건수를 세므로 규칙도 일관되지 않았다.
+  const exceedTotal=exceed.length, underTotal=under.length;
+  exceed.sort((a,b)=>b.diff-a.diff);    // 초과금액 큰 순
+  under.sort((a,b)=>a.diff-b.diff);     // 부족금액 큰 순
+  exceed.splice(BRIEF_MAX_ROWS);
+  under.splice(BRIEF_MAX_ROWS);
 
-  _briefTop=topStock; _briefUnder=under;
+  _briefTop=topStock; _briefUnder=under; _briefExceed=exceed;
   document.getElementById('brief-over-cnt').textContent=`${topStock.length}`;
-  document.getElementById('brief-under-cnt').textContent=`${under.length}`;
+  document.getElementById('brief-under-cnt').textContent=`${underTotal}`;
+  document.getElementById('brief-exceed-cnt').textContent=`${exceedTotal}`;
   document.getElementById('brief-line').textContent=hasGoal?'':'목표규칙 없음 — 발주주의/악성재고만 표시';
 
   renderGoalSummary(realByBrand,ruleByBrand);
+  renderExceedBrief();
   renderTopBrief();
   renderUnderBrief();
   renderOrderBrief();
@@ -1950,22 +1969,44 @@ function renderGoalSummary(realByBrand,ruleByBrand){
   const newRows=_allResult.filter(r=>r.state==='신규입고');
   const newAmt=newRows.reduce((s2,r)=>s2+(r.amount||0),0);
 
-  el.innerHTML=
-     `<b>전체 재고 ${_W(totalReal)}원</b> · 품목 ${_allResult.length.toLocaleString()}건`
-    +(avgMonths!==null?` · 평균 재고개월수 <b style="color:${avgMonths>=MANAGE_MONTHS?'#B91C1C':'#111827'};">${avgMonths.toFixed(1)}개월</b>`:'')
-    +(exclReal>0?` <span style="color:var(--text-mute);font-size:11px;">(LG마감기준 ${_W(exclReal)}원 포함)</span>`:'')
-    +`<br>`
-    +(tgtSum>0
-       ? `목표 ${_W(tgtSum)}원 · 실적 ${_W(realSum)}원 · 달성률 <b style="color:${pctCol};">${Math.round(pctAll)}%</b>`
-        +` <span style="font-size:11px;color:var(--text-mute);">(LG마감기준 제외)</span><br>`
-        +`└ 목표초과 <b style="color:#EA7317;">${over}개</b>${overAmt>0?` · 초과 ${_W(overAmt)}원`:''}`
-        +` · 적정 <b style="color:#059669;">${good}개</b>`
-        +` · 미달 <b style="color:#2563EB;">${lack}개</b>${lackAmt>0?` · 부족 ${_W(lackAmt)}원`:''}`
-       : `목표금액이 설정된 메이커가 없습니다`)
-    +`<br>└ 관리대상(${MANAGE_MONTHS}개월 이상) <b class="bs-act">${mngCnt.toLocaleString()}건</b>`
-    +` · 악성재고 <b class="bs-act">${deadCnt.toLocaleString()}건</b>`
-    +(newRows.length?` · 신규입고 <b>${newRows.length.toLocaleString()}건</b> (${_W(newAmt)}원)`:'')
-    +` <span style="font-size:11px;color:var(--text-mute);">— 아래 버튼에서 상세 확인</span>`;
+  // (v15.56 / A안) 번호 + 라벨칸 + 구분선 3단 구조.
+  //   기존엔 세 줄이 모두 같은 무게라 어디부터 볼지 안 잡혔다.
+  //   ① 보유 → ② 목표대비 → ③ 조치 순으로 눈이 내려가게 한다.
+  const L=(no,label,body,sep)=>
+    `<div style="display:flex;gap:10px;align-items:baseline;`
+   +(sep?`border-top:1px solid #EFE3C8;margin-top:7px;padding-top:7px;`:``)
+   +`">`
+   +`<span style="flex:0 0 76px;font-size:11px;font-weight:700;color:#8a6d1f;white-space:nowrap;">${no} ${label}</span>`
+   +`<span style="flex:1;">${body}</span></div>`;
+  const SUB=body=>
+    `<div style="display:flex;gap:10px;align-items:baseline;margin-top:1px;">`
+   +`<span style="flex:0 0 76px;"></span>`
+   +`<span style="flex:1;font-size:12px;color:#5b6b7f;">${body}</span></div>`;
+
+  let h=L('①','보유',
+      `<b>${_W(totalReal)}원</b> · 품목 ${_allResult.length.toLocaleString()}건`
+     +(avgMonths!==null?` · 평균 재고개월수 <b style="color:${avgMonths>=MANAGE_MONTHS?'#B91C1C':'#111827'};">${avgMonths.toFixed(1)}개월</b>`:'')
+     +(exclReal>0?` <span style="color:var(--text-mute);font-size:11px;">(LG마감기준 ${_W(exclReal)}원 포함)</span>`:''));
+
+  if(tgtSum>0){
+    h+=L('②','목표대비',
+        `목표 ${_W(tgtSum)}원 → 실적 ${_W(realSum)}원 · 달성률 <b style="color:${pctCol};font-size:14px;">${Math.round(pctAll)}%</b>`
+       +` <span style="font-size:11px;color:var(--text-mute);">(LG마감기준 제외)</span>`,true);
+    h+=SUB(
+        `초과 <b style="color:#EA7317;">${over}개</b>${overAmt>0?` (+${_W(overAmt)}원)`:''}`
+       +` · 적정 <b style="color:#059669;">${good}개</b>`
+       +` · 미달 <b style="color:#2563EB;">${lack}개</b>${lackAmt>0?` (-${_W(lackAmt)}원)`:''}`);
+  }else{
+    h+=L('②','목표대비','<span style="color:var(--text-mute);">목표금액이 설정된 메이커가 없습니다</span>',true);
+  }
+
+  h+=L('③','조치',
+      `관리대상(${MANAGE_MONTHS}개월 이상) <b class="bs-act">${mngCnt.toLocaleString()}건</b>`
+     +` · 악성재고 <b class="bs-act">${deadCnt.toLocaleString()}건</b>`
+     +(newRows.length?` · 신규입고 <b>${newRows.length.toLocaleString()}건</b> <span style="font-size:11px;color:var(--text-mute);">(${_W(newAmt)}원)</span>`:'')
+     +` <span style="font-size:11px;color:var(--text-mute);">— 아래 버튼에서 상세 확인</span>`,true);
+
+  el.innerHTML=h;
 }
 
 // ── (v15.50) 발주주의 / 악성재고 브리핑 ──
@@ -2050,6 +2091,7 @@ function sortBrief(kind,key){
   if(st.k===key)st.asc=!st.asc; else{st.k=key;st.asc=false;}
   if(kind==='over')renderTopBrief();
   else if(kind==='under')renderUnderBrief();
+  else if(kind==='exceed')renderExceedBrief();
   else if(kind==='order')renderOrderBrief();
   else renderDeadBrief();
 }
@@ -2112,6 +2154,16 @@ function renderTopBrief(){
   document.getElementById('brief-over-head').innerHTML=_briefHead('over',_BRIEF_COLS_GOAL);
   _briefSyncWidth('over',_BRIEF_COLS_GOAL);
   box.innerHTML=rows.length?_briefApplySort('over',rows).map(r=>_goalRow('over',r)).join(''):_briefEmpty;
+}
+// (v15.56) 목표 초과 — 재고화면에서는 초과가 실제 문제다(미달은 재고감축이라 중립).
+//   미달 버튼만 있고 초과 버튼이 없어 요약에 뜬 17개·16.6억을 볼 방법이 없었다.
+function renderExceedBrief(){
+  const box=document.getElementById('brief-exceed');
+  if(!box)return;
+  const rows=_briefExceed.map(r=>({...r,cnt:_itemsOfMaker(r.std).length}));
+  document.getElementById('brief-exceed-head').innerHTML=_briefHead('exceed',_BRIEF_COLS_GOAL);
+  _briefSyncWidth('exceed',_BRIEF_COLS_GOAL);
+  box.innerHTML=rows.length?_briefApplySort('exceed',rows).map(r=>_goalRow('exceed',r)).join(''):_briefEmpty;
 }
 function renderUnderBrief(){
   const box=document.getElementById('brief-under');
@@ -2197,6 +2249,7 @@ function toggleBriefDrill(kind,brand){
   if(kind==='order')renderOrderBrief();
   else if(kind==='dead')renderDeadBrief();
   else if(kind==='over')renderTopBrief();
+  else if(kind==='exceed')renderExceedBrief();
   else renderUnderBrief();
 }
 
@@ -2278,7 +2331,7 @@ function applyBriefOpen(which){
     if(btn){btn.style.background='#fff';btn.style.boxShadow='none';}
   }
 }
-const BRIEF_KINDS=['under','over','order','dead'];
+const BRIEF_KINDS=['exceed','under','over','order','dead'];
 // (v15.53) 아코디언 — 한 번에 하나만 펼친다.
 //   4개를 동시에 펼치면 화면이 세로로 길어져 어느 목록을 보고 있었는지 놓치게 된다.
 //   이미 열린 버튼을 다시 누르면 그냥 닫힌다(토글 유지).
