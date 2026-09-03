@@ -234,7 +234,9 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
 .ord-stop{background:var(--ng-bg);color:var(--ng);border:1px solid var(--ng-border);}
 .ord-hold{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border);}
 .ord-use{background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;}
-#brief-over-panel.hide,#brief-under-panel.hide{display:none;}
+/* (v15.51) 4개 패널 공통 — 기존엔 over/under 두 id만 하드코딩돼 있어
+   신규 order/dead 패널은 .hide 가 붙어도 접히지 않았다. */
+#stockBriefBox .hide{display:none;}
 .empty-state{text-align:center;padding:50px 20px;color:var(--text-mute);}
 .empty-icon{font-size:32px;margin-bottom:10px;opacity:.4;}
 .empty-text{font-size:13px;line-height:1.9;}
@@ -647,9 +649,11 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
         <div style="padding:12px 16px;">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <span style="font-size:13px;font-weight:800;color:#8a6d1f;">📋 재고 브리핑</span>
-            <select id="brief-month" onchange="renderStockBrief()" style="font-size:12px;padding:4px 8px;border:1px solid #e0cfa0;border-radius:6px;background:#fff;font-family:var(--sans);font-weight:600;color:#8a6d1f;"></select>
+            <span id="brief-basis" style="font-size:11px;font-weight:700;color:#8a6d1f;background:#fdf3dc;border:1px solid #e0cfa0;border-radius:5px;padding:2px 8px;"></span>
             <span id="brief-line" style="font-size:12px;color:var(--text-mute);margin-left:2px;"></span>
           </div>
+          <!-- (v15.51) 선택월 재고 요약 — 항상 표시(접기 없음). 버튼 리스트보다 위. -->
+          <div id="brief-summary" class="brief-sum" style="margin-top:10px;margin-bottom:0;"></div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
             <button id="brief-over-btn" onclick="toggleBrief('over')" style="padding:6px 12px;border:1.5px solid #f0b9a0;border-radius:7px;background:#fff;color:#b45309;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">📦 재고금액 상위 <span id="brief-over-cnt" style="font-weight:600;"></span> <span id="brief-over-arrow">▾</span></button>
             <button id="brief-under-btn" onclick="toggleBrief('under')" style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">ℹ 목표 미달 <span id="brief-under-cnt" style="font-weight:500;color:var(--text-mute);"></span> <span id="brief-under-arrow">▾</span></button>
@@ -658,27 +662,21 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
           </div>
         </div>
         <div id="brief-over-panel" class="hide" style="padding:0 16px 12px;">
-          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고금액이 많은 상위 10개 메이커 (목표 유무 무관)</div>
-          <div class="brief-head-row" style="color:#b45309;">
-            <span style="min-width:130px;">메이커</span><span>목표</span><span>재고</span><span>차이금액</span><span style="min-width:52px;text-align:right;">달성률</span>
-          </div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고금액 큰 순 10개 메이커 · <b>행을 클릭하면 품목이 펼쳐집니다</b> · 컬럼명 클릭 시 정렬</div>
+          <div class="brief-head-row6" id="brief-over-head" style="color:#b45309;"></div>
           <div id="brief-over"></div>
         </div>
         <div id="brief-under-panel" class="hide" style="padding:0 16px 12px;">
-          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표보다 적음 — 재고 감축이라 문제 아님, 참고용</div>
-          <div class="brief-head-row" style="color:#475569;">
-            <span style="min-width:130px;">메이커</span><span>목표</span><span>재고</span><span>차이금액</span><span style="min-width:52px;text-align:right;">달성률</span>
-          </div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">재고가 목표보다 적음 — 재고 감축이라 문제 아님, 참고용 · <b>행을 클릭하면 품목이 펼쳐집니다</b></div>
+          <div class="brief-head-row6" id="brief-under-head" style="color:#475569;"></div>
           <div id="brief-under"></div>
         </div>
 
         <!-- (v15.50) 발주주의 — 재고개월수 4M 이상 관리대상 + 최근 매입 발생 -->
         <div id="brief-order-panel" class="hide" style="padding:0 16px 12px;">
           <div id="brief-order-sum" class="brief-sum"></div>
-          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">관리재고 많은 순 10개 메이커 · <b>행을 클릭하면 품목이 펼쳐집니다</b></div>
-          <div class="brief-head-row6" style="color:#B91C1C;">
-            <span>메이커</span><span style="text-align:center;">관리품목</span><span style="text-align:right;">관리재고</span><span style="text-align:right;">최근1M매입</span><span style="text-align:right;">최근3M매입</span><span style="text-align:center;">발주판정</span>
-          </div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">관리재고 많은 순 10개 메이커 · <b>행을 클릭하면 품목이 펼쳐집니다</b> · 컬럼명 클릭 시 정렬</div>
+          <div class="brief-head-row6" id="brief-order-head" style="color:#B91C1C;"></div>
           <div id="brief-order"></div>
           <div class="brief-note" id="brief-order-note"></div>
         </div>
@@ -686,10 +684,8 @@ th.sortable:hover{background:rgba(26,86,219,.06);}
         <!-- (v15.50) 데드스톡 — 12개월 무판매 -->
         <div id="brief-dead-panel" class="hide" style="padding:0 16px 12px;">
           <div id="brief-dead-sum" class="brief-sum"></div>
-          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">데드재고 많은 순 10개 메이커 · <b>행을 클릭하면 품목이 펼쳐집니다</b></div>
-          <div class="brief-head-row6" style="color:#5b4141;">
-            <span>메이커</span><span style="text-align:center;">데드품목</span><span style="text-align:right;">데드재고</span><span style="text-align:right;">최근1M매입</span><span style="text-align:right;">최근3M매입</span><span style="text-align:center;">발주판정</span>
-          </div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:4px;">데드재고 많은 순 10개 메이커 · <b>행을 클릭하면 품목이 펼쳐집니다</b> · 컬럼명 클릭 시 정렬</div>
+          <div class="brief-head-row6" id="brief-dead-head" style="color:#5b4141;"></div>
           <div id="brief-dead"></div>
           <div class="brief-note" id="brief-dead-note"></div>
         </div>
@@ -1780,6 +1776,10 @@ const BRIEF_MAX_ROWS=10;         // 각 블록 최대 10개 메이커
 const BRIEF_DRILL_MAX=20;        // 메이커 드릴다운 최대 품목수
 let _briefOpen={over:false,under:false,order:false,dead:false};
 let _briefDrill={};              // {'order|메이커':true} 열린 드릴다운
+// (v15.51) 블록별 정렬 상태 + 원본 데이터 캐시 — 컬럼명 클릭 시 정렬
+let _briefSort={over:{k:'real',asc:false},under:{k:'diff',asc:true},
+                order:{k:'amt',asc:false},dead:{k:'amt',asc:false}};
+let _briefTop=[], _briefUnder=[];
 
 async function renderStockBrief(){
   const box=document.getElementById('stockBriefBox');
@@ -1789,36 +1789,31 @@ async function renderStockBrief(){
   //   박스 자체는 띄우고, 목표 관련 두 블록만 비워둔다.
   if(!_allResult.length&&!_goalRules.length){box.style.display='none';return;}
   box.style.display='block';
-  const hasGoal=_goalRules.length&&_allMonthsList.length;
+  // (v15.51 / C안) 월 선택 드롭다운 폐지 — 4개 블록 모두 상단 필터의 분석기준월 하나를 따른다.
+  //   기존엔 목표대비 2블록만 브리핑 월 선택을 따르고 발주주의·데드스톡은 분석기준월을 따라
+  //   한 화면에 기준이 둘로 갈려 있었다. 재고개월수·매입 지표는 분석실행 시점 기준월로만
+  //   계산되므로, 월을 바꾸려면 상단 필터에서 다시 분석실행하는 것이 유일한 정합 경로다.
+  const baseYm=document.getElementById('f_month').value||'';
+  const basisEl=document.getElementById('brief-basis');
+  if(basisEl){
+    const[by,bm]=baseYm.split('-');
+    basisEl.textContent=baseYm?`${by}년 ${parseInt(bm)}월 기준`:'기준월 미선택';
+  }
+  const hasGoal=_goalRules.length>0;
   ['brief-over-btn','brief-under-btn'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.style.display=hasGoal?'flex':'none';
   });
-  const selWrap=document.getElementById('brief-month');
-  if(selWrap)selWrap.style.display=hasGoal?'':'none';
-  if(!hasGoal){
-    document.getElementById('brief-line').textContent='목표대비 데이터 없음 — 발주주의/데드스톡만 표시';
-    renderOrderBrief();renderDeadBrief();
-    ['order','dead'].forEach(applyBriefOpen);
-    return;
-  }
-  // 월 선택 드롭다운 — 데이터 있는 월 내림차순, 최초엔 최신월
-  const sel=document.getElementById('brief-month');
-  if(sel && !sel.dataset.filled){
-    const opts=[..._allMonthsList].sort((a,b)=>b.localeCompare(a));
-    sel.innerHTML=opts.map(m=>{const[y,mo]=m.split('-');return `<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;}).join('');
-    sel.dataset.filled='1';
-  }
-  const baseYm=(sel&&sel.value)||_allMonthsList[_allMonthsList.length-1];
 
   // realByBrand: LG마감 포함 전체 재고(재고금액 상위 순위용).
   //   Glory Faith 등 LG마감기준도 실제 재고가 쌓여 있으므로 상위 순위에는 포함한다.
-  //   미달 판정에서만 아래 _lgClosingExcludeSet 으로 걸러낸다.
+  //   미달 판정에서만 isLgClosingExcluded() 로 걸러낸다.
+  //   (v15.51) _allMonthsStock 이 아직 안 받아졌을 수 있으므로 _allResult 를 1차 소스로 쓴다.
+  //            _allResult 는 분석실행 시점에 항상 채워져 있고 기준월과 정확히 일치한다.
   const realByBrand={};
-  _allMonthsStock.forEach(r=>{
-    if(r.ym!==baseYm)return;
-    const b=normMaker(r.brand_std||r.brand||'');
-    realByBrand[b]=(realByBrand[b]||0)+(Number(r.stock_amount)||0);
+  _allResult.forEach(r=>{
+    const b=normMaker(r.brand||'');
+    realByBrand[b]=(realByBrand[b]||0)+(Number(r.amount)||0);
   });
   // 목표 규칙을 표준명 기준 맵으로 (미달 판정 + 상위목록의 목표/달성률 표기용)
   const ruleByBrand={};
@@ -1826,56 +1821,190 @@ async function renderStockBrief(){
     const tgt=Number(rule.target_amount)||0;
     if(tgt>0)ruleByBrand[normMaker(rule.brand)]={tgt,orig:rule.brand};
   });
+
   // ── 재고금액 상위 10 (전체 메이커, 목표 무관) ──
-  //   재고금액 순위엔 LG마감기준(Glory Faith 등)도 포함한다 — 실제로 재고가 쌓여 있으므로.
   const topStock=Object.keys(realByBrand)
     .map(b=>{const real=realByBrand[b],r=ruleByBrand[b];
-             return {brand:(r&&r.orig)||b,real,tgt:r?r.tgt:0,
+             return {std:b,brand:(r&&r.orig)||b,real,tgt:r?r.tgt:0,
                      pct:r&&r.tgt>0?real/r.tgt*100:null, diff:r?real-r.tgt:null};})
     .filter(x=>x.real>0)
     .sort((a,b)=>b.real-a.real)
     .slice(0,BRIEF_MAX_ROWS);
-  // ── 목표 미달 (달성률 <100%, 목표 보유 브랜드, LG마감 제외 이미 반영) ──
+  // ── 목표 미달 (달성률 <100%, 목표 보유 브랜드, LG마감 제외) ──
   const under=[];
   Object.keys(ruleByBrand).forEach(b=>{
     if(isLgClosingExcluded(b))return;
     const tgt=ruleByBrand[b].tgt, real=realByBrand[b]||0, pct=real/tgt*100;
-    if(pct<100)under.push({brand:ruleByBrand[b].orig,tgt,real,pct,diff:real-tgt});
+    if(pct<100)under.push({std:b,brand:ruleByBrand[b].orig,tgt,real,pct,diff:real-tgt});
   });
   under.sort((a,b)=>a.diff-b.diff).splice(BRIEF_MAX_ROWS); // 부족금액 큰 순 10개
 
-  const W=v=>Math.round(v).toLocaleString(); // 원 단위 전체
-  const topSum=topStock.reduce((a,r)=>a+r.real,0);
-  document.getElementById('brief-line').textContent=
-    `재고금액 상위 ${topStock.length}개 합계 ${W(topSum)}원 · 목표미달 ${under.length}개`;
+  _briefTop=topStock; _briefUnder=under;
   document.getElementById('brief-over-cnt').textContent=`${topStock.length}`;
   document.getElementById('brief-under-cnt').textContent=`${under.length}`;
+  document.getElementById('brief-line').textContent=hasGoal?'':'목표규칙 없음 — 발주주의/데드스톡만 표시';
 
-  // 재고금액 상위: 목표가 없으면 목표/차이/% 칸은 '—'
-  const rowTop=r=>`<div class="brief-row"><span class="bn" title="${r.brand}">${r.brand}</span>`
-    +`<span class="bv">${r.tgt?W(r.tgt):'—'}</span>`
-    +`<span class="bv">${W(r.real)}</span>`
-    +`<span class="bv" style="color:${r.diff==null?'#94A3B8':(r.diff>=0?'#EA7317':'#2563EB')};font-weight:700;">${r.diff==null?'—':(r.diff>=0?'+':'-')+W(Math.abs(r.diff))}</span>`
-    +`<span class="bv" style="font-weight:800;color:${r.pct==null?'#94A3B8':(r.pct>100?'#EA7317':'#2563EB')};">${r.pct==null?'—':Math.round(r.pct)+'%'}</span></div>`;
-  const rowUnder=r=>`<div class="brief-row"><span class="bn" title="${r.brand}">${r.brand}</span>`
-    +`<span class="bv">${W(r.tgt)}</span>`
-    +`<span class="bv">${W(r.real)}</span>`
-    +`<span class="bv" style="color:#2563EB;font-weight:700;">-${W(Math.abs(r.diff))}</span>`
-    +`<span class="bv" style="font-weight:800;color:#2563EB;">${Math.round(r.pct)}%</span></div>`;
-  const empty='<div style="font-size:12px;color:var(--text-mute);padding:8px 2px;">해당 없음</div>';
-  document.getElementById('brief-over').innerHTML = topStock.length?topStock.map(rowTop).join(''):empty;
-  document.getElementById('brief-under').innerHTML = under.length?under.map(rowUnder).join(''):empty;
-  // (v15.50) 발주주의 / 데드스톡 블록
+  renderGoalSummary(realByBrand,ruleByBrand);
+  renderTopBrief();
+  renderUnderBrief();
   renderOrderBrief();
   renderDeadBrief();
   ['over','under','order','dead'].forEach(applyBriefOpen);
 }
 
+// ── (v15.51) 선택월 재고 요약 · 목표대비 달성률 — 항상 표시(접기 없음) ──
+// 버튼 리스트보다 위에서 "이번 달 재고가 목표 대비 어떤 상태인가"를 한눈에 준다.
+function renderGoalSummary(realByBrand,ruleByBrand){
+  const el=document.getElementById('brief-summary');
+  if(!el)return;
+  const totalReal=_allResult.reduce((s,r)=>s+(r.amount||0),0);
+  const exclReal=_allResult.filter(r=>isLgClosingExcluded(r.brand)).reduce((s,r)=>s+(r.amount||0),0);
+
+  let over=0,good=0,lack=0,tgtSum=0,realSum=0,overAmt=0,lackAmt=0;
+  Object.keys(ruleByBrand).forEach(b=>{
+    if(isLgClosingExcluded(b))return;
+    const tgt=ruleByBrand[b].tgt, real=realByBrand[b]||0, pct=real/tgt*100;
+    tgtSum+=tgt; realSum+=real;
+    if(pct>100){over++; overAmt+=real-tgt;}
+    else if(pct>=80)good++;
+    else {lack++; lackAmt+=tgt-real;}
+  });
+  const pctAll=tgtSum>0?realSum/tgtSum*100:null;
+  const pctCol=pctAll==null?'#94A3B8':(pctAll>130?'#B91C1C':pctAll>100?'#EA7317':'#2563EB');
+
+  // 재고개월수 금액가중평균 — "지금 재고가 월평균 판매 몇 개월치인가"
+  let wt=0,wa=0;
+  _allResult.forEach(r=>{if(r.stockMonths!==null&&r.amount>0){wt+=r.stockMonths*r.amount;wa+=r.amount;}});
+  const avgMonths=wa>0?wt/wa:null;
+  const mngCnt=_allResult.filter(r=>r.state==='관리').length;
+  const deadCnt=_allResult.filter(r=>r.state==='데드스톡').length;
+
+  el.innerHTML=
+     `<b>전체 재고 ${_W(totalReal)}원</b> · 품목 ${_allResult.length.toLocaleString()}건`
+    +(avgMonths!==null?` · 평균 재고개월수 <b style="color:${avgMonths>=MANAGE_MONTHS?'#B91C1C':'#111827'};">${avgMonths.toFixed(1)}개월</b>`:'')
+    +(exclReal>0?` <span style="color:var(--text-mute);font-size:11px;">(LG마감기준 ${_W(exclReal)}원 포함)</span>`:'')
+    +`<br>`
+    +(tgtSum>0
+       ? `목표 ${_W(tgtSum)}원 · 실적 ${_W(realSum)}원 · 달성률 <b style="color:${pctCol};">${Math.round(pctAll)}%</b>`
+        +` <span style="font-size:11px;color:var(--text-mute);">(LG마감기준 제외)</span><br>`
+        +`└ 목표초과 <b style="color:#EA7317;">${over}개</b>${overAmt>0?` · 초과 ${_W(overAmt)}원`:''}`
+        +` · 적정 <b style="color:#059669;">${good}개</b>`
+        +` · 미달 <b style="color:#2563EB;">${lack}개</b>${lackAmt>0?` · 부족 ${_W(lackAmt)}원`:''}`
+       : `목표금액이 설정된 메이커가 없습니다`)
+    +`<br>└ 관리대상(${MANAGE_MONTHS}개월 이상) <b class="bs-act">${mngCnt.toLocaleString()}건</b>`
+    +` · 데드스톡 <b class="bs-act">${deadCnt.toLocaleString()}건</b>`
+    +` <span style="font-size:11px;color:var(--text-mute);">— 아래 버튼에서 상세 확인</span>`;
+}
+
 // ── (v15.50) 발주주의 / 데드스톡 브리핑 ──
-// 두 블록 모두 "기준월"이 아니라 탭1과 같은 현재 분석결과(_allResult)를 쓴다.
+// 네 블록 모두 탭1과 같은 현재 분석결과(_allResult)를 쓴다.
 // 재고개월수·매입 지표는 분석실행 시점의 기준월로만 계산되기 때문이다.
-// (브리핑 상단 월 선택은 목표대비 두 블록에만 적용된다 — 아래 안내문에 명시)
+// (v15.51 C안) 브리핑 자체 월 선택은 폐지 — 기준이 둘로 갈리는 혼동을 없앴다.
 const _W=v=>Math.round(v||0).toLocaleString();
+
+// ── (v15.51) 브리핑 공용 — 정렬 가능한 헤더 / 정렬 토글 ──
+// cols: [{k:'키', t:'표시명', a:'정렬(left|center|right)'}]
+function _briefHead(kind,cols){
+  const st=_briefSort[kind];
+  return cols.map(c=>{
+    const on=st.k===c.k;
+    const icon=on?(st.asc?' ↑':' ↓'):'';
+    const al=c.a==='right'?'text-align:right;':c.a==='center'?'text-align:center;':'';
+    return `<span style="${al}cursor:pointer;user-select:none;${on?'text-decoration:underline;':''}"`
+         + ` onclick="sortBrief('${kind}','${c.k}')" title="클릭하면 정렬">${c.t}${icon}</span>`;
+  }).join('');
+}
+function _briefApplySort(kind,rows){
+  const{k,asc}=_briefSort[kind];
+  return [...rows].sort((a,b)=>{
+    const x=a[k],y=b[k];
+    if(x==null&&y==null)return 0;
+    if(x==null)return 1;      // 값 없는 행은 항상 뒤로
+    if(y==null)return -1;
+    if(typeof x==='number'&&typeof y==='number')return asc?x-y:y-x;
+    return asc?String(x).localeCompare(String(y)):String(y).localeCompare(String(x));
+  });
+}
+function sortBrief(kind,key){
+  const st=_briefSort[kind];
+  if(st.k===key)st.asc=!st.asc; else{st.k=key;st.asc=false;}
+  if(kind==='over')renderTopBrief();
+  else if(kind==='under')renderUnderBrief();
+  else if(kind==='order')renderOrderBrief();
+  else renderDeadBrief();
+}
+
+// ── (v15.51) 재고금액 상위 / 목표 미달 — 정렬 + 행클릭 드릴다운 ──
+const _BRIEF_COLS_GOAL=[{k:'brand',t:'메이커'},{k:'tgt',t:'목표',a:'right'},
+  {k:'real',t:'재고',a:'right'},{k:'diff',t:'차이금액',a:'right'},
+  {k:'pct',t:'달성률',a:'right'},{k:'cnt',t:'품목',a:'center'}];
+
+// 표준명이 같은 품목을 모아 드릴다운에 쓴다
+function _itemsOfMaker(std){
+  return _allResult.filter(r=>normMaker(r.brand||'')===std);
+}
+function _goalRow(kind,r){
+  const key=kind+'|'+r.std;
+  const open=!!_briefDrill[key];
+  const esc=r.std.replace(/'/g,"\\'");
+  const items=_itemsOfMaker(r.std);
+  const dCol=r.diff==null?'#94A3B8':(r.diff>=0?'#EA7317':'#2563EB');
+  const pCol=r.pct==null?'#94A3B8':(r.pct>100?'#EA7317':'#2563EB');
+  let h=`<div class="brief-row6" onclick="toggleBriefDrill('${kind}','${esc}')">`
+   +`<span class="bn" title="${r.brand}">${open?'▾':'▸'} ${r.brand}</span>`
+   +`<span class="bv">${r.tgt?_W(r.tgt):'—'}</span>`
+   +`<span class="bv" style="font-weight:700;">${_W(r.real)}</span>`
+   +`<span class="bv" style="color:${dCol};font-weight:700;">${r.diff==null?'—':(r.diff>=0?'+':'-')+_W(Math.abs(r.diff))}</span>`
+   +`<span class="bv" style="font-weight:800;color:${pCol};">${r.pct==null?'—':Math.round(r.pct)+'%'}</span>`
+   +`<span class="bc">${items.length}개</span></div>`;
+  if(open)h+=_goalDrillHtml(items);
+  return h;
+}
+// 목표대비 드릴다운 — 재고금액 큰 순. 재고개월수·상태로 어디가 문제인지 바로 보이게 한다.
+function _goalDrillHtml(items){
+  const list=[...items].sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,BRIEF_DRILL_MAX);
+  const rows=list.map(r=>{
+    const[cls,lbl]=SM[r.state]||['b-good','양호'];
+    return `<tr>
+      <td class="left" style="font-family:var(--mono);">${r.code}</td>
+      <td class="left" title="${r.desc}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.desc}</td>
+      <td>${r.type}</td>
+      <td class="right">${r.realQty.toLocaleString()}</td>
+      <td class="right">${r.avgMonthly>0?Math.round(r.avgMonthly).toLocaleString():'—'}</td>
+      <td class="right" style="font-weight:700;color:${(r.stockMonths!==null&&r.stockMonths>=MANAGE_MONTHS)?'#B91C1C':'#111827'};">${r.stockMonths!==null?r.stockMonths.toFixed(1)+'M':'DEAD'}</td>
+      <td class="right" style="font-weight:700;">${_W(r.amount)}</td>
+      <td><span class="badge ${cls}">${lbl}</span></td>
+    </tr>`;
+  }).join('');
+  const more=items.length>BRIEF_DRILL_MAX?`<div class="bdrill-more">+${items.length-BRIEF_DRILL_MAX}건 더 있음 — 탭1에서 브랜드 필터로 전체 확인</div>`:'';
+  return `<div class="bdrill"><table>
+    <thead><tr>
+      <th class="left">품목코드</th><th class="left">품명및규격</th><th>공급유형</th><th>실재고</th>
+      <th>월평균판매</th><th>재고개월</th><th>재고금액</th><th>상태</th>
+    </tr></thead><tbody>${rows}</tbody></table>${more}</div>`;
+}
+const _briefEmpty='<div style="font-size:12px;color:var(--text-mute);padding:8px 2px;">해당 없음</div>';
+
+function renderTopBrief(){
+  const box=document.getElementById('brief-over');
+  if(!box)return;
+  const rows=_briefTop.map(r=>({...r,cnt:_itemsOfMaker(r.std).length}));
+  document.getElementById('brief-over-head').innerHTML=_briefHead('over',_BRIEF_COLS_GOAL);
+  box.innerHTML=rows.length?_briefApplySort('over',rows).map(r=>_goalRow('over',r)).join(''):_briefEmpty;
+}
+function renderUnderBrief(){
+  const box=document.getElementById('brief-under');
+  if(!box)return;
+  const rows=_briefUnder.map(r=>({...r,cnt:_itemsOfMaker(r.std).length}));
+  document.getElementById('brief-under-head').innerHTML=_briefHead('under',_BRIEF_COLS_GOAL);
+  box.innerHTML=rows.length?_briefApplySort('under',rows).map(r=>_goalRow('under',r)).join(''):_briefEmpty;
+}
+
+
+// 발주주의/데드스톡 컬럼 정의 (라벨만 다르고 키는 동일)
+const _BRIEF_COLS_MNG=lbl=>[{k:'brand',t:'메이커'},{k:'cnt',t:lbl+'품목',a:'center'},
+  {k:'amt',t:lbl+'재고',a:'right'},{k:'p1',t:'최근1M매입',a:'right'},
+  {k:'p3',t:`최근${PUR_RECENT_MONTHS}M매입`,a:'right'},{k:'judge',t:'발주판정',a:'center'}];
 
 // 메이커 단위로 묶기. pick(r) 이 true 인 품목만 집계한다.
 function _groupByMaker(pick){
@@ -1888,7 +2017,12 @@ function _groupByMaker(pick){
     g.items.push(r); g.cnt++; g.amt+=r.amount||0;
     g.p1+=r.purAmt1||0; g.p3+=r.purAmt3||0;
   });
-  return Object.values(m).sort((a,b)=>b.amt-a.amt||b.p3-a.p3);
+  // judge 는 정렬용 텍스트 키 (발주중단 > 발주보류 > 소진우선 순으로 읽히게 접두 숫자 부여)
+  const ord={stop:'1발주중단',hold:'2발주보류',use:'3소진우선'};
+  return Object.values(m).map(g=>{
+    const j=orderJudge(g.amt,g.p3);
+    return {...g, judge:j?ord[j.key]:'9'};
+  });
 }
 
 function _briefRow6(kind,g){
@@ -1939,7 +2073,9 @@ function toggleBriefDrill(kind,brand){
   if(_briefDrill[key])delete _briefDrill[key];
   else _briefDrill[key]=true;
   if(kind==='order')renderOrderBrief();
-  else renderDeadBrief();
+  else if(kind==='dead')renderDeadBrief();
+  else if(kind==='over')renderTopBrief();
+  else renderUnderBrief();
 }
 
 function renderOrderBrief(){
@@ -1960,7 +2096,8 @@ function renderOrderBrief(){
    +`└ 최근 ${PUR_RECENT_MONTHS}개월 매입발생 <b>${alertAll.length.toLocaleString()}건</b> · 매입 <b>${_W(pur3)}원</b> <span class="bs-act">→ 발주 조율 필요</span><br>`
    +`└ 이번 달에도 매입 <b>${alert1M.length.toLocaleString()}건</b> · 매입 <b>${_W(pur1)}원</b> <span class="bs-act">→ 즉시 조율</span>`;
 
-  const groups=_groupByMaker(isMng).slice(0,BRIEF_MAX_ROWS);
+  const groups=_briefApplySort('order',_groupByMaker(isMng)).slice(0,BRIEF_MAX_ROWS);
+  document.getElementById('brief-order-head').innerHTML=_briefHead('order',_BRIEF_COLS_MNG('관리'));
   box.innerHTML=groups.length?groups.map(g=>_briefRow6('order',g)).join('')
     :'<div style="font-size:12px;color:var(--text-mute);padding:8px 2px;">관리대상 없음</div>';
 
@@ -1969,7 +2106,7 @@ function renderOrderBrief(){
     `※ 재고개월수 = 실재고 ÷ 월평균판매량(최근 12M, 매입매출자료 년/월 기준)<br>`
    +`※ ${MANAGE_MONTHS}개월 이상 = 관리대상. 매입이 이어지면 발주 조율 검토<br>`
    +`※ 발주중단 = 최근 ${PUR_RECENT_MONTHS}M 매입액이 관리재고액 이상 · 발주보류 = 매입 발생 · 소진우선 = 매입 없음<br>`
-   +`※ 이 블록은 <b>탭 상단 필터의 분석기준월</b>을 따릅니다 (브리핑 월 선택은 목표대비 두 블록 전용)`
+   +`※ 브리핑 4개 블록은 모두 <b>탭 상단 필터의 분석기준월</b>을 따릅니다 (다른 월은 기준월을 바꿔 분석실행)`
    +(noPrice?`<br>※ 단가 미등록으로 재고금액이 산출되지 않은 품목 ${noPrice}건은 금액 합계에서 제외됨`:'');
 }
 
@@ -1989,14 +2126,15 @@ function renderDeadBrief(){
       ? `└ 그런데 최근 ${PUR_RECENT_MONTHS}개월 매입발생 <b>${deadPur.length.toLocaleString()}건</b> · 매입 <b>${_W(deadPurAmt)}원</b> <span class="bs-act">→ 발주 즉시 중단 검토</span>`
       : `└ 최근 ${PUR_RECENT_MONTHS}개월 매입 없음 — 소진·처분만 진행하면 됨`);
 
-  const groups=_groupByMaker(isDead).slice(0,BRIEF_MAX_ROWS);
+  const groups=_briefApplySort('dead',_groupByMaker(isDead)).slice(0,BRIEF_MAX_ROWS);
+  document.getElementById('brief-dead-head').innerHTML=_briefHead('dead',_BRIEF_COLS_MNG('데드'));
   box.innerHTML=groups.length?groups.map(g=>_briefRow6('dead',g)).join('')
     :'<div style="font-size:12px;color:var(--text-mute);padding:8px 2px;">데드스톡 없음</div>';
 
   document.getElementById('brief-dead-note').innerHTML=
     `※ 데드스톡 = 최근 12개월 판매수량 합계 0 + 실재고 보유<br>`
    +`※ 무판매 컬럼은 최근 달부터 연속으로 판매가 없는 개월수 (최대 12M)<br>`
-   +`※ 이 블록은 <b>탭 상단 필터의 분석기준월</b>을 따릅니다`;
+   +`※ 브리핑 4개 블록은 모두 <b>탭 상단 필터의 분석기준월</b>을 따릅니다`;
 }
 function applyBriefOpen(which){
   const panel=document.getElementById('brief-'+which+'-panel');
