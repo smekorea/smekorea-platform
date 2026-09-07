@@ -193,6 +193,14 @@
   .cust-ac-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);}
   .cust-ac-item:last-child{border-bottom:none;}
   .cust-ac-item:hover,.cust-ac-item.active{background:var(--surface2);color:var(--accent2);}
+  .cust-ac-item .cust-ac-hl{color:var(--accent2);font-weight:700;}
+  .form-input.cust-ok{border-color:var(--accent3)!important;background:rgba(14,159,110,0.04);}
+  .form-input.cust-warn{border-color:var(--warn)!important;background:rgba(217,119,6,0.05);}
+  .cust-ac-msg{margin-top:4px;font-size:11.5px;line-height:1.45;display:none;}
+  .cust-ac-msg.show{display:block;}
+  .cust-ac-msg.ok{color:var(--accent3);}
+  .cust-ac-msg.warn{color:var(--warn);}
+  .cust-ac-msg.err{color:var(--accent);font-weight:600;}
   .ecat-dropdown-wrap{position:relative;}
   .ecat-select-box{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:2px solid var(--accent2);border-radius:7px;cursor:pointer;background:var(--surface);font-size:14px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
   .ecat-select-box:hover{border-color:var(--accent2);box-shadow:0 2px 8px rgba(0,0,0,0.1);}
@@ -400,9 +408,10 @@
         <div class="form-group">
           <div class="form-label">매출처명 <span class="req">*</span></div>
           <div class="cust-ac-wrap">
-            <input type="text" class="form-input" id="inCustomer" placeholder="목록에서 선택 또는 직접 입력" autocomplete="off" oninput="onCustomerInput()" onfocus="onCustomerInput()">
+            <input type="text" class="form-input" id="inCustomer" placeholder="매출처명 입력 후 목록에서 선택" autocomplete="off" oninput="onCustomerInput()" onfocus="onCustomerInput()">
             <div class="cust-ac-list" id="custAcList"></div>
           </div>
+          <div class="cust-ac-msg" id="custAcMsg"></div>
         </div>
         <div class="form-group">
           <div class="form-label">추가구분 <span style="color:var(--muted);font-weight:400;">(선택)</span><span class="ecat-manage-link" onclick="openEcatManageModal()">＋항목 관리</span></div>
@@ -509,8 +518,12 @@
             <input type="date" class="form-input" id="editShipDate">
           </div>
           <div class="form-group">
-            <div class="form-label">매출처명</div>
-            <input type="text" class="form-input" id="editCustomer">
+            <div class="form-label">매출처명 <span class="req">*</span></div>
+            <div class="cust-ac-wrap">
+              <input type="text" class="form-input" id="editCustomer" placeholder="매출처명 입력 후 목록에서 선택" autocomplete="off" oninput="onEditCustomerInput()" onfocus="onEditCustomerInput()">
+              <div class="cust-ac-list" id="editCustAcList"></div>
+            </div>
+            <div class="cust-ac-msg" id="editCustAcMsg"></div>
           </div>
         </div>
         <div class="form-row">
@@ -1362,8 +1375,23 @@
     } catch (e) { return []; }
   }
 
+  // ── 앞단 차단: 매출처명이 확정되기 전에는 거래명세표 처리를 진행하지 않는다.
+  // 중복감지·거래처대조가 약칭 기준으로 돌아 오판하는 것을 막기 위함.
+  function requireCustomerBeforeParse() {
+    const inp = document.getElementById('inCustomer');
+    const raw = (inp ? inp.value.trim() : '');
+    if (!raw) {
+      showToast('⚠ 매출처명을 먼저 선택해주세요', true);
+      if (inp) inp.focus();
+      return false;
+    }
+    if (!validateCustomerOrWarn('inCustomer','custAcList','custAcMsg')) return false;
+    return true;
+  }
+
   async function handleLotFileSelect(file) {
     if (!file) return;
+    if (!requireCustomerBeforeParse()) { resetLotFileState(); return; }
     parsedLotItems = null;
     document.getElementById('ldzFilename').textContent = '📎 ' + file.name;
     document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
@@ -1386,7 +1414,8 @@
       }
       checkCustomerMismatch(parsed.warnings, parsed.customer);
       const enriched = await enrichCheckType(parsed.items);
-      const custForDup = (parsed.customer || document.getElementById('inCustomer').value.trim());
+      // 중복감지는 반드시 확정된 정식 매출처명으로 조회 (약칭이면 기존 건을 못 찾음)
+      const custForDup = document.getElementById('inCustomer').value.trim();
       const dupSchedules = await checkDuplicateSchedule(enriched, custForDup, document.getElementById('inShipDate').value);
       pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, dupSchedules };
       renderLotPreview();
@@ -1399,6 +1428,7 @@
   async function handleLotPasteInput() {
     const text = document.getElementById('lotPasteArea').value;
     if (!text.trim()) { showToast('⚠ 붙여넣은 내용이 없습니다', true); return; }
+    if (!requireCustomerBeforeParse()) return;
     parsedLotItems = null;
     document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
     try {
@@ -1420,7 +1450,8 @@
       }
       checkCustomerMismatch(parsed.warnings, parsed.customer);
       const enriched = await enrichCheckType(parsed.items);
-      const custForDup = (parsed.customer || document.getElementById('inCustomer').value.trim());
+      // 중복감지는 반드시 확정된 정식 매출처명으로 조회 (약칭이면 기존 건을 못 찾음)
+      const custForDup = document.getElementById('inCustomer').value.trim();
       const dupSchedules = await checkDuplicateSchedule(enriched, custForDup, document.getElementById('inShipDate').value);
       pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, dupSchedules };
       renderLotPreview();
@@ -1481,9 +1512,9 @@
 
   function confirmLotPreview() {
     if (!pendingLotPreview) return;
+    // 이카운트 거래처명을 그대로 주입하지 않는다 — 확정된 정식명만 사용
+    if (!validateCustomerOrWarn('inCustomer','custAcList','custAcMsg')) return;
     parsedLotItems = pendingLotPreview.enriched;
-    const custInput = document.getElementById('inCustomer');
-    if (!custInput.value.trim() && pendingLotPreview.customer) custInput.value = pendingLotPreview.customer;
     renderLotPreview();
     showToast('✓ 거래명세표 내용이 확정되었습니다');
   }
@@ -1603,22 +1634,113 @@
 
 
   // ── 매출처명 자동완성 (partners 마스터) ──
+  // 정식 거래처명만 저장되도록 강제: 목록에서 선택해야만 확정 상태가 된다.
   let customerMasterNames = [];
-  function onCustomerInput() {
-    const val = document.getElementById('inCustomer').value.trim().toLowerCase();
-    const list = document.getElementById('custAcList');
-    if (!val) { list.classList.remove('show'); list.innerHTML=''; return; }
+
+  // 미등록 매출처 안내 — 관리자설정 바로가기 포함
+  const CUST_UNREG_MSG =
+    '⚠ 미등록 업체입니다. 관리자설정에서 신규로 등록을 하세요 ' +
+    '<a href="admin_log.html" target="_blank" rel="noopener" style="color:var(--accent2);font-weight:700;text-decoration:underline;">관리자설정 열기 ↗</a>';
+
+  function escHtml(v){ return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // 마스터 등록 여부 판정 (공백 무시 + 대소문자 무시)
+  function normCust(v){ return String(v||'').replace(/\s+/g,'').toLowerCase(); }
+  function isRegisteredCustomer(v){
+    const k = normCust(v);
+    if (!k) return false;
+    return customerMasterNames.some(n => normCust(n) === k);
+  }
+  function officialCustomerName(v){
+    const k = normCust(v);
+    return customerMasterNames.find(n => normCust(n) === k) || '';
+  }
+
+  // 공통 자동완성 렌더러 (등록/수정 화면 공용)
+  function renderCustomerAc(inputId, listId, msgId, pickFn) {
+    const inp  = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    const msg  = document.getElementById(msgId);
+    if (!inp || !list) return;
+    const raw = inp.value.trim();
+    const val = raw.toLowerCase();
+
+    const setMsg = (cls, text, asHtml) => {
+      if (!msg) return;
+      if (!text) { msg.className = 'cust-ac-msg'; msg.textContent = ''; return; }
+      msg.className = 'cust-ac-msg show ' + cls;
+      if (asHtml) msg.innerHTML = text; else msg.textContent = text;
+    };
+
+    inp.classList.remove('cust-ok','cust-warn');
+
+    if (!raw) { list.classList.remove('show'); list.innerHTML=''; setMsg('',''); return; }
+
+    // 이미 정식명과 일치 → 확정
+    if (isRegisteredCustomer(raw)) {
+      list.classList.remove('show'); list.innerHTML='';
+      inp.classList.add('cust-ok');
+      setMsg('ok','✓ 등록된 매출처입니다');
+      return;
+    }
+
     const matched = customerMasterNames.filter(n => n.toLowerCase().includes(val)).slice(0, 8);
-    if (matched.length === 0) { list.classList.remove('show'); list.innerHTML=''; return; }
-    list.innerHTML = matched.map(n => `<div class="cust-ac-item" onclick="selectCustomer('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+    if (matched.length === 0) {
+      list.classList.remove('show'); list.innerHTML='';
+      inp.classList.add('cust-warn');
+      setMsg('err', CUST_UNREG_MSG, true);
+      return;
+    }
+
+    inp.classList.add('cust-warn');
+    setMsg('warn','⚠ 아래 목록에서 정식 거래처명을 선택해주세요 (직접 입력본은 저장되지 않습니다)');
+    list.innerHTML = matched.map(n =>
+      `<div class="cust-ac-item" onclick="${pickFn}('${String(n).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${escHtml(n)}</div>`
+    ).join('');
     list.classList.add('show');
   }
+
+  function onCustomerInput()     { renderCustomerAc('inCustomer','custAcList','custAcMsg','selectCustomer'); }
+  function onEditCustomerInput() { renderCustomerAc('editCustomer','editCustAcList','editCustAcMsg','selectEditCustomer'); }
+
   function selectCustomer(name) {
     document.getElementById('inCustomer').value = name;
     document.getElementById('custAcList').classList.remove('show');
+    onCustomerInput();
   }
+  function selectEditCustomer(name) {
+    document.getElementById('editCustomer').value = name;
+    document.getElementById('editCustAcList').classList.remove('show');
+    onEditCustomerInput();
+  }
+
+  // 저장 직전 검증 — 등록/수정/거래명세표 자동채움 모든 경로 공통
+  // 통과하면 정식 거래처명을 돌려주고, 실패하면 null
+  function validateCustomerOrWarn(inputId, listId, msgId) {
+    const inp = document.getElementById(inputId);
+    const raw = (inp ? inp.value.trim() : '');
+    if (!raw) { showToast('⚠ 매출처명을 입력해주세요', true); if(inp) inp.focus(); return null; }
+    if (!customerMasterNames.length) {
+      showToast('⚠ 거래처 마스터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요', true);
+      return null;
+    }
+    if (!isRegisteredCustomer(raw)) {
+      renderCustomerAc(inputId, listId, msgId, inputId==='inCustomer' ? 'selectCustomer' : 'selectEditCustomer');
+      showToast('⚠ 등록되지 않은 매출처명입니다 — 목록에서 선택해주세요', true);
+      if (inp) inp.focus();
+      return null;
+    }
+    const official = officialCustomerName(raw);
+    if (official && official !== raw && inp) inp.value = official;  // 표기 통일
+    return official || raw;
+  }
+
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.cust-ac-wrap')) document.getElementById('custAcList').classList.remove('show');
+    if (!e.target.closest('.cust-ac-wrap')) {
+      document.getElementById('custAcList').classList.remove('show');
+      const el = document.getElementById('editCustAcList');
+      if (el) el.classList.remove('show');
+    }
   });
 
   // ── 거래명세표 파싱 공통 로직 (이카운트 다운로드 포맷) — 파일업로드/붙여넣기 공용 ──
@@ -1782,7 +1904,7 @@
     const recvDept = document.getElementById('inRecvDeptSelect').value;
     const recvManager = document.getElementById('inRecvManagerSelect').value;
     const shipDate = document.getElementById('inShipDate').value;
-    const customer = document.getElementById('inCustomer').value.trim();
+    let customer = document.getElementById('inCustomer').value.trim();
     const extraCategory = document.getElementById('inExtraCategory').value.trim();
     const packQty = document.getElementById('inPackQty').value.trim();
     const note = document.getElementById('inNote').value.trim();
@@ -1792,7 +1914,10 @@
     if (!deptVal) { showToast('⚠ 입력 부서를 선택해주세요', true); return; }
     if (!manager)  { showToast('⚠ 담당자를 선택해주세요', true); return; }
     if (!shipDate) { showToast('⚠ 출하 일자를 선택해주세요', true); return; }
-    if (!customer) { showToast('⚠ 매출처명을 입력해주세요', true); return; }
+    // 매출처명은 partners 마스터에 등록된 정식명만 허용 (직접입력 · 거래명세표 자동채움 모두 포함)
+    const customerOfficial = validateCustomerOrWarn('inCustomer','custAcList','custAcMsg');
+    if (!customerOfficial) return;
+    customer = customerOfficial;   // 표기 통일된 정식 거래처명으로 확정
     if (!packQty || !unit) { showToast('⚠ 포장 수량과 단위를 입력해주세요', true); return; }
 
     const lotRequired = document.getElementById('inLotRequired').checked;
@@ -1895,6 +2020,7 @@
 
     document.getElementById('editShipDate').value = r.ship_date || '';
     document.getElementById('editCustomer').value = r.customer || '';
+    onEditCustomerInput();   // 기존 값이 마스터와 맞는지 즉시 표시
     document.getElementById('editExtraCategory').value = r.extra_category || '';
     document.getElementById('editManager').value = r.manager || '';
     document.getElementById('editArrivalTime').value = (r.arrival_time && r.arrival_time !== '-') ? r.arrival_time : '';
@@ -1929,6 +2055,9 @@
     if (!editBy)     { showToast('⚠ 수정자를 입력해주세요', true); return; }
     if (!editReason) { showToast('⚠ 수정사유를 입력해주세요', true); return; }
 
+    const editCustomerOfficial = validateCustomerOrWarn('editCustomer','editCustAcList','editCustAcMsg');
+    if (!editCustomerOfficial) return;
+
     const btn = document.getElementById('saveEditBtn');
     btn.disabled = true; btn.textContent = '저장 중...';
 
@@ -1936,7 +2065,7 @@
     const extraCategoryVal = document.getElementById('editExtraCategory').value.trim();
     const body = {
       ship_date:    document.getElementById('editShipDate').value,
-      customer:     document.getElementById('editCustomer').value.trim(),
+      customer:     editCustomerOfficial,
       extra_category: extraCategoryVal || null,
       manager:      document.getElementById('editManager').value.trim(),
       arrival_time: document.getElementById('editArrivalTime').value.trim() || '-',
