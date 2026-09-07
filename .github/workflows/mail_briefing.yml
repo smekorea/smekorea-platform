@@ -1,0 +1,41 @@
+name: 메일 브리핑 자동수집
+
+on:
+  schedule:
+    # 매일 07:00 KST (= UTC 22:00 전일)
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: '수집 대상일 (YYYY-MM-DD, 비우면 전일)'
+        required: false
+        default: ''
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install anthropic requests
+
+      - name: 메일 브리핑 실행
+        env:
+          BIZMEKA_IMAP_USER:     ${{ secrets.BIZMEKA_IMAP_USER }}
+          BIZMEKA_IMAP_PASSWORD: ${{ secrets.BIZMEKA_IMAP_PASSWORD }}
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:          ${{ secrets.SUPABASE_KEY }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_DATE:           ${{ github.event.inputs.target_date }}
+        run: python scripts/mail_briefing.py
