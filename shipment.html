@@ -1077,16 +1077,23 @@
   }
 
   // ── 부서/담당자 마스터 (완료처리 담당자 목록과 동일 소스) ──
-  const DEPT_EMP_MAP = {
-    '대표이사': ['곽선효'],
-    '상무이사': ['박정용'],
-    '재경팀': ['김근복','이서연'],
-    '개발기획팀': ['김봉승'],
-    '자재구매팀': ['배병대','조승연','곽경민','박영주'],
-    '개발구매팀': ['김종길','최성빈','최세진'],
-    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
-    '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
-  };
+  // v2: 하드코딩 폐지 → employees 테이블(entity=KOREA, active=true)에서 동적 로드
+  let DEPT_EMP_MAP = {};
+  async function loadDeptEmpMap() {
+    try {
+      const rows = await sbGet('employees', 'select=name,dept&entity=eq.KOREA&active=eq.true&order=dept.asc,name.asc');
+      const map = {};
+      (Array.isArray(rows) ? rows : []).forEach(r => {
+        if (!r.dept) return;
+        if (!map[r.dept]) map[r.dept] = [];
+        map[r.dept].push(r.name);
+      });
+      DEPT_EMP_MAP = map;
+    } catch (e) {
+      console.error('부서/담당자 목록 로드 실패', e);
+      DEPT_EMP_MAP = {};
+    }
+  }
   function fillDeptSelect(selEl) {
     selEl.innerHTML = '<option value="">부서 선택</option>' +
       Object.keys(DEPT_EMP_MAP).map(d => `<option value="${d}">${d}</option>`).join('');
@@ -1102,8 +1109,11 @@
   function onRecvDeptChange() {
     fillManagerSelect(document.getElementById('inRecvManagerSelect'), document.getElementById('inRecvDeptSelect').value);
   }
-  fillDeptSelect(document.getElementById('inDeptSelect'));
-  fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+  (async function initDeptEmpMap() {
+    await loadDeptEmpMap();
+    fillDeptSelect(document.getElementById('inDeptSelect'));
+    fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+  })();
 
   // ── 매출처명 마스터(partners) 자동완성 ──
   let customerMasterLoaded = false;
