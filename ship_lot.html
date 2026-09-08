@@ -264,7 +264,10 @@
   #mpnModal .modal-section-title{font-size:13px;font-weight:800;color:var(--text);letter-spacing:0.2px;margin-bottom:6px;}
   #mpnModal .form-input{font-family:'Noto Sans KR',sans-serif;background:var(--surface2);}
   #mpnModal .form-input:focus{outline:none;border-color:var(--accent2);background:var(--surface);}
-  .mpn-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:10px 14px;flex-wrap:wrap;}
+  .mpn-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-start;padding:10px 14px;flex-wrap:wrap;}
+  .mpn-div{width:1px;height:22px;background:var(--border2);margin:0 4px;}
+  .mpn-select{padding:8px 10px;border:1.5px solid var(--border2);border-radius:7px;font-size:12.5px;font-family:'Noto Sans KR',sans-serif;background:var(--surface);color:var(--text);cursor:pointer;min-width:150px;}
+  .mpn-count{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap;}
   .mpn-btn{padding:8px 14px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text);}
   .mpn-btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;}
   .mpn-btn:hover{filter:brightness(0.97);}
@@ -274,7 +277,7 @@
   .mpn-pill.ic{color:#374151;}
   .mpn-pill-warn{color:var(--warn) !important;}
   .mpn-count-warn{color:var(--warn);font-weight:800;font-size:10px;margin-left:4px;}
-  .mpn-search{padding:8px 12px;border:1.5px solid var(--border2);border-radius:7px;font-size:12.5px;width:220px;}
+  .mpn-search{padding:8px 12px;border:1.5px solid var(--border2);border-radius:7px;font-size:12.5px;width:330px;font-family:'Noto Sans KR',sans-serif;}
   .mpn-dyn-row{display:flex;gap:6px;margin-bottom:6px;}
   .mpn-dyn-row input{flex:1;padding:7px 9px;border:1.5px solid var(--border2);border-radius:6px;font-size:12.5px;}
   .mpn-dyn-row button{padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:12px;cursor:pointer;font-weight:700;}
@@ -608,12 +611,18 @@
 <!-- ══ 메이커별 품목체계표 탭 ══ -->
 <div class="tabpanel" id="tab-mpn">
   <div class="mpn-toolbar">
-    <input type="text" class="mpn-search" id="mpnSearchInput" placeholder="메이커품번/품명/LG품번 검색" oninput="renderMpnTable()">
-    <button class="mpn-btn" onclick="downloadMpnTemplate()">📄 업로드 양식</button>
+    <button class="mpn-btn primary" onclick="openMpnModal()">＋ 신규 등록</button>
+    <span class="mpn-div"></span>
+    <input type="text" class="mpn-search" id="mpnSearchInput" placeholder="브랜드명 / 메이커품번 / 품명 / LG품번 / ERP품목코드 검색" oninput="renderMpnTable()">
+    <select class="mpn-select" id="mpnBrandFilter" onchange="renderMpnTable()">
+      <option value="">전체 브랜드</option>
+    </select>
+    <span class="mpn-count" id="mpnCount"></span>
+    <span class="mpn-div"></span>
+    <button class="mpn-btn" onclick="downloadMpnExcel()">⬇ 엑셀 다운로드</button>
     <button class="mpn-btn" onclick="document.getElementById('mpnUploadFile').click()">⬆ 엑셀 업로드</button>
     <input type="file" id="mpnUploadFile" accept=".xlsx" style="display:none;" onchange="handleMpnUpload(event)">
-    <button class="mpn-btn" onclick="downloadMpnExcel()">⬇ 엑셀 다운로드</button>
-    <button class="mpn-btn primary" onclick="openMpnModal()">＋ 신규 등록</button>
+    <button class="mpn-btn" onclick="downloadMpnTemplate()">📄 업로드 양식</button>
   </div>
   <div class="maker-table-wrap" style="margin:0 14px 14px;">
     <table class="dtab" id="mpnTable">
@@ -893,51 +902,25 @@
     setTimeout(()=>t.classList.remove('show'), 2600);
   }
 
-  // ── 부서/작업자 마스터 ──
-  // v2(2026-09-08): 하드코딩 폐지 → employees 테이블(entity=KOREA, active=true)에서 동적 로드.
-  //   · 신규 입사자는 직원관리에 등록만 하면 자동 반영 / 퇴사자(active=false)는 자동 제외
-  //   · shipment.html의 부서·담당자 목록과 동일 소스
-  const DEPT_ORDER = ['대표이사','상무이사','재경팀','개발기획팀','자재구매팀','개발구매팀','출하팀','제조팀'];
-  let DEPT_EMP_MAP = {};
-
-  function escHtmlOpt(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  async function loadDeptEmpMap() {
-    try {
-      const rows = await sbGet('employees', 'select=name,dept&entity=eq.KOREA&active=eq.true&order=name.asc&limit=500');
-      const map = {};
-      (Array.isArray(rows) ? rows : []).forEach(r => {
-        const d = (r.dept || '').trim();
-        const n = (r.name || '').trim();
-        if (!d || !n) return;
-        if (!map[d]) map[d] = [];
-        if (map[d].indexOf(n) === -1) map[d].push(n);
-      });
-      const ordered = {};
-      DEPT_ORDER.forEach(d => { if (map[d]) ordered[d] = map[d]; });
-      Object.keys(map).sort().forEach(d => { if (!ordered[d]) ordered[d] = map[d]; });
-      DEPT_EMP_MAP = ordered;
-    } catch (e) {
-      console.error('부서/작업자 목록 로드 실패', e);
-      DEPT_EMP_MAP = {};
-    }
-  }
-
+  const DEPT_EMP_MAP = {
+    '대표이사': ['곽선효'],
+    '상무이사': ['박정용'],
+    '재경팀': ['김근복','이서연'],
+    '개발기획팀': ['김봉승'],
+    '자재구매팀': ['배병대','조승연','곽경민','박영주'],
+    '개발구매팀': ['김종길','최성빈','최세진'],
+    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
+    '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
+  };
   function fillWorkerDeptSelect() {
     const sel = document.getElementById('workerDeptSelect');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">부서 선택</option>' +
-      Object.keys(DEPT_EMP_MAP).map(d=>`<option value="${escHtmlOpt(d)}">${escHtmlOpt(d)}</option>`).join('');
+    sel.innerHTML = '<option value="">부서 선택</option>' + Object.keys(DEPT_EMP_MAP).map(d=>`<option value="${d}">${d}</option>`).join('');
   }
   function onWorkerDeptChange() {
     const dept = document.getElementById('workerDeptSelect').value;
     const sel = document.getElementById('workerSelect');
-    if (!dept || !DEPT_EMP_MAP[dept]) { sel.innerHTML = '<option value="">부서 먼저 선택</option>'; return; }
-    sel.innerHTML = '<option value="">작업자 선택</option>' +
-      DEPT_EMP_MAP[dept].map(n=>`<option value="${escHtmlOpt(n)}">${escHtmlOpt(n)}</option>`).join('');
+    if (!dept) { sel.innerHTML = '<option value="">부서 먼저 선택</option>'; return; }
+    sel.innerHTML = '<option value="">작업자 선택</option>' + DEPT_EMP_MAP[dept].map(n=>`<option value="${n}">${n}</option>`).join('');
   }
 
   let allBatches = [];
@@ -1087,8 +1070,7 @@
   const params = new URLSearchParams(location.search);
   const sidParam = params.get('sid');
 
-  window.addEventListener('DOMContentLoaded', async () => {
-    await loadDeptEmpMap();
+  window.addEventListener('DOMContentLoaded', () => {
     fillWorkerDeptSelect();
     loadList();
     if (sidParam) { switchTab('work'); openBatch(parseInt(sidParam,10)); }
@@ -1369,11 +1351,6 @@
         document.getElementById('workerDeptSelect').value = foundDept;
         onWorkerDeptChange();
         document.getElementById('workerSelect').value = workerName;
-      } else {
-        // 퇴사 등으로 현재 직원목록에 없는 작업자 — 기록 보존을 위해 이름은 그대로 표시
-        const sel = document.getElementById('workerSelect');
-        sel.innerHTML = `<option value="${escHtmlOpt(workerName)}">${escHtmlOpt(workerName)}</option>`;
-        sel.value = workerName;
       }
     }
     document.getElementById('scanInput').disabled = !workerName;
@@ -2991,7 +2968,11 @@
   })();
 
   // ══ 메이커별 품목체계표 탭 ══
-  let mpnList = [];          // {id, brand, maker_pn, description, lg_pns:[], item_codes:[]}
+  let mpnList = [];          // {id, brand, brand_raw, maker_pn, description, lg_pns:[], item_codes:[]}
+
+  // 브랜드 필터 옵션 생성용 이스케이프
+  function escHtmlMpn(v){ return String(v==null?'':v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function escAttr(v){ return escHtmlMpn(v); }
   let mpnLoaded = false;
   let mpnSortKey = 'maker_pn';
   let mpnSortAsc = true;
@@ -3040,10 +3021,34 @@
       const lgMap = {}, icMap = {};
       lgAll.forEach(r => { (lgMap[r.maker_pn_id] = lgMap[r.maker_pn_id] || []).push(r.lg_pn); });
       icAll.forEach(r => { (icMap[r.maker_pn_id] = icMap[r.maker_pn_id] || []).push(r.item_code); });
+      // 동일메이커 매핑(maker_alias) 적용 — 별칭을 표준 브랜드명으로 통일
+      let aliasMap = {};
+      try {
+        const al = await sbGet('maker_alias', 'select=standard_name,alias&limit=1000');
+        if (Array.isArray(al)) al.forEach(r => {
+          if (r.alias && r.standard_name) aliasMap[String(r.alias).trim().toLowerCase()] = r.standard_name;
+        });
+      } catch(e) { /* 매핑 실패해도 원본 브랜드명으로 계속 동작 */ }
+      const stdBrand = v => aliasMap[String(v||'').trim().toLowerCase()] || (v || '');
+
       mpnList = masters.map(m => ({
-        id: m.id, brand: m.brand, maker_pn: m.maker_pn, description: m.description || '',
+        id: m.id,
+        brand: stdBrand(m.brand),      // 화면 표시/검색은 표준명
+        brand_raw: m.brand,            // 저장·수정 시에는 원본 유지
+        maker_pn: m.maker_pn, description: m.description || '',
         lg_pns: lgMap[m.id] || [], item_codes: icMap[m.id] || []
       }));
+
+      // 브랜드 필터 옵션 채우기 (표준명 기준)
+      const sel = document.getElementById('mpnBrandFilter');
+      if (sel) {
+        const cur = sel.value;
+        const brands = [...new Set(mpnList.map(r => r.brand).filter(Boolean))].sort((x,y)=>x.localeCompare(y));
+        sel.innerHTML = '<option value="">전체 브랜드</option>' +
+          brands.map(bn => `<option value="${escAttr(bn)}">${escHtmlMpn(bn)}</option>`).join('');
+        if (cur && brands.includes(cur)) sel.value = cur;
+      }
+
       mpnLoaded = true;
       renderMpnTable();
     } catch(e) {
@@ -3058,12 +3063,21 @@
 
   function renderMpnTable() {
     const kw = (document.getElementById('mpnSearchInput').value || '').trim().toLowerCase();
+    const bf = (document.getElementById('mpnBrandFilter')?.value || '');
     let rows = mpnList.filter(r => {
+      if (bf && r.brand !== bf) return false;
       if (!kw) return true;
-      return r.maker_pn.toLowerCase().includes(kw)
+      return (r.brand||'').toLowerCase().includes(kw)
+        || (r.brand_raw||'').toLowerCase().includes(kw)
+        || r.maker_pn.toLowerCase().includes(kw)
         || (r.description||'').toLowerCase().includes(kw)
-        || r.lg_pns.some(v => v.toLowerCase().includes(kw));
+        || r.lg_pns.some(v => (v||'').toLowerCase().includes(kw))
+        || r.item_codes.some(v => (v||'').toLowerCase().includes(kw));
     });
+    const cntEl = document.getElementById('mpnCount');
+    if (cntEl) cntEl.textContent = (rows.length === mpnList.length)
+      ? `${mpnList.length.toLocaleString()}건`
+      : `${rows.length.toLocaleString()} / ${mpnList.length.toLocaleString()}건`;
     rows.sort((a,b) => {
       const av = (a[mpnSortKey]||'').toString(); const bv = (b[mpnSortKey]||'').toString();
       const c = av.localeCompare(bv);
@@ -3137,7 +3151,7 @@
     if (id) {
       const r = mpnList.find(x => x.id === id);
       document.getElementById('mpnModalTitle').textContent = '✏ 메이커품번 수정';
-      document.getElementById('mpnBrand').value = r.brand || 'SMART';
+      document.getElementById('mpnBrand').value = r.brand_raw || r.brand || 'SMART';  // 원본 브랜드명 유지 (표준명으로 덮어쓰지 않음)
       document.getElementById('mpnMakerPn').value = r.maker_pn;
       document.getElementById('mpnDescription').value = r.description || '';
       (r.lg_pns.length ? r.lg_pns : ['']).forEach(v => addMpnDynRow('lg', v));
