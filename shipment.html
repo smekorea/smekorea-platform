@@ -483,7 +483,8 @@
               <input type="file" id="inLotFile" accept=".xlsx,.xls" style="display:none;" onchange="handleLotFileSelect(this.files[0])">
             </div>
             <div id="lotPasteModeArea" style="display:none;">
-              <div class="lot-paste-hint">이카운트에서 거래명세서를 열고 전체 선택(Ctrl+A) 후 복사(Ctrl+C)해서 아래에 붙여넣으세요(Ctrl+V). 일자~총합계 구간만 붙여넣어도 됩니다.</div>
+              <div class="lot-paste-hint" id="lotPasteHintEcount">이카운트에서 거래명세서를 열고 전체 선택(Ctrl+A) 후 복사(Ctrl+C)해서 아래에 붙여넣으세요(Ctrl+V). 일자~총합계 구간만 붙여넣어도 됩니다.</div>
+              <div class="lot-paste-hint" id="lotPasteHintLG" style="display:none;">LG 전산에서 다운받은 "출발현황" 엑셀을 열고, <b>헤더(1행) 포함 + 전체 컬럼(A~X)</b>을 선택(Ctrl+A) 후 복사(Ctrl+C)해서 아래에 붙여넣으세요(Ctrl+V). 헤더를 빼거나 일부 컬럼만 복사하면 인식이 안 되니, 필요없는 컬럼도 골라내지 말고 통째로 복사해주세요.</div>
               <textarea class="lot-paste-textarea" id="lotPasteArea" placeholder="여기에 Ctrl+V로 붙여넣기"></textarea>
               <button type="button" class="btn-primary-sm" style="margin-top:6px;" onclick="handleLotPasteInput()">🔍 미리보기</button>
             </div>
@@ -1756,7 +1757,17 @@
     list.classList.add('show');
   }
 
-  function onCustomerInput()     { renderCustomerAc('inCustomer','custAcList','custAcMsg','selectCustomer'); }
+  function onCustomerInput()     { renderCustomerAc('inCustomer','custAcList','custAcMsg','selectCustomer'); toggleLotPasteHint(); }
+
+  // 매출처가 LG전자면 LG 출발현황 안내문구로, 아니면 이카운트 안내문구로 전환
+  function toggleLotPasteHint() {
+    const isLG = isLGCustomer(document.getElementById('inCustomer').value);
+    const ecountHint = document.getElementById('lotPasteHintEcount');
+    const lgHint = document.getElementById('lotPasteHintLG');
+    if (!ecountHint || !lgHint) return;
+    ecountHint.style.display = isLG ? 'none' : '';
+    lgHint.style.display = isLG ? '' : 'none';
+  }
   function onEditCustomerInput() { renderCustomerAc('editCustomer','editCustAcList','editCustAcMsg','selectEditCustomer'); }
 
   function selectCustomer(name) {
@@ -2050,7 +2061,11 @@
 
   // ── 붙여넣기 텍스트 → rows 2차원배열 변환 (이카운트/LG 공용 — 탭구분 텍스트) ──
   async function parseLotPasteText(text, useLG) {
-    const lines = text.replace(/\r/g, '').split('\n');
+    let clean = text.replace(/\r/g, '');
+    // LG 출발현황 원본의 "To Storage Location" 헤더 셀은 엑셀 안에서 줄바꿈이 내장되어 있어(2줄 표시),
+    // 붙여넣기(줄바꿈 기준 행분리) 시 헤더 행이 둘로 쪼개져 이후 전체 컬럼이 밀리는 문제가 있음 — 사전 정규화로 방지
+    if (useLG) clean = clean.replace(/To Storage\n\s*Location/gi, 'To Storage Location');
+    const lines = clean.split('\n');
     const rows = lines.map(line => line.split('\t'));
     const raw = useLG ? parseLGDepartureRows(rows) : parseLotRows(rows);
     return useLG ? await enrichLGItemMaster(raw) : raw;
