@@ -245,6 +245,13 @@
   .lot-preview-stat span.warn{color:var(--accent);}
   .lot-preview-warn-list{max-height:110px;overflow-y:auto;border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;}
   .lot-preview-warn-item{color:var(--accent);font-size:11px;padding:1px 0;}
+  .lot-preview-items-wrap{max-height:220px;overflow-y:auto;margin-top:8px;border-top:1px dashed var(--border);}
+  .lot-preview-items{width:100%;border-collapse:collapse;font-size:11px;}
+  .lot-preview-items thead th{position:sticky;top:0;background:var(--surface);text-align:left;padding:4px 6px;border-bottom:1.5px solid var(--border);font-weight:700;white-space:nowrap;}
+  .lot-preview-items td{padding:4px 6px;border-right:1px solid #e8edf5;color:#111827;white-space:nowrap;}
+  .lot-preview-items td:last-child{border-right:none;}
+  .lot-preview-items tbody tr:nth-child(even){background:rgba(0,0,0,0.02);}
+  .lot-preview-items .est-badge{font-size:9px;color:var(--accent2);font-weight:700;margin-left:3px;}
   .form-label .req{color:var(--accent);}
   .form-input,.form-select,.form-textarea{padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);transition:border-color 0.2s;}
   .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent2);background:var(--surface);}
@@ -1077,23 +1084,16 @@
   }
 
   // ── 부서/담당자 마스터 (완료처리 담당자 목록과 동일 소스) ──
-  // v2: 하드코딩 폐지 → employees 테이블(entity=KOREA, active=true)에서 동적 로드
-  let DEPT_EMP_MAP = {};
-  async function loadDeptEmpMap() {
-    try {
-      const rows = await sbGet('employees', 'select=name,dept&entity=eq.KOREA&active=eq.true&order=dept.asc,name.asc');
-      const map = {};
-      (Array.isArray(rows) ? rows : []).forEach(r => {
-        if (!r.dept) return;
-        if (!map[r.dept]) map[r.dept] = [];
-        map[r.dept].push(r.name);
-      });
-      DEPT_EMP_MAP = map;
-    } catch (e) {
-      console.error('부서/담당자 목록 로드 실패', e);
-      DEPT_EMP_MAP = {};
-    }
-  }
+  const DEPT_EMP_MAP = {
+    '대표이사': ['곽선효'],
+    '상무이사': ['박정용'],
+    '재경팀': ['김근복','이서연'],
+    '개발기획팀': ['김봉승'],
+    '자재구매팀': ['배병대','조승연','곽경민','박영주'],
+    '개발구매팀': ['김종길','최성빈','최세진'],
+    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
+    '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
+  };
   function fillDeptSelect(selEl) {
     selEl.innerHTML = '<option value="">부서 선택</option>' +
       Object.keys(DEPT_EMP_MAP).map(d => `<option value="${d}">${d}</option>`).join('');
@@ -1109,11 +1109,8 @@
   function onRecvDeptChange() {
     fillManagerSelect(document.getElementById('inRecvManagerSelect'), document.getElementById('inRecvDeptSelect').value);
   }
-  (async function initDeptEmpMap() {
-    await loadDeptEmpMap();
-    fillDeptSelect(document.getElementById('inDeptSelect'));
-    fillDeptSelect(document.getElementById('inRecvDeptSelect'));
-  })();
+  fillDeptSelect(document.getElementById('inDeptSelect'));
+  fillDeptSelect(document.getElementById('inRecvDeptSelect'));
 
   // ── 매출처명 마스터(partners) 자동완성 ──
   let customerMasterLoaded = false;
@@ -1406,7 +1403,8 @@
     document.getElementById('ldzFilename').textContent = '📎 ' + file.name;
     document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
     try {
-      const parsed = await parseLotExcelFile(file);
+      const useLG = isLGCustomer(document.getElementById('inCustomer').value);
+      const parsed = await parseLotExcelFile(file, useLG);
       if (parsed.blocked) {
         pendingLotPreview = null;
         document.getElementById('lotPreviewArea').innerHTML =
@@ -1427,7 +1425,7 @@
       // 중복감지는 반드시 확정된 정식 매출처명으로 조회 (약칭이면 기존 건을 못 찾음)
       const custForDup = document.getElementById('inCustomer').value.trim();
       const dupSchedules = await checkDuplicateSchedule(enriched, custForDup, document.getElementById('inShipDate').value);
-      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, dupSchedules };
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, extraCategory: parsed.extraCategory || '', dupSchedules };
       renderLotPreview();
     } catch(e) {
       pendingLotPreview = null;
@@ -1442,7 +1440,8 @@
     parsedLotItems = null;
     document.getElementById('lotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
     try {
-      const parsed = parseLotPasteText(text);
+      const useLG = isLGCustomer(document.getElementById('inCustomer').value);
+      const parsed = await parseLotPasteText(text, useLG);
       if (parsed.blocked) {
         pendingLotPreview = null;
         document.getElementById('lotPreviewArea').innerHTML =
@@ -1463,7 +1462,7 @@
       // 중복감지는 반드시 확정된 정식 매출처명으로 조회 (약칭이면 기존 건을 못 찾음)
       const custForDup = document.getElementById('inCustomer').value.trim();
       const dupSchedules = await checkDuplicateSchedule(enriched, custForDup, document.getElementById('inShipDate').value);
-      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, dupSchedules };
+      pendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, slipNo: parsed.slipNo, amount: parsed.amount, extraCategory: parsed.extraCategory || '', dupSchedules };
       renderLotPreview();
     } catch(e) {
       pendingLotPreview = null;
@@ -1477,6 +1476,29 @@
     document.getElementById('lotFileModeArea').style.display = mode === 'file' ? '' : 'none';
     document.getElementById('lotPasteModeArea').style.display = mode === 'paste' ? '' : 'none';
     resetLotFileState();
+  }
+
+  // 파싱된 품목 리스트를 일자/품목코드/품목명[규격]/수량/단가/공급가액/브랜드명 테이블로 렌더 (이카운트/LG 공용)
+  function renderLotItemsTable(enriched, shipDate) {
+    if (!enriched || !enriched.length) return '';
+    const rows = enriched.map(it => {
+      const est = it._priceEstimated ? '<span class="est-badge">≈추정</span>' : '';
+      const priceTxt = (it.unit_price === null || it.unit_price === undefined) ? '-' : Math.round(it.unit_price).toLocaleString();
+      const amtTxt = (it.amount === null || it.amount === undefined) ? '-' : Math.round(it.amount).toLocaleString();
+      return `<tr>
+        <td>${shipDate || '-'}</td>
+        <td>${escHtml(it.item_code || '-')}</td>
+        <td>${escHtml(it.description || '-')}</td>
+        <td>${(it.qty_required||0).toLocaleString()}</td>
+        <td>${priceTxt}${est}</td>
+        <td>${amtTxt}${est}</td>
+        <td>${escHtml(it.maker || '-')}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="lot-preview-items-wrap"><table class="lot-preview-items">
+      <thead><tr><th>일자</th><th>품목코드</th><th>품목명[규격]</th><th>수량</th><th>단가</th><th>공급가액</th><th>브랜드명</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
   }
 
   function renderLotPreview() {
@@ -1511,6 +1533,7 @@
       </div>
       ${warnHtml}
       ${dupHtml}
+      ${renderLotItemsTable(enriched, document.getElementById('inShipDate') ? document.getElementById('inShipDate').value : '')}
       <div style="margin-top:8px;display:flex;gap:8px;">
         ${confirmed
           ? `<span style="color:var(--accent3);font-weight:700;font-size:12px;">✓ 이 내용으로 확정되었습니다</span>`
@@ -1525,6 +1548,11 @@
     // 이카운트 거래처명을 그대로 주입하지 않는다 — 확정된 정식명만 사용
     if (!validateCustomerOrWarn('inCustomer','custAcList','custAcMsg')) return;
     parsedLotItems = pendingLotPreview.enriched;
+    // LG전자 건은 도착업체명에서 추출한 배송지를 추가구분에 자동 채움 (기존 입력값이 있으면 유지)
+    const extraCatInput = document.getElementById('inExtraCategory');
+    if (extraCatInput && !extraCatInput.value.trim() && pendingLotPreview.extraCategory) {
+      extraCatInput.value = pendingLotPreview.extraCategory;
+    }
     renderLotPreview();
     showToast('✓ 거래명세표 내용이 확정되었습니다');
   }
@@ -1552,7 +1580,14 @@
     document.getElementById('editLdzFilename').textContent = '📎 ' + file.name;
     document.getElementById('editLotPreviewArea').innerHTML = '<div class="lot-preview">파싱 중...</div>';
     try {
-      const parsed = await parseLotExcelFile(file);
+      const useLG = isLGCustomer(document.getElementById('editCustomer').value);
+      const parsed = await parseLotExcelFile(file, useLG);
+      if (parsed.blocked) {
+        editPendingLotPreview = null;
+        document.getElementById('editLotPreviewArea').innerHTML =
+          `<div class="lot-preview"><div class="lot-preview-stat"><span class="warn">⚠ ${parsed.blockReason}</span></div></div>`;
+        return;
+      }
       if (parsed.items.length === 0) {
         editPendingLotPreview = null;
         document.getElementById('editLotPreviewArea').innerHTML =
@@ -1561,7 +1596,7 @@
         return;
       }
       const enriched = await enrichCheckType(parsed.items);
-      editPendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer };
+      editPendingLotPreview = { enriched, warnings: parsed.warnings, customer: parsed.customer, extraCategory: parsed.extraCategory || '' };
       renderEditLotPreview();
     } catch(e) {
       editPendingLotPreview = null;
@@ -1588,6 +1623,7 @@
         ${warnings.length ? `<span class="warn">⚠ 확인필요 ${warnings.length}건</span>` : ''}
       </div>
       ${warnHtml}
+      ${renderLotItemsTable(enriched, document.getElementById('editShipDate') ? document.getElementById('editShipDate').value : '')}
       <div style="margin-top:8px;display:flex;gap:8px;">
         ${confirmed
           ? `<span style="color:var(--accent3);font-weight:700;font-size:12px;">✓ 저장 시 기존 거래명세표를 이 내용으로 교체합니다</span>`
@@ -1603,6 +1639,10 @@
     const inProgress = r && (r.lot_status === '진행중' || r.lot_status === '완료');
     if (inProgress && !confirm(`⚠ 이 출하 건은 이미 바코드검수가 "${r.lot_status}" 상태입니다.\n거래명세표를 교체하면 지금까지의 스캔 이력이 전부 삭제됩니다.\n그래도 교체하시겠습니까?`)) return;
     editLotItemsToSave = editPendingLotPreview.enriched;
+    const editExtraCatInput = document.getElementById('editExtraCategory');
+    if (editExtraCatInput && !editExtraCatInput.value.trim() && editPendingLotPreview.extraCategory) {
+      editExtraCatInput.value = editPendingLotPreview.extraCategory;
+    }
     renderEditLotPreview();
     showToast('✓ 재업로드 내용이 확정되었습니다 (수정 저장 시 반영됩니다)');
   }
@@ -1664,6 +1704,12 @@
   function officialCustomerName(v){
     const k = normCust(v);
     return customerMasterNames.find(n => normCust(n) === k) || '';
+  }
+
+  // LG전자 거래명세표는 이카운트와 포맷이 완전히 달라 별도 파서로 분기 (매출처 기준 판정)
+  function isLGCustomer(v){
+    const off = officialCustomerName(v) || String(v||'').trim();
+    return off === 'LG전자 주식회사';
   }
 
   // 공통 자동완성 렌더러 (등록/수정 화면 공용)
@@ -1839,15 +1885,162 @@
     return { items, warnings, customer: extractedCustomer, slipNo: extractedSlipNo, amount: extractedAmount, blocked: false };
   }
 
-  function parseLotExcelFile(file) {
+  // ── LG전자 출발현황 파싱 (LG 전산 다운로드 포맷 — 메타행 없이 1행이 바로 헤더) ──
+  // 헤더 예: 번호/납품번호/자재/출발일자/Time/송장번호/출발상태/MKT/출발수량/주문번호/아이템/발주유형명/
+  //          P/S Order/납품유형/출발취소일자/취소장소/To Storage Location/To Storage Location Description/
+  //          도착업체코드/도착업체명/검사종류/Maker Flag/Maker Code/Comments
+  // "자재" = LG품번(items.lg_pn과 매칭). "P/S Order"는 LG 내부 생산참조번호라 우리 시스템과 무관, 저장 안 함.
+  // 같은 납품번호 안에서 "자재"가 같으면 여러 행(발주번호 다름)이어도 출발수량 합산.
+  function parseLGDepartureRows(rows) {
+    const warnings = [];
+    if (!rows || !rows.length) {
+      return { items: [], warnings: ['⚠ 인식할 데이터가 없습니다'], customer: '', slipNo: '', amount: null, blocked: false, extraCategoryRaw: '' };
+    }
+    // 헤더 라벨은 셀 줄바꿈(\n) 등으로 흔들릴 수 있어 공백류 제거 후 비교
+    const normHdr = s => String(s || '').replace(/\s+/g, '');
+    const headerRowRaw = rows[0].map(h => String(h || '').trim());
+    const headerNorm = headerRowRaw.map(normHdr);
+    const needCols = ['납품번호', '자재', '출발수량'];
+    const missing = needCols.filter(n => headerNorm.indexOf(normHdr(n)) < 0);
+    if (missing.length) {
+      return { items: [], warnings: [`⚠ LG 출발현황 형식이 아닌 것 같습니다 (누락 컬럼: ${missing.join(', ')})`], customer: '', slipNo: '', amount: null, blocked: false, extraCategoryRaw: '' };
+    }
+    const col = {};
+    headerNorm.forEach((h, i) => { if (h && !(h in col)) col[h] = i; });
+    // 배송지명: "도착업체명" 컬럼은 실제 데이터가 항상 공백으로 오는 경우가 있어,
+    // "To Storage Location Description"(실제 목적지명이 들어오는 컬럼)도 함께 후보로 두고 값이 있는 쪽을 사용
+    const destColCandidates = [normHdr('도착업체명'), normHdr('To Storage Location Description')]
+      .map(n => col[n]).filter(i => i !== undefined);
+
+    const slipSet = new Set();
+    const destSet = new Set();
+    const map = new Map(); // lg_pn → { lg_pn, qty_required }
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const slip = String(r[col[normHdr('납품번호')]] || '').trim();
+      const lgPn = String(r[col[normHdr('자재')]] || '').trim();
+      const qtyRaw = String(r[col[normHdr('출발수량')]] || '').trim();
+      let dest = '';
+      for (const ci of destColCandidates) { const v = String(r[ci] || '').trim(); if (v) { dest = v; break; } }
+      if (!slip && !lgPn && !qtyRaw) continue; // 완전 빈행 무시
+      if (slip) slipSet.add(slip);
+      if (dest) destSet.add(dest);
+      if (!lgPn) { warnings.push(`⚠ ${i + 1}행: 자재(품번)가 없어 제외됨`); continue; }
+      const qtyNum = parseFloat(qtyRaw.replace(/[^0-9.-]/g, '')) || 0;
+      if (qtyNum <= 0) warnings.push(`⚠ ${lgPn}: 수량 인식 실패 또는 0 (원본값: "${qtyRaw}")`);
+      if (map.has(lgPn)) map.get(lgPn).qty_required += qtyNum;
+      else map.set(lgPn, { lg_pn: lgPn, qty_required: qtyNum });
+    }
+
+    if (slipSet.size > 1) {
+      return { items: [], warnings: [], customer: '', slipNo: '', amount: null, blocked: true,
+        blockReason: `납품번호가 ${slipSet.size}건(${Array.from(slipSet).join(', ')}) 섞여 있습니다. 1건만 업로드해주세요.` };
+    }
+    if (destSet.size > 1) {
+      warnings.push(`ℹ 도착업체명이 여러 개(${Array.from(destSet).join(', ')}) 발견되어 첫 번째 값만 사용합니다.`);
+    }
+
+    return {
+      items: Array.from(map.values()),
+      warnings,
+      customer: 'LG전자 주식회사',
+      slipNo: Array.from(slipSet)[0] || '',
+      amount: null,
+      blocked: false,
+      extraCategoryRaw: Array.from(destSet)[0] || ''
+    };
+  }
+
+  // "유상(오성사3공장 창원) PARTS 창고" → "오성사3공장 창원" 처럼 괄호 안 핵심 목적지명만 추출
+  function extractExtraCategory(raw) {
+    if (!raw) return '';
+    const m = String(raw).match(/\(([^)]+)\)/);
+    return m ? m[1].trim() : String(raw).trim();
+  }
+
+  // ── LG 후처리: LG품번→내부 품목코드 매칭 + 최근 매출단가 추정 + 배송지(extra_category) 추출 ──
+  // 단가는 sales_data 최신 1건 기준 추정치이며(환율 등으로 실제와 차이 가능), 마감은 이카운트 기준이라 참고용임.
+  async function enrichLGItemMaster(parsed) {
+    if (parsed.blocked) return { ...parsed, extraCategory: '' };
+    if (parsed.items.length === 0) return { ...parsed, extraCategory: extractExtraCategory(parsed.extraCategoryRaw) };
+
+    const warnings = [...parsed.warnings];
+    const lgPns = parsed.items.map(it => it.lg_pn);
+    const itemMap = {};
+    const chunkSize = 100;
+
+    // 1차: lg_pn 기준 조회
+    for (let i = 0; i < lgPns.length; i += chunkSize) {
+      const chunk = lgPns.slice(i, i + chunkSize);
+      const inList = chunk.map(c => `"${c.replace(/"/g, '')}"`).join(',');
+      const rows = await sbGet('items', `lg_pn=in.(${inList})&select=item_code,lg_pn,description,maker`);
+      if (Array.isArray(rows)) rows.forEach(r => { itemMap[r.lg_pn] = r; });
+    }
+    // 2차 폴백: lg_pn으로 못 찾은 것만 maker_pn 기준 재조회
+    const stillMissing = lgPns.filter(p => !itemMap[p]);
+    for (let i = 0; i < stillMissing.length; i += chunkSize) {
+      const chunk = stillMissing.slice(i, i + chunkSize);
+      const inList = chunk.map(c => `"${c.replace(/"/g, '')}"`).join(',');
+      const rows = await sbGet('items', `maker_pn=in.(${inList})&select=item_code,maker_pn,description,maker`);
+      if (Array.isArray(rows)) rows.forEach(r => { itemMap[r.maker_pn] = r; });
+    }
+
+    const resolved = [];
+    parsed.items.forEach(it => {
+      const m = itemMap[it.lg_pn];
+      if (!m) { warnings.push(`⚠ LG품번 ${it.lg_pn}이 품목 마스터에 없어 제외됨 — 담당자 확인 필요`); return; }
+      resolved.push({
+        item_code: m.item_code,
+        description: m.description || it.lg_pn,
+        maker: m.maker || '',
+        qty_required: it.qty_required,
+        unit_price: null,
+        amount: null,
+        _lgPn: it.lg_pn
+      });
+    });
+
+    // 최근 매출단가 추정 (LG전자 매출 중 해당 품목의 가장 최근 1건)
+    for (const it of resolved) {
+      try {
+        const rows = await sbGet('sales_data',
+          `item_code=eq.${encodeURIComponent(it.item_code)}&customer=eq.${encodeURIComponent('LG전자 주식회사')}&select=unit_price&order=trade_date.desc,id.desc&limit=1`);
+        if (Array.isArray(rows) && rows.length) {
+          const up = parseFloat(rows[0].unit_price) || 0;
+          it.unit_price = up;
+          it.amount = Math.round(up * it.qty_required);
+          it._priceEstimated = true;
+        } else {
+          warnings.push(`ℹ ${it.item_code}: 최근 매출단가를 찾지 못해 금액을 비워둡니다`);
+        }
+      } catch (e) {
+        warnings.push(`ℹ ${it.item_code}: 단가 조회 실패 — ${e.message || e}`);
+      }
+    }
+
+    return {
+      items: resolved,
+      warnings,
+      customer: parsed.customer,
+      slipNo: parsed.slipNo,
+      amount: null,
+      blocked: false,
+      extraCategory: extractExtraCategory(parsed.extraCategoryRaw)
+    };
+  }
+
+  function parseLotExcelFile(file, useLG) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const wb = XLSX.read(e.target.result, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          resolve(parseLotRows(rows));
+          const raw = useLG ? parseLGDepartureRows(rows) : parseLotRows(rows);
+          const result = useLG ? await enrichLGItemMaster(raw) : raw;
+          resolve(result);
         } catch (err) { reject(err); }
       };
       reader.onerror = reject;
@@ -1855,11 +2048,12 @@
     });
   }
 
-  // ── 붙여넣기 텍스트 → rows 2차원배열 변환 (이카운트에서 복사한 탭구분 텍스트) ──
-  function parseLotPasteText(text) {
+  // ── 붙여넣기 텍스트 → rows 2차원배열 변환 (이카운트/LG 공용 — 탭구분 텍스트) ──
+  async function parseLotPasteText(text, useLG) {
     const lines = text.replace(/\r/g, '').split('\n');
     const rows = lines.map(line => line.split('\t'));
-    return parseLotRows(rows);
+    const raw = useLG ? parseLGDepartureRows(rows) : parseLotRows(rows);
+    return useLG ? await enrichLGItemMaster(raw) : raw;
   }
 
   function closeInputModal() {
