@@ -618,47 +618,9 @@
       </div>
       <div class="modal-section">
         <div class="modal-section-title">완료 처리 담당자 <span style="color:var(--accent);font-size:9px;">* 필수</span></div>
+        <!-- v2: 하드코딩 폐지 → employees 테이블에서 동적 생성 (fillCompleteBySelect) -->
         <select class="form-select" id="completeBy" style="width:100%;">
           <option value="">— 담당자 선택 —</option>
-          <optgroup label="대표이사">
-            <option>곽선효</option>
-          </optgroup>
-          <optgroup label="상무이사">
-            <option>박정용</option>
-          </optgroup>
-          <optgroup label="재경팀">
-            <option>김근복</option>
-            <option>이서연</option>
-          </optgroup>
-          <optgroup label="개발기획팀">
-            <option>김봉승</option>
-          </optgroup>
-          <optgroup label="자재구매팀">
-            <option>배병대</option>
-            <option>조승연</option>
-            <option>곽경민</option>
-            <option>박영주</option>
-          </optgroup>
-          <optgroup label="개발구매팀">
-            <option>김종길</option>
-            <option>최성빈</option>
-            <option>최세진</option>
-          </optgroup>
-          <optgroup label="출하팀">
-            <option>박형호</option>
-            <option>김재옥</option>
-            <option>최혜영</option>
-            <option>송윤석</option>
-            <option>박현길</option>
-          </optgroup>
-          <optgroup label="제조팀">
-            <option>문상호</option>
-            <option>장우승</option>
-            <option>김기훈</option>
-            <option>김아현</option>
-            <option>윤선정</option>
-            <option>공수지</option>
-          </optgroup>
         </select>
       </div>
     </div>
@@ -918,7 +880,8 @@
     // 출하 카드 정보 표시
     document.getElementById('completeCardInfo').textContent =
       `${custDisp(r.customer, r.extra_category)} · ${r.ship_date||'-'} · ${r.manager||'-'}`;
-    // 담당자 드롭다운 초기화
+    // 담당자 드롭다운 초기화 (목록이 비어 있으면 employees 기준으로 재생성)
+    if (document.getElementById('completeBy').options.length <= 1) fillCompleteBySelect();
     document.getElementById('completeBy').value = '';
     document.getElementById('completeModal').classList.add('show');
   }
@@ -1064,6 +1027,11 @@
 
   // ── 입력 모달 ──
   function openInputModal() {
+    // 부서 목록이 비어 있으면(초기 로드 지연 등) employees 기준으로 재생성
+    if (document.getElementById('inDeptSelect').options.length <= 1) {
+      fillDeptSelect(document.getElementById('inDeptSelect'));
+      fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+    }
     document.getElementById('inShipDate').value = todayStr();
     document.getElementById('inDeptSelect').value = '';
     document.getElementById('inManagerSelect').innerHTML = '<option value="">부서 먼저 선택</option>';
@@ -1084,34 +1052,79 @@
     document.getElementById('inputModal').classList.add('show');
   }
 
-  // ── 부서/담당자 마스터 (완료처리 담당자 목록과 동일 소스) ──
-  const DEPT_EMP_MAP = {
-    '대표이사': ['곽선효'],
-    '상무이사': ['박정용'],
-    '재경팀': ['김근복','이서연'],
-    '개발기획팀': ['김봉승'],
-    '자재구매팀': ['배병대','조승연','곽경민','박영주'],
-    '개발구매팀': ['김종길','최성빈','최세진'],
-    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
-    '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
-  };
+  // ── 부서/담당자 마스터 ──
+  // v2(2026-09-08): 하드코딩 폐지 → employees 테이블(entity=KOREA, active=true)에서 동적 로드.
+  //   · 신규 입사자는 직원관리에 등록만 하면 자동 반영
+  //   · 퇴사자(active=false)는 자동 제외
+  //   · 출하지시 입력/수정의 부서·담당자, 출하완료 담당자(completeBy) 모두 이 목록을 공유
+  const DEPT_ORDER = ['대표이사','상무이사','재경팀','개발기획팀','자재구매팀','개발구매팀','출하팀','제조팀'];
+  let DEPT_EMP_MAP = {};
+
+  function escHtmlOpt(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function loadDeptEmpMap() {
+    try {
+      const rows = await sbGet('employees', 'select=name,dept&entity=eq.KOREA&active=eq.true&order=name.asc&limit=500');
+      const map = {};
+      (Array.isArray(rows) ? rows : []).forEach(r => {
+        const d = (r.dept || '').trim();
+        const n = (r.name || '').trim();
+        if (!d || !n) return;
+        if (!map[d]) map[d] = [];
+        if (map[d].indexOf(n) === -1) map[d].push(n);
+      });
+      // 부서 정렬: 지정 순서 우선, 목록에 없는 부서는 뒤에 가나다순
+      const ordered = {};
+      DEPT_ORDER.forEach(d => { if (map[d]) ordered[d] = map[d]; });
+      Object.keys(map).sort().forEach(d => { if (!ordered[d]) ordered[d] = map[d]; });
+      DEPT_EMP_MAP = ordered;
+    } catch (e) {
+      console.error('부서/담당자 목록 로드 실패', e);
+      DEPT_EMP_MAP = {};
+    }
+  }
+
   function fillDeptSelect(selEl) {
+    if (!selEl) return;
     selEl.innerHTML = '<option value="">부서 선택</option>' +
-      Object.keys(DEPT_EMP_MAP).map(d => `<option value="${d}">${d}</option>`).join('');
+      Object.keys(DEPT_EMP_MAP).map(d => `<option value="${escHtmlOpt(d)}">${escHtmlOpt(d)}</option>`).join('');
   }
   function fillManagerSelect(selEl, dept) {
+    if (!selEl) return;
     if (!dept || !DEPT_EMP_MAP[dept]) { selEl.innerHTML = '<option value="">부서 먼저 선택</option>'; return; }
     selEl.innerHTML = '<option value="">담당자 선택</option>' +
-      DEPT_EMP_MAP[dept].map(n => `<option value="${n}">${n}</option>`).join('');
+      DEPT_EMP_MAP[dept].map(n => `<option value="${escHtmlOpt(n)}">${escHtmlOpt(n)}</option>`).join('');
   }
+  // 출하완료 처리 담당자(부서 optgroup 형태)
+  function fillCompleteBySelect() {
+    const selEl = document.getElementById('completeBy');
+    if (!selEl) return;
+    const keep = selEl.value;
+    selEl.innerHTML = '<option value="">— 담당자 선택 —</option>' +
+      Object.keys(DEPT_EMP_MAP).map(d =>
+        `<optgroup label="${escHtmlOpt(d)}">` +
+        DEPT_EMP_MAP[d].map(n => `<option value="${escHtmlOpt(n)}">${escHtmlOpt(n)}</option>`).join('') +
+        `</optgroup>`
+      ).join('');
+    if (keep) selEl.value = keep;
+  }
+
   function onInDeptChange() {
     fillManagerSelect(document.getElementById('inManagerSelect'), document.getElementById('inDeptSelect').value);
   }
   function onRecvDeptChange() {
     fillManagerSelect(document.getElementById('inRecvManagerSelect'), document.getElementById('inRecvDeptSelect').value);
   }
-  fillDeptSelect(document.getElementById('inDeptSelect'));
-  fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+
+  (async function initDeptEmpMap() {
+    await loadDeptEmpMap();
+    fillDeptSelect(document.getElementById('inDeptSelect'));
+    fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+    fillCompleteBySelect();
+  })();
 
   // ── 매출처명 마스터(partners) 자동완성 ──
   let customerMasterLoaded = false;
