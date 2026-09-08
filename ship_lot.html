@@ -893,25 +893,51 @@
     setTimeout(()=>t.classList.remove('show'), 2600);
   }
 
-  const DEPT_EMP_MAP = {
-    '대표이사': ['곽선효'],
-    '상무이사': ['박정용'],
-    '재경팀': ['김근복','이서연'],
-    '개발기획팀': ['김봉승'],
-    '자재구매팀': ['배병대','조승연','곽경민','박영주'],
-    '개발구매팀': ['김종길','최성빈','최세진'],
-    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
-    '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
-  };
+  // ── 부서/작업자 마스터 ──
+  // v2(2026-09-08): 하드코딩 폐지 → employees 테이블(entity=KOREA, active=true)에서 동적 로드.
+  //   · 신규 입사자는 직원관리에 등록만 하면 자동 반영 / 퇴사자(active=false)는 자동 제외
+  //   · shipment.html의 부서·담당자 목록과 동일 소스
+  const DEPT_ORDER = ['대표이사','상무이사','재경팀','개발기획팀','자재구매팀','개발구매팀','출하팀','제조팀'];
+  let DEPT_EMP_MAP = {};
+
+  function escHtmlOpt(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function loadDeptEmpMap() {
+    try {
+      const rows = await sbGet('employees', 'select=name,dept&entity=eq.KOREA&active=eq.true&order=name.asc&limit=500');
+      const map = {};
+      (Array.isArray(rows) ? rows : []).forEach(r => {
+        const d = (r.dept || '').trim();
+        const n = (r.name || '').trim();
+        if (!d || !n) return;
+        if (!map[d]) map[d] = [];
+        if (map[d].indexOf(n) === -1) map[d].push(n);
+      });
+      const ordered = {};
+      DEPT_ORDER.forEach(d => { if (map[d]) ordered[d] = map[d]; });
+      Object.keys(map).sort().forEach(d => { if (!ordered[d]) ordered[d] = map[d]; });
+      DEPT_EMP_MAP = ordered;
+    } catch (e) {
+      console.error('부서/작업자 목록 로드 실패', e);
+      DEPT_EMP_MAP = {};
+    }
+  }
+
   function fillWorkerDeptSelect() {
     const sel = document.getElementById('workerDeptSelect');
-    sel.innerHTML = '<option value="">부서 선택</option>' + Object.keys(DEPT_EMP_MAP).map(d=>`<option value="${d}">${d}</option>`).join('');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">부서 선택</option>' +
+      Object.keys(DEPT_EMP_MAP).map(d=>`<option value="${escHtmlOpt(d)}">${escHtmlOpt(d)}</option>`).join('');
   }
   function onWorkerDeptChange() {
     const dept = document.getElementById('workerDeptSelect').value;
     const sel = document.getElementById('workerSelect');
-    if (!dept) { sel.innerHTML = '<option value="">부서 먼저 선택</option>'; return; }
-    sel.innerHTML = '<option value="">작업자 선택</option>' + DEPT_EMP_MAP[dept].map(n=>`<option value="${n}">${n}</option>`).join('');
+    if (!dept || !DEPT_EMP_MAP[dept]) { sel.innerHTML = '<option value="">부서 먼저 선택</option>'; return; }
+    sel.innerHTML = '<option value="">작업자 선택</option>' +
+      DEPT_EMP_MAP[dept].map(n=>`<option value="${escHtmlOpt(n)}">${escHtmlOpt(n)}</option>`).join('');
   }
 
   let allBatches = [];
@@ -1061,7 +1087,8 @@
   const params = new URLSearchParams(location.search);
   const sidParam = params.get('sid');
 
-  window.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('DOMContentLoaded', async () => {
+    await loadDeptEmpMap();
     fillWorkerDeptSelect();
     loadList();
     if (sidParam) { switchTab('work'); openBatch(parseInt(sidParam,10)); }
@@ -1342,6 +1369,11 @@
         document.getElementById('workerDeptSelect').value = foundDept;
         onWorkerDeptChange();
         document.getElementById('workerSelect').value = workerName;
+      } else {
+        // 퇴사 등으로 현재 직원목록에 없는 작업자 — 기록 보존을 위해 이름은 그대로 표시
+        const sel = document.getElementById('workerSelect');
+        sel.innerHTML = `<option value="${escHtmlOpt(workerName)}">${escHtmlOpt(workerName)}</option>`;
+        sel.value = workerName;
       }
     }
     document.getElementById('scanInput').disabled = !workerName;
