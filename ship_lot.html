@@ -757,6 +757,23 @@
         <div id="mpnIcRows"></div>
         <div class="mpn-dyn-add" onclick="addMpnDynRow('ic')">＋ ERP품목코드 추가</div>
       </div>
+      <div class="modal-section">
+        <div class="modal-section-title">자재관리 기준 <span style="color:var(--muted);font-size:9px;font-weight:400;">* 선택 · 자재구매팀 발주 계산용</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div>
+            <div style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">MOQ (최소발주수량)</div>
+            <input type="number" min="0" step="1" class="form-input" id="mpnMoq" style="width:100%;" placeholder="예) 5000">
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">리드타임 (일)</div>
+            <input type="number" min="0" step="1" class="form-input" id="mpnLeadtime" style="width:100%;" placeholder="예) 84">
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">적정재고기준 (일)</div>
+            <input type="number" min="0" step="1" class="form-input" id="mpnStockStd" style="width:100%;" placeholder="예) 60">
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="closeMpnModal()">취소</button>
@@ -2983,7 +3000,7 @@
     try {
       let pg = 0, masters = [];
       while (true) {
-        const chunk = await sbGet('maker_pn_master', `select=id,brand,maker_pn,description&order=maker_pn&limit=1000&offset=${pg*1000}`);
+        const chunk = await sbGet('maker_pn_master', `select=id,brand,maker_pn,description,moq,leadtime_days,stock_std_days&order=maker_pn&limit=1000&offset=${pg*1000}`);
         if (!Array.isArray(chunk)) {
           if (pg === 0) console.error('maker_pn_master 조회 실패(권한/RLS 문제일 수 있음):', chunk);
           break;
@@ -3036,6 +3053,7 @@
         brand: stdBrand(m.brand),      // 화면 표시/검색은 표준명
         brand_raw: m.brand,            // 저장·수정 시에는 원본 유지
         maker_pn: m.maker_pn, description: m.description || '',
+        moq: m.moq, leadtime_days: m.leadtime_days, stock_std_days: m.stock_std_days,
         lg_pns: lgMap[m.id] || [], item_codes: icMap[m.id] || []
       }));
 
@@ -3078,9 +3096,18 @@
     if (cntEl) cntEl.textContent = (rows.length === mpnList.length)
       ? `${mpnList.length.toLocaleString()}건`
       : `${rows.length.toLocaleString()} / ${mpnList.length.toLocaleString()}건`;
+    const NUMKEYS = ['moq','leadtime_days','stock_std_days'];
     rows.sort((a,b) => {
-      const av = (a[mpnSortKey]||'').toString(); const bv = (b[mpnSortKey]||'').toString();
-      const c = av.localeCompare(bv);
+      let c;
+      if (NUMKEYS.includes(mpnSortKey)) {
+        const an = a[mpnSortKey], bn = b[mpnSortKey];
+        if (an == null && bn == null) c = 0;
+        else if (an == null) c = 1;          // 미설정은 항상 뒤로
+        else if (bn == null) c = -1;
+        else c = Number(an) - Number(bn);
+      } else {
+        c = (a[mpnSortKey]||'').toString().localeCompare((b[mpnSortKey]||'').toString());
+      }
       return mpnSortAsc ? c : -c;
     });
 
@@ -3094,14 +3121,17 @@
       <th style="width:200px;" onclick="sortMpn('description')">품명 및 규격<div class="col-resizer"></div></th>
       ${Array.from({length:maxLg}, (_,i)=>`<th style="width:120px;">LG품번${i+1}<div class="col-resizer"></div></th>`).join('')}
       ${Array.from({length:maxIc}, (_,i)=>`<th style="width:110px;">ERP품목코드${i+1}<div class="col-resizer"></div></th>`).join('')}
+      <th style="width:70px;" onclick="sortMpn('moq')">MOQ<div class="col-resizer"></div></th>
+      <th style="width:80px;" onclick="sortMpn('leadtime_days')">리드타임<div class="col-resizer"></div></th>
+      <th style="width:90px;" onclick="sortMpn('stock_std_days')">적정재고기준<div class="col-resizer"></div></th>
       <th style="width:90px;">관리<div class="col-resizer"></div></th>
     </tr>`;
     document.getElementById('mpnThead').innerHTML = theadHtml;
 
-    const colspan = 4 + maxLg + maxIc;
+    const colspan = 7 + maxLg + maxIc;
     if (rows.length === 0) {
       document.getElementById('mpnTbody').innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:20px;color:var(--muted);">등록된 항목이 없습니다.</td></tr>`;
-      initColResize('mpnTable', 'shiplot_mpn_col_v1');
+      initColResize('mpnTable', 'shiplot_mpn_col_v2');
       return;
     }
     document.getElementById('mpnTbody').innerHTML = rows.map(r => {
@@ -3120,13 +3150,16 @@
         <td class="mono"><b>${r.maker_pn}</b></td>
         <td style="white-space:normal;">${r.description||'-'}${warnBadge}</td>
         ${lgCells}${icCells}
+        <td class="mono" style="text-align:right;">${r.moq != null ? Number(r.moq).toLocaleString() : '<span style="color:var(--muted);">-</span>'}</td>
+        <td class="mono" style="text-align:right;">${r.leadtime_days != null ? r.leadtime_days + '일' : '<span style="color:var(--muted);">-</span>'}</td>
+        <td class="mono" style="text-align:right;">${r.stock_std_days != null ? r.stock_std_days + '일' : '<span style="color:var(--muted);">-</span>'}</td>
         <td>
           <button class="btn btn-ghost" style="width:auto;padding:4px 9px;font-size:11px;" onclick="openMpnModal(${r.id})">수정</button>
           <button class="btn btn-ghost" style="width:auto;padding:4px 9px;font-size:11px;color:var(--accent);" onclick="deleteMpn(${r.id})">삭제</button>
         </td>
       </tr>`;
     }).join('');
-    initColResize('mpnTable', 'shiplot_mpn_col_v1');
+    initColResize('mpnTable', 'shiplot_mpn_col_v2');
   }
 
   // ── 등록/수정 모달 ──
@@ -3152,6 +3185,9 @@
       const r = mpnList.find(x => x.id === id);
       document.getElementById('mpnModalTitle').textContent = '✏ 메이커품번 수정';
       document.getElementById('mpnBrand').value = r.brand_raw || r.brand || 'SMART';  // 원본 브랜드명 유지 (표준명으로 덮어쓰지 않음)
+      document.getElementById('mpnMoq').value       = (r.moq            != null ? r.moq            : '');
+      document.getElementById('mpnLeadtime').value  = (r.leadtime_days  != null ? r.leadtime_days  : '');
+      document.getElementById('mpnStockStd').value  = (r.stock_std_days != null ? r.stock_std_days : '');
       document.getElementById('mpnMakerPn').value = r.maker_pn;
       document.getElementById('mpnDescription').value = r.description || '';
       (r.lg_pns.length ? r.lg_pns : ['']).forEach(v => addMpnDynRow('lg', v));
@@ -3159,6 +3195,9 @@
     } else {
       document.getElementById('mpnModalTitle').textContent = '✚ 메이커품번 신규 등록';
       document.getElementById('mpnBrand').value = 'SMART';
+      document.getElementById('mpnMoq').value = '';
+      document.getElementById('mpnLeadtime').value = '';
+      document.getElementById('mpnStockStd').value = '';
       document.getElementById('mpnMakerPn').value = '';
       document.getElementById('mpnDescription').value = '';
       addMpnDynRow('lg');
@@ -3172,6 +3211,10 @@
     const makerPn = document.getElementById('mpnMakerPn').value.trim();
     const description = document.getElementById('mpnDescription').value.trim();
     if (!makerPn) { showToast('⚠ 메이커품번을 입력해주세요', true); return; }
+    const numOrNull = v => { const x = String(v||'').trim(); return x === '' ? null : (Number.isFinite(+x) ? Math.trunc(+x) : null); };
+    const moq            = numOrNull(document.getElementById('mpnMoq').value);
+    const leadtime_days  = numOrNull(document.getElementById('mpnLeadtime').value);
+    const stock_std_days = numOrNull(document.getElementById('mpnStockStd').value);
     const lgVals = Array.from(document.querySelectorAll('#mpnLgRows input')).map(i => i.value.trim()).filter(Boolean);
     const icVals = Array.from(document.querySelectorAll('#mpnIcRows input')).map(i => i.value.trim()).filter(Boolean);
     if (lgVals.length === 0) { showToast('⚠ LG품번을 최소 1개 이상 입력해주세요', true); return; }
@@ -3192,12 +3235,12 @@
 
     let mid = mpnEditingId;
     if (mid) {
-      await sbPatch('maker_pn_master', mid, { brand, maker_pn: makerPn, description });
+      await sbPatch('maker_pn_master', mid, { brand, maker_pn: makerPn, description, moq, leadtime_days, stock_std_days });
       // 기존 매핑 전체 삭제 후 재등록(간단/안전한 방식)
       await fetch(SB_URL + '/rest/v1/maker_pn_lgpn_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
       await fetch(SB_URL + '/rest/v1/maker_pn_itemcode_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
     } else {
-      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description });
+      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description, moq, leadtime_days, stock_std_days });
       if (!Array.isArray(result) || result.length === 0) { showToast('⚠ 등록 실패 — ' + sbErrMsg(result), true); return; }
       mid = result[0].id;
     }
@@ -3229,7 +3272,8 @@
   // ── 엑셀 업로드/다운로드 ──
   function downloadMpnTemplate() {
     const data = [{ '브랜드명':'SMART', '메이커품번':'예시: RC-98TRF5K10', '품명및규격':'예시: RC- 1/8W 2012 1% 5.1K Ω',
-      'LG품번1':'0RH5101L422','LG품번2':'0301-019087','LG품번3':'','ERP품목코드1':'3000-0015','ERP품목코드2':'9000-...','ERP품목코드3':'' }];
+      'LG품번1':'0RH5101L422','LG품번2':'0301-019087','LG품번3':'','ERP품목코드1':'3000-0015','ERP품목코드2':'9000-...','ERP품목코드3':'',
+      'MOQ':'5000','리드타임':'84','적정재고기준':'60' }];
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '업로드양식');
@@ -3242,6 +3286,9 @@
       const row = { '브랜드명': r.brand, '메이커품번': r.maker_pn, '품명및규격': r.description };
       for (let i=0;i<maxLg;i++) row['LG품번'+(i+1)] = r.lg_pns[i] || '';
       for (let i=0;i<maxIc;i++) row['ERP품목코드'+(i+1)] = r.item_codes[i] || '';
+      row['MOQ']          = (r.moq            != null ? r.moq            : '');
+      row['리드타임']      = (r.leadtime_days  != null ? r.leadtime_days  : '');
+      row['적정재고기준']  = (r.stock_std_days != null ? r.stock_std_days : '');
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(data);
@@ -3267,9 +3314,13 @@
       const lgVals = Object.keys(row).filter(k => k.startsWith('LG품번')).map(k => String(row[k]||'').trim()).filter(Boolean);
       const icVals = Object.keys(row).filter(k => k.startsWith('ERP품목코드')).map(k => String(row[k]||'').trim()).filter(Boolean);
       if (lgVals.length === 0) { skipped++; continue; }
+      const upNum = v => { const x = String(v==null?'':v).trim(); return x === '' ? null : (Number.isFinite(+x) ? Math.trunc(+x) : null); };
+      const moq            = upNum(row['MOQ']);
+      const leadtime_days  = upNum(row['리드타임']);
+      const stock_std_days = upNum(row['적정재고기준']);
       const hasConflict = lgVals.some(lg => mpnList.some(r => r.lg_pns.includes(lg)));
       if (hasConflict) conflictNoted++;
-      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description });
+      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description, moq, leadtime_days, stock_std_days });
       if (!Array.isArray(result) || result.length === 0) {
         skipped++;
         if (errSamples.length < 3) errSamples.push(`${makerPn}: ${sbErrMsg(result)}`);
@@ -3342,7 +3393,7 @@
   initColResize('makerTable', 'shiplot_maker_col_v1');
   initColResize('itemDtab', 'shiplot_item_col_v1');
   initColResize('scanResultTable', 'shiplot_scanresult_col_v2');
-  initColResize('mpnTable', 'shiplot_mpn_col_v1');
+  initColResize('mpnTable', 'shiplot_mpn_col_v2');
   loadSnd();
 </script>
 </body>
