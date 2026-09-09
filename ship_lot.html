@@ -773,6 +773,7 @@
             <input type="number" min="0" step="1" class="form-input" id="mpnStockStd" style="width:100%;" placeholder="예) 60">
           </div>
         </div>
+        <div id="mpnLeadHint" style="font-size:10.5px;color:var(--accent2);margin-top:6px;line-height:1.45;"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -2988,6 +2989,44 @@
   let mpnList = [];          // {id, brand, brand_raw, maker_pn, description, lg_pns:[], item_codes:[]}
 
   // 브랜드 필터 옵션 생성용 이스케이프
+  // ── 접두별 납기 규칙 (maker_pn_leadtime) ──
+  let mpnLeadRules = [];
+  async function loadMpnLeadRules() {
+    try {
+      const r = await sbGet('maker_pn_leadtime', 'select=maker_name,pfx,part_group,weeks,days&limit=1000');
+      mpnLeadRules = Array.isArray(r) ? r : [];
+    } catch(e) { mpnLeadRules = []; }
+  }
+
+  // 메이커품번 앞 3자리로 규칙을 찾아 안내 + 리드타임 자동 입력
+  function bindMpnLeadHint() {
+    const pn = document.getElementById('mpnMakerPn'), br = document.getElementById('mpnBrand');
+    if (pn) pn.oninput = suggestMpnLeadtime;
+    if (br) br.oninput = suggestMpnLeadtime;
+    const h = document.getElementById('mpnLeadHint');
+    if (h) h.textContent = '';
+    suggestMpnLeadtime();
+  }
+
+  function suggestMpnLeadtime() {
+    const hint = document.getElementById('mpnLeadHint');
+    const lead = document.getElementById('mpnLeadtime');
+    if (!hint || !lead) return;
+    const brand = (document.getElementById('mpnBrand').value || '').trim();
+    const pn    = (document.getElementById('mpnMakerPn').value || '').trim();
+    if (!brand || pn.length < 3) { hint.textContent = ''; return; }
+    const pfx  = pn.slice(0,3);
+    const rule = mpnLeadRules.find(x => x.maker_name === brand && x.pfx === pfx);
+    if (!rule) {
+      hint.style.color = 'var(--muted)';
+      hint.textContent = `\u2139 접두 "${pfx}" 규칙이 없습니다. 관리자설정 › 메이커 납기에서 등록할 수 있습니다.`;
+      return;
+    }
+    hint.style.color = 'var(--accent2)';
+    hint.textContent = `\u2139 접두 "${pfx}" (${rule.part_group || '미분류'}) 규칙: ${rule.days}일 / ${rule.weeks}주`;
+    if (!lead.value) lead.value = rule.days;
+  }
+
   function escHtmlMpn(v){ return String(v==null?'':v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function escAttr(v){ return escHtmlMpn(v); }
   let mpnLoaded = false;
@@ -3039,6 +3078,7 @@
       lgAll.forEach(r => { (lgMap[r.maker_pn_id] = lgMap[r.maker_pn_id] || []).push(r.lg_pn); });
       icAll.forEach(r => { (icMap[r.maker_pn_id] = icMap[r.maker_pn_id] || []).push(r.item_code); });
       // 동일메이커 매핑(maker_alias) 적용 — 별칭을 표준 브랜드명으로 통일
+      await loadMpnLeadRules();
       let aliasMap = {};
       try {
         const al = await sbGet('maker_alias', 'select=standard_name,alias&limit=1000');
@@ -3185,6 +3225,7 @@
       const r = mpnList.find(x => x.id === id);
       document.getElementById('mpnModalTitle').textContent = '✏ 메이커품번 수정';
       document.getElementById('mpnBrand').value = r.brand_raw || r.brand || 'SMART';  // 원본 브랜드명 유지 (표준명으로 덮어쓰지 않음)
+      bindMpnLeadHint();
       document.getElementById('mpnMoq').value       = (r.moq            != null ? r.moq            : '');
       document.getElementById('mpnLeadtime').value  = (r.leadtime_days  != null ? r.leadtime_days  : '');
       document.getElementById('mpnStockStd').value  = (r.stock_std_days != null ? r.stock_std_days : '');
@@ -3198,6 +3239,7 @@
       document.getElementById('mpnMoq').value = '';
       document.getElementById('mpnLeadtime').value = '';
       document.getElementById('mpnStockStd').value = '';
+      bindMpnLeadHint();
       document.getElementById('mpnMakerPn').value = '';
       document.getElementById('mpnDescription').value = '';
       addMpnDynRow('lg');
@@ -3303,13 +3345,26 @@
     const wb = XLSX.read(buf, { type: 'array' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    let added = 0, skipped = 0, conflictNoted = 0;
+    // 기존 품번은 갱신, 없으면 신규 등록 (관리자설정 품목마스터와 동일 동작)
+    const willUpdate = rows.filter(r => {
+      const pn = String(r['메이커품번']||'').trim();
+      const bd = String(r['브랜드명']||'SMART').trim();
+      return pn && pn.indexOf('예시') !== 0 && mpnList.some(x => x.maker_pn === pn && (x.brand_raw||x.brand) === bd);
+    }).length;
+    if (willUpdate > 0) {
+      if (!confirm(`업로드 ${rows.length}건 중 ${willUpdate}건이 기존 등록 품번입니다.\n\n기존 값(LG품번·ERP품목코드·MOQ·리드타임·적정재고기준)을 엑셀 내용으로 덮어씁니다.\n계속하시겠습니까?`)) {
+        evt.target.value = '';
+        return;
+      }
+    }
+
+    let added = 0, updated = 0, skipped = 0, conflictNoted = 0;
     const errSamples = [];   // 실패 사유 샘플(최대 3건) — 원인 즉시 파악용
     for (const row of rows) {
       const makerPn = String(row['메이커품번']||'').trim();
       if (!makerPn || makerPn.indexOf('예시') === 0) continue;
-      if (mpnList.some(r => r.maker_pn === makerPn)) { skipped++; continue; }
       const brand = String(row['브랜드명']||'SMART').trim();
+      const existing = mpnList.find(r => r.maker_pn === makerPn && (r.brand_raw||r.brand) === brand);
       const description = String(row['품명및규격']||'').trim();
       const lgVals = Object.keys(row).filter(k => k.startsWith('LG품번')).map(k => String(row[k]||'').trim()).filter(Boolean);
       const icVals = Object.keys(row).filter(k => k.startsWith('ERP품목코드')).map(k => String(row[k]||'').trim()).filter(Boolean);
@@ -3318,22 +3373,33 @@
       const moq            = upNum(row['MOQ']);
       const leadtime_days  = upNum(row['리드타임']);
       const stock_std_days = upNum(row['적정재고기준']);
-      const hasConflict = lgVals.some(lg => mpnList.some(r => r.lg_pns.includes(lg)));
+      // 갱신 시 자기 자신은 제외하고 판정 (기존 LG품번을 중복으로 잡지 않도록)
+      const hasConflict = lgVals.some(lg => mpnList.some(r => (!existing || r.id !== existing.id) && r.lg_pns.includes(lg)));
       if (hasConflict) conflictNoted++;
-      const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description, moq, leadtime_days, stock_std_days });
-      if (!Array.isArray(result) || result.length === 0) {
-        skipped++;
-        if (errSamples.length < 3) errSamples.push(`${makerPn}: ${sbErrMsg(result)}`);
-        console.error('메이커품번 등록 실패:', makerPn, result);
-        continue;
+      let mid;
+      if (existing) {
+        await sbPatch('maker_pn_master', existing.id, { brand, maker_pn: makerPn, description, moq, leadtime_days, stock_std_days });
+        mid = existing.id;
+        // 기존 매핑 전체 삭제 후 재등록
+        await fetch(SB_URL + '/rest/v1/maker_pn_lgpn_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+        await fetch(SB_URL + '/rest/v1/maker_pn_itemcode_map?maker_pn_id=eq.' + mid, { method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'} });
+        updated++;
+      } else {
+        const result = await sbPost('maker_pn_master', { brand, maker_pn: makerPn, description, moq, leadtime_days, stock_std_days });
+        if (!Array.isArray(result) || result.length === 0) {
+          skipped++;
+          if (errSamples.length < 3) errSamples.push(`${makerPn}: ${sbErrMsg(result)}`);
+          console.error('메이커품번 등록 실패:', makerPn, result);
+          continue;
+        }
+        mid = result[0].id;
+        added++;
       }
-      const mid = result[0].id;
-      await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
+      if (lgVals.length) await sbPost('maker_pn_lgpn_map', lgVals.map(v => ({ maker_pn_id: mid, lg_pn: v })));
       if (icVals.length) await sbPost('maker_pn_itemcode_map', icVals.map(v => ({ maker_pn_id: mid, item_code: v })));
-      added++;
     }
     evt.target.value = '';
-    showToast(`✓ 업로드 완료 — 신규 ${added}건 등록${skipped ? `, 중복/오류 ${skipped}건 제외` : ''}${conflictNoted ? `, ⚠ LG품번 중복의심 ${conflictNoted}건(별도 확인 필요)` : ''}`);
+    showToast(`✓ 업로드 완료 — 신규 ${added}건${updated ? `, 갱신 ${updated}건` : ''}${skipped ? `, 오류 ${skipped}건 제외` : ''}${conflictNoted ? `, ⚠ LG품번 중복의심 ${conflictNoted}건(확인 필요)` : ''}`);
     if (errSamples.length > 0) {
       setTimeout(() => showToast('⚠ 실패 사유 — ' + errSamples.join(' / '), true), 1200);
     }
