@@ -30,6 +30,8 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   font-family:'Noto Sans KR',sans-serif;transition:all .18s;}
 .nav-back{background:transparent;border:1.5px solid var(--border);color:var(--muted);}
 .nav-back:hover{background:var(--surface);color:var(--text);border-color:var(--accent2);}
+.nav-new{background:#fff;border:1.5px solid var(--accent3);color:var(--accent3);}
+.nav-new:hover{background:var(--accent3);color:#fff;}
 .nav-home{background:var(--accent2);border:1.5px solid var(--accent2);color:#fff;}
 .nav-home:hover{filter:brightness(1.08);}
 
@@ -265,6 +267,7 @@ tr.dragging{opacity:.45;}
   <div style="display:flex;align-items:center;gap:10px;">
     <div style="display:flex;align-items:center;gap:5px;background:rgba(200,0,30,.07);border:1px solid rgba(200,0,30,.2);border-radius:20px;padding:5px 14px;font-size:11px;color:var(--accent);font-weight:700;">⚙ 관리자 설정</div>
     <div class="nav-group">
+      <button class="nav-btn nav-new" onclick="openInNewWindow()" title="이 화면을 새 탭으로 빼내고, 현재 탭은 홈으로 돌아갑니다">⧉ 새창열기</button>
       <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
       <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
     </div>
@@ -607,6 +610,11 @@ tr.dragging{opacity:.45;}
       <option value="true">활성만</option>
       <option value="false">비활성만</option>
     </select>
+    <select id="pf-supply" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:6px;font-size:13px;">
+      <option value="">공급방식 전체</option>
+      <option value="FORECAST">예측발주만</option>
+      <option value="PO_BASED">PO접수만</option>
+    </select>
   </div>
 
   <!-- 목록 -->
@@ -619,12 +627,14 @@ tr.dragging{opacity:.45;}
         <th style="width:90px;">구분</th>
         <th style="width:80px;">국가</th>
         <th style="width:130px;">마감기준</th>
+        <th style="width:100px;">공급방식</th>
+        <th style="width:90px;">담당자</th>
         <th style="width:140px;">결제조건</th>
         <th>비고</th>
         <th class="center" style="width:90px;">상태</th>
         <th class="center" style="width:130px;">관리</th>
       </tr></thead>
-      <tbody id="partners-tbody"><tr><td colspan="10"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="partners-tbody"><tr><td colspan="12"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -658,6 +668,17 @@ tr.dragging{opacity:.45;}
           <option value="">실재고보유 (기본, SME 재고 소유)</option>
           <option value="LG마감기준">LG마감기준 (재고 미보유 — LG사급 실적 제외 대상)</option>
         </select>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>공급방식</label>
+          <select id="pm-supply">
+            <option value="FORECAST">예측발주 (SME가 재고관리·발주)</option>
+            <option value="PO_BASED">PO접수 (업체가 자체 발주서 발행)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>담당자</label>
+          <select id="pm-manager"><option value="">(미지정)</option></select>
+        </div>
       </div>
       <div class="form-group full"><label>결제조건</label><input id="pm-terms" placeholder="예) 월말마감 익월30일 (선택, 향후 사용예정)"></div>
       <div class="form-group full"><label>비고</label><input id="pm-note"></div>
@@ -2029,13 +2050,14 @@ let _partnersData=[], _partnersRows=[];
 
 async function loadPartnersData() {
   const tbody=document.getElementById('partners-tbody');
-  tbody.innerHTML='<tr><td colspan="10"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  tbody.innerHTML='<tr><td colspan="12"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const {data,error}=await sb.from('partners').select('*').order('name');
-  if(error){tbody.innerHTML=`<tr><td colspan="10" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
+  if(error){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
   _partnersData=data||[];
   document.getElementById('partners-count').textContent=`(${_partnersData.length}개)`;
+  if(_empData.length===0) await loadEmpData(); // 담당자 드롭다운용 직원목록 확보
   renderPartnersTable();
-  setTimeout(()=>initColResize('partners-table','al_partners'),50);
+  setTimeout(()=>initColResize('partners-table','al_partners_v2'),50);
 }
 
 function renderPartnersTable() {
@@ -2044,18 +2066,22 @@ function renderPartnersTable() {
   const fType=document.getElementById('pf-type')?.value||'';
   const fClosing=document.getElementById('pf-closing')?.value||'';
   const fActive=document.getElementById('pf-active')?.value||'';
+  const fSupply=document.getElementById('pf-supply')?.value||'';
   let rows=_partnersData;
   if(kw) rows=rows.filter(r=>(r.name||'').toLowerCase().includes(kw)||(r.alias1||'').toLowerCase().includes(kw)||(r.alias2||'').toLowerCase().includes(kw));
   if(fType) rows=rows.filter(r=>r.type===fType);
   if(fClosing==='LG마감기준') rows=rows.filter(r=>r.closing_basis==='LG마감기준');
   if(fClosing==='basic') rows=rows.filter(r=>r.closing_basis!=='LG마감기준');
   if(fActive) rows=rows.filter(r=>(r.is_active!==false)===(fActive==='true'));
-  if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="10"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="10"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
+  if(fSupply) rows=rows.filter(r=>(r.supply_mode||'FORECAST')===fSupply);
+  if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
     const aliases=[r.alias1,r.alias2].filter(Boolean).join(', ');
     const active=r.is_active!==false;
     const closingBadge=r.closing_basis==='LG마감기준'?'<span class="badge b-gray" style="background:#FEE2E2;color:#B91C1C;">LG마감기준</span>':(r.closing_basis||'');
+    const supply=r.supply_mode||'FORECAST';
+    const supplyBadge=supply==='PO_BASED'?'<span class="badge b-gray" style="background:#EDE9FE;color:#6D28D9;">PO접수</span>':'<span class="badge b-gray" style="background:#DBEAFE;color:#1D4ED8;">예측발주</span>';
     return `
     <tr>
       <td class="center mono">${i+1}</td>
@@ -2064,6 +2090,8 @@ function renderPartnersTable() {
       <td class="center">${r.type||''}</td>
       <td class="center">${r.country||''}</td>
       <td class="center">${closingBadge}</td>
+      <td class="center">${supplyBadge}</td>
+      <td class="center">${r.sales_manager||''}</td>
       <td>${r.payment_terms||''}</td>
       <td>${r.note||''}</td>
       <td class="center"><span class="badge ${active?'b-green':'b-gray'}" style="cursor:pointer;" onclick="togglePartnersActive(${r.id},${active})">${active?'활성':'비활성'}</span></td>
@@ -2073,6 +2101,12 @@ function renderPartnersTable() {
       </td>
     </tr>`;
   }).join('');
+}
+
+function _partnersManagerOptions(selected){
+  const active=_empData.filter(e=>e.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  const opts=active.map(e=>`<option value="${e.name}" ${e.name===selected?'selected':''}>${e.name}${e.dept?` (${e.dept})`:''}</option>`).join('');
+  return `<option value="">(미지정)</option>${opts}`;
 }
 
 async function togglePartnersActive(id, current) {
@@ -2100,6 +2134,8 @@ function openPartnersAddModal(){
   document.getElementById('pm-type').value='매입처';
   document.getElementById('pm-country').value='';
   document.getElementById('pm-closing').value='';
+  document.getElementById('pm-supply').value='FORECAST';
+  document.getElementById('pm-manager').innerHTML=_partnersManagerOptions('');
   document.getElementById('pm-terms').value='';
   document.getElementById('pm-note').value='';
   document.getElementById('pm-active').value='true';
@@ -2115,6 +2151,8 @@ function openPartnersEditModal(id){
   document.getElementById('pm-type').value=r.type||'매입처';
   document.getElementById('pm-country').value=r.country||'';
   document.getElementById('pm-closing').value=r.closing_basis||'';
+  document.getElementById('pm-supply').value=r.supply_mode||'FORECAST';
+  document.getElementById('pm-manager').innerHTML=_partnersManagerOptions(r.sales_manager||'');
   document.getElementById('pm-terms').value=r.payment_terms||'';
   document.getElementById('pm-note').value=r.note||'';
   document.getElementById('pm-active').value=(r.is_active!==false)?'true':'false';
@@ -2133,6 +2171,8 @@ async function savePartnersModal() {
     type:document.getElementById('pm-type').value||null,
     country:document.getElementById('pm-country').value.trim()||null,
     closing_basis:document.getElementById('pm-closing').value||null,
+    supply_mode:document.getElementById('pm-supply').value||'FORECAST',
+    sales_manager:document.getElementById('pm-manager').value||null,
     payment_terms:document.getElementById('pm-terms').value.trim()||null,
     note:document.getElementById('pm-note').value.trim()||null,
     is_active:document.getElementById('pm-active').value==='true',
@@ -4568,6 +4608,13 @@ async function uploadBsrExcel(e){
     }catch(err){alert('등록 실패: '+err.message);}
   };
   reader.readAsArrayBuffer(file); e.target.value='';
+}
+
+// ── 화면이동 네비게이션 표준: 새창열기 (v15.47 3버튼 표준) ──
+function openInNewWindow(){
+  const w=window.open(location.href,'_blank');
+  if(!w){alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n브라우저 주소창의 팝업 차단 아이콘에서 허용해주세요.');return;}
+  location.href='index.html';   // 원래 탭은 홈으로 — 같은 화면 2개를 띄우지 않는다
 }
 
 // ── 리사이저블 컬럼 ──
