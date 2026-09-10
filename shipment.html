@@ -757,6 +757,26 @@
     return res.json();
   }
 
+  // ── 전량 조회 (1,000행 상한 회피 — range 페이지네이션) ──
+  // Supabase는 limit 값과 무관하게 응답을 1,000행에서 잘라낸다.
+  // 정렬이 오름차순이면 잘려나가는 쪽이 최신분이라 "오늘 일정이 안 보이는" 사고가 된다.
+  // (2026-09-10 실사고: 6개월 1,034건 중 오늘 이전이 1,002건이라 오늘/미래분이 통째로 누락)
+  async function sbGetAll(table, params) {
+    const PAGE = 1000;
+    const out = [];
+    for (let from = 0; ; from += PAGE) {
+      const url = SB_URL + '/rest/v1/' + table + '?' + params;
+      const res = await fetch(url, {
+        headers: { ...SB_HEADERS, Range: `${from}-${from + PAGE - 1}` }
+      });
+      const rows = await res.json();
+      if (!Array.isArray(rows)) throw new Error('조회 실패: ' + JSON.stringify(rows));
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    return out;
+  }
+
   async function sbPost(table, body) {
     const res = await fetch(SB_URL + '/rest/v1/' + table, {
       method: 'POST', headers: SB_HEADERS, body: JSON.stringify(body)
@@ -796,11 +816,14 @@
   // ── 데이터 로드 ──
   async function loadData() {
     try {
-      // 최근 6개월 + 미래 데이터 조회
-      const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const fromDate = sixMonthsAgo.toISOString().slice(0,10);
-      const rows = await sbGet('ship_schedule',
-        'ship_date=gte.' + fromDate + '&order=ship_date.asc,created_at.asc&limit=2000');
+      // 메인 조회: 오늘-14일 이후만. 화면이 실제 쓰는 범위(오늘/주간/30일/수정삭제)를 모두 덮으면서
+      // 건수를 작게 유지해 1,000행 상한과 무관해진다.
+      const fromD = new Date(); fromD.setDate(fromD.getDate() - 14);
+      const fromDate = fromD.getFullYear() + '-' +
+        String(fromD.getMonth()+1).padStart(2,'0') + '-' +
+        String(fromD.getDate()).padStart(2,'0');
+      const rows = await sbGetAll('ship_schedule',
+        'ship_date=gte.' + fromDate + '&order=ship_date.asc,created_at.asc');
 
       allData = Array.isArray(rows) ? rows : [];
 
@@ -830,28 +853,42 @@
       }
 
       buildDaySummary();
+      await buildMonthGrid(currentYear, currentMonth);
 
-      document.getElementById('monthGrid').innerHTML = MONTHS.map((mName, mi) => {
-        const count = allData.filter(r => {
-          if (!r.ship_date) return false;
-          const d = new Date(r.ship_date);
-          return d.getFullYear() === currentYear && d.getMonth() === mi;
-        }).length;
-        const isCurrent = mi === currentMonth;
-        return `<div class="month-card ${isCurrent?'current-month':''}">
-          <div class="month-name ${isCurrent?'current':''}">${mName}</div>
-          <div class="month-count ${isCurrent?'current':''}">${count}</div>
-          <div class="month-unit">건</div></div>`;
-      }).join('');
-
-      const t = new Date();
+      const _now = new Date();
       document.getElementById('lastUpdate').textContent =
-        `마지막 갱신: ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+        `마지막 갱신: ${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}:${String(_now.getSeconds()).padStart(2,'0')}`;
 
     } catch(err) {
       document.getElementById('todayList').innerHTML = renderEmpty('데이터 로딩 실패');
       console.error(err);
     }
+  }
+
+  // ── 월별 집계 (올해 전체) ──
+  // 메인 조회는 최근 범위만 받으므로 연간 집계는 별도 조회한다.
+  // ship_date 한 컬럼만 받아 payload를 최소화하고, 1,000행을 넘으므로 페이지네이션을 쓴다.
+  async function buildMonthGrid(currentYear, currentMonth) {
+    let counts = new Array(12).fill(0);
+    try {
+      const yRows = await sbGetAll('ship_schedule',
+        `select=ship_date&ship_date=gte.${currentYear}-01-01&ship_date=lte.${currentYear}-12-31&order=ship_date.asc`);
+      yRows.forEach(r => {
+        if (!r.ship_date) return;
+        const mi = parseInt(String(r.ship_date).slice(5,7), 10) - 1;
+        if (mi >= 0 && mi < 12) counts[mi]++;
+      });
+    } catch(err) {
+      console.error('월별 집계 조회 실패:', err);
+    }
+    document.getElementById('monthGrid').innerHTML = MONTHS.map((mName, mi) => {
+      const count = counts[mi];
+      const isCurrent = mi === currentMonth;
+      return `<div class="month-card ${isCurrent?'current-month':''}">
+        <div class="month-name ${isCurrent?'current':''}">${mName}</div>
+        <div class="month-count ${isCurrent?'current':''}">${count}</div>
+        <div class="month-unit">건</div></div>`;
+    }).join('');
   }
 
   // ── 카드 렌더 ──

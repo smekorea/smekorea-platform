@@ -31,6 +31,8 @@
   .nav-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 13px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;transition:all .18s;}
   .nav-back{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#c9d6ec;}
   .nav-back:hover{background:rgba(255,255,255,0.16);color:#fff;}
+  .nav-new{background:rgba(255,255,255,0.08);border:1px solid rgba(120,200,160,0.45);color:#8fe3bb;}
+  .nav-new:hover{background:rgba(120,200,160,0.22);color:#fff;}
   .nav-home{background:var(--accent2);border:1px solid var(--accent2);color:#fff;}
   .nav-home:hover{filter:brightness(1.1);}
 
@@ -307,6 +309,7 @@
   <div class="top-right">
     <a class="top-btn" href="shipment.html" style="background:rgba(200,0,30,0.16);border-color:rgba(200,0,30,0.35);color:#ff8a94;">📦 출하관리로</a>
     <div class="nav-group">
+      <button class="nav-btn nav-new" onclick="openInNewWindow()" title="이 화면을 새 탭으로 빼내고, 현재 탭은 홈으로 돌아갑니다">⧉ 새창열기</button>
       <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
       <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
     </div>
@@ -918,6 +921,13 @@
     const t = document.getElementById('toast');
     t.textContent = msg; t.className = 'toast show' + (isError?' error':'');
     setTimeout(()=>t.classList.remove('show'), 2600);
+  }
+
+  // ── 화면이동 네비게이션 표준: 새창열기 (v15.47 3버튼 표준) ──
+  function openInNewWindow(){
+    const w = window.open(location.href, '_blank');
+    if(!w){ showToast('팝업이 차단되어 새 탭을 열 수 없습니다. 주소창의 팝업 차단 아이콘에서 허용해주세요', true); return; }
+    location.href = 'index.html';   // 원래 탭은 홈으로 — 같은 화면 2개를 띄우지 않는다
   }
 
   const DEPT_EMP_MAP = {
@@ -1699,25 +1709,36 @@
     const makerPnOfTarget = makerId ? (makerIdToMakerPn[makerId] || null) : null;
 
     // 1차: 이번 거래명세서 품목(itemRows)의 품명 맨 앞 토큰(LG품번)과 완전일치
-    const fromRow = itemRows.find(r => {
+    //      단, 그 행이 이미 필요수량을 채웠으면 확정하지 않고 2차로 내려간다 (v15.49)
+    //      — 메이커품번이 같은 품목이 두 행일 때, 채워진 행에 계속 매칭되어
+    //        나머지 행이 0인 채 남는 문제를 막는다.
+    const directRows = itemRows.filter(r => {
       const firstToken = (r.description || '').trim().split(/\s+/)[0] || '';
       return firstToken === target;
     });
-    if (fromRow) return { item_code: fromRow.item_code, lg_pn: target, scanned_pn: target, match_method: '직접매칭', maker_pn: makerPnOfTarget };
+    const openDirect = directRows.find(isRowOpen);
+    if (openDirect) return { item_code: openDirect.item_code, lg_pn: target, scanned_pn: target, match_method: '직접매칭', maker_pn: makerPnOfTarget };
 
     // 2차: 같은 메이커품번에 등록된 다른 LG품번들 중, 이번 거래명세서 내 다른 품목코드와 일치하는 게 있는지 교차조회
-    //      (SMART 등 산지별 LG품번 이중등록 브랜드 대응)
+    //      (SMART 등 산지별 LG품번 이중등록 브랜드 대응) — 미충족 행을 우선 선택 (v15.49)
     if (makerId) {
       const sameMakerLgPns = makerIdToLgPns[makerId] || new Set();
-      const crossRow = itemRows.find(r => {
+      const crossRows = itemRows.filter(r => {
         const rowToken = (r.description || '').trim().split(/\s+/)[0] || '';
         if (!rowToken || rowToken === target) return false;
         return sameMakerLgPns.has(rowToken);
       });
+      const crossRow = crossRows.find(isRowOpen) || null;
       if (crossRow) {
         const crossToken = (crossRow.description || '').trim().split(/\s+/)[0] || '';
         return { item_code: crossRow.item_code, lg_pn: crossToken, scanned_pn: target, match_method: '메이커품번매칭', maker_pn: makerPnOfTarget };
       }
+    }
+
+    // 미충족 행이 전혀 없으면(전부 충족) 충족된 직접매칭 행을 반환한다.
+    // → 미매칭("없는 품번")이 아니라 초과 스캔 NG로 정확히 안내되게 하기 위함 (v15.49)
+    if (directRows.length) {
+      return { item_code: directRows[0].item_code, lg_pn: target, scanned_pn: target, match_method: '직접매칭', maker_pn: makerPnOfTarget };
     }
 
     // ⛔ 3차 폴백(마스터폴백) 제거 (2026-08-11) — 이번 거래명세서와 무관한 품목이
@@ -1873,11 +1894,37 @@
     document.getElementById('slotBarcodeBadge').className = 'slot-badge';
   }
 
-  function isAlreadyFulfilled(itemCode) {
+  // 이번 스캔 수량을 더하면 필요수량을 초과하는지 판정한다. (v15.49)
+  // ⚠ 기존엔 인자가 itemCode 뿐이라 "스캔 전에 이미 충족됐는가"만 봤다.
+  //    그 경우 잔여 5,000인데 10,000짜리 릴을 스캔하면 0 < 5,000 이므로 통과되어
+  //    10,000이 그대로 누적된다(2026-09-10 sid=1322/1323 실사고).
+  //    정당한 초과 출하는 강제완료+사유("추가출하 필요") 경로를 사용한다.
+  function isAlreadyFulfilled(itemCode, qty) {
     const row = itemRows.find(r => r.item_code === itemCode);
     if (!row) return false;
     if (row.check_type === 'manual') return false;
-    return (row.qty_scanned||0) >= (row.qty_required||0);
+    const add = Number(qty) || 0;
+    return (row.qty_scanned||0) + add > (row.qty_required||0);
+  }
+
+  // 초과 스캔 NG 메시지 — 릴 오선택인지 중복스캔인지 현장에서 즉시 판단할 수 있게 상세 표기 (v15.49)
+  function overScanDetail(itemCode, qty) {
+    const row = itemRows.find(r => r.item_code === itemCode);
+    if (!row) return `${itemCode} 초과 스캔 (수량 반영 안 됨)`;
+    const req  = row.qty_required || 0;
+    const cur  = row.qty_scanned || 0;
+    const rest = Math.max(0, req - cur);
+    const add  = Number(qty) || 0;
+    const over = (cur + add) - req;
+    return `${itemCode} · 필요 ${req.toLocaleString()} / 현재 ${cur.toLocaleString()} / 잔여 ${rest.toLocaleString()}`
+         + ` · 스캔 ${add.toLocaleString()} → ${over.toLocaleString()} 초과 (수량 반영 안 됨)`;
+  }
+
+  // 아직 필요수량을 못 채운 행인지 (v15.49 — 메이커품번 동일 시 미충족 행 우선 선택용)
+  function isRowOpen(row) {
+    if (!row) return false;
+    if (row.check_type === 'manual') return false;
+    return (row.qty_scanned||0) < (row.qty_required||0);
   }
 
   async function processScan(raw) {
@@ -1898,7 +1945,7 @@
       const origin = detectOrigin(lotPart);
       const item = findItemByLgPn(pn);
       const itemCode = item ? item.item_code : null;
-      const overScan = itemCode ? isAlreadyFulfilled(itemCode) : false;
+      const overScan = itemCode ? isAlreadyFulfilled(itemCode, qty) : false;
 
       const log = await sbPost('ship_lot_log', {
         ship_schedule_id: currentSid, item_code: itemCode, scan_type: 'QR',
@@ -1915,8 +1962,7 @@
       logRows.unshift(Array.isArray(log)?log[0]:log);
       activeItemCode = itemCode;
       if (itemCode && overScan) {
-        const row = itemRows.find(r => r.item_code === itemCode);
-        finishScan('qr', false, '⚠ 초과 스캔', `${itemCode} 이미 필요수량(${(row.qty_required||0).toLocaleString()}) 충족 - 수량 반영 안 됨`);
+        finishScan('qr', false, '⚠ 초과 스캔', overScanDetail(itemCode, qty));
       } else if (itemCode) {
         await accumulateQty(itemCode, qty);
         finishScan('qr', true, '✓ 인식 완료', `${item.maker_pn || itemCode} +${qty.toLocaleString()}개`);
@@ -2011,7 +2057,7 @@
 
   async function completePairFromPN(pn_obj, lotRaw) {
     const origin = detectOrigin(lotRaw);
-    const overScan = pn_obj.itemCode ? isAlreadyFulfilled(pn_obj.itemCode) : false;
+    const overScan = pn_obj.itemCode ? isAlreadyFulfilled(pn_obj.itemCode, pn_obj.qty) : false;
     const patchResult = await sbPatch('ship_lot_log', pn_obj.logId, { parsed_lot: lotRaw, origin: origin, pair_status: overScan ? '초과스캔' : '완결' });
     if (isSbError(patchResult)) {
       console.error('ship_lot_log 패치 실패:', patchResult);
@@ -2026,7 +2072,7 @@
 
   async function completePair(item, pn, qty, pnRaw, lot_obj) {
     const itemCode = item ? item.item_code : null;
-    const overScan = itemCode ? isAlreadyFulfilled(itemCode) : false;
+    const overScan = itemCode ? isAlreadyFulfilled(itemCode, qty) : false;
     const origin = detectOrigin(lot_obj.raw);
     const log = await sbPost('ship_lot_log', {
       ship_schedule_id: currentSid, item_code: itemCode, scan_type: '바코드1_품번',
@@ -2620,7 +2666,7 @@
       const lot = parts.slice(2).join('!');
       const item = findItemByLgPn(pn);
       const newItemCode = item ? item.item_code : null;
-      const overScan = newItemCode ? isAlreadyFulfilled(newItemCode) && newItemCode !== oldItemCode : false;
+      const overScan = newItemCode ? isAlreadyFulfilled(newItemCode, qty) && newItemCode !== oldItemCode : false;
       updates = { ...updates, parsed_pn: pn, parsed_qty: qty, parsed_lot: lot, origin: detectOrigin(lotPart),
         item_code: newItemCode, matched_lg_pn: item ? item.lg_pn : null, match_method: item ? item.match_method : null,
         pair_status: overScan ? '초과스캔' : '완결' };
