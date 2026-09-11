@@ -620,45 +620,6 @@
         <div class="modal-section-title">완료 처리 담당자 <span style="color:var(--accent);font-size:9px;">* 필수</span></div>
         <select class="form-select" id="completeBy" style="width:100%;">
           <option value="">— 담당자 선택 —</option>
-          <optgroup label="대표이사">
-            <option>곽선효</option>
-          </optgroup>
-          <optgroup label="상무이사">
-            <option>박정용</option>
-          </optgroup>
-          <optgroup label="재경팀">
-            <option>김근복</option>
-            <option>이서연</option>
-          </optgroup>
-          <optgroup label="개발기획팀">
-            <option>김봉승</option>
-          </optgroup>
-          <optgroup label="자재구매팀">
-            <option>배병대</option>
-            <option>조승연</option>
-            <option>곽경민</option>
-            <option>박영주</option>
-          </optgroup>
-          <optgroup label="개발구매팀">
-            <option>김종길</option>
-            <option>최성빈</option>
-            <option>최세진</option>
-          </optgroup>
-          <optgroup label="출하팀">
-            <option>박형호</option>
-            <option>김재옥</option>
-            <option>최혜영</option>
-            <option>송윤석</option>
-            <option>박현길</option>
-          </optgroup>
-          <optgroup label="제조팀">
-            <option>문상호</option>
-            <option>장우승</option>
-            <option>김기훈</option>
-            <option>김아현</option>
-            <option>윤선정</option>
-            <option>공수지</option>
-          </optgroup>
         </select>
       </div>
     </div>
@@ -1121,17 +1082,58 @@
     document.getElementById('inputModal').classList.add('show');
   }
 
-  // ── 부서/담당자 마스터 (완료처리 담당자 목록과 동일 소스) ──
-  const DEPT_EMP_MAP = {
-    '대표이사': ['곽선효'],
+  // ── 부서/담당자 마스터 — 관리자설정(인원관리)의 employees 테이블이 유일한 기준 ──
+  // 재직중(active=true) + 국내법인(entity=KOREA)만 노출. 입·퇴사는 인원관리에서 처리하면 여기 자동 반영됨.
+  // 하드코딩 금지: 아래 FALLBACK은 조회 실패 시 등록 자체가 막히는 것을 막기 위한 최후 수단일 뿐임.
+  const DEPT_EMP_FALLBACK = {
+    '대표이사': ['사장님(곽선효)'],
     '상무이사': ['박정용'],
     '재경팀': ['김근복','이서연'],
     '개발기획팀': ['김봉승'],
     '자재구매팀': ['배병대','조승연','곽경민','박영주'],
     '개발구매팀': ['김종길','최성빈','최세진'],
-    '출하팀': ['박형호','김재옥','최혜영','송윤석','박현길'],
+    '출하팀': ['박형호','김재옥','최혜영','송윤석'],
     '제조팀': ['문상호','장우승','김기훈','김아현','윤선정','공수지']
   };
+  let DEPT_EMP_MAP = JSON.parse(JSON.stringify(DEPT_EMP_FALLBACK));
+
+  async function loadDeptEmpMap() {
+    try {
+      const rows = await sbGet('employees', 'select=name,dept,emp_no&active=eq.true&entity=eq.KOREA&order=emp_no&limit=500');
+      if (Array.isArray(rows) && rows.length) {
+        const m = {};
+        rows.forEach(r => {
+          if (!r.dept || !r.name) return;
+          (m[r.dept] = m[r.dept] || []).push(r.name);
+        });
+        if (Object.keys(m).length) {
+          DEPT_EMP_MAP = m;
+          // 이미 그려둔 부서 셀렉트를 최신 목록으로 다시 채움(선택값은 유지)
+          ['inDeptSelect','inRecvDeptSelect'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { const keep = el.value; fillDeptSelect(el); if (keep) el.value = keep; }
+          });
+          fillCompleteBySelect();
+          return;
+        }
+      }
+      console.warn('employees 조회 결과가 비어 있어 기본 목록을 사용합니다', rows);
+    } catch(e) {
+      console.error('employees 조회 실패, 기본 목록 사용:', e);
+    }
+  }
+
+  function fillCompleteBySelect() {
+    const el = document.getElementById('completeBy');
+    if (!el) return;
+    const keep = el.value;
+    el.innerHTML = '<option value="">— 담당자 선택 —</option>' +
+      Object.keys(DEPT_EMP_MAP).map(d =>
+        `<optgroup label="${d}">` + DEPT_EMP_MAP[d].map(n => `<option>${n}</option>`).join('') + '</optgroup>'
+      ).join('');
+    if (keep) el.value = keep;
+  }
+
   function fillDeptSelect(selEl) {
     selEl.innerHTML = '<option value="">부서 선택</option>' +
       Object.keys(DEPT_EMP_MAP).map(d => `<option value="${d}">${d}</option>`).join('');
@@ -1149,6 +1151,8 @@
   }
   fillDeptSelect(document.getElementById('inDeptSelect'));
   fillDeptSelect(document.getElementById('inRecvDeptSelect'));
+  fillCompleteBySelect();
+  loadDeptEmpMap();   // employees 기준으로 즉시 갱신
 
   // ── 매출처명 마스터(partners) 자동완성 ──
   let customerMasterLoaded = false;
