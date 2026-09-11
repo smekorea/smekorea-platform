@@ -801,6 +801,44 @@ tr.dragging{opacity:.45;}
     </div>
     <div class="up-info">💡 납기일 수정 후 [저장] 클릭 시 즉시 반영. 엑셀 업로드 시 전체 교체됩니다.</div>
   </div>
+
+  <!-- 발주예측 설정 (smart_forecast_setting) -->
+  <div class="up-section">
+    <div class="up-section-title">📈 발주예측 설정 <span style="font-size:12px;font-weight:400;color:var(--muted);">스마트전자 자재관리 발주수량 계산에 적용</span></div>
+    <div class="up-info" style="line-height:1.8;">
+      💡 <b>대상월</b> = 발주월 + 올림(납기주 ÷ 4). 9월 발주 시 12주 품목은 12월분, 8주 품목은 11월분입니다.<br>
+      💡 <b>월평균판매</b> = 최근실적 평균 × 최근가중치 + 작년계절 평균 × 계절가중치. 두 가중치 합은 100이어야 합니다.<br>
+      💡 <b>적정재고 기본값</b>은 품목에 값이 없을 때 계산에만 임시 적용되며 DB에 저장되지 않습니다. 화면에 [기본값] 표시가 붙습니다.
+    </div>
+    <div id="sfs-form" style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding:12px 14px;background:#fff;border:1.5px solid var(--border);border-radius:8px;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11.5px;color:var(--muted);font-weight:700;">최근실적 개월수</label>
+        <input id="sfs-recent" type="number" min="1" max="24" style="width:90px;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;text-align:right;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11.5px;color:var(--muted);font-weight:700;">작년계절 개월수</label>
+        <input id="sfs-season" type="number" min="1" max="12" style="width:90px;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;text-align:right;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11.5px;color:var(--muted);font-weight:700;">최근 가중치(%)</label>
+        <input id="sfs-wr" type="number" min="0" max="100" oninput="sfsSyncWeight('r')" style="width:90px;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;text-align:right;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11.5px;color:var(--muted);font-weight:700;">계절 가중치(%)</label>
+        <input id="sfs-ws" type="number" min="0" max="100" oninput="sfsSyncWeight('s')" style="width:90px;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;text-align:right;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11.5px;color:var(--muted);font-weight:700;">적정재고 기본 · CHIP(일)</label>
+        <input id="sfs-chip" type="number" min="0" max="365" style="width:130px;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;text-align:right;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11.5px;color:var(--muted);font-weight:700;">적정재고 기본 · 그 외(일)</label>
+        <input id="sfs-etc" type="number" min="0" max="365" style="width:130px;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;text-align:right;">
+      </div>
+      <button class="up-btn up-btn-primary" onclick="saveForecastSetting()">저장</button>
+      <span id="sfs-meta" style="font-size:11.5px;color:var(--muted);"></span>
+    </div>
+  </div>
   <div class="tbl-wrap">
     <table id="maker-table">
       <thead><tr>
@@ -809,10 +847,11 @@ tr.dragging{opacity:.45;}
         <th class="center" style="width:100px;">납기(일)</th>
         <th class="center" style="width:100px;">납기(주)</th>
         <th style="width:110px;">기본운송</th>
+        <th class="center" style="width:90px;">발주일</th>
         <th>비고</th>
         <th class="center" style="width:120px;">관리</th>
       </tr></thead>
-      <tbody id="maker-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="maker-tbody"><tr><td colspan="8"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -833,8 +872,9 @@ tr.dragging{opacity:.45;}
       </div>
       <div class="modal-row">
         <div class="form-group"><label>기본운송</label><select id="mm-transport"><option value="VSL">VSL</option><option value="AIR">AIR</option><option value="">-</option></select></div>
-        <div class="form-group"><label>비고</label><input id="mm-note" placeholder="비고"></div>
+        <div class="form-group"><label>발주일 (매월 며칠)</label><input id="mm-oday" type="number" min="1" max="31" placeholder="예) 5"></div>
       </div>
+      <div class="form-group full"><label>비고</label><input id="mm-note" placeholder="비고"></div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeMakerModal()">취소</button>
@@ -1345,7 +1385,7 @@ function switchTab(t) {
   if(t==='partners'  && _partnersData.length===0)   loadPartnersData();
   if(t==='master'    && _bsrData.length===0)        loadBsrData();
   if(t==='alias'     && _aliasData.length===0)      loadAliasData();
-  if(t==='maker'     && _makerData.length===0)      loadMakerData();
+  if(t==='maker'){ if(_makerData.length===0) loadMakerData(); if(!_sfsRow) loadForecastSetting(); }
   if(t==='logistics' && _logisticsData.length===0)  loadLogisticsData();
   if(t==='trade')     loadTradeSummary();
   if(t==='stock')     loadStockSummary();
@@ -3740,6 +3780,58 @@ async function loadMakerData() {
 let _mplData = [];                 // maker_pn_leadtime 전체
 let _mplOpen = {};                 // {maker_name: true} 펼침 상태
 
+// ── 발주예측 설정 (smart_forecast_setting, 1행 운영) ──
+let _sfsRow = null;
+
+async function loadForecastSetting() {
+  const {data, error} = await sb.from('smart_forecast_setting').select('*').order('id').limit(1);
+  if (error) { console.error('발주예측 설정 로드 실패:', error); return; }
+  _sfsRow = (data && data[0]) || null;
+  if (!_sfsRow) { document.getElementById('sfs-meta').textContent = '⚠ 설정 행이 없습니다'; return; }
+  const g = id => document.getElementById(id);
+  g('sfs-recent').value = _sfsRow.recent_months;
+  g('sfs-season').value = _sfsRow.season_months;
+  g('sfs-wr').value     = _sfsRow.weight_recent;
+  g('sfs-ws').value     = _sfsRow.weight_season;
+  g('sfs-chip').value   = _sfsRow.default_std_days_chip;
+  g('sfs-etc').value    = _sfsRow.default_std_days_etc;
+  const at = _sfsRow.updated_at ? String(_sfsRow.updated_at).slice(0,16).replace('T',' ') : '';
+  g('sfs-meta').textContent = _sfsRow.updated_by ? `최종수정: ${_sfsRow.updated_by} ${at}` : '';
+}
+
+// 한쪽 가중치를 바꾸면 나머지를 자동으로 맞춰 합계 100을 유지한다
+function sfsSyncWeight(which) {
+  const wr = document.getElementById('sfs-wr'), ws = document.getElementById('sfs-ws');
+  const v = parseInt(which === 'r' ? wr.value : ws.value);
+  if (!Number.isFinite(v) || v < 0 || v > 100) return;
+  if (which === 'r') ws.value = 100 - v; else wr.value = 100 - v;
+}
+
+async function saveForecastSetting() {
+  if (!_sfsRow) { alert('설정 행이 없어 저장할 수 없습니다.'); return; }
+  const num = id => parseInt(document.getElementById(id).value);
+  const recent = num('sfs-recent'), season = num('sfs-season');
+  const wr = num('sfs-wr'), ws = num('sfs-ws');
+  const chip = num('sfs-chip'), etc = num('sfs-etc');
+
+  if (![recent, season, wr, ws, chip, etc].every(Number.isFinite)) { alert('모든 항목을 입력해주세요.'); return; }
+  if (recent < 1 || recent > 24) { alert('최근실적 개월수는 1~24 사이여야 합니다.'); return; }
+  if (season < 1 || season > 12) { alert('작년계절 개월수는 1~12 사이여야 합니다.'); return; }
+  if (wr + ws !== 100) { alert(`가중치 합이 ${wr + ws}입니다. 100이 되어야 합니다.`); return; }
+  if (chip < 0 || chip > 365 || etc < 0 || etc > 365) { alert('적정재고 기본값은 0~365일 사이여야 합니다.'); return; }
+
+  const by = localStorage.getItem('sme_user_name') || '관리자';
+  const {error} = await sb.from('smart_forecast_setting').update({
+    recent_months: recent, season_months: season,
+    weight_recent: wr, weight_season: ws,
+    default_std_days_chip: chip, default_std_days_etc: etc,
+    updated_by: by, updated_at: new Date().toISOString()
+  }).eq('id', _sfsRow.id);
+  if (error) { alert('저장 실패: ' + error.message); return; }
+  alert('✓ 발주예측 설정이 저장되었습니다.');
+  await loadForecastSetting();
+}
+
 async function loadMplData() {
   const {data, error} = await sb.from('maker_pn_leadtime')
     .select('*').order('maker_name').order('part_group', {nullsFirst:false}).order('pfx');
@@ -3768,13 +3860,18 @@ function mplRowsHtml(makerName) {
       <div class="mpl-empty">등록된 접두 규칙이 없습니다. 메이커 기본납기가 적용됩니다.</div>
     </div>`;
   }
+  const numOrDash = v => (v != null && v !== '') ? Number(v).toLocaleString() : '—';
   const body = list.map(x => `
     <tr id="mpl-row-${x.id}">
       <td><b class="mono">${escH(x.pfx)}</b></td>
       <td>${x.part_group ? escH(x.part_group) : '<span style="color:#b45309;font-weight:700;">⚠ 미분류</span>'}</td>
       <td style="text-align:right;">${x.weeks != null ? x.weeks + '주' : '—'}</td>
       <td style="text-align:right;"><b>${x.days != null ? x.days + '일' : '—'}</b></td>
-      <td style="color:var(--muted);">${escH(x.note||'')}</td>
+      <td style="text-align:right;">${numOrDash(x.moq)}</td>
+      <td style="text-align:right;">${numOrDash(x.order_unit)}</td>
+      <td style="text-align:right;">${numOrDash(x.box_unit)}</td>
+      <td style="text-align:right;">${numOrDash(x.box_threshold)}</td>
+      <td style="color:var(--muted);">${mplNoteHtml(x.note)}</td>
       <td style="text-align:center;">
         <button class="row-btn row-btn-edit" onclick="editMplRow(${x.id})">수정</button>
         <button class="row-btn row-btn-del" onclick="deleteMplRow(${x.id})">삭제</button>
@@ -3789,16 +3886,29 @@ function mplRowsHtml(makerName) {
     </div>
     <table class="mpl-tbl">
       <thead><tr>
-        <th style="width:80px;">품번접두</th><th style="width:130px;">구분</th>
-        <th style="width:70px;text-align:right;">납기(주)</th><th style="width:70px;text-align:right;">납기(일)</th>
-        <th style="width:220px;">비고</th><th style="width:120px;text-align:center;">관리</th>
+        <th style="width:80px;">품번접두</th><th style="width:120px;">구분</th>
+        <th style="width:62px;text-align:right;">납기(주)</th><th style="width:62px;text-align:right;">납기(일)</th>
+        <th style="width:74px;text-align:right;">MOQ</th>
+        <th style="width:80px;text-align:right;">발주단위</th>
+        <th style="width:80px;text-align:right;">박스단위</th>
+        <th style="width:80px;text-align:right;">박스임계</th>
+        <th style="width:200px;">비고</th><th style="width:120px;text-align:center;">관리</th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table>
-    <div style="margin-top:6px;font-size:11px;color:var(--muted);">
-      💡 품번 앞 3자리로 매칭됩니다. 규칙이 없는 접두는 메이커 기본납기가 적용됩니다.
+    <div style="margin-top:6px;font-size:11px;color:var(--muted);line-height:1.7;">
+      💡 품번 앞 3자리로 매칭됩니다. 규칙이 없는 접두는 메이커 기본납기가 적용됩니다.<br>
+      📦 발주수량 보정 — 박스수 = 발주수량 ÷ 박스단위(버림), 잔량이 <b>박스임계 초과</b>면 박스 1개 추가, 이하면 <b>발주단위 배수</b>로 올림. 최종이 MOQ 미만이면 MOQ 적용.<br>
+      ⚠ 비고의 <b>검토필요</b>는 과거 발주실적으로 자동 추정한 값이라는 뜻입니다. 담당자 확인 후 실제 값으로 수정해주세요.
     </div>
   </div>`;
+}
+
+// 비고의 '검토필요'를 눈에 띄게 — 자동추정값과 확인된 값을 구분하기 위함
+function mplNoteHtml(note){
+  const s = escH(note||'');
+  if (!s) return '';
+  return s.replace(/검토필요/g, '<b style="color:#b45309;">검토필요</b>');
 }
 
 function escH(v){ return String(v==null?'':v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -3999,12 +4109,13 @@ function renderMakerTable() {
       <td class="center mono">${r.lead_time_days||'—'}</td>
       <td class="center mono">${r.lead_time_weeks||'—'}</td>
       <td class="center">${r.transport_default||'—'}</td>
+      <td class="center mono">${r.order_day ? '매월 '+r.order_day+'일' : '—'}</td>
       <td>${escH(r.remark||'')}</td>
       <td class="center">
         <button class="row-btn row-btn-edit" onclick="editMakerRow(${r.id})">수정</button>
         <button class="row-btn row-btn-del" onclick="deleteMakerRow(${r.id},'${escJs(mn)}')">삭제</button>
       </td>
-    </tr>` + (open ? `<tr class="mpl-host"><td colspan="7" style="padding:0;">${mplRowsHtml(mn)}</td></tr>` : '');
+    </tr>` + (open ? `<tr class="mpl-host"><td colspan="8" style="padding:0;">${mplRowsHtml(mn)}</td></tr>` : '');
   }).join('');
   setTimeout(()=>initColResize('maker-table','al_maker'),50);
 }
@@ -4016,8 +4127,9 @@ function editMakerRow(id) {
   row.cells[2].innerHTML = `<input class="mk-input w60" id="mk-days-${id}" type="number" value="${r.lead_time_days||''}">`;
   row.cells[3].innerHTML = `<input class="mk-input w60" id="mk-weeks-${id}" type="number" value="${r.lead_time_weeks||''}">`;
   row.cells[4].innerHTML = `<input class="mk-input w80" id="mk-trans-${id}" value="${r.transport_default||''}">`;
-  row.cells[5].innerHTML = `<input class="mk-input" style="width:100%;" id="mk-remark-${id}" value="${r.remark||''}">`;
-  row.cells[6].innerHTML = `
+  row.cells[5].innerHTML = `<input class="mk-input w60" id="mk-oday-${id}" type="number" min="1" max="31" placeholder="1~31" value="${r.order_day||''}">`;
+  row.cells[6].innerHTML = `<input class="mk-input" style="width:100%;" id="mk-remark-${id}" value="${r.remark||''}">`;
+  row.cells[7].innerHTML = `
     <button class="row-btn row-btn-save" onclick="saveMaker(${id})">저장</button>
     <button class="row-btn row-btn-cancel" onclick="renderMakerTable()">취소</button>`;
 }
@@ -4037,10 +4149,14 @@ function editMplRow(id) {
   if (!x || !row) return;
   row.cells[0].innerHTML = `<input class="mpl-in mono" id="mpl-pfx-${id}" style="width:66px;" value="${escH(x.pfx||'')}" maxlength="10">`;
   row.cells[1].innerHTML = mplGroupSelect('mpl-grp-'+id, x.part_group||'');
-  row.cells[2].innerHTML = `<input class="mpl-in" id="mpl-wk-${id}" type="number" min="0" style="width:56px;text-align:right;" value="${x.weeks!=null?x.weeks:''}" oninput="mplSyncDays(${id})">`;
-  row.cells[3].innerHTML = `<input class="mpl-in" id="mpl-dy-${id}" type="number" min="0" style="width:56px;text-align:right;" value="${x.days!=null?x.days:''}">`;
-  row.cells[4].innerHTML = `<input class="mpl-in" id="mpl-note-${id}" style="width:210px;" value="${escH(x.note||'')}">`;
-  row.cells[5].innerHTML = `
+  row.cells[2].innerHTML = `<input class="mpl-in" id="mpl-wk-${id}" type="number" min="0" style="width:52px;text-align:right;" value="${x.weeks!=null?x.weeks:''}" oninput="mplSyncDays(${id})">`;
+  row.cells[3].innerHTML = `<input class="mpl-in" id="mpl-dy-${id}" type="number" min="0" style="width:52px;text-align:right;" value="${x.days!=null?x.days:''}">`;
+  row.cells[4].innerHTML = `<input class="mpl-in" id="mpl-moq-${id}" type="number" min="0" style="width:68px;text-align:right;" value="${x.moq!=null?x.moq:''}">`;
+  row.cells[5].innerHTML = `<input class="mpl-in" id="mpl-ou-${id}" type="number" min="0" style="width:74px;text-align:right;" value="${x.order_unit!=null?x.order_unit:''}">`;
+  row.cells[6].innerHTML = `<input class="mpl-in" id="mpl-bu-${id}" type="number" min="0" style="width:74px;text-align:right;" value="${x.box_unit!=null?x.box_unit:''}">`;
+  row.cells[7].innerHTML = `<input class="mpl-in" id="mpl-bt-${id}" type="number" min="0" style="width:74px;text-align:right;" value="${x.box_threshold!=null?x.box_threshold:''}">`;
+  row.cells[8].innerHTML = `<input class="mpl-in" id="mpl-note-${id}" style="width:190px;" value="${escH(x.note||'')}">`;
+  row.cells[9].innerHTML = `
     <button class="row-btn row-btn-save" onclick="saveMplRow(${id})">저장</button>
     <button class="row-btn row-btn-cancel" onclick="renderMakerTable()">취소</button>`;
 }
@@ -4057,11 +4173,27 @@ async function saveMplRow(id) {
   const g = v => document.getElementById(v);
   const pfx = (g('mpl-pfx-'+id).value||'').trim();
   if (!pfx) { alert('품번접두를 입력해주세요.'); return; }
+  const numOrNull = el => { const v = parseInt(g(el).value); return Number.isFinite(v) && v > 0 ? v : null; };
+  const moq = numOrNull('mpl-moq-'+id), orderUnit = numOrNull('mpl-ou-'+id);
+  const boxUnit = numOrNull('mpl-bu-'+id), boxTh = numOrNull('mpl-bt-'+id);
+
+  // 박스 규칙은 단위와 임계가 짝이라 한쪽만 있으면 보정 로직이 돌지 않는다
+  if ((boxUnit && !boxTh) || (!boxUnit && boxTh)) {
+    alert('박스단위와 박스임계는 함께 입력해야 합니다.\n둘 다 비우면 박스 규칙 없이 발주단위 배수만 적용됩니다.'); return;
+  }
+  if (boxUnit && boxTh && boxTh >= boxUnit) {
+    alert(`박스임계(${boxTh.toLocaleString()})는 박스단위(${boxUnit.toLocaleString()})보다 작아야 합니다.\n잔량이 박스단위 이상이면 이미 박스 1개가 됩니다.`); return;
+  }
+  if (moq && orderUnit && moq % orderUnit !== 0) {
+    if (!confirm(`MOQ(${moq.toLocaleString()})가 발주단위(${orderUnit.toLocaleString()})의 배수가 아닙니다.\n그대로 저장할까요?`)) return;
+  }
+
   const body = {
     pfx,
     part_group: (g('mpl-grp-'+id).value||'') || null,
     weeks: parseInt(g('mpl-wk-'+id).value) || null,
     days:  parseInt(g('mpl-dy-'+id).value) || null,
+    moq, order_unit: orderUnit, box_unit: boxUnit, box_threshold: boxTh,
     note:  (g('mpl-note-'+id).value||'').trim() || null
   };
   const {error} = await sb.from('maker_pn_leadtime').update(body).eq('id', id);
@@ -4110,12 +4242,14 @@ async function saveMaker(id) {
     lead_time_days:   parseInt(document.getElementById('mk-days-'+id).value)||null,
     lead_time_weeks:  parseInt(document.getElementById('mk-weeks-'+id).value)||null,
     transport_default: document.getElementById('mk-trans-'+id).value.trim()||null,
+    order_day:        (()=>{ const v=parseInt(document.getElementById('mk-oday-'+id).value);
+                             return (Number.isFinite(v) && v>=1 && v<=31) ? v : null; })(),
     remark:           document.getElementById('mk-remark-'+id).value.trim()||null,
   };
   const {error} = await sb.from('makers').update(body).eq('id', id);
   if(!error) {
     const row = _makerData.find(r=>r.id===id);
-    if(row){ row.lead_time_days=body.lead_time_days; row.lead_time_weeks=body.lead_time_weeks; row.transport_default=body.transport_default; row.remark=body.remark; }
+    if(row){ row.lead_time_days=body.lead_time_days; row.lead_time_weeks=body.lead_time_weeks; row.transport_default=body.transport_default; row.order_day=body.order_day; row.remark=body.remark; }
     renderMakerTable();
   } else alert('저장 실패: '+error.message);
 }
@@ -4557,6 +4691,7 @@ function openMakerAddModal(){
   document.getElementById('mm-days').value='';
   document.getElementById('mm-weeks').value='';
   document.getElementById('mm-transport').value='VSL';
+  document.getElementById('mm-oday').value='';
   document.getElementById('mm-note').value='';
   document.getElementById('makerModalTitle').textContent='메이커 추가';
   document.getElementById('makerModal').classList.add('show');
@@ -4566,12 +4701,18 @@ async function saveMakerModal(){
   const id=document.getElementById('mm-id').value;
   const name=document.getElementById('mm-name').value.trim();
   if(!name){alert('메이커명은 필수입니다.');return;}
+  const oday=parseInt(document.getElementById('mm-oday').value);
+  if(document.getElementById('mm-oday').value.trim() && !(Number.isFinite(oday)&&oday>=1&&oday<=31)){
+    alert('발주일은 1~31 사이로 입력해주세요.');return;
+  }
+  // 컬럼명은 makers 테이블 실제 스키마 기준 (lead_time_*/transport_default/remark)
   const payload={
     maker_name:name,
-    lead_days:parseInt(document.getElementById('mm-days').value)||null,
-    lead_weeks:parseInt(document.getElementById('mm-weeks').value)||null,
-    default_transport:document.getElementById('mm-transport').value||null,
-    note:document.getElementById('mm-note').value.trim()||null,
+    lead_time_days:parseInt(document.getElementById('mm-days').value)||null,
+    lead_time_weeks:parseInt(document.getElementById('mm-weeks').value)||null,
+    transport_default:document.getElementById('mm-transport').value||null,
+    order_day:(Number.isFinite(oday)&&oday>=1&&oday<=31)?oday:null,
+    remark:document.getElementById('mm-note').value.trim()||null,
   };
   let error;
   if(id){({error}=await sb.from('makers').update(payload).eq('id',id));}
