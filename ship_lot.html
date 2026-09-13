@@ -121,6 +121,23 @@
   .dp-cust.wait{background:#fff6d6;border-color:#e8b923;color:#5c4300;}
   .dp-empty{font-size:11.5px;color:var(--muted);font-weight:700;padding:6px 2px;}
   .dp-updated{font-size:10.5px;color:var(--muted);font-weight:700;white-space:nowrap;}
+  /* 매출처별 월별 품목수 · 출하일수 */
+  .dp-sales-wrap{max-height:230px;overflow:auto;border:1px solid var(--border);border-radius:7px;background:#fff;}
+  .dp-sales{border-collapse:separate;border-spacing:0;width:100%;font-size:11.5px;}
+  .dp-sales th,.dp-sales td{padding:4px 7px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);}
+  .dp-sales thead th{position:sticky;top:0;z-index:2;background:var(--navy);color:#fff;font-size:10.5px;font-weight:800;}
+  .dp-sales tbody tr:nth-child(even){background:#f7f9fc;}
+  .dp-sales .c-name{position:sticky;left:0;z-index:1;background:inherit;text-align:left;font-weight:800;color:var(--text);
+    max-width:190px;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--border);}
+  .dp-sales thead .c-name{z-index:3;background:var(--navy);}
+  .dp-sales .c-rank{color:var(--muted);font-weight:800;font-size:10px;}
+  .dp-sales .v-item{font-weight:800;color:var(--text);font-size:12px;}
+  .dp-sales .v-days{font-size:9.5px;color:var(--accent2);font-weight:700;}
+  .dp-sales td.zero .v-item{color:#c9d2e0;}
+  .dp-sales .c-total{background:#eef3fb;}
+  .dp-sales tbody tr:nth-child(even) .c-total{background:#e6edf8;}
+  .dp-sales .c-total .v-item{color:var(--navy);}
+  .dp-sales-note{font-size:10px;color:var(--muted);font-weight:700;margin-top:5px;}
   /* ── 품목 진행 컬럼 ── */
   .ip-text{font-size:13.5px;font-weight:800;color:#111827;white-space:nowrap;}
   .ip-text.done{color:var(--accent2);}
@@ -1479,6 +1496,70 @@
     if (detailProgressOpen) renderDetailProgress();
   }
   let dpWorkerScope = 'today';   // 'today' | 'month'
+
+  // ── 매출처별 월별 품목수·출하일수 (ERP 마감자료, sales_customer_monthly_v) ──
+  // 월마감 자료라 자주 안 바뀌므로 패널 최초 열람 시 1회만 조회하고 캐시한다.
+  let salesMonthly = null, salesMonthlyYear = '', salesMonthlyLoading = false;
+  async function loadSalesMonthly() {
+    if (salesMonthly !== null || salesMonthlyLoading) return;
+    salesMonthlyLoading = true;
+    const yy = n => String(n).slice(2) + '년';
+    try {
+      let yr = yy(new Date().getFullYear());
+      let rows = await sbGet('sales_customer_monthly_v', `year=eq.${encodeURIComponent(yr)}&select=mm,customer,line_cnt,ship_days&limit=3000`);
+      // 연초라 올해 마감자료가 아직 없으면 직전 연도로 대체
+      if (!Array.isArray(rows) || rows.length === 0) {
+        yr = yy(new Date().getFullYear() - 1);
+        rows = await sbGet('sales_customer_monthly_v', `year=eq.${encodeURIComponent(yr)}&select=mm,customer,line_cnt,ship_days&limit=3000`);
+      }
+      salesMonthly = Array.isArray(rows) ? rows : [];
+      salesMonthlyYear = yr;
+    } catch(e) {
+      console.error('매출 월별 집계 조회 실패:', e);
+      salesMonthly = [];
+    }
+    salesMonthlyLoading = false;
+    if (detailProgressOpen) renderDetailProgress();
+  }
+
+  function buildSalesMonthlyHtml() {
+    if (salesMonthly === null) { loadSalesMonthly(); return '<div class="dp-empty">불러오는 중...</div>'; }
+    if (!salesMonthly.length) return '<div class="dp-empty">ERP 매출자료가 없습니다</div>';
+
+    const months = [...new Set(salesMonthly.map(r => r.mm))].sort((a,b) => a-b);
+    const nMonths = months.length || 1;   // 월평균 분모 — 마감된 개월 수(8월 마감이 올라오면 자동 증가)
+    const byCust = new Map();
+    salesMonthly.forEach(r => {
+      if (!byCust.has(r.customer)) byCust.set(r.customer, { m:{}, lines:0, days:0 });
+      const c = byCust.get(r.customer);
+      c.m[r.mm] = { l: r.line_cnt||0, d: r.ship_days||0 };
+      c.lines += r.line_cnt||0;
+      c.days  += r.ship_days||0;
+    });
+    const rows = [...byCust.entries()].sort((a,b) => b[1].lines - a[1].lines);
+    const nf = n => n.toLocaleString('ko-KR');
+
+    const head = `<tr><th class="c-name">매출처</th>` +
+      months.map(m => `<th>${m}월</th>`).join('') +
+      `<th class="c-total">월평균</th></tr>`;
+
+    const body = rows.map(([name, c], idx) => {
+      const tds = months.map(m => {
+        const v = c.m[m];
+        return v
+          ? `<td><div class="v-item">${nf(v.l)}</div><div class="v-days">${v.d}일</div></td>`
+          : `<td class="zero"><div class="v-item">-</div><div class="v-days">&nbsp;</div></td>`;
+      }).join('');
+      const avgL = Math.round(c.lines / nMonths);
+      const avgD = (c.days / nMonths).toFixed(1);
+      return `<tr><td class="c-name"><span class="c-rank">${idx+1}</span> ${name}</td>${tds}` +
+             `<td class="c-total"><div class="v-item">${nf(avgL)}</div><div class="v-days">${avgD}일</div></td></tr>`;
+    }).join('');
+
+    const lastM = months[months.length-1];
+    return `<div class="dp-sales-wrap"><table class="dp-sales"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+      <div class="dp-sales-note">※ 위 숫자는 품목 건수(출하 시마다 집계), 아래는 출하일수 · 월평균은 ${nMonths}개월 기준 · ${salesMonthlyYear} 1월~${lastM}월 · 이카운트 ERP 마감자료(실시간 아님) · 매출처 ${rows.length}개사</div>`;
+  }
   function setDpWorkerScope(sc) { dpWorkerScope = sc; renderDetailProgress(); }
 
   function renderDetailProgress() {
@@ -1600,6 +1681,10 @@
           </div>${workerHtml}
         </div>
         <div class="dp-box"><div class="dp-box-title">오늘 출하 매출처 (${custMap.size}개사)</div>${custHtml}</div>
+      </div>
+      <div class="dp-box" style="margin-top:12px;">
+        <div class="dp-box-title">📦 매출처별 월별 추이 — 품목 건수 · 출하일수</div>
+        ${buildSalesMonthlyHtml()}
       </div>`;
   }
 
