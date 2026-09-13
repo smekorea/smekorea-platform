@@ -1499,24 +1499,30 @@
 
   // ── 매출처별 월별 품목수·출하일수 (ERP 마감자료, sales_customer_monthly_v) ──
   // 월마감 자료라 자주 안 바뀌므로 패널 최초 열람 시 1회만 조회하고 캐시한다.
-  let salesMonthly = null, salesMonthlyYear = '', salesMonthlyLoading = false;
+  let salesMonthly = null, salesMonthlyYear = '', salesMonthlyLoading = false, salesMonthlyErr = '';
   async function loadSalesMonthly() {
     if (salesMonthly !== null || salesMonthlyLoading) return;
     salesMonthlyLoading = true;
     const yy = n => String(n).slice(2) + '년';
+    const q = y => `year=eq.${encodeURIComponent(y)}&select=mm,customer,line_cnt,ship_days&limit=3000`;
     try {
       let yr = yy(new Date().getFullYear());
-      let rows = await sbGet('sales_customer_monthly_v', `year=eq.${encodeURIComponent(yr)}&select=mm,customer,line_cnt,ship_days&limit=3000`);
+      let rows = await sbGet('sales_customer_monthly_v', q(yr));
+      // PostgREST 에러는 배열이 아닌 객체로 오므로 반드시 구분해서 사유를 남긴다
+      if (isSbError(rows)) throw new Error(rows.message || rows.code || '조회 오류');
       // 연초라 올해 마감자료가 아직 없으면 직전 연도로 대체
       if (!Array.isArray(rows) || rows.length === 0) {
         yr = yy(new Date().getFullYear() - 1);
-        rows = await sbGet('sales_customer_monthly_v', `year=eq.${encodeURIComponent(yr)}&select=mm,customer,line_cnt,ship_days&limit=3000`);
+        rows = await sbGet('sales_customer_monthly_v', q(yr));
+        if (isSbError(rows)) throw new Error(rows.message || rows.code || '조회 오류');
       }
       salesMonthly = Array.isArray(rows) ? rows : [];
       salesMonthlyYear = yr;
+      salesMonthlyErr = '';
     } catch(e) {
       console.error('매출 월별 집계 조회 실패:', e);
       salesMonthly = [];
+      salesMonthlyErr = e.message || String(e);
     }
     salesMonthlyLoading = false;
     if (detailProgressOpen) renderDetailProgress();
@@ -1524,6 +1530,10 @@
 
   function buildSalesMonthlyHtml() {
     if (salesMonthly === null) { loadSalesMonthly(); return '<div class="dp-empty">불러오는 중...</div>'; }
+    if (salesMonthlyErr) {
+      return `<div class="dp-empty" style="color:var(--accent);">조회 실패: ${salesMonthlyErr}
+        <button class="detail-toggle-btn" style="margin-left:8px;" onclick="salesMonthly=null;salesMonthlyErr='';renderDetailProgress();">다시 시도</button></div>`;
+    }
     if (!salesMonthly.length) return '<div class="dp-empty">ERP 매출자료가 없습니다</div>';
 
     const months = [...new Set(salesMonthly.map(r => r.mm))].sort((a,b) => a-b);
