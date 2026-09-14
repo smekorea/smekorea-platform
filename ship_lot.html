@@ -123,13 +123,19 @@
   .dp-updated{font-size:10.5px;color:var(--muted);font-weight:700;white-space:nowrap;}
   /* 매출처별 월별 품목수 · 출하일수 */
   .dp-sales-wrap{max-height:230px;overflow:auto;border:1px solid var(--border);border-radius:7px;background:#fff;}
-  .dp-sales{border-collapse:separate;border-spacing:0;width:100%;font-size:11.5px;}
-  .dp-sales th,.dp-sales td{padding:4px 7px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);}
+  .dp-sales{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:11.5px;}
+  .dp-sales th,.dp-sales td{padding:4px 7px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;}
   .dp-sales thead th{position:sticky;top:0;z-index:2;background:var(--navy);color:#fff;font-size:10.5px;font-weight:800;}
+  /* 월평균 헤더 — c-total 이 배경만 덮어써 흰 글씨가 묻히던 문제 */
+  .dp-sales thead th.c-total{background:#0f2d5e;color:#fff;}
+  .dp-sales-rz{position:absolute;right:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:6;}
+  .dp-sales-rz:hover{background:rgba(255,255,255,0.35);}
+  .dp-sales thead th{position:sticky;}
   .dp-sales tbody tr:nth-child(even){background:#f7f9fc;}
   .dp-sales .c-name{position:sticky;left:0;z-index:1;background:inherit;text-align:left;font-weight:800;color:var(--text);
     max-width:190px;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--border);}
   .dp-sales thead .c-name{z-index:3;background:var(--navy);}
+  .dp-sales thead th{box-sizing:border-box;}
   .dp-sales .c-rank{color:var(--muted);font-weight:800;font-size:10px;}
   .dp-sales .v-item{font-weight:800;color:var(--text);font-size:12px;}
   .dp-sales .v-days{font-size:9.5px;color:var(--accent2);font-weight:700;}
@@ -1495,6 +1501,56 @@
     panel.style.display = detailProgressOpen ? 'block' : 'none';
     if (detailProgressOpen) renderDetailProgress();
   }
+  // ── 매출 추이 표 컬럼 리사이즈 (목록과 동일한 독립 방식: 드래그한 컬럼만 변경) ──
+  const SALES_COL_WIDTH_KEY = 'shiplot_sales_col_width_v1';
+  const SALES_COL_DEFAULT = { name: 240, avg: 104 };   // 월 컬럼 기본값은 아래 90px
+  const SALES_MONTH_DEFAULT_W = 90;
+  let salesColWidths = {}, salesColKeys = [];
+  try { salesColWidths = JSON.parse(localStorage.getItem(SALES_COL_WIDTH_KEY) || '{}') || {}; } catch(e) { salesColWidths = {}; }
+  function salesColW(key) {
+    if (salesColWidths[key] > 0) return salesColWidths[key];
+    return SALES_COL_DEFAULT[key] || SALES_MONTH_DEFAULT_W;
+  }
+  function applySalesColWidths(keys) {
+    const table = document.querySelector('.dp-sales');
+    if (!table) return;
+    const total = keys.reduce((a,k) => a + salesColW(k), 0);
+    table.style.width = total + 'px';
+    const cg = table.querySelector('colgroup');
+    if (cg) [...cg.children].forEach((col, i) => { col.style.width = salesColW(keys[i]) + 'px'; });
+  }
+  function initSalesColResize(keys) {
+    const table = document.querySelector('.dp-sales');
+    if (!table) return;
+    applySalesColWidths(keys);
+    table.querySelectorAll('thead th').forEach((th, i) => {
+      const rz = th.querySelector('.dp-sales-rz');
+      if (!rz) return;
+      const key = keys[i];
+      rz.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const startX = e.clientX, startW = salesColW(key);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const onMove = ev => { salesColWidths[key] = Math.max(60, startW + (ev.clientX - startX)); applySalesColWidths(keys); };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          document.body.style.cursor = ''; document.body.style.userSelect = '';
+          try { localStorage.setItem(SALES_COL_WIDTH_KEY, JSON.stringify(salesColWidths)); } catch(e) {}
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      };
+      rz.ondblclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        delete salesColWidths[key];
+        applySalesColWidths(keys);
+        try { localStorage.setItem(SALES_COL_WIDTH_KEY, JSON.stringify(salesColWidths)); } catch(e) {}
+      };
+    });
+  }
+
   let dpWorkerScope = 'today';   // 'today' | 'month'
 
   // ── 매출처별 월별 품목수·출하일수 (ERP 마감자료, sales_customer_monthly_mv) ──
@@ -1565,9 +1621,13 @@
     const rows = [...byCust.entries()].sort((a,b) => b[1].lines - a[1].lines);
     const nf = n => n.toLocaleString('ko-KR');
 
-    const head = `<tr><th class="c-name">매출처</th>` +
-      months.map(m => `<th>${m}월</th>`).join('') +
-      `<th class="c-total">월평균</th></tr>`;
+    // 리사이즈용 컬럼 키 (월 구성이 바뀌어도 저장된 폭이 유지되도록 m1..m12 고정 키 사용)
+    salesColKeys = ['name', ...months.map(m => 'm'+m), 'avg'];
+    const colgroup = `<colgroup>${salesColKeys.map(()=>'<col>').join('')}</colgroup>`;
+    const RZ = '<span class="dp-sales-rz"></span>';
+    const head = `<tr><th class="c-name">매출처${RZ}</th>` +
+      months.map(m => `<th>${m}월${RZ}</th>`).join('') +
+      `<th class="c-total">월평균${RZ}</th></tr>`;
 
     const body = rows.map(([name, c], idx) => {
       const tds = months.map(m => {
@@ -1583,7 +1643,7 @@
     }).join('');
 
     const lastM = months[months.length-1];
-    return `<div class="dp-sales-wrap"><table class="dp-sales"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    return `<div class="dp-sales-wrap"><table class="dp-sales">${colgroup}<thead>${head}</thead><tbody>${body}</tbody></table></div>
       <div class="dp-sales-note">※ 위 숫자는 품목 건수(출하 시마다 집계), 아래는 출하일수 · 월평균은 ${nMonths}개월 기준 · ${salesMonthlyYear} 1월~${lastM}월 · 이카운트 ERP 마감자료(실시간 아님) · 매출처 ${rows.length}개사
         ${salesMonthlyBuilt ? ' · 집계기준 ' + fmtDT(salesMonthlyBuilt) : ''}
         <button class="detail-toggle-btn" id="salesRefreshBtn" style="margin-left:8px;padding:2px 9px;font-size:10px;" onclick="refreshSalesMonthly()">집계 갱신</button></div>`;
@@ -1714,6 +1774,7 @@
         <div class="dp-box-title">📦 매출처별 월별 추이 — 품목 건수 · 출하일수</div>
         ${buildSalesMonthlyHtml()}
       </div>`;
+    if (salesColKeys.length) initSalesColResize(salesColKeys);
   }
 
   function renderTodayProgress() {
