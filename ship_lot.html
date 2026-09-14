@@ -141,6 +141,11 @@
   .dp-sales .v-days{font-size:9.5px;color:var(--accent2);font-weight:700;}
   .dp-sales td.zero .v-item{color:#c9d2e0;}
   .dp-sales .c-total{background:#eef3fb;}
+  .dp-sales .c-share{background:#f3f0fb;}
+  .dp-sales tbody tr:nth-child(even) .c-share{background:#ebe6f7;}
+  .dp-sales .c-share .v-item{color:#5b3fa8;}
+  .dp-sales .c-share .v-days{color:#8b78c4;}
+  .dp-sales thead th.c-share{background:#3a2a6b;color:#fff;}
   .dp-sales tbody tr:nth-child(even) .c-total{background:#e6edf8;}
   .dp-sales .c-total .v-item{color:var(--navy);}
   .dp-sales-note{font-size:10px;color:var(--muted);font-weight:700;margin-top:5px;}
@@ -1503,7 +1508,7 @@
   }
   // ── 매출 추이 표 컬럼 리사이즈 (목록과 동일한 독립 방식: 드래그한 컬럼만 변경) ──
   const SALES_COL_WIDTH_KEY = 'shiplot_sales_col_width_v1';
-  const SALES_COL_DEFAULT = { name: 240, avg: 104 };   // 월 컬럼 기본값은 아래 90px
+  const SALES_COL_DEFAULT = { name: 240, avg: 104, share: 88 };   // 월 컬럼 기본값은 아래 90px
   const SALES_MONTH_DEFAULT_W = 90;
   let salesColWidths = {}, salesColKeys = [];
   try { salesColWidths = JSON.parse(localStorage.getItem(SALES_COL_WIDTH_KEY) || '{}') || {}; } catch(e) { salesColWidths = {}; }
@@ -1620,14 +1625,18 @@
     });
     const rows = [...byCust.entries()].sort((a,b) => b[1].lines - a[1].lines);
     const nf = n => n.toLocaleString('ko-KR');
+    // 비중 분모 — 화면 표시분이 아니라 조회된 전체 매출처 합계
+    const totLines = rows.reduce((a,[,c]) => a + c.lines, 0) || 1;
+    const totDays  = rows.reduce((a,[,c]) => a + c.days,  0) || 1;
 
     // 리사이즈용 컬럼 키 (월 구성이 바뀌어도 저장된 폭이 유지되도록 m1..m12 고정 키 사용)
-    salesColKeys = ['name', ...months.map(m => 'm'+m), 'avg'];
+    salesColKeys = ['name', ...months.map(m => 'm'+m), 'avg', 'share'];
     const colgroup = `<colgroup>${salesColKeys.map(()=>'<col>').join('')}</colgroup>`;
     const RZ = '<span class="dp-sales-rz"></span>';
     const head = `<tr><th class="c-name">매출처${RZ}</th>` +
       months.map(m => `<th>${m}월${RZ}</th>`).join('') +
-      `<th class="c-total">월평균${RZ}</th></tr>`;
+      `<th class="c-total">월평균${RZ}</th>` +
+      `<th class="c-share">비중${RZ}</th></tr>`;
 
     const body = rows.map(([name, c], idx) => {
       const tds = months.map(m => {
@@ -1638,13 +1647,16 @@
       }).join('');
       const avgL = Math.round(c.lines / nMonths);
       const avgD = (c.days / nMonths).toFixed(1);
+      const shL = (c.lines / totLines * 100).toFixed(1);
+      const shD = (c.days  / totDays  * 100).toFixed(1);
       return `<tr><td class="c-name"><span class="c-rank">${idx+1}</span> ${name}</td>${tds}` +
-             `<td class="c-total"><div class="v-item">${nf(avgL)}</div><div class="v-days">${avgD}일</div></td></tr>`;
+             `<td class="c-total"><div class="v-item">${nf(avgL)}</div><div class="v-days">${avgD}일</div></td>` +
+             `<td class="c-share"><div class="v-item">${shL}%</div><div class="v-days">${shD}%</div></td></tr>`;
     }).join('');
 
     const lastM = months[months.length-1];
     return `<div class="dp-sales-wrap"><table class="dp-sales">${colgroup}<thead>${head}</thead><tbody>${body}</tbody></table></div>
-      <div class="dp-sales-note">※ 위 숫자는 품목 건수(출하 시마다 집계), 아래는 출하일수 · 월평균은 ${nMonths}개월 기준 · ${salesMonthlyYear} 1월~${lastM}월 · 이카운트 ERP 마감자료(실시간 아님) · 매출처 ${rows.length}개사
+      <div class="dp-sales-note">※ 위 숫자는 품목 건수(출하 시마다 집계), 아래는 출하일수 · 비중은 전체 ${rows.length}개사 합계 대비 · 월평균은 ${nMonths}개월 기준 · ${salesMonthlyYear} 1월~${lastM}월 · 이카운트 ERP 마감자료(실시간 아님) · 매출처 ${rows.length}개사
         ${salesMonthlyBuilt ? ' · 집계기준 ' + fmtDT(salesMonthlyBuilt) : ''}
         <button class="detail-toggle-btn" id="salesRefreshBtn" style="margin-left:8px;padding:2px 9px;font-size:10px;" onclick="refreshSalesMonthly()">집계 갱신</button></div>`;
   }
