@@ -1497,27 +1497,43 @@
   }
   let dpWorkerScope = 'today';   // 'today' | 'month'
 
-  // ── 매출처별 월별 품목수·출하일수 (ERP 마감자료, sales_customer_monthly_v) ──
+  // ── 매출처별 월별 품목수·출하일수 (ERP 마감자료, sales_customer_monthly_mv) ──
   // 월마감 자료라 자주 안 바뀌므로 패널 최초 열람 시 1회만 조회하고 캐시한다.
-  let salesMonthly = null, salesMonthlyYear = '', salesMonthlyLoading = false, salesMonthlyErr = '';
+  let salesMonthly = null, salesMonthlyYear = '', salesMonthlyLoading = false, salesMonthlyErr = '', salesMonthlyBuilt = '';
+  // ERP 월마감 자료 업로드 후 집계를 최신화 (머티리얼라이즈드 뷰 갱신)
+  async function refreshSalesMonthly() {
+    const btn = document.getElementById('salesRefreshBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '집계 갱신 중...'; }
+    try {
+      const res = await fetch(SB_URL + '/rest/v1/rpc/refresh_sales_customer_monthly', { method:'POST', headers: SB_HEADERS, body: '{}' });
+      if (!res.ok) throw new Error(await res.text());
+      salesMonthly = null; salesMonthlyErr = '';
+      showToast('✅ 매출 집계를 최신화했습니다');
+    } catch(e) {
+      showToast('⚠ 집계 갱신 실패: ' + (e.message||e), true);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '집계 갱신'; }
+    renderDetailProgress();
+  }
   async function loadSalesMonthly() {
     if (salesMonthly !== null || salesMonthlyLoading) return;
     salesMonthlyLoading = true;
     const yy = n => String(n).slice(2) + '년';
-    const q = y => `year=eq.${encodeURIComponent(y)}&select=mm,customer,line_cnt,ship_days&limit=3000`;
+    const q = y => `year=eq.${encodeURIComponent(y)}&select=mm,customer,line_cnt,ship_days,built_at&limit=3000`;
     try {
       let yr = yy(new Date().getFullYear());
-      let rows = await sbGet('sales_customer_monthly_v', q(yr));
+      let rows = await sbGet('sales_customer_monthly_mv', q(yr));
       // PostgREST 에러는 배열이 아닌 객체로 오므로 반드시 구분해서 사유를 남긴다
       if (isSbError(rows)) throw new Error(rows.message || rows.code || '조회 오류');
       // 연초라 올해 마감자료가 아직 없으면 직전 연도로 대체
       if (!Array.isArray(rows) || rows.length === 0) {
         yr = yy(new Date().getFullYear() - 1);
-        rows = await sbGet('sales_customer_monthly_v', q(yr));
+        rows = await sbGet('sales_customer_monthly_mv', q(yr));
         if (isSbError(rows)) throw new Error(rows.message || rows.code || '조회 오류');
       }
       salesMonthly = Array.isArray(rows) ? rows : [];
       salesMonthlyYear = yr;
+      salesMonthlyBuilt = (salesMonthly[0] && salesMonthly[0].built_at) || '';
       salesMonthlyErr = '';
     } catch(e) {
       console.error('매출 월별 집계 조회 실패:', e);
@@ -1568,7 +1584,9 @@
 
     const lastM = months[months.length-1];
     return `<div class="dp-sales-wrap"><table class="dp-sales"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-      <div class="dp-sales-note">※ 위 숫자는 품목 건수(출하 시마다 집계), 아래는 출하일수 · 월평균은 ${nMonths}개월 기준 · ${salesMonthlyYear} 1월~${lastM}월 · 이카운트 ERP 마감자료(실시간 아님) · 매출처 ${rows.length}개사</div>`;
+      <div class="dp-sales-note">※ 위 숫자는 품목 건수(출하 시마다 집계), 아래는 출하일수 · 월평균은 ${nMonths}개월 기준 · ${salesMonthlyYear} 1월~${lastM}월 · 이카운트 ERP 마감자료(실시간 아님) · 매출처 ${rows.length}개사
+        ${salesMonthlyBuilt ? ' · 집계기준 ' + fmtDT(salesMonthlyBuilt) : ''}
+        <button class="detail-toggle-btn" id="salesRefreshBtn" style="margin-left:8px;padding:2px 9px;font-size:10px;" onclick="refreshSalesMonthly()">집계 갱신</button></div>`;
   }
   function setDpWorkerScope(sc) { dpWorkerScope = sc; renderDetailProgress(); }
 
