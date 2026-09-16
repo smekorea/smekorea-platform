@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스마트전자 자재관리 | SMERP</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* ── SMERP 업무용 톤 (남색 1색 · 흰 배경 · 테두리 구분 · 그림자 없음) ── */
+:root{
+  --bg:#FFFFFF; --bg-sub:#F5F6F8;
+  --point:#1B3A6B; --point-dk:#142C52; --point-bg:#EDF1F7;
+  --line:#D5D9E0; --line-lt:#E8EAEE; --line-dk:#A9B0BC;
+  --text:#222629; --text-sub:#6A7078;
+  --st-danger:#B3261E; --st-warn:#8A6116; --st-ok:#2E6B4F;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;line-height:1.5;}
+.wrap{max-width:1800px;margin:0 auto;padding:0 16px 40px;}
+
+/* 상단바 — 2안: 흰 배경 + 아래 남색선 */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:11px 2px;border-bottom:2px solid var(--point);}
+.brand{display:flex;align-items:center;gap:9px;}
+.brand-tag{background:var(--point);color:#fff;font-size:11px;font-weight:500;padding:3px 7px;}
+.brand-name{font-size:14px;font-weight:500;}
+.brand-sub{font-size:11.5px;color:var(--text-sub);margin-left:4px;}
+.nav-group{display:flex;gap:6px;align-items:center;}
+.nav-btn{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:5px 11px;border-radius:2px;
+  border:1px solid var(--line);background:#fff;color:var(--text-sub);cursor:pointer;text-decoration:none;font-family:inherit;}
+.nav-btn:hover{border-color:var(--point);color:var(--point);}
+.nav-home{background:var(--point);border-color:var(--point);color:#fff;}
+.nav-home:hover{background:var(--point-dk);color:#fff;}
+
+/* 탭 — 2안: 밑줄 */
+.tabs{display:flex;border-bottom:1px solid var(--line);}
+.tab{padding:9px 15px;font-size:12.5px;color:var(--text-sub);background:none;border:none;cursor:pointer;
+  font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.tab:hover{color:var(--text);}
+.tab.on{color:var(--point);font-weight:500;border-bottom-color:var(--point);}
+.panel{display:none;padding-top:14px;}
+.panel.on{display:block;}
+
+/* 툴바 */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 10px;border:1px solid var(--line);border-bottom:none;background:var(--bg-sub);}
+.bar-lbl{font-size:11.5px;color:var(--text-sub);}
+.seg{display:inline-flex;border:1px solid var(--line);background:#fff;}
+.seg button{font-size:11.5px;padding:4px 11px;border:none;background:#fff;color:var(--text-sub);cursor:pointer;font-family:inherit;}
+.seg button+button{border-left:1px solid var(--line);}
+.seg button.on{background:var(--point);color:#fff;}
+select,input[type=text],input[type=number],input[type=date],input[type=month]{
+  font-family:inherit;font-size:12px;padding:4px 7px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--text);}
+select:focus,input:focus{outline:2px solid var(--point-bg);border-color:var(--point);}
+.btn{font-family:inherit;font-size:12px;padding:5px 14px;border-radius:2px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--text);}
+.btn:hover{border-color:var(--point);color:var(--point);}
+.btn-p{background:var(--point);border-color:var(--point);color:#fff;}
+.btn-p:hover{background:var(--point-dk);color:#fff;}
+.btn-sm{padding:3px 9px;font-size:11.5px;}
+
+/* 표 */
+.tbl-wrap{border:1px solid var(--line);overflow:auto;max-height:calc(100vh - 300px);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{position:sticky;top:0;z-index:2;background:var(--bg-sub);text-align:left;padding:7px 8px;font-weight:500;
+  border-bottom:2px solid var(--line-dk);border-right:1px solid var(--line);white-space:nowrap;}
+thead th:last-child{border-right:none;}
+thead th.sortable{cursor:pointer;user-select:none;}
+thead th.sortable:hover{color:var(--point);}
+tbody td{padding:6px 8px;border-bottom:1px solid var(--line-lt);border-right:1px solid var(--line);white-space:nowrap;}
+tbody td:last-child{border-right:none;}
+tbody tr:nth-child(even){background:rgba(0,0,0,.015);}
+tbody tr:hover{background:var(--point-bg);}
+.num{text-align:right;font-variant-numeric:tabular-nums;}
+.ctr{text-align:center;}
+.sub{color:var(--text-sub);}
+.dim{color:var(--line-dk);}
+.danger{color:var(--st-danger);}
+.warn{color:var(--st-warn);}
+.ok{color:var(--st-ok);}
+.strong{font-weight:500;}
+
+/* 요약 카드 */
+.cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.card{flex:1;min-width:150px;border:1px solid var(--line);padding:10px 12px;}
+.card-lbl{font-size:11.5px;color:var(--text-sub);}
+.card-val{font-size:20px;font-weight:500;margin-top:3px;font-variant-numeric:tabular-nums;}
+.card-sub{font-size:11px;color:var(--text-sub);margin-top:2px;}
+
+/* 안내 / 경고 */
+.note{font-size:11.5px;color:var(--text-sub);border:1px solid var(--line);border-left:3px solid var(--point);
+  padding:8px 11px;margin-bottom:10px;line-height:1.75;background:var(--bg-sub);}
+.alert{font-size:12px;border:1px solid var(--line);border-left:3px solid var(--st-danger);
+  padding:8px 11px;margin-bottom:10px;color:var(--text);background:#fff;}
+.tag{display:inline-block;font-size:10.5px;padding:1px 5px;border:1px solid var(--line);color:var(--text-sub);margin-left:4px;}
+.tag-est{border-color:var(--st-warn);color:var(--st-warn);}
+.tag-rev{border-color:var(--st-danger);color:var(--st-danger);}
+
+.loading{padding:26px;text-align:center;color:var(--text-sub);font-size:12px;}
+.empty{padding:26px;text-align:center;color:var(--text-sub);font-size:12px;}
+.foot{font-size:11px;color:var(--text-sub);padding:7px 2px;}
+
+/* 모달 */
+.mask{display:none;position:fixed;inset:0;background:rgba(20,25,35,.45);z-index:50;align-items:center;justify-content:center;}
+.mask.on{display:flex;}
+.modal{background:#fff;border:1px solid var(--line-dk);width:min(760px,94vw);max-height:88vh;overflow:auto;
+  box-shadow:0 8px 28px rgba(0,0,0,.22);}
+.modal-hd{padding:11px 14px;border-bottom:2px solid var(--point);display:flex;justify-content:space-between;align-items:center;}
+.modal-ti{font-size:14px;font-weight:500;}
+.modal-bd{padding:14px;}
+.modal-ft{padding:11px 14px;border-top:1px solid var(--line);display:flex;gap:7px;justify-content:flex-end;}
+.frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.fg{display:flex;flex-direction:column;gap:3px;}
+.fg label{font-size:11.5px;color:var(--text-sub);font-weight:500;}
+.x{background:none;border:none;font-size:19px;color:var(--text-sub);cursor:pointer;line-height:1;font-family:inherit;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-tag">SME</span>
+      <span class="brand-name">스마트전자 자재관리</span>
+      <span class="brand-sub" id="hdMeta">-</span>
+    </div>
+    <div class="nav-group">
+      <button class="nav-btn" onclick="openInNewWindow()" title="이 화면을 새 탭으로 빼내고, 현재 탭은 홈으로 돌아갑니다">⧉ 새창열기</button>
+      <button class="nav-btn" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
+      <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" id="tb-stock"    onclick="switchTab('stock')">재고현황</button>
+    <button class="tab"    id="tb-forecast" onclick="switchTab('forecast')">발주예측</button>
+    <button class="tab"    id="tb-po"       onclick="switchTab('po')">발주·잔량</button>
+    <button class="tab"    id="tb-recon"    onclick="switchTab('recon')">실적대사</button>
+    <button class="tab"    id="tb-brief"    onclick="switchTab('brief')">브리핑</button>
+  </div>
+
+  <!-- ═══ 재고현황 ═══ -->
+  <div class="panel on" id="pn-stock">
+    <div class="cards" id="stkCards"></div>
+    <div class="note" id="stkNote"></div>
+    <div class="bar">
+      <span class="bar-lbl">기준월</span>
+      <select id="stkYm" onchange="renderStock()"></select>
+      <span class="bar-lbl" style="margin-left:8px;">단위</span>
+      <div class="seg"><button id="stkU1" class="on" onclick="setStockUnit('qty')">수량</button><button id="stkU2" onclick="setStockUnit('amt')">금액</button></div>
+      <input type="text" id="stkKw" placeholder="품번·품명 검색" style="width:170px;margin-left:8px;" oninput="renderStock()">
+      <label class="bar-lbl" style="margin-left:8px;"><input type="checkbox" id="stkDiff" onchange="renderStock()"> 전산-실물 차이만</label>
+      <button class="btn btn-sm" style="margin-left:auto;" onclick="exportStock()">엑셀 다운로드</button>
+    </div>
+    <div class="tbl-wrap"><table id="stkTbl">
+      <thead><tr>
+        <th class="sortable" onclick="sortStock('item_code')" style="width:100px;">품목코드</th>
+        <th class="sortable" onclick="sortStock('maker_pn')" style="width:150px;">메이커품번</th>
+        <th style="width:230px;">품명</th>
+        <th style="width:80px;">구분</th>
+        <th class="num sortable" onclick="sortStock('erp')" style="width:110px;">전산재고</th>
+        <th class="num sortable" onclick="sortStock('real')" style="width:110px;">실재고</th>
+        <th class="num sortable" onclick="sortStock('diff')" style="width:100px;">차이</th>
+        <th class="num sortable" onclick="sortStock('amt')" style="width:120px;">재고금액</th>
+        <th class="num sortable" onclick="sortStock('mavg')" style="width:110px;">월평균판매</th>
+        <th class="num sortable" onclick="sortStock('months')" style="width:90px;">보유개월</th>
+      </tr></thead>
+      <tbody id="stkBody"><tr><td colspan="10"><div class="loading">불러오는 중...</div></td></tr></tbody>
+    </table></div>
+    <div class="foot" id="stkFoot"></div>
+  </div>
+
+  <!-- ═══ 발주예측 ═══ -->
+  <div class="panel" id="pn-forecast">
+    <div class="note" id="fcNote"></div>
+    <div class="cards" id="fcCards"></div>
+    <div class="bar">
+      <span class="bar-lbl">발주월</span>
+      <input type="month" id="fcYm" onchange="calcForecast()">
+      <span class="bar-lbl" style="margin-left:8px;">단위</span>
+      <div class="seg"><button id="fcU1" class="on" onclick="setFcUnit('qty')">수량</button><button id="fcU2" onclick="setFcUnit('amt')">금액</button></div>
+      <span class="bar-lbl" style="margin-left:8px;">보기</span>
+      <select id="fcFilter" onchange="renderForecast()">
+        <option value="need">발주 필요만</option>
+        <option value="all">전체</option>
+        <option value="danger">결품위험만</option>
+      </select>
+      <input type="text" id="fcKw" placeholder="품번·품명 검색" style="width:170px;margin-left:8px;" oninput="renderForecast()">
+      <button class="btn btn-sm" style="margin-left:auto;" onclick="exportForecast()">엑셀 다운로드</button>
+      <button class="btn btn-p btn-sm" onclick="createPoFromForecast()">선택 항목 발주 등록</button>
+    </div>
+    <div class="tbl-wrap"><table id="fcTbl">
+      <thead><tr>
+        <th class="ctr" style="width:34px;"><input type="checkbox" id="fcAll" onchange="toggleAllFc(this.checked)"></th>
+        <th style="width:100px;">품목코드</th>
+        <th style="width:145px;">메이커품번</th>
+        <th style="width:200px;">품명</th>
+        <th class="ctr" style="width:70px;">구분</th>
+        <th class="ctr" style="width:60px;">납기</th>
+        <th class="ctr" style="width:80px;">대상월</th>
+        <th class="num sortable" onclick="sortFc('recent')" style="width:105px;">최근6개월</th>
+        <th class="num" style="width:105px;">작년동월</th>
+        <th class="num" style="width:105px;">작년계절</th>
+        <th class="num sortable" onclick="sortFc('mavg')" style="width:110px;">월평균판매</th>
+        <th class="num" style="width:80px;">적정기준</th>
+        <th class="num" style="width:110px;">목표재고</th>
+        <th class="num sortable" onclick="sortFc('stock')" style="width:110px;">현재고</th>
+        <th class="num" style="width:100px;">발주잔량</th>
+        <th class="num sortable" onclick="sortFc('order')" style="width:115px;">발주수량</th>
+        <th style="width:90px;">판정</th>
+      </tr></thead>
+      <tbody id="fcBody"><tr><td colspan="17"><div class="loading">불러오는 중...</div></td></tr></tbody>
+    </table></div>
+    <div class="foot" id="fcFoot"></div>
+  </div>
+
+  <!-- ═══ 발주·잔량 ═══ -->
+  <div class="panel" id="pn-po">
+    <div class="cards" id="poCards"></div>
+    <div class="bar">
+      <span class="bar-lbl">상태</span>
+      <select id="poStatus" onchange="renderPo()">
+        <option value="open">미완료만</option>
+        <option value="">전체</option>
+        <option value="발주">발주</option>
+        <option value="부분입고">부분입고</option>
+        <option value="입고완료">입고완료</option>
+        <option value="취소">취소</option>
+      </select>
+      <input type="text" id="poKw" placeholder="발주번호·품번 검색" style="width:180px;margin-left:8px;" oninput="renderPo()">
+      <button class="btn btn-sm" style="margin-left:auto;" onclick="openPoModal()">+ 발주 등록</button>
+      <button class="btn btn-sm" onclick="exportPo()">엑셀 다운로드</button>
+    </div>
+    <div class="tbl-wrap"><table id="poTbl">
+      <thead><tr>
+        <th style="width:120px;">발주번호</th>
+        <th class="ctr" style="width:95px;">발주일</th>
+        <th class="ctr" style="width:80px;">대상월</th>
+        <th style="width:100px;">품목코드</th>
+        <th style="width:145px;">메이커품번</th>
+        <th style="width:190px;">품명</th>
+        <th class="num" style="width:105px;">발주수량</th>
+        <th class="num" style="width:105px;">입고수량</th>
+        <th class="num" style="width:105px;">잔량</th>
+        <th class="ctr" style="width:95px;">예상납기</th>
+        <th class="ctr" style="width:80px;">경과</th>
+        <th class="ctr" style="width:85px;">상태</th>
+        <th class="ctr" style="width:120px;">관리</th>
+      </tr></thead>
+      <tbody id="poBody"><tr><td colspan="13"><div class="loading">불러오는 중...</div></td></tr></tbody>
+    </table></div>
+    <div class="foot" id="poFoot"></div>
+  </div>
+
+  <!-- ═══ 실적대사 ═══ -->
+  <div class="panel" id="pn-recon">
+    <div class="note" id="rcNote"></div>
+    <div id="rcAlert"></div>
+    <div class="cards" id="rcCards"></div>
+    <div class="bar">
+      <span class="bar-lbl">기간</span>
+      <select id="rcYm" onchange="renderRecon()"></select>
+      <span class="bar-lbl" style="margin-left:8px;">보기</span>
+      <div class="seg">
+        <button id="rcV1" class="on" onclick="setReconView('customer')">매출처별</button>
+        <button id="rcV2" onclick="setReconView('month')">월별 추이</button>
+      </div>
+      <label class="bar-lbl" style="margin-left:8px;"><input type="checkbox" id="rcTargetOnly" checked onchange="renderRecon()"> 대사대상만</label>
+      <button class="btn btn-sm" style="margin-left:auto;" onclick="exportRecon()">엑셀 다운로드</button>
+    </div>
+    <div class="tbl-wrap"><table id="rcTbl">
+      <thead id="rcHead"></thead>
+      <tbody id="rcBody"><tr><td colspan="7"><div class="loading">불러오는 중...</div></td></tr></tbody>
+    </table></div>
+    <div class="foot" id="rcFoot"></div>
+  </div>
+
+  <!-- ═══ 브리핑 ═══ -->
+  <div class="panel" id="pn-brief">
+    <div id="bfAlerts"></div>
+    <div class="cards" id="bfCards"></div>
+    <div class="bar"><span class="bar-lbl">점검 항목</span>
+      <div class="seg">
+        <button id="bfP1" class="on" onclick="setBriefPeriod('now')">현재</button>
+        <button id="bfP2" onclick="setBriefPeriod('month')">이번 달</button>
+      </div>
+      <button class="btn btn-sm" style="margin-left:auto;" onclick="loadBrief()">새로고침</button>
+    </div>
+    <div class="tbl-wrap" style="max-height:none;"><table>
+      <thead><tr>
+        <th style="width:120px;">구분</th>
+        <th style="width:250px;">항목</th>
+        <th class="num" style="width:110px;">값</th>
+        <th>내용</th>
+        <th class="ctr" style="width:90px;">상태</th>
+      </tr></thead>
+      <tbody id="bfBody"><tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr></tbody>
+    </table></div>
+    <div class="foot" id="bfFoot"></div>
+  </div>
+
+</div>
+
+<!-- 발주 등록 모달 -->
+<div class="mask" id="poMask">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ti" id="poModalTi">발주 등록</span><button class="x" onclick="closePoModal()">×</button></div>
+    <div class="modal-bd">
+      <div class="frow">
+        <div class="fg"><label>발주번호</label><input type="text" id="pmNo" style="width:170px;"></div>
+        <div class="fg"><label>발주일</label><input type="date" id="pmDate" style="width:140px;"></div>
+        <div class="fg"><label>대상월</label><input type="month" id="pmTarget" style="width:140px;"></div>
+        <div class="fg"><label>예상납기</label><input type="date" id="pmEta" style="width:140px;"></div>
+      </div>
+      <div class="frow">
+        <div class="fg" style="flex:1;"><label>비고</label><input type="text" id="pmNote" style="width:100%;"></div>
+      </div>
+      <div id="pmItems"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closePoModal()">취소</button>
+      <button class="btn btn-p" onclick="savePo()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 입고 등록 모달 -->
+<div class="mask" id="rcvMask">
+  <div class="modal" style="width:min(460px,94vw);">
+    <div class="modal-hd"><span class="modal-ti">입고 등록</span><button class="x" onclick="closeRcvModal()">×</button></div>
+    <div class="modal-bd">
+      <div id="rcvInfo" class="note" style="margin-bottom:12px;"></div>
+      <div class="frow">
+        <div class="fg"><label>누적 입고수량</label><input type="number" id="rcvQty" min="0" style="width:160px;"></div>
+      </div>
+      <div class="frow"><div class="fg" style="flex:1;"><label>비고</label><input type="text" id="rcvNote" style="width:100%;"></div></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeRcvModal()">취소</button>
+      <button class="btn btn-p" onclick="saveRcv()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 인증 ──
+(function(){
+  const hq = localStorage.getItem('sme_hq_auth') || sessionStorage.getItem('hq_auth');
+  const main = localStorage.getItem('sme_auth');
+  if(hq !== '1' || main !== '1'){ alert('접근 권한이 없습니다.'); location.href='index.html'; }
+})();
+
+const SB_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SB_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const USER = localStorage.getItem('sme_user_name') || '관리자';
+
+// ── 공통 ──
+const $ = id => document.getElementById(id);
+const nf = n => (n==null||n==='')?'-':Math.round(Number(n)).toLocaleString('ko-KR');
+const nf1 = n => (n==null||n==='')?'-':Number(n).toFixed(1);
+const esc = v => String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const todayStr = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const ymStr = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+const ymAdd = (ym, n) => { const [y,m]=ym.split('-').map(Number); const d=new Date(y, m-1+n, 1); return ymStr(d); };
+const ymLabel = ym => { const [y,m]=ym.split('-'); return y.slice(2)+'년 '+Number(m)+'월'; };
+
+function openInNewWindow(){
+  const w = window.open(location.href,'_blank');
+  if(!w){ alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.'); return; }
+  location.href='index.html';
+}
+
+// Supabase는 limit 값과 무관하게 1,000행에서 잘라내므로 range 페이지네이션으로 전량 조회한다
+async function sbAll(table, cols, build){
+  const PAGE = 1000; let out = [];
+  for(let from=0;;from+=PAGE){
+    let q = sb.from(table).select(cols).range(from, from+PAGE-1);
+    if(build) q = build(q);
+    const {data, error} = await q;
+    if(error) throw new Error(table+': '+error.message);
+    out = out.concat(data||[]);
+    if(!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
+// ── 전역 데이터 ──
+let CFG = null;         // smart_forecast_setting
+let ITEMS = [];         // v_smart_item
+let SALES = {};         // item_code → {ym: {qty, amt}}
+let SALES_YMS = [];     // 매출 존재 월 목록 (오름차순)
+let STOCK = {};         // ym → {item_code: {erp, real, amt, price}}
+let STOCK_YMS = [];
+let PO = [];            // smart_po + items 평면화
+let COVER = [];         // v_smart_coverage
+let PARTNERS = [];
+let ITEM_MAP = {};      // item_code → item
+let stockUnit='qty', fcUnit='qty', reconView='customer', briefPeriod='now';
+let stockSort={key:'amt',dir:-1}, fcSort={key:'order',dir:-1};
+let FC = [];            // 계산 결과
+
+// ── 초기 로드 ──
+async function init(){
+  try{
+    const [cfg, items, partners] = await Promise.all([
+      sb.from('smart_forecast_setting').select('*').order('id').limit(1),
+      sbAll('v_smart_item','*'),
+      sbAll('partners','name,supply_mode,sales_manager,lot_check_target,is_active')
+    ]);
+    if(cfg.error) throw new Error('설정: '+cfg.error.message);
+    CFG = (cfg.data&&cfg.data[0]) || {recent_months:6,season_months:3,weight_recent:50,weight_season:50,
+      default_std_days_chip:60,default_std_days_etc:30,sales_upload_day:5,purchase_upload_day:5,stock_upload_day:10};
+    ITEMS = items; PARTNERS = partners;
+    ITEMS.forEach(i => ITEM_MAP[i.item_code] = i);
+
+    const [sales, stock] = await Promise.all([
+      sbAll('v_smart_sales_monthly','item_code,ym,qty,amt'),
+      sbAll('v_smart_stock_monthly','item_code,ym,real_qty,erp_qty,amt,unit_price')
+    ]);
+    const ymSet = new Set();
+    sales.forEach(r => { (SALES[r.item_code] = SALES[r.item_code]||{})[r.ym] = {qty:Number(r.qty)||0, amt:Number(r.amt)||0}; ymSet.add(r.ym); });
+    SALES_YMS = [...ymSet].sort();
+    const symSet = new Set();
+    stock.forEach(r => { (STOCK[r.ym] = STOCK[r.ym]||{})[r.item_code] =
+      {erp:Number(r.erp_qty)||0, real:Number(r.real_qty)||0, amt:Number(r.amt)||0, price:Number(r.unit_price)||0}; symSet.add(r.ym); });
+    STOCK_YMS = [...symSet].sort().reverse();
+
+    $('hdMeta').textContent = `품목 ${ITEMS.length.toLocaleString()}건 · 매출 ~${SALES_YMS[SALES_YMS.length-1]||'-'} · 재고 ~${STOCK_YMS[0]||'-'}`;
+
+    STOCK_YMS.forEach(y => $('stkYm').insertAdjacentHTML('beforeend', `<option value="${y}">${ymLabel(y)}</option>`));
+    $('fcYm').value = ymStr(new Date());
+
+    renderStock();
+  }catch(e){
+    $('stkBody').innerHTML = `<tr><td colspan="10"><div class="empty danger">데이터를 불러오지 못했습니다 — ${esc(e.message)}</div></td></tr>`;
+    console.error(e);
+  }
+}
+
+function switchTab(t){
+  ['stock','forecast','po','recon','brief'].forEach(k=>{
+    $('tb-'+k).classList.toggle('on', k===t);
+    $('pn-'+k).classList.toggle('on', k===t);
+  });
+  if(t==='forecast' && !FC.length) calcForecast();
+  if(t==='po' && !PO.length) loadPo();
+  if(t==='recon' && !COVER.length) loadRecon();
+  if(t==='brief') loadBrief();
+}
+
+/* ══════════ 공통 계산 ══════════ */
+// 적정재고운영기준(일). 품목값이 없으면 설정의 기본값을 계산에만 적용한다(DB 미저장)
+function stdDays(it){
+  if(it.stock_std_days != null && it.stock_std_days > 0) return {v:it.stock_std_days, def:false};
+  const chip = (it.part_group||'').toLowerCase()==='chip';
+  return {v: chip ? CFG.default_std_days_chip : CFG.default_std_days_etc, def:true};
+}
+// 최근 N개월 평균 (기준월 직전)
+function avgRecent(code, baseYm, n){
+  const s = SALES[code]; if(!s) return null;
+  let sum=0, cnt=0;
+  for(let i=1;i<=n;i++){ const ym = ymAdd(baseYm, -i); if(s[ym]){ sum += s[ym].qty; cnt++; } }
+  return cnt ? sum/cnt : null;
+}
+// 작년 대상월 중심 M개월 평균
+function avgSeason(code, targetYm, m){
+  const s = SALES[code]; if(!s) return null;
+  const lastYear = ymAdd(targetYm, -12);
+  const half = Math.floor(m/2);
+  let sum=0, cnt=0;
+  for(let i=-half;i<=m-half-1;i++){ const ym = ymAdd(lastYear, i); if(s[ym]){ sum += s[ym].qty; cnt++; } }
+  return cnt ? sum/cnt : null;
+}
+function lastYearSame(code, targetYm){
+  const s = SALES[code]; if(!s) return null;
+  const ym = ymAdd(targetYm, -12);
+  return s[ym] ? s[ym].qty : null;
+}
+// 발주단위 보정: 박스수 + 잔량(발주단위 배수), 잔량이 임계 초과면 박스 1개 추가
+function adjustQty(qty, it){
+  if(qty <= 0) return 0;
+  const unit = it.order_unit||0, box = it.box_unit||0, th = it.box_threshold||0, moq = it.moq||0;
+  let out;
+  if(box > 0 && th > 0){
+    let boxes = Math.floor(qty / box);
+    let rem = qty - boxes * box;
+    if(rem > th){ boxes += 1; rem = 0; }
+    else if(rem > 0 && unit > 0) rem = Math.ceil(rem / unit) * unit;
+    out = boxes * box + rem;
+  } else {
+    out = unit > 0 ? Math.ceil(qty / unit) * unit : Math.round(qty);
+  }
+  if(moq > 0 && out < moq) out = moq;
+  return out;
+}
+function unitPrice(code){
+  for(const ym of STOCK_YMS){ const r = STOCK[ym] && STOCK[ym][code]; if(r && r.price) return r.price; }
+  const s = SALES[code]; if(s){ const yms = Object.keys(s).sort().reverse();
+    for(const ym of yms){ if(s[ym].qty) return s[ym].amt / s[ym].qty; } }
+  return 0;
+}
+
+/* ══════════ 재고현황 ══════════ */
+function setStockUnit(u){ stockUnit=u; $('stkU1').classList.toggle('on',u==='qty'); $('stkU2').classList.toggle('on',u==='amt'); renderStock(); }
+function sortStock(k){ stockSort = {key:k, dir: stockSort.key===k ? -stockSort.dir : -1}; renderStock(); }
+
+function stockRows(ym){
+  const st = STOCK[ym] || {};
+  return Object.keys(st).map(code=>{
+    const it = ITEM_MAP[code] || {};
+    const r = st[code];
+    const mavg = avgRecent(code, ymAdd(ym,1), CFG.recent_months) || 0;
+    return { item_code:code, maker_pn:it.maker_pn||'', description:it.description||'', part_group:it.part_group||'',
+      erp:r.erp, real:r.real, diff:r.real-r.erp, amt:r.amt, mavg,
+      months: mavg>0 ? r.real/mavg : null };
+  });
+}
+
+function renderStock(){
+  const ym = $('stkYm').value; if(!ym) return;
+  const kw = ($('stkKw').value||'').trim().toLowerCase();
+  const diffOnly = $('stkDiff').checked;
+  let rows = stockRows(ym);
+  const total = rows.length;
+  if(kw) rows = rows.filter(r => (r.item_code+r.maker_pn+r.description).toLowerCase().includes(kw));
+  if(diffOnly) rows = rows.filter(r => Math.abs(r.diff) > 0.5);
+  const k = stockSort.key, d = stockSort.dir;
+  rows.sort((a,b)=>{
+    const av=a[k], bv=b[k];
+    if(av==null) return 1; if(bv==null) return -1;
+    return typeof av==='string' ? d*av.localeCompare(bv,'ko') : d*(av-bv);
+  });
+
+  const sumAmt = rows.reduce((s,r)=>s+r.amt,0);
+  const diffCnt = rows.filter(r=>Math.abs(r.diff)>0.5).length;
+  const mavgAmt = rows.reduce((s,r)=>s + r.mavg*(r.real>0? r.amt/r.real : 0), 0);
+  $('stkCards').innerHTML = `
+    <div class="card"><div class="card-lbl">품목수</div><div class="card-val">${nf(rows.length)}</div><div class="card-sub">전체 ${nf(total)}건</div></div>
+    <div class="card"><div class="card-lbl">재고금액</div><div class="card-val">${nf(sumAmt/1e8)}<span style="font-size:13px;"> 억</span></div><div class="card-sub">${ymLabel(ym)} 기준</div></div>
+    <div class="card"><div class="card-lbl">전산-실물 차이</div><div class="card-val ${diffCnt?'warn':''}">${nf(diffCnt)}</div><div class="card-sub">품목</div></div>
+    <div class="card"><div class="card-lbl">보유 개월수</div><div class="card-val">${mavgAmt>0?nf1(sumAmt/mavgAmt):'-'}</div><div class="card-sub">재고금액 ÷ 월평균판매액</div></div>`;
+
+  $('stkNote').innerHTML = `재고조사는 확정 자료입니다(매월 ${CFG.stock_upload_day}일 이내 업로드). 월평균판매는 기준월 직전 ${CFG.recent_months}개월 매출 평균입니다.`;
+
+  if(!rows.length){ $('stkBody').innerHTML = '<tr><td colspan="10"><div class="empty">조건에 맞는 품목이 없습니다.</div></td></tr>'; $('stkFoot').textContent=''; return; }
+  const amtMode = stockUnit==='amt';
+  $('stkBody').innerHTML = rows.map(r=>{
+    const price = r.real>0 ? r.amt/r.real : 0;
+    const cv = v => amtMode ? nf(v*price) : nf(v);
+    return `<tr>
+      <td>${esc(r.item_code)}</td>
+      <td>${esc(r.maker_pn)}</td>
+      <td>${esc(r.description)}</td>
+      <td class="sub">${esc(r.part_group)}</td>
+      <td class="num">${cv(r.erp)}</td>
+      <td class="num strong">${cv(r.real)}</td>
+      <td class="num ${Math.abs(r.diff)>0.5?'warn':'dim'}">${r.diff===0?'-':cv(r.diff)}</td>
+      <td class="num">${nf(r.amt)}</td>
+      <td class="num sub">${r.mavg?cv(r.mavg):'-'}</td>
+      <td class="num ${r.months!=null&&r.months<1?'danger':''}">${r.months!=null?nf1(r.months):'-'}</td>
+    </tr>`;
+  }).join('');
+  $('stkFoot').textContent = `${rows.length.toLocaleString()}건 표시 · 단위 ${amtMode?'금액(원)':'수량(개)'}`;
+}
+
+/* ══════════ 발주예측 ══════════ */
+function setFcUnit(u){ fcUnit=u; $('fcU1').classList.toggle('on',u==='qty'); $('fcU2').classList.toggle('on',u==='amt'); renderForecast(); }
+function sortFc(k){ fcSort = {key:k, dir: fcSort.key===k ? -fcSort.dir : -1}; renderForecast(); }
+
+async function calcForecast(){
+  const orderYm = $('fcYm').value; if(!orderYm) return;
+  if(!PO.length) { try { await loadPoData(); } catch(e){} }
+  const stockYm = STOCK_YMS[0];
+  const stk = STOCK[stockYm] || {};
+
+  // 발주잔량: 미입고 수량 합계
+  const openQty = {};
+  PO.forEach(p=>{ if(p.status!=='취소'){ const rem = Number(p.qty_ordered)-Number(p.qty_received);
+    if(rem>0) openQty[p.item_code] = (openQty[p.item_code]||0) + rem; } });
+
+  FC = ITEMS.map(it=>{
+    const code = it.item_code;
+    const targetYm = ymAdd(orderYm, it.lead_mon || 2);
+    const recent = avgRecent(code, orderYm, CFG.recent_months);
+    const season = avgSeason(code, targetYm, CFG.season_months);
+    const lastY  = lastYearSame(code, targetYm);
+    let mavg = null;
+    if(recent!=null && season!=null) mavg = recent*(CFG.weight_recent/100) + season*(CFG.weight_season/100);
+    else if(recent!=null) mavg = recent;
+    else if(season!=null) mavg = season;
+    const sd = stdDays(it);
+    const target = mavg!=null ? mavg * sd.v / 30 : null;
+    const cur = (stk[code] ? stk[code].real : 0);
+    const open = openQty[code] || 0;
+    const raw = (target!=null) ? Math.max(target - cur - open, 0) : null;
+    const order = raw!=null ? adjustQty(raw, it) : null;
+    // 판정: 현재고가 1개월치 미만이면 결품위험, 목표의 2배 초과면 과잉
+    let verdict = '-';
+    if(mavg!=null && mavg>0){
+      const months = cur / mavg;
+      if(months < 1) verdict = 'danger';
+      else if(target!=null && cur > target*2) verdict = 'over';
+      else verdict = 'ok';
+    }
+    return { it, code, targetYm, recent, season, lastY, mavg, stdDays:sd, target, cur, open, order, verdict,
+      price: unitPrice(code) };
+  }).filter(r => r.mavg != null || r.cur > 0);
+
+  renderForecast();
+}
+
+function renderForecast(){
+  if(!FC.length){ $('fcBody').innerHTML='<tr><td colspan="17"><div class="empty">계산할 데이터가 없습니다.</div></td></tr>'; return; }
+  const kw = ($('fcKw').value||'').trim().toLowerCase();
+  const f = $('fcFilter').value;
+  let rows = FC.slice();
+  if(f==='need') rows = rows.filter(r => r.order > 0);
+  if(f==='danger') rows = rows.filter(r => r.verdict==='danger');
+  if(kw) rows = rows.filter(r => (r.code + (r.it.maker_pn||'') + (r.it.description||'')).toLowerCase().includes(kw));
+  const k = fcSort.key, d = fcSort.dir;
+  rows.sort((a,b)=>{ const av=a[k]??-1, bv=b[k]??-1; return d*(av-bv); });
+
+  const needCnt = FC.filter(r=>r.order>0).length;
+  const dangerCnt = FC.filter(r=>r.verdict==='danger').length;
+  const orderAmt = FC.reduce((s,r)=> s + (r.order||0)*r.price, 0);
+  const defCnt = FC.filter(r=>r.stdDays.def).length;
+  $('fcCards').innerHTML = `
+    <div class="card"><div class="card-lbl">발주 필요</div><div class="card-val">${nf(needCnt)}</div><div class="card-sub">품목</div></div>
+    <div class="card"><div class="card-lbl">결품위험</div><div class="card-val ${dangerCnt?'danger':''}">${nf(dangerCnt)}</div><div class="card-sub">현재고 1개월 미만</div></div>
+    <div class="card"><div class="card-lbl">발주 예상금액</div><div class="card-val">${nf(orderAmt/1e8)}<span style="font-size:13px;"> 억</span></div><div class="card-sub">최근 단가 기준 추정</div></div>
+    <div class="card"><div class="card-lbl">적정기준 미설정</div><div class="card-val ${defCnt?'warn':''}">${nf(defCnt)}</div><div class="card-sub">기본값으로 계산됨</div></div>`;
+
+  const orderYm = $('fcYm').value;
+  $('fcNote').innerHTML =
+    `대상월 = 발주월 + 올림(납기주 ÷ 4). 월평균판매 = 최근 ${CFG.recent_months}개월 평균 × ${CFG.weight_recent}% + 작년 계절 ${CFG.season_months}개월 평균 × ${CFG.weight_season}%.<br>`
+    + `현재고는 <b>${STOCK_YMS[0]?ymLabel(STOCK_YMS[0]):'-'} 재고조사</b> 기준이며 이후 입출고가 반영되지 않은 추정값입니다. 발주수량은 MOQ·발주단위·박스 규칙으로 보정됩니다.<br>`
+    + `<span class="tag tag-est">기본값</span> 표시는 품목에 적정재고운영기준이 없어 설정 기본값(CHIP ${CFG.default_std_days_chip}일 / 그 외 ${CFG.default_std_days_etc}일)으로 계산한 항목입니다.`;
+
+  const amtMode = fcUnit==='amt';
+  const cv = (v,p) => v==null ? '-' : (amtMode ? nf(v*p) : nf(v));
+  const vmap = {danger:['결품위험','danger'], over:['과잉','warn'], ok:['정상','ok']};
+  $('fcBody').innerHTML = rows.slice(0,1500).map(r=>{
+    const v = vmap[r.verdict] || ['-','dim'];
+    return `<tr>
+      <td class="ctr"><input type="checkbox" class="fc-ck" data-code="${esc(r.code)}" ${r.order>0?'':'disabled'}></td>
+      <td>${esc(r.code)}</td>
+      <td>${esc(r.it.maker_pn||'')}</td>
+      <td>${esc(r.it.description||'')}</td>
+      <td class="ctr sub">${esc(r.it.part_group||'-')}${r.it.need_review?'<span class="tag tag-rev">검토</span>':''}</td>
+      <td class="ctr sub">${r.it.weeks?r.it.weeks+'주':'-'}</td>
+      <td class="ctr">${ymLabel(r.targetYm)}</td>
+      <td class="num sub">${cv(r.recent,r.price)}</td>
+      <td class="num sub">${cv(r.lastY,r.price)}</td>
+      <td class="num sub">${cv(r.season,r.price)}</td>
+      <td class="num strong">${cv(r.mavg,r.price)}</td>
+      <td class="num">${r.stdDays.v}일${r.stdDays.def?'<span class="tag tag-est">기본값</span>':''}</td>
+      <td class="num">${cv(r.target,r.price)}</td>
+      <td class="num">${cv(r.cur,r.price)}</td>
+      <td class="num ${r.open?'':'dim'}">${r.open?cv(r.open,r.price):'-'}</td>
+      <td class="num strong ${r.order>0?'':'dim'}">${r.order>0?cv(r.order,r.price):'-'}</td>
+      <td class="${v[1]}">${v[0]}</td>
+    </tr>`;
+  }).join('');
+  $('fcFoot').textContent = `${rows.length.toLocaleString()}건 중 ${Math.min(rows.length,1500).toLocaleString()}건 표시 · 단위 ${amtMode?'금액(원)':'수량(개)'} · 발주월 ${ymLabel(orderYm)}`;
+}
+
+function toggleAllFc(on){ document.querySelectorAll('.fc-ck:not(:disabled)').forEach(c=>c.checked=on); }
+
+/* ══════════ 발주·잔량 ══════════ */
+async function loadPoData(){
+  const hd = await sbAll('smart_po','*');
+  const it = await sbAll('smart_po_item','*');
+  const hmap = {}; hd.forEach(h=>hmap[h.id]=h);
+  PO = it.map(i=>{ const h = hmap[i.po_id]||{};
+    return {...i, po_no:h.po_no, order_date:h.order_date, target_ym:h.target_ym,
+      status:h.status, head_eta:h.eta_date, ordered_by:h.ordered_by}; });
+}
+async function loadPo(){
+  try{ await loadPoData(); renderPo(); }
+  catch(e){ $('poBody').innerHTML = `<tr><td colspan="13"><div class="empty danger">${esc(e.message)}</div></td></tr>`; }
+}
+function renderPo(){
+  const st = $('poStatus').value, kw = ($('poKw').value||'').trim().toLowerCase();
+  let rows = PO.slice();
+  if(st==='open') rows = rows.filter(r => r.status!=='입고완료' && r.status!=='취소');
+  else if(st) rows = rows.filter(r => r.status===st);
+  if(kw) rows = rows.filter(r => ((r.po_no||'')+(r.item_code||'')+(r.maker_pn||'')).toLowerCase().includes(kw));
+  rows.sort((a,b)=> (b.order_date||'').localeCompare(a.order_date||''));
+
+  const openRows = PO.filter(r=>r.status!=='입고완료'&&r.status!=='취소');
+  const openQty = openRows.reduce((s,r)=>s+Math.max(Number(r.qty_ordered)-Number(r.qty_received),0),0);
+  const today = todayStr();
+  const lateCnt = openRows.filter(r=>{ const eta=r.eta_date||r.head_eta; return eta && eta < today && Number(r.qty_received) < Number(r.qty_ordered); }).length;
+  $('poCards').innerHTML = `
+    <div class="card"><div class="card-lbl">진행 중 발주</div><div class="card-val">${nf(openRows.length)}</div><div class="card-sub">품목 기준</div></div>
+    <div class="card"><div class="card-lbl">미입고 잔량</div><div class="card-val">${nf(openQty)}</div><div class="card-sub">개</div></div>
+    <div class="card"><div class="card-lbl">납기 경과</div><div class="card-val ${lateCnt?'danger':''}">${nf(lateCnt)}</div><div class="card-sub">예상납기 초과</div></div>
+    <div class="card"><div class="card-lbl">등록 발주</div><div class="card-val">${nf(new Set(PO.map(r=>r.po_no)).size)}</div><div class="card-sub">건</div></div>`;
+
+  if(!rows.length){ $('poBody').innerHTML = '<tr><td colspan="13"><div class="empty">등록된 발주가 없습니다. [+ 발주 등록] 또는 발주예측 탭에서 만들 수 있습니다.</div></td></tr>'; $('poFoot').textContent=''; return; }
+  $('poBody').innerHTML = rows.map(r=>{
+    const rem = Number(r.qty_ordered)-Number(r.qty_received);
+    const eta = r.eta_date||r.head_eta;
+    let days = '-', cls='dim';
+    if(eta && rem>0){ const d = Math.floor((new Date(today)-new Date(eta))/86400000);
+      if(d>0){ days = d+'일 경과'; cls='danger'; } else { days = (-d)+'일 남음'; cls='sub'; } }
+    const scls = r.status==='입고완료'?'ok':(r.status==='취소'?'dim':(r.status==='부분입고'?'warn':''));
+    return `<tr>
+      <td>${esc(r.po_no||'')}</td>
+      <td class="ctr sub">${esc(r.order_date||'')}</td>
+      <td class="ctr sub">${r.target_ym?ymLabel(r.target_ym):'-'}</td>
+      <td>${esc(r.item_code)}</td>
+      <td>${esc(r.maker_pn||'')}</td>
+      <td>${esc(r.description||'')}</td>
+      <td class="num">${nf(r.qty_ordered)}</td>
+      <td class="num">${nf(r.qty_received)}</td>
+      <td class="num strong ${rem>0?'':'dim'}">${rem>0?nf(rem):'-'}</td>
+      <td class="ctr sub">${esc(eta||'-')}</td>
+      <td class="ctr ${cls}">${days}</td>
+      <td class="ctr ${scls}">${esc(r.status||'')}</td>
+      <td class="ctr">
+        <button class="btn btn-sm" onclick="openRcvModal(${r.id})">입고</button>
+        <button class="btn btn-sm" onclick="deletePoItem(${r.id})">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+  $('poFoot').textContent = `${rows.length.toLocaleString()}건 표시`;
+}
+
+let poDraft = [];
+function createPoFromForecast(){
+  const codes = [...document.querySelectorAll('.fc-ck:checked')].map(c=>c.dataset.code);
+  if(!codes.length){ alert('발주할 품목을 선택해주세요.'); return; }
+  poDraft = codes.map(c=>{ const r = FC.find(x=>x.code===c); return {
+    item_code:c, maker_pn:r.it.maker_pn||'', description:r.it.description||'',
+    qty_ordered:r.order, unit_price:r.price, target_ym:r.targetYm }; });
+  openPoModal(true);
+}
+function openPoModal(fromFc){
+  if(!fromFc) poDraft = [];
+  const d = new Date();
+  $('pmNo').value = 'SP' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '-' + String(Math.floor(Math.random()*900+100));
+  $('pmDate').value = todayStr();
+  $('pmTarget').value = poDraft.length ? poDraft[0].target_ym : ymAdd(ymStr(d), 3);
+  $('pmEta').value = ''; $('pmNote').value='';
+  renderPoDraft();
+  $('poMask').classList.add('on');
+}
+function renderPoDraft(){
+  if(!poDraft.length){ $('pmItems').innerHTML = '<div class="note">발주예측 탭에서 품목을 선택한 뒤 [선택 항목 발주 등록]을 누르면 품목이 채워집니다.</div>'; return; }
+  $('pmItems').innerHTML = `<div class="tbl-wrap" style="max-height:320px;"><table>
+    <thead><tr><th style="width:95px;">품목코드</th><th style="width:130px;">메이커품번</th><th>품명</th>
+    <th class="num" style="width:120px;">발주수량</th><th class="ctr" style="width:50px;"></th></tr></thead>
+    <tbody>${poDraft.map((d,i)=>`<tr>
+      <td>${esc(d.item_code)}</td><td>${esc(d.maker_pn)}</td><td>${esc(d.description)}</td>
+      <td class="num"><input type="number" min="0" value="${d.qty_ordered}" style="width:105px;text-align:right;"
+        onchange="poDraft[${i}].qty_ordered=Number(this.value)||0"></td>
+      <td class="ctr"><button class="btn btn-sm" onclick="poDraft.splice(${i},1);renderPoDraft();">×</button></td>
+    </tr>`).join('')}</tbody></table></div>
+    <div class="foot">${poDraft.length}개 품목</div>`;
+}
+function closePoModal(){ $('poMask').classList.remove('on'); }
+
+async function savePo(){
+  const no = ($('pmNo').value||'').trim();
+  if(!no){ alert('발주번호를 입력해주세요.'); return; }
+  if(!$('pmDate').value){ alert('발주일을 선택해주세요.'); return; }
+  if(!poDraft.length){ alert('발주할 품목이 없습니다.'); return; }
+  const bad = poDraft.filter(d=>!(d.qty_ordered>0));
+  if(bad.length){ alert('발주수량이 0인 품목이 있습니다.'); return; }
+  try{
+    const {data:hd, error:e1} = await sb.from('smart_po').insert({
+      po_no:no, order_date:$('pmDate').value, maker:'SMART',
+      target_ym:$('pmTarget').value||null, eta_date:$('pmEta').value||null,
+      status:'발주', ordered_by:USER, note:($('pmNote').value||'').trim()||null
+    }).select().single();
+    if(e1) throw new Error(e1.message);
+    const items = poDraft.map(d=>({ po_id:hd.id, item_code:d.item_code, maker_pn:d.maker_pn,
+      description:d.description, qty_ordered:d.qty_ordered, qty_received:0, unit_price:d.unit_price||null }));
+    const {error:e2} = await sb.from('smart_po_item').insert(items);
+    if(e2) throw new Error(e2.message);
+    alert(`발주 ${no} 등록 완료 (${items.length}품목)`);
+    closePoModal(); poDraft=[]; await loadPo(); switchTab('po');
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
+
+let rcvId = null;
+function openRcvModal(id){
+  const r = PO.find(x=>x.id===id); if(!r) return;
+  rcvId = id;
+  $('rcvInfo').innerHTML = `${esc(r.po_no)} · ${esc(r.item_code)} ${esc(r.maker_pn||'')}<br>발주 ${nf(r.qty_ordered)} · 현재 입고 ${nf(r.qty_received)} · 잔량 ${nf(Number(r.qty_ordered)-Number(r.qty_received))}`;
+  $('rcvQty').value = r.qty_received; $('rcvNote').value = r.note||'';
+  $('rcvMask').classList.add('on');
+}
+function closeRcvModal(){ $('rcvMask').classList.remove('on'); rcvId=null; }
+async function saveRcv(){
+  const r = PO.find(x=>x.id===rcvId); if(!r) return;
+  const q = Number($('rcvQty').value);
+  if(!Number.isFinite(q) || q < 0){ alert('입고수량을 확인해주세요.'); return; }
+  if(q > Number(r.qty_ordered)){
+    if(!confirm(`입고수량(${nf(q)})이 발주수량(${nf(r.qty_ordered)})을 초과합니다.\n그대로 저장할까요?`)) return;
+  }
+  try{
+    const {error} = await sb.from('smart_po_item').update({qty_received:q, note:($('rcvNote').value||'').trim()||null}).eq('id', rcvId);
+    if(error) throw new Error(error.message);
+    // 헤더 상태 재계산 — 같은 발주번호의 모든 품목이 채워지면 입고완료
+    const sibs = PO.filter(x=>x.po_id===r.po_id).map(x=> x.id===rcvId ? {...x, qty_received:q} : x);
+    const allDone = sibs.every(x=>Number(x.qty_received) >= Number(x.qty_ordered));
+    const anyRcv  = sibs.some(x=>Number(x.qty_received) > 0);
+    const st = allDone ? '입고완료' : (anyRcv ? '부분입고' : '발주');
+    await sb.from('smart_po').update({status:st, updated_at:new Date().toISOString()}).eq('id', r.po_id);
+    closeRcvModal(); await loadPo();
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
+async function deletePoItem(id){
+  const r = PO.find(x=>x.id===id); if(!r) return;
+  if(!confirm(`${r.po_no} · ${r.item_code} 품목을 삭제할까요?`)) return;
+  const {error} = await sb.from('smart_po_item').delete().eq('id', id);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  await loadPo();
+}
+
+/* ══════════ 실적대사 ══════════ */
+function setReconView(v){ reconView=v; $('rcV1').classList.toggle('on',v==='customer'); $('rcV2').classList.toggle('on',v==='month'); renderRecon(); }
+
+async function loadRecon(){
+  try{
+    COVER = await sbAll('v_smart_coverage','*');
+    const yms = [...new Set(COVER.map(r=>r.ym))].filter(Boolean).sort().reverse();
+    $('rcYm').innerHTML = yms.map(y=>`<option value="${y}">${ymLabel(y)}</option>`).join('');
+    // 기본값: 매출·스캔 양쪽이 있는 가장 최근 월
+    const valid = yms.find(y => COVER.some(r=>r.ym===y && Number(r.sales_qty)>0 && Number(r.lot_qty)>0));
+    if(valid) $('rcYm').value = valid;
+    renderRecon();
+  }catch(e){ $('rcBody').innerHTML = `<tr><td colspan="7"><div class="empty danger">${esc(e.message)}</div></td></tr>`; }
+}
+
+function renderRecon(){
+  if(!COVER.length) return;
+  const pmap = {}; PARTNERS.forEach(p=>pmap[p.name]=p);
+  const targetOnly = $('rcTargetOnly').checked;
+  const lastSalesYm = SALES_YMS[SALES_YMS.length-1] || '-';
+  $('rcNote').innerHTML =
+    `이카운트 매출(확정)과 출하LOT 바코드 스캔을 대조합니다. <b>출하LOT은 2026년 9월부터 검증용</b>으로 운영하며 발주 계산에는 사용하지 않습니다.<br>`
+    + `커버리지 = 스캔수량 ÷ 매출수량. 100%를 넘으면 출하일과 매출계상일이 다르거나 매출처가 잘못 등록된 경우입니다.<br>`
+    + `매출자료는 매월 ${CFG.sales_upload_day}일 이내 업로드 기준이며, 현재 최신 매출월은 ${ymLabel(lastSalesYm)}입니다.`;
+
+  // 매출자료 지연 경고
+  const d = new Date();
+  const prevYm = ymAdd(ymStr(d), -1);
+  let alertHtml = '';
+  if(d.getDate() > CFG.sales_upload_day && lastSalesYm < prevYm){
+    alertHtml += `<div class="alert">매출자료 업로드가 지연되었습니다. ${ymLabel(prevYm)} 자료가 매월 ${CFG.sales_upload_day}일까지 등록되어야 하지만 최신 자료는 ${ymLabel(lastSalesYm)}입니다.</div>`;
+  }
+
+  const ym = $('rcYm').value;
+
+  if(reconView==='month'){
+    const yms = [...new Set(COVER.map(r=>r.ym))].filter(Boolean).sort().reverse();
+    const rows = yms.map(y=>{
+      const rs = COVER.filter(r=>r.ym===y && (!targetOnly || !pmap[r.customer] || pmap[r.customer].lot_check_target!==false));
+      const s = rs.reduce((a,r)=>a+Number(r.sales_qty),0);
+      const l = rs.reduce((a,r)=>a+Number(r.lot_qty),0);
+      let state = '대사가능';
+      if(s===0) state='매출자료 대기';
+      else if(l===0) state='LOT 미운영';
+      else if(y < '2026-09') state='검증전';
+      return {ym:y, s, l, cov: s>0 ? l/s*100 : null, state};
+    });
+    $('rcHead').innerHTML = `<tr><th style="width:110px;">월</th><th class="num" style="width:150px;">매출수량</th>
+      <th class="num" style="width:150px;">스캔수량</th><th class="num" style="width:110px;">커버리지</th>
+      <th class="num" style="width:150px;">차이</th><th style="width:130px;">상태</th><th>비고</th></tr>`;
+    $('rcBody').innerHTML = rows.map(r=>{
+      const cls = r.cov==null?'dim':(r.cov>=90&&r.cov<=110?'ok':(r.cov>=70?'warn':'danger'));
+      return `<tr>
+        <td class="strong">${ymLabel(r.ym)}</td>
+        <td class="num">${nf(r.s)}</td><td class="num">${nf(r.l)}</td>
+        <td class="num ${cls}">${r.cov!=null?nf1(r.cov)+'%':'-'}</td>
+        <td class="num sub">${nf(r.l-r.s)}</td>
+        <td class="${r.state==='대사가능'?'':'sub'}">${r.state}</td>
+        <td class="sub">${r.ym>='2026-09'?'검증 대상 기간':'참고용'}</td>
+      </tr>`;
+    }).join('');
+    $('rcCards').innerHTML = '';
+    $('rcAlert').innerHTML = alertHtml;
+    $('rcFoot').textContent = `${rows.length}개월 표시`;
+    return;
+  }
+
+  // 매출처별
+  let rows = COVER.filter(r=>r.ym===ym);
+  if(targetOnly) rows = rows.filter(r => !pmap[r.customer] || pmap[r.customer].lot_check_target!==false);
+  rows = rows.map(r=>({ customer:r.customer, s:Number(r.sales_qty), l:Number(r.lot_qty),
+    cov: Number(r.sales_qty)>0 ? Number(r.lot_qty)/Number(r.sales_qty)*100 : null,
+    mgr: (pmap[r.customer]||{}).sales_manager || '', mode:(pmap[r.customer]||{}).supply_mode||'' }))
+    .filter(r=>r.s>0 || r.l>0)
+    .sort((a,b)=>b.s-a.s);
+
+  const ts = rows.reduce((a,r)=>a+r.s,0), tl = rows.reduce((a,r)=>a+r.l,0);
+  const over = rows.filter(r=>r.cov!=null && r.cov>110);
+  const under = rows.filter(r=>r.cov!=null && r.cov<70 && r.s>0);
+
+  // 유사명 매출처 교차 의심 — 한쪽 초과 + 다른 쪽 미달이 짝으로 나오면 표시
+  const suspects = [];
+  over.forEach(o=>{
+    const base = o.customer.replace(/^(주식회사|\(주\))\s*/,'').replace(/\s*(주식회사|\(주\))$/,'').slice(0,2);
+    const m = under.find(u => u.customer!==o.customer && u.customer.includes(base));
+    if(m) suspects.push([o.customer, m.customer]);
+  });
+  if(suspects.length){
+    alertHtml += `<div class="alert">유사명 매출처 교차 등록이 의심됩니다 — ${suspects.map(p=>esc(p[0])+' ↔ '+esc(p[1])).join(', ')}. 한쪽은 100%를 넘고 다른 쪽은 미달입니다. 출하지시 등록 시 매출처 선택을 확인해주세요.</div>`;
+  }
+  $('rcAlert').innerHTML = alertHtml;
+
+  $('rcCards').innerHTML = `
+    <div class="card"><div class="card-lbl">전체 커버리지</div><div class="card-val ${ts>0&&tl/ts>=0.9?'ok':'warn'}">${ts>0?nf1(tl/ts*100):'-'}<span style="font-size:13px;">%</span></div><div class="card-sub">${ymLabel(ym)}</div></div>
+    <div class="card"><div class="card-lbl">매출수량</div><div class="card-val">${nf(ts/1e6)}<span style="font-size:13px;"> 백만</span></div><div class="card-sub">이카운트 확정</div></div>
+    <div class="card"><div class="card-lbl">스캔수량</div><div class="card-val">${nf(tl/1e6)}<span style="font-size:13px;"> 백만</span></div><div class="card-sub">출하LOT</div></div>
+    <div class="card"><div class="card-lbl">확인 필요</div><div class="card-val ${(over.length+under.length)?'warn':''}">${over.length+under.length}</div><div class="card-sub">초과 ${over.length} · 미달 ${under.length}</div></div>`;
+
+  $('rcHead').innerHTML = `<tr><th style="width:260px;">매출처</th><th class="ctr" style="width:90px;">공급방식</th>
+    <th style="width:90px;">담당자</th><th class="num" style="width:150px;">매출수량</th>
+    <th class="num" style="width:150px;">스캔수량</th><th class="num" style="width:110px;">커버리지</th><th>확인사항</th></tr>`;
+  if(!rows.length){ $('rcBody').innerHTML='<tr><td colspan="7"><div class="empty">해당 월 데이터가 없습니다.</div></td></tr>'; $('rcFoot').textContent=''; return; }
+  $('rcBody').innerHTML = rows.map(r=>{
+    const cls = r.cov==null?'dim':(r.cov>110?'warn':(r.cov>=90?'ok':(r.cov>=70?'warn':'danger')));
+    let msg='';
+    if(r.cov==null) msg='매출 없음';
+    else if(r.cov>110) msg='스캔이 매출보다 많음 — 매출처 오등록 또는 기간경계';
+    else if(r.cov<70) msg='스캔 누락 가능성';
+    return `<tr>
+      <td>${esc(r.customer)}</td>
+      <td class="ctr sub">${r.mode==='PO_BASED'?'PO접수':'예측발주'}</td>
+      <td class="sub">${esc(r.mgr||'-')}</td>
+      <td class="num">${nf(r.s)}</td><td class="num">${nf(r.l)}</td>
+      <td class="num strong ${cls}">${r.cov!=null?nf1(r.cov)+'%':'-'}</td>
+      <td class="sub">${msg}</td>
+    </tr>`;
+  }).join('');
+  $('rcFoot').textContent = `${rows.length}개 매출처 · ${ymLabel(ym)}`;
+}
+
+/* ══════════ 브리핑 ══════════ */
+function setBriefPeriod(p){ briefPeriod=p; $('bfP1').classList.toggle('on',p==='now'); $('bfP2').classList.toggle('on',p==='month'); loadBrief(); }
+
+async function loadBrief(){
+  try{
+    if(!FC.length) await calcForecast();
+    if(!PO.length) { try{ await loadPoData(); }catch(e){} }
+    if(!COVER.length) { try{ COVER = await sbAll('v_smart_coverage','*'); }catch(e){} }
+  }catch(e){}
+  const d = new Date(), today = todayStr();
+  const rows = [];
+  const alerts = [];
+
+  // 1. 자료 업로드 상태
+  const lastSales = SALES_YMS[SALES_YMS.length-1]||'-';
+  const lastStock = STOCK_YMS[0]||'-';
+  const prevYm = ymAdd(ymStr(d), -1);
+  const salesLate = d.getDate() > CFG.sales_upload_day && lastSales < prevYm;
+  const stockLate = d.getDate() > CFG.stock_upload_day && lastStock < prevYm;
+  rows.push(['자료', '이카운트 매출 최신월', ymLabel(lastSales), `업로드 기한 매월 ${CFG.sales_upload_day}일`, salesLate?'지연':'정상']);
+  rows.push(['자료', '재고조사 최신월', ymLabel(lastStock), `업로드 기한 매월 ${CFG.stock_upload_day}일`, stockLate?'지연':'정상']);
+  if(salesLate) alerts.push(`매출자료가 지연되었습니다 — ${ymLabel(prevYm)} 자료 필요`);
+  if(stockLate) alerts.push(`재고조사가 지연되었습니다 — ${ymLabel(prevYm)} 자료 필요`);
+
+  // 2. 발주일 안내
+  try{
+    const {data:mk} = await sb.from('makers').select('maker_name,order_day').ilike('maker_name','%SMART%');
+    const od = (mk&&mk[0]&&mk[0].order_day) || null;
+    if(od){
+      const dd = d.getDate();
+      rows.push(['발주','스마트전자 발주일', '매월 '+od+'일', dd===od?'오늘이 발주일입니다':(dd<od?`${od-dd}일 남음`:`이번 달 발주일 경과`), dd===od?'주의':'정상']);
+      if(dd===od) alerts.push('오늘은 스마트전자 발주일입니다.');
+    } else {
+      rows.push(['발주','스마트전자 발주일','-','관리자설정 > 메이커 납기에서 등록할 수 있습니다','미설정']);
+    }
+  }catch(e){}
+
+  // 3. 발주 필요/결품
+  const need = FC.filter(r=>r.order>0), danger = FC.filter(r=>r.verdict==='danger');
+  const over = FC.filter(r=>r.verdict==='over');
+  rows.push(['발주','발주 필요 품목', nf(need.length), '목표재고 미달로 발주가 필요한 품목', need.length?'주의':'정상']);
+  rows.push(['재고','결품위험 품목', nf(danger.length), '현재고가 월평균판매 1개월치 미만', danger.length?'위험':'정상']);
+  rows.push(['재고','과잉재고 품목', nf(over.length), '현재고가 목표재고의 2배 초과', over.length?'주의':'정상']);
+  if(danger.length) alerts.push(`결품위험 ${danger.length}품목 — 발주예측 탭에서 확인하세요.`);
+
+  // 4. 기준 미설정
+  const noStd = FC.filter(r=>r.stdDays.def).length;
+  const noMoq = ITEMS.filter(i=>!i.moq).length;
+  const needRev = ITEMS.filter(i=>i.need_review).length;
+  rows.push(['기준','적정재고 미설정', nf(noStd), '설정 기본값으로 계산 중 — 품목별 값 입력 권장', noStd?'주의':'정상']);
+  rows.push(['기준','MOQ 미설정', nf(noMoq), '관리자설정 > 메이커 납기 > 접두별 세부납기', noMoq?'주의':'정상']);
+  rows.push(['기준','접두 규칙 검토필요', nf(needRev), '과거 실적으로 자동 추정된 값 — 담당자 확인 필요', needRev?'주의':'정상']);
+
+  // 5. 발주 잔량
+  const openRows = PO.filter(r=>r.status!=='입고완료'&&r.status!=='취소');
+  const late = openRows.filter(r=>{ const eta=r.eta_date||r.head_eta; return eta && eta<today; });
+  rows.push(['잔량','진행 중 발주', nf(openRows.length), '미입고 품목 수', '정상']);
+  rows.push(['잔량','납기 경과', nf(late.length), '예상납기를 넘긴 미입고 건', late.length?'위험':'정상']);
+  if(late.length) alerts.push(`납기 경과 발주 ${late.length}건 — 발주·잔량 탭에서 확인하세요.`);
+
+  // 6. 실적대사
+  const covYms = [...new Set(COVER.map(r=>r.ym))].filter(y=>y>='2026-09').sort().reverse();
+  if(covYms.length){
+    const y = covYms[0];
+    const rs = COVER.filter(r=>r.ym===y);
+    const s = rs.reduce((a,r)=>a+Number(r.sales_qty),0), l = rs.reduce((a,r)=>a+Number(r.lot_qty),0);
+    rows.push(['대사','출하LOT 커버리지', s>0?nf1(l/s*100)+'%':'-', `${ymLabel(y)} 기준 · 검증용`, s>0&&l/s>=0.9?'정상':'주의']);
+  } else {
+    rows.push(['대사','출하LOT 커버리지','-','9월부터 검증 데이터 수집 중','정상']);
+  }
+
+  const smap = {'위험':'danger','주의':'warn','지연':'danger','미설정':'warn','정상':'ok'};
+  $('bfAlerts').innerHTML = alerts.map(a=>`<div class="alert">${esc(a)}</div>`).join('');
+  $('bfCards').innerHTML = `
+    <div class="card"><div class="card-lbl">발주 필요</div><div class="card-val">${nf(need.length)}</div><div class="card-sub">품목</div></div>
+    <div class="card"><div class="card-lbl">결품위험</div><div class="card-val ${danger.length?'danger':''}">${nf(danger.length)}</div><div class="card-sub">품목</div></div>
+    <div class="card"><div class="card-lbl">납기 경과</div><div class="card-val ${late.length?'danger':''}">${nf(late.length)}</div><div class="card-sub">발주 건</div></div>
+    <div class="card"><div class="card-lbl">확인 항목</div><div class="card-val ${alerts.length?'warn':'ok'}">${alerts.length}</div><div class="card-sub">조치 필요</div></div>`;
+  $('bfBody').innerHTML = rows.map(r=>`<tr>
+    <td class="sub">${esc(r[0])}</td><td>${esc(r[1])}</td><td class="num strong">${r[2]}</td>
+    <td class="sub">${esc(r[3])}</td><td class="ctr ${smap[r[4]]||''}">${esc(r[4])}</td></tr>`).join('');
+  $('bfFoot').textContent = `${todayStr()} 기준 · 접속자 ${USER}`;
+}
+
+/* ══════════ 엑셀 ══════════ */
+function xlsx(rows, name){
+  if(!rows.length){ alert('내보낼 데이터가 없습니다.'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, name.slice(0,30));
+  XLSX.writeFile(wb, `${name}_${todayStr()}.xlsx`);
+}
+function exportStock(){
+  const ym = $('stkYm').value;
+  xlsx(stockRows(ym).map(r=>({품목코드:r.item_code, 메이커품번:r.maker_pn, 품명:r.description, 구분:r.part_group,
+    전산재고:r.erp, 실재고:r.real, 차이:r.diff, 재고금액:r.amt, 월평균판매:Math.round(r.mavg),
+    보유개월:r.months!=null?Number(r.months.toFixed(1)):null})), `스마트전자_재고현황_${ym}`);
+}
+function exportForecast(){
+  xlsx(FC.map(r=>({품목코드:r.code, 메이커품번:r.it.maker_pn, 품명:r.it.description, 구분:r.it.part_group,
+    납기주:r.it.weeks, 대상월:r.targetYm, 최근6개월:r.recent!=null?Math.round(r.recent):null,
+    작년동월:r.lastY!=null?Math.round(r.lastY):null, 작년계절:r.season!=null?Math.round(r.season):null,
+    월평균판매:r.mavg!=null?Math.round(r.mavg):null, 적정기준일:r.stdDays.v, 기본값여부:r.stdDays.def?'Y':'',
+    목표재고:r.target!=null?Math.round(r.target):null, 현재고:r.cur, 발주잔량:r.open, 발주수량:r.order,
+    판정:{danger:'결품위험',over:'과잉',ok:'정상'}[r.verdict]||''})), `스마트전자_발주예측_${$('fcYm').value}`);
+}
+function exportPo(){
+  xlsx(PO.map(r=>({발주번호:r.po_no, 발주일:r.order_date, 대상월:r.target_ym, 품목코드:r.item_code,
+    메이커품번:r.maker_pn, 품명:r.description, 발주수량:Number(r.qty_ordered), 입고수량:Number(r.qty_received),
+    잔량:Number(r.qty_ordered)-Number(r.qty_received), 예상납기:r.eta_date||r.head_eta, 상태:r.status})), '스마트전자_발주잔량');
+}
+function exportRecon(){
+  const ym = $('rcYm').value;
+  const pmap = {}; PARTNERS.forEach(p=>pmap[p.name]=p);
+  xlsx(COVER.filter(r=>r.ym===ym).map(r=>({매출처:r.customer, 월:r.ym, 매출수량:Number(r.sales_qty),
+    스캔수량:Number(r.lot_qty), 커버리지: Number(r.sales_qty)>0 ? Number((Number(r.lot_qty)/Number(r.sales_qty)*100).toFixed(1)) : null,
+    담당자:(pmap[r.customer]||{}).sales_manager||''})), `스마트전자_실적대사_${ym}`);
+}
+
+init();
+</script>
+</body>
+</html>
