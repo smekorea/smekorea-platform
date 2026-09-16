@@ -2,48 +2,6 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<script>
-// ── 진단용: 스크립트 오류를 화면에 표시 + 깨진 인라인 핸들러 자동 색출 ──
-(function(){
-  const seen = new Set();
-  function box(txt){
-    let el = document.getElementById('__diagBox');
-    if(!el){
-      el = document.createElement('div'); el.id='__diagBox';
-      el.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:10px 16px;font:12px monospace;z-index:999999;max-height:45vh;overflow:auto;white-space:pre-wrap;';
-      const x=document.createElement('button');
-      x.textContent='닫기'; x.style.cssText='position:absolute;top:6px;right:10px;padding:2px 10px;cursor:pointer;';
-      x.onclick=()=>el.remove(); el.appendChild(x);
-      (document.body||document.documentElement).appendChild(el);
-    }
-    const p=document.createElement('div'); p.textContent=txt; el.appendChild(p);
-  }
-  window.addEventListener('error', function(e){
-    const k=e.message+e.lineno+e.colno; if(seen.has(k)) return; seen.add(k);
-    box('⚠ ' + e.message + '  @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno + ':' + e.colno);
-  }, true);
-
-  // 깨진 인라인 핸들러 색출 — 문법오류가 나는 on* 속성의 실제 내용을 그대로 보여준다
-  window.__scanHandlers = function(){
-    const attrs=['onclick','onchange','oninput','onsubmit','onkeyup','onkeydown','onerror','onload'];
-    const bad=[];
-    document.querySelectorAll('*').forEach(el=>{
-      attrs.forEach(a=>{
-        const v = el.getAttribute && el.getAttribute(a);
-        if(!v) return;
-        try { new Function(v); }
-        catch(err){ bad.push({tag:el.tagName, attr:a, val:v, err:err.message,
-          row:(el.closest('tr')||{}).id||'', txt:(el.textContent||'').trim().slice(0,20)}); }
-      });
-    });
-    if(!bad.length){ box('✓ 인라인 핸들러 검사: 이상 없음 (' + document.querySelectorAll('[onclick]').length + '개 확인)'); return bad; }
-    box('⚠ 깨진 인라인 핸들러 ' + bad.length + '건 발견:');
-    bad.slice(0,8).forEach(b=> box('   <'+b.tag.toLowerCase()+' '+b.attr+'> '+(b.row?'['+b.row+'] ':'')+(b.txt?'"'+b.txt+'" ':'')+'\n     내용: '+b.val+'\n     오류: '+b.err));
-    return bad;
-  };
-  window.addEventListener('load', ()=> setTimeout(()=>window.__scanHandlers(), 2500));
-})();
-</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMERP — 관리자 설정</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -1893,7 +1851,7 @@ function renderLgTable() {
       <td>${r.seller_name||''}</td>
       <td><b>${r.brand_name||''}</b></td>
       <td class="center"><span class="badge b-lg">${r.supply_type||'LG사급품'}</span></td>
-      <td class="center"><button class="row-btn row-btn-del" onclick="deleteLgRow(${r.id},'${(r.brand_name||'').replace(/'/g,"\\'")}')">삭제</button></td>
+      <td class="center"><button class="row-btn row-btn-del" onclick="deleteLgRow('${String(r.id).replace(/'/g,"\\'")}','${(r.brand_name||'').replace(/'/g,"\\'")}')">삭제</button></td>
     </tr>`).join('');
 }
 
@@ -4154,8 +4112,8 @@ function renderMakerTable() {
       <td class="center mono">${r.order_day ? '매월 '+r.order_day+'일' : '—'}</td>
       <td>${escH(r.remark||'')}</td>
       <td class="center">
-        <button class="row-btn row-btn-edit" onclick="editMakerRow(${r.id})">수정</button>
-        <button class="row-btn row-btn-del" onclick="deleteMakerRow(${r.id},'${escJs(mn)}')">삭제</button>
+        <button class="row-btn row-btn-edit" onclick="editMakerRow('${escJs(r.id)}')">수정</button>
+        <button class="row-btn row-btn-del" onclick="deleteMakerRow('${escJs(r.id)}','${escJs(mn)}')">삭제</button>
       </td>
     </tr>` + (open ? `<tr class="mpl-host"><td colspan="8" style="padding:0;">${mplRowsHtml(mn)}</td></tr>` : '');
   }).join('');
@@ -4174,7 +4132,7 @@ function editMakerRow(id) {
   row.cells[5].innerHTML = `<input class="mk-input w60" id="mk-oday-${id}" type="number" min="1" max="31" placeholder="1~31" value="${r.order_day||''}">`;
   row.cells[6].innerHTML = `<input class="mk-input" style="width:100%;" id="mk-remark-${id}" value="${r.remark||''}">`;
   row.cells[7].innerHTML = `
-    <button class="row-btn row-btn-save" onclick="saveMaker(${id})">저장</button>
+    <button class="row-btn row-btn-save" onclick="saveMaker('${escJs(id)}')">저장</button>
     <button class="row-btn row-btn-cancel" onclick="renderMakerTable()">취소</button>`;
 }
 
