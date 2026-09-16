@@ -61,7 +61,7 @@ select:focus,input:focus{outline:2px solid var(--point-bg);border-color:var(--po
 /* 표 */
 .tbl-wrap{border:1px solid var(--line);overflow:auto;max-height:calc(100vh - 300px);}
 table{width:100%;border-collapse:collapse;font-size:12px;}
-thead th{position:sticky;top:0;z-index:2;background:var(--bg-sub);text-align:left;padding:7px 8px;font-weight:500;
+thead th{position:sticky;top:0;z-index:2;background:var(--bg-sub);text-align:center;padding:7px 8px;font-weight:500;
   border-bottom:2px solid var(--line-dk);border-right:1px solid var(--line);white-space:nowrap;}
 thead th:last-child{border-right:none;}
 thead th.sortable{cursor:pointer;user-select:none;}
@@ -71,6 +71,8 @@ tbody td:last-child{border-right:none;}
 tbody tr:nth-child(even){background:rgba(0,0,0,.025);}
 tbody tr:hover{background:var(--point-bg);}
 .num{text-align:right;font-variant-numeric:tabular-nums;}
+/* 제목 컬럼은 정렬 클래스와 무관하게 항상 가운데 — 본문 숫자는 우측 정렬 유지 */
+thead th.num,thead th.ctr{text-align:center;}
 .ctr{text-align:center;}
 .sub{color:var(--text-sub);}
 .dim{color:var(--line-dk);}
@@ -124,6 +126,7 @@ tbody tr:hover{background:var(--point-bg);}
       <span class="brand-sub" id="hdMeta">-</span>
     </div>
     <div class="nav-group">
+      <button class="nav-btn" onclick="refreshViews()" title="이카운트 자료를 새로 업로드한 뒤 눌러 집계를 최신화합니다">↻ 집계 갱신</button>
       <button class="nav-btn" onclick="openInNewWindow()" title="이 화면을 새 탭으로 빼내고, 현재 탭은 홈으로 돌아갑니다">⧉ 새창열기</button>
       <button class="nav-btn" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
       <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
@@ -370,6 +373,17 @@ function openInNewWindow(){
   location.href='index.html';
 }
 
+// 매출·매입 집계는 35만행을 미리 계산해 둔 것이라, 자료를 새로 업로드하면 갱신이 필요하다
+async function refreshViews(){
+  if(!confirm('이카운트 자료를 새로 업로드하셨나요?\n집계를 다시 계산합니다 (30초 정도 걸릴 수 있습니다).')) return;
+  try{
+    const {data, error} = await sb.rpc('refresh_smart_views');
+    if(error) throw new Error(error.message);
+    alert(data || '집계 갱신 완료');
+    location.reload();
+  }catch(e){ alert('갱신 실패: '+e.message); }
+}
+
 // Supabase는 limit 값과 무관하게 1,000행에서 잘라내므로 range 페이지네이션으로 전량 조회한다
 async function sbAll(table, cols, build){
   const PAGE = 1000; let out = [];
@@ -413,8 +427,11 @@ async function init(){
     ITEMS = items; PARTNERS = partners;
     ITEMS.forEach(i => ITEM_MAP[i.item_code] = i);
 
+    // 예측에 필요한 범위는 최근 24개월(작년 계절 비교 포함)이면 충분하다.
+    // 전체를 받으면 4만행이 넘어 페이지 요청이 과도해진다.
+    const fromYm = ymAdd(ymStr(new Date()), -24);
     const [sales, stock] = await Promise.all([
-      sbAll('v_smart_sales_monthly','item_code,ym,qty,amt'),
+      sbAll('v_smart_sales_monthly','item_code,ym,qty,amt', q=>q.gte('ym', fromYm)),
       sbAll('v_smart_stock_monthly','item_code,ym,real_qty,erp_qty,amt,unit_price')
     ]);
     const ymSet = new Set();
