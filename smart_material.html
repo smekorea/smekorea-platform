@@ -35,10 +35,10 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 
 /* 탭 — 2안: 밑줄 */
 .tabs{display:flex;border-bottom:1px solid var(--line);}
-.tab{padding:9px 15px;font-size:12.5px;color:var(--text-sub);background:none;border:none;cursor:pointer;
-  font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px;}
-.tab:hover{color:var(--text);}
-.tab.on{color:var(--point);font-weight:500;border-bottom-color:var(--point);}
+.tab{padding:11px 17px;font-size:14px;color:var(--text);background:none;border:none;cursor:pointer;
+  font-family:inherit;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.tab:hover{color:var(--point);}
+.tab.on{color:var(--point);font-weight:700;border-bottom-color:var(--point);}
 .panel{display:none;padding-top:14px;}
 .panel.on{display:block;}
 
@@ -62,7 +62,9 @@ select:focus,input:focus{outline:2px solid var(--point-bg);border-color:var(--po
 .tbl-wrap{border:1px solid var(--line);overflow:auto;max-height:calc(100vh - 300px);}
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead th{position:sticky;top:0;z-index:2;background:var(--bg-sub);text-align:center;padding:7px 8px;font-weight:500;
-  border-bottom:2px solid var(--line-dk);border-right:1px solid var(--line);white-space:nowrap;}
+  border-bottom:2px solid var(--line-dk);border-right:1px solid var(--line);white-space:nowrap;user-select:none;}
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent;z-index:3;}
+.col-resizer:hover{background:var(--point);opacity:.35;}
 thead th:last-child{border-right:none;}
 thead th.sortable{cursor:pointer;user-select:none;}
 thead th.sortable:hover{color:var(--point);}
@@ -288,7 +290,7 @@ thead th.num,thead th.ctr{text-align:center;}
       </div>
       <button class="btn btn-sm" style="margin-left:auto;" onclick="loadBrief()">새로고침</button>
     </div>
-    <div class="tbl-wrap" style="max-height:none;"><table>
+    <div class="tbl-wrap" style="max-height:none;"><table id="bfTbl">
       <thead><tr>
         <th style="width:120px;">구분</th>
         <th style="width:250px;">항목</th>
@@ -578,6 +580,7 @@ function renderStock(){
     </tr>`;
   }).join('');
   $('stkFoot').textContent = `${rows.length.toLocaleString()}건 표시 · 단위 ${amtMode?'금액(원)':'수량(개)'}`;
+  applyResize('stkTbl','stock');
 }
 
 /* ══════════ 발주예측 ══════════ */
@@ -679,6 +682,7 @@ function renderForecast(){
     </tr>`;
   }).join('');
   $('fcFoot').textContent = `${rows.length.toLocaleString()}건 중 ${Math.min(rows.length,1500).toLocaleString()}건 표시 · 단위 ${amtMode?'금액(원)':'수량(개)'} · 발주월 ${ymLabel(orderYm)}`;
+  applyResize('fcTbl','forecast');
 }
 
 function toggleAllFc(on){ document.querySelectorAll('.fc-ck:not(:disabled)').forEach(c=>c.checked=on); }
@@ -742,6 +746,7 @@ function renderPo(){
     </tr>`;
   }).join('');
   $('poFoot').textContent = `${rows.length.toLocaleString()}건 표시`;
+  applyResize('poTbl','po');
 }
 
 let poDraft = [];
@@ -901,6 +906,7 @@ function renderRecon(){
     $('rcCards').innerHTML = '';
     $('rcAlert').innerHTML = alertHtml;
     $('rcFoot').textContent = `${rows.length}개월 표시`;
+    applyResize('rcTbl','recon_month');
     return;
   }
 
@@ -955,6 +961,7 @@ function renderRecon(){
     </tr>`;
   }).join('');
   $('rcFoot').textContent = `${rows.length}개 매출처 · ${ymLabel(ym)}`;
+  applyResize('rcTbl','recon');
 }
 
 /* ══════════ 브리핑 ══════════ */
@@ -1039,7 +1046,67 @@ async function loadBrief(){
     <td class="sub">${esc(r[0])}</td><td>${esc(r[1])}</td><td class="num strong">${r[2]}</td>
     <td class="sub">${esc(r[3])}</td><td class="ctr ${smap[r[4]]||''}">${esc(r[4])}</td></tr>`).join('');
   $('bfFoot').textContent = `${todayStr()} 기준 · 접속자 ${USER}`;
+  applyResize('bfTbl','brief');
 }
+
+/* ══════════ 컬럼 리사이즈 (표별 독립 저장) ══════════ */
+// 컬럼 구조를 바꾸면 KEY 버전을 올려 예전 저장폭을 무효화한다
+const COL_VER = 'v1';
+function initColResize(tableId, storageKey){
+  const table = document.getElementById(tableId);
+  if(!table) return;
+  const ths = table.querySelectorAll('thead th');
+  if(!ths.length) return;
+  const key = 'sm_col_' + storageKey + '_' + COL_VER;
+
+  let saved = {};
+  try{ saved = JSON.parse(localStorage.getItem(key) || '{}'); }catch(e){}
+
+  // colgroup으로 폭을 제어해야 헤더/본문이 함께 움직인다
+  let cg = table.querySelector('colgroup');
+  if(!cg){ cg = document.createElement('colgroup'); table.insertBefore(cg, table.firstChild); }
+  while(cg.children.length < ths.length) cg.appendChild(document.createElement('col'));
+  while(cg.children.length > ths.length) cg.removeChild(cg.lastChild);
+
+  const widths = [];
+  ths.forEach((th,i)=>{
+    const w = saved[i] || th.getBoundingClientRect().width || 100;
+    widths[i] = Math.max(40, Math.round(w));
+    cg.children[i].style.width = widths[i] + 'px';
+  });
+  table.style.tableLayout = 'fixed';
+  table.style.width = widths.reduce((a,b)=>a+b,0) + 'px';
+
+  ths.forEach((th,i)=>{
+    if(th.querySelector('.col-resizer')) return;
+    const r = document.createElement('div');
+    r.className = 'col-resizer';
+    // 정렬용 헤더 클릭과 겹치지 않게 리사이저에서 이벤트를 끊는다
+    r.addEventListener('click', e => e.stopPropagation());
+    r.addEventListener('mousedown', e=>{
+      e.preventDefault(); e.stopPropagation();
+      const startX = e.pageX, startW = widths[i];
+      const move = ev=>{
+        widths[i] = Math.max(40, startW + (ev.pageX - startX));
+        cg.children[i].style.width = widths[i] + 'px';
+        table.style.width = widths.reduce((a,b)=>a+b,0) + 'px';
+      };
+      const up = ()=>{
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.body.style.cursor = '';
+        const obj = {}; widths.forEach((w,idx)=> obj[idx]=w);
+        try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
+      };
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+    th.appendChild(r);
+  });
+}
+// 렌더 직후 폭이 확정되도록 약간 지연시켜 적용
+function applyResize(tableId, key){ setTimeout(()=>initColResize(tableId, key), 60); }
 
 /* ══════════ 엑셀 ══════════ */
 function xlsx(rows, name){
