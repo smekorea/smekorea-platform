@@ -3,14 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <script>
-// ── 진단용: 스크립트 오류를 화면에 직접 표시 (콘솔의 "파일:1" 표시가 부정확한 경우 대비) ──
-window.addEventListener('error', function(e){
-  const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:10px 16px;font:12px monospace;z-index:999999;max-height:40vh;overflow:auto;white-space:pre-wrap;';
-  box.textContent = '⚠ 스크립트 오류 감지\n메시지: ' + e.message + '\n위치: ' + e.filename + ':' + e.lineno + ':' + e.colno
-    + (e.error && e.error.stack ? '\n스택:\n' + e.error.stack : '');
-  document.body ? document.body.appendChild(box) : window.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(box));
-}, true);
+// ── 진단용: 스크립트 오류를 화면에 표시 + 깨진 인라인 핸들러 자동 색출 ──
+(function(){
+  const seen = new Set();
+  function box(txt){
+    let el = document.getElementById('__diagBox');
+    if(!el){
+      el = document.createElement('div'); el.id='__diagBox';
+      el.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:10px 16px;font:12px monospace;z-index:999999;max-height:45vh;overflow:auto;white-space:pre-wrap;';
+      const x=document.createElement('button');
+      x.textContent='닫기'; x.style.cssText='position:absolute;top:6px;right:10px;padding:2px 10px;cursor:pointer;';
+      x.onclick=()=>el.remove(); el.appendChild(x);
+      (document.body||document.documentElement).appendChild(el);
+    }
+    const p=document.createElement('div'); p.textContent=txt; el.appendChild(p);
+  }
+  window.addEventListener('error', function(e){
+    const k=e.message+e.lineno+e.colno; if(seen.has(k)) return; seen.add(k);
+    box('⚠ ' + e.message + '  @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno + ':' + e.colno);
+  }, true);
+
+  // 깨진 인라인 핸들러 색출 — 문법오류가 나는 on* 속성의 실제 내용을 그대로 보여준다
+  window.__scanHandlers = function(){
+    const attrs=['onclick','onchange','oninput','onsubmit','onkeyup','onkeydown','onerror','onload'];
+    const bad=[];
+    document.querySelectorAll('*').forEach(el=>{
+      attrs.forEach(a=>{
+        const v = el.getAttribute && el.getAttribute(a);
+        if(!v) return;
+        try { new Function(v); }
+        catch(err){ bad.push({tag:el.tagName, attr:a, val:v, err:err.message,
+          row:(el.closest('tr')||{}).id||'', txt:(el.textContent||'').trim().slice(0,20)}); }
+      });
+    });
+    if(!bad.length){ box('✓ 인라인 핸들러 검사: 이상 없음 (' + document.querySelectorAll('[onclick]').length + '개 확인)'); return bad; }
+    box('⚠ 깨진 인라인 핸들러 ' + bad.length + '건 발견:');
+    bad.slice(0,8).forEach(b=> box('   <'+b.tag.toLowerCase()+' '+b.attr+'> '+(b.row?'['+b.row+'] ':'')+(b.txt?'"'+b.txt+'" ':'')+'\n     내용: '+b.val+'\n     오류: '+b.err));
+    return bad;
+  };
+  window.addEventListener('load', ()=> setTimeout(()=>window.__scanHandlers(), 2500));
+})();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMERP — 관리자 설정</title>
