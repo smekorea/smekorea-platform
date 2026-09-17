@@ -27,7 +27,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   /* ── 화면이동 네비게이션 표준 (SMERP 공통) — [← 뒤로][⌂ 홈] 2버튼 고정 ── */
   /* ── 브랜드 헤더 표준 (SMERP 공통) ── */
   .brand{display:flex;align-items:center;gap:10px;}
-  .brand-tag{background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:5px 8px;border-radius:2px;
+  .brand-tag{display:inline-flex;align-items:center;justify-content:center;
+    height:30px;min-width:46px;padding:0 9px;
+    background:var(--brand);color:#fff;font-size:14px;font-weight:700;border-radius:2px;
     font-family:'Noto Sans KR',sans-serif;line-height:1;letter-spacing:.5px;}
   .brand-id{display:flex;flex-direction:column;line-height:1.25;}
   .brand-co{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.3px;}
@@ -44,6 +46,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   .nav-new:hover{background:var(--accent3);color:#fff;}
   .nav-home{background:var(--accent2);border:1.5px solid var(--accent2);color:#fff;}
   .nav-home:hover{filter:brightness(1.08);}
+  .topbar-stamp{font-size:11px;color:var(--muted);margin-right:4px;white-space:nowrap;}
 
 
 /* KPI */
@@ -60,7 +63,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 /* TAB */
 .tab-bar{display:flex;gap:0;padding: 0 28px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
 .tab-btn{padding:11px 17px;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0;background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;}
-.tab-btn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:none;}
+.tab-btn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:var(--point-bg);}
 .tab-btn:hover:not(.active){background:var(--bg-sub);}
 
 /* FILTER */
@@ -159,6 +162,12 @@ th{position:relative;user-select:none;}
     <span class="brand-tag">SME</span>
     <div class="brand-id"><div class="brand-co">SMEKOREA</div><div class="brand-file">po_monitor</div></div>
     <span class="brand-name">PO 모니터</span>
+  </div>
+  <div class="nav-group">
+    <span id="lastUpdated" class="topbar-stamp"></span>
+    <button class="nav-btn nav-new" onclick="openNewWindow()" title="이 화면을 새 탭에서 엽니다">🔗 새창열기</button>
+    <a class="nav-btn nav-back" href="po_hub.html">← 뒤로</a>
+    <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
   </div>
 </div>
 
@@ -614,7 +623,25 @@ th{position:relative;user-select:none;}
 const SUPABASE_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SUPABASE_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+// v15.60 — 새창열기로 열린 탭은 3초 이내 임시 플래그로 세션 인증을 승계한다
+(function(){
+  const _nwa = localStorage.getItem('pmon_newwin_auth');
+  if(_nwa && (Date.now()-parseInt(_nwa))<3000){
+    sessionStorage.setItem('po_auth','1');
+    localStorage.removeItem('pmon_newwin_auth');
+  }
+})();
 if(sessionStorage.getItem('po_auth')!=='1') window.location.href='po_hub.html';
+
+// v15.60 — 표준 네비게이션: 새창열기 (이 화면을 새 탭에서 그대로 오픈)
+function openNewWindow(){
+  localStorage.setItem('pmon_newwin_auth', Date.now().toString());
+  const w = window.open(location.href, '_blank');
+  if(!w){
+    localStorage.removeItem('pmon_newwin_auth');
+    alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.');
+  }
+}
 
 // 법인별 운송기간
 let entityTransitMap={};
@@ -896,7 +923,8 @@ async function loadBaseData(){
 
   // KPI 업데이트
   updateKPI();
-  document.getElementById('lastUpdated').textContent='업데이트: '+new Date().toLocaleTimeString('ko-KR');
+  const _lu=document.getElementById('lastUpdated');
+  if(_lu) _lu.textContent='업데이트: '+new Date().toLocaleTimeString('ko-KR');   // v15.60 — 요소 부재시 로드 전체가 실패하던 문제 방어
 }
 
 function updateKPI(){
@@ -1518,7 +1546,7 @@ function renderPSI(){
   const psiCssVars=PSI_COLS.map(k=>`--pw-${k}:${FIX_W[k]}px;--pl-${k}:${FIX_L[k]}px;`).join('');
   const fixHeadBase='background:var(--bg-sub);color:var(--text);border:1px solid var(--border);text-align:center;font-family:\'Noto Sans KR\',sans-serif;font-weight:500;position:sticky;';
   const thFixCellTop=(k,label,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${PW(k)};min-width:${PW(k)};max-width:${PW(k)};overflow:hidden;text-overflow:ellipsis;left:${PL(k)};top:0;z-index:10;border-bottom:none;${extra}">${label}<div class="col-resizer" data-pcol="${k}"></div></th>`;
-  const thFixCellBot=(k,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${PW(k)};min-width:${PW(k)};max-width:${PW(k)};overflow:hidden;left:${PL(k)};top:37px;z-index:10;border-top:none;border-bottom:2px solid var(--line-dk);${extra}"></th>`;
+  const thFixCellBot=(k,extra)=>`<th style="${fixHeadBase}font-size:12px;width:${PW(k)};min-width:${PW(k)};max-width:${PW(k)};overflow:hidden;left:${PL(k)};top:var(--psi-h1,37px);z-index:10;border-top:none;border-bottom:2px solid var(--line-dk);${extra}"></th>`;
 
   // ── 헤더 생성 (월별: 단순 1행 / 주차별: 월 병합 + 주차 2행)
   let thead='';
@@ -1566,7 +1594,7 @@ function renderPSI(){
     });
     const thWeeks=psiPeriods.map(pk=>{
       const m2=pk.match(/W(\d)/);
-      return`<th style="background:${weekBgMap[pk]};color:var(--text);padding:6px 10px;text-align:center;border:1px solid var(--line-dk);border-left:2px solid var(--line-dk);border-bottom:2px solid var(--line-dk);font-size:11px;font-weight:700;min-width:66px;position:sticky;top:37px;z-index:2;">${m2?m2[1]+'주차':'?'}</th>`;
+      return`<th style="background:${weekBgMap[pk]};color:var(--text);padding:6px 10px;text-align:center;border:1px solid var(--line-dk);border-left:2px solid var(--line-dk);border-bottom:2px solid var(--line-dk);font-size:11px;font-weight:700;min-width:66px;position:sticky;top:var(--psi-h1,37px);z-index:2;">${m2?m2[1]+'주차':'?'}</th>`;
     }).join('');
     thead=`<thead>
       <tr>
@@ -1669,7 +1697,24 @@ function renderPSI(){
       </colgroup>
       ${thead}<tbody>${tbody}</tbody>
     </table>`;
+  syncPsiHeaderTop();
   initPsiFixColResize();
+}
+
+// v15.60 — 2행 헤더의 sticky top이 37px로 하드코딩되어 1행 실제 높이(약 33px)와
+// 어긋나면서 그 틈으로 본문이 비쳐 가로 흰 줄로 보이던 문제 해결.
+// 렌더 직후 1행의 실측 높이를 CSS 변수(--psi-h1)에 넣어 정확히 붙인다.
+function syncPsiHeaderTop(){
+  const tbl = document.querySelector('#psiTableWrap table.psi-table');
+  if(!tbl) return;
+  const r1 = tbl.querySelector('thead tr');
+  if(!r1) return;
+  const apply = () => {
+    const h1 = Math.round(r1.getBoundingClientRect().height);
+    if(h1 > 0) tbl.style.setProperty('--psi-h1', h1 + 'px');
+  };
+  apply();
+  requestAnimationFrame(apply);   // 폰트 로드 후 높이 변동 대응
 }
 
 function exportPSI(){

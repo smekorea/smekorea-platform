@@ -16,12 +16,9 @@
   --accent:#B3261E; --brand:#C8001E; --accent2:#1B3A6B; --accent3:#2E6B4F; --amber:#8A6116; --purple:#1B3A6B;
 }
 
-  :root {
-    --bg:var(--bg-sub); --surface:#fff; --border:var(--border);
-    --accent:var(--accent); --accent2:var(--point); --accent3:var(--accent3);
-    --amber:var(--amber); --purple:var(--point);
-    --text:var(--text); --muted:var(--muted);
-  }
+  /* v15.60 — 자기참조(--border:var(--border) 등)로 토큰이 무효화되던 중복 :root 제거.
+     실제로 달랐던 값은 --bg 뿐이므로 그것만 남긴다. */
+  :root { --bg:#EEF0F3; }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{
     background:var(--bg);color:var(--text);
@@ -70,7 +67,9 @@
   /* ── 화면이동 네비게이션 표준 (SMERP 공통) — [← 뒤로][⌂ 홈] 2버튼 고정 ── */
   /* ── 브랜드 헤더 표준 (SMERP 공통) ── */
   .brand{display:flex;align-items:center;gap:10px;}
-  .brand-tag{background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:5px 8px;border-radius:2px;
+  .brand-tag{display:inline-flex;align-items:center;justify-content:center;
+    height:30px;min-width:46px;padding:0 9px;
+    background:var(--brand);color:#fff;font-size:14px;font-weight:700;border-radius:2px;
     font-family:'Noto Sans KR',sans-serif;line-height:1;letter-spacing:.5px;}
   .brand-id{display:flex;flex-direction:column;line-height:1.25;}
   .brand-co{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.3px;}
@@ -87,6 +86,7 @@
   .nav-new:hover{background:var(--accent3);color:#fff;}
   .nav-home{background:var(--accent2);border:1.5px solid var(--accent2);color:#fff;}
   .nav-home:hover{filter:brightness(1.08);}
+  .topbar-stamp{font-size:11px;color:var(--muted);margin-right:4px;white-space:nowrap;}
 
 
   /* ── 요약 KPI ── */
@@ -164,6 +164,12 @@
     overflow:auto;flex:1;
   }
   table{width:auto;border-collapse:separate;border-spacing:0;font-size:14px;white-space:nowrap;}
+  /* ── 탭바 (표준 · 밑줄형) ── */
+  .tab-bar{display:flex;gap:0;padding:0 28px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
+  .tab-btn{padding:11px 17px;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0;background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;}
+  .tab-btn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:var(--point-bg);}
+  .tab-btn:hover:not(.active){background:var(--bg-sub);}
+
   thead th{background:var(--bg-sub);padding:7px 10px;text-align:center;font-weight:500;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:12px;border-bottom:2px solid var(--line-dk);border-right:1px solid var(--border);position:sticky;top:0;z-index:2;}
   thead th.sortable{cursor:pointer;user-select:none;}
   thead th.sortable:hover{color:var(--accent2);}
@@ -345,6 +351,12 @@
     <div class="brand-id"><div class="brand-co">SMEKOREA</div><div class="brand-file">po_master</div></div>
     <span class="brand-name">PO 마스터</span>
   </div>
+  <div class="nav-group">
+    <span id="lastUpdated" class="topbar-stamp"></span>
+    <button class="nav-btn nav-new" onclick="openNewWindow()" title="이 화면을 새 탭에서 엽니다">🔗 새창열기</button>
+    <a class="nav-btn nav-back" href="po_hub.html">← 뒤로</a>
+    <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
+  </div>
 </div>
 
 <!-- KPI 요약 -->
@@ -375,20 +387,11 @@
   </div>
 </div>
 
-<!-- 탭 -->
-<div style="display:flex;gap:8px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--border);">
-  <button id="tab-query-btn" onclick="switchMasterTab('query')"
-    style="padding:8px 18px;border-radius:2px;border:none;background:var(--text);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
-    🔍 PO 조회 · 출하입력
-  </button>
-  <button id="tab-upload-btn" onclick="switchMasterTab('upload')"
-    style="padding:8px 18px;border-radius:2px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
-    📤 출하수량 업로드
-  </button>
-  <button id="tab-history-btn" onclick="switchMasterTab('history')"
-    style="padding:8px 18px;border-radius:2px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
-    📜 수정·취소 이력
-  </button>
+<!-- 탭 (v15.60 — 표준 밑줄형 탭바로 통일) -->
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-query-btn" onclick="switchMasterTab('query')">🔍 PO 조회 · 출하입력</button>
+  <button class="tab-btn" id="tab-upload-btn" onclick="switchMasterTab('upload')">📤 출하수량 업로드</button>
+  <button class="tab-btn" id="tab-history-btn" onclick="switchMasterTab('history')">📜 수정·취소 이력</button>
 </div>
 
 <!-- 출하 업로드 탭 -->
@@ -573,7 +576,6 @@
       <div class="table-title">PO 목록 <span class="table-count" id="tableCount"></span></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <button class="btn-excel" style="color:var(--accent2);" onclick="openNewWindow()" title="이 화면을 새 탭에서 엽니다">🔗 새창열기</button>
       <button class="btn-excel" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
     </div>
   </div>
@@ -1490,10 +1492,10 @@
     document.querySelector('.table-section').style.display = isQuery ? 'flex' : 'none';
     document.getElementById('mainLayout').style.display = isQuery ? 'flex' : 'none';
     document.getElementById('detailPanel').classList.remove('show');
-    const setBtn = (id,on,bg) => { const b=document.getElementById(id); if(!b)return; b.style.background=on?bg:'none'; b.style.color=on?'#fff':'var(--muted)'; b.style.fontWeight=on?'700':'500'; };
-    setBtn('tab-query-btn', isQuery, 'var(--text)');
-    setBtn('tab-upload-btn', isUpload, 'var(--accent2)');
-    setBtn('tab-history-btn', isHistory, 'var(--point)');
+    const setBtn = (id,on) => { const b=document.getElementById(id); if(b) b.classList.toggle('active', !!on); };
+    setBtn('tab-query-btn', isQuery);
+    setBtn('tab-upload-btn', isUpload);
+    setBtn('tab-history-btn', isHistory);
     if (isHistory) loadHistory();
   }
 
@@ -1890,26 +1892,30 @@
     applyWidths();
 
     ths.forEach((th,i)=>{
-      if(!th.querySelector('.col-resizer')){
-        const r = document.createElement('div'); r.className='col-resizer'; th.appendChild(r);
-        r.addEventListener('mousedown', e => {
-          const sx = e.clientX, sw = widths[i];
-          r.classList.add('dragging');
-          document.body.style.cursor = 'col-resize';
-          const mv = e => { widths[i] = Math.max(50, sw + e.clientX - sx); applyWidths(); };
-          const up = () => {
-            r.classList.remove('dragging');
-            document.body.style.cursor = '';
-            const ws={}; widths.forEach((w,j)=>ws[j]=w);
-            localStorage.setItem(verKey, JSON.stringify(ws));
-            document.removeEventListener('mousemove',mv);
-            document.removeEventListener('mouseup',up);
-          };
-          document.addEventListener('mousemove',mv);
-          document.addEventListener('mouseup',up);
-          e.preventDefault(); e.stopPropagation();
-        });
-      }
+      // v15.60 — HTML에 .col-resizer가 정적으로 박혀 있으면 이전 코드는 이벤트 등록까지 건너뛰어
+      // 리사이즈가 전혀 동작하지 않았다. 생성 여부와 무관하게 리스너를 붙인다.
+      let r = th.querySelector('.col-resizer');
+      if(!r){ r = document.createElement('div'); r.className='col-resizer'; th.appendChild(r); }
+      if(r.dataset.rsBound === '1') return;   // 중복 등록 방지
+      r.dataset.rsBound = '1';
+      r.addEventListener('click', e => { e.stopPropagation(); });   // 정렬 onclick 오작동 방지
+      r.addEventListener('mousedown', e => {
+        const sx = e.clientX, sw = widths[i];
+        r.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        const mv = e => { widths[i] = Math.max(50, sw + e.clientX - sx); applyWidths(); };
+        const up = () => {
+          r.classList.remove('dragging');
+          document.body.style.cursor = '';
+          const ws={}; widths.forEach((w,j)=>ws[j]=w);
+          localStorage.setItem(verKey, JSON.stringify(ws));
+          document.removeEventListener('mousemove',mv);
+          document.removeEventListener('mouseup',up);
+        };
+        document.addEventListener('mousemove',mv);
+        document.addEventListener('mouseup',up);
+        e.preventDefault(); e.stopPropagation();
+      });
     });
   }
 
