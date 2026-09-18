@@ -7,80 +7,137 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
+  /* ══════════════════════════════════════════════════════════════
+     v15.60 — SMERP 표준 토큰(v15.59) 전환
+     ── 설계: 토큰 "이름"은 그대로 두고 "값"만 표준색으로 재매핑하는
+        별칭 계층 방식(stock_analysis v15.60에서 검증). var() 참조를
+        일괄 치환하면 회귀 지점이 그만큼 생기므로 쓰지 않는다.
+     ── 핵심 결정: 포인트색이 보라(--purple #6d28d9)였으나 남색 1색
+        원칙에 따라 --point 남색으로 통일. 부서 구분은 색이 아니라
+        브랜드 헤더의 부서 배지(.dept-badge)로 한다. 앞으로 만들
+        kpi_material·kpi_mfg·kpi_planning·kpi_purchase도 같은 규칙.
+     ══════════════════════════════════════════════════════════════ */
   :root {
-    --bg:#eef2f8;--surface:#fff;--surface2:#eef2f8;--border:#d7e0ee;--border2:#b0c4de;
-    --navy:#182338;--navy2:#22314f;
-    --accent:#c8001e;--accent2:#1a56db;--accent3:#0e9f6e;--warn:#d97706;--purple:#6d28d9;
-    --text:#1a2233;--muted:#7a8baa;
-    --shadow:0 2px 10px rgba(20,30,60,0.08);
+    /* SMERP 표준 토큰 — 신규 코드는 이 이름을 쓴다 */
+    --point:#1B3A6B; --point-dk:#142C52; --point-bg:#EDF1F7;
+    --brand:#C8001E; --line-lt:#DFE3E8; --line-dk:#98A0AB; --bg-sub:#EEF0F3;
+    --amber:#8A6116;
+
+    /* 별칭 계층 — 기존 참조가 표준색을 받도록 값만 재매핑 */
+    --bg:#FFFFFF;                     /* 구 #eef2f8 → 흰 배경(원칙①) */
+    --surface:#fff;
+    --surface2:#EEF0F3;               /* 구 #eef2f8 */
+    --border:#C7CCD4;                 /* 구 #d7e0ee */
+    --border2:#98A0AB;                /* 구 #b0c4de → --line-dk */
+    --navy:#FFFFFF;                   /* 구 #182338 다크 상단바 → 흰색 */
+    --navy2:#98A0AB;                  /* 구 #22314f → 헤더 하단선용 */
+    --purple:#1B3A6B;                 /* 구 #6d28d9 보라 → 남색(포인트) */
+    --accent:#B3261E;                 /* 구 #c8001e */
+    --accent2:#1B3A6B;                /* 구 #1a56db */
+    --accent3:#2E6B4F;                /* 구 #0e9f6e */
+    --warn:#8A6116;                   /* 구 #d97706 */
+    --text:#1E2225;                   /* 구 #1a2233 */
+    --muted:#565C64;                  /* 구 #7a8baa */
+    --shadow:none;                    /* 그림자 제거(원칙③) */
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
 
-  .topbar{background:var(--navy);padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;}
-  .brand{display:flex;align-items:center;gap:12px;}
-  .brand-badge{background:var(--purple);color:#fff;font-weight:900;font-size:12px;padding:8px 12px;border-radius:6px;letter-spacing:1px;}
-  .brand-title{color:#fff;font-size:19px;font-weight:800;}
-  .brand-sub{color:#8fa3c7;font-size:11px;margin-top:2px;}
-  .top-right{display:flex;align-items:center;gap:10px;}
-  .top-btn{background:rgba(255,255,255,0.08);color:#c9d6ec;border:1px solid rgba(255,255,255,0.15);padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;}
-  .top-btn:hover{background:rgba(255,255,255,0.16);color:#fff;}
-  .clock{font-family:'Noto Sans KR',sans-serif;color:#5b9bff;font-size:19px;letter-spacing:1px;}
-  /* ── 화면이동 네비게이션 표준 (SMERP 공통) — [← 뒤로][⌂ 홈] 2버튼 고정 ── */
-  .nav-group{display:flex;align-items:center;gap:6px;}
-  .nav-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 13px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;transition:all .18s;}
-  .nav-back{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#c9d6ec;}
-  .nav-back:hover{background:rgba(255,255,255,0.16);color:#fff;}
-  .nav-home{background:var(--purple);border:1px solid var(--purple);color:#fff;}
-  .nav-home:hover{filter:brightness(1.1);}
+  /* 상단바 — 흰 배경 + 아래 남색 2px선(v15.59 2안) */
+  .topbar{background:#fff;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--point);}
 
-  .tabbar{background:#fff;display:flex;gap:4px;padding:10px 24px;border-bottom:1px solid var(--border);}
-  .tabbtn{padding:8px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:20px;background:transparent;transition:all 0.15s;}
-  .tabbtn:hover{color:var(--text);}
-  .tabbtn.active{color:#fff;background:var(--purple);}
-  .tabbtn.disabled{color:#c3cadb;cursor:not-allowed;}
+  /* 브랜드 헤더 — 전 화면 동일 형식 (v15.59) */
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-tag{display:inline-flex;align-items:center;justify-content:center;
+    height:30px;min-width:46px;padding:0 9px;
+    background:var(--brand);color:#fff;font-size:14px;font-weight:700;border-radius:2px;
+    font-family:'Noto Sans KR',sans-serif;line-height:1;letter-spacing:.5px;}
+  .brand-id{display:flex;flex-direction:column;line-height:1.25;}
+  .brand-co{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.3px;}
+  .brand-file{font-size:10.5px;color:var(--muted);letter-spacing:.3px;}
+  .brand-name{font-size:14px;font-weight:500;color:var(--text);padding-left:10px;border-left:1px solid var(--border);}
+  /* 부서 배지 — KPI 화면은 색이 아니라 이 배지로 부서를 구분한다.
+     신규 KPI 화면(자재·제조·기획·구매)도 이 클래스를 그대로 쓴다. */
+  .dept-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;
+    background:var(--point-bg);color:var(--point);border:1px solid var(--point);
+    border-radius:2px;font-size:11.5px;font-weight:700;letter-spacing:.3px;}
+
+  .top-right{display:flex;align-items:center;gap:10px;}
+  .top-btn{background:#fff;color:var(--text);border:1.5px solid var(--border);padding:7px 13px;border-radius:2px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;}
+  .top-btn:hover{border-color:var(--point);color:var(--point);}
+  .clock{font-family:'Noto Sans KR',sans-serif;color:var(--muted);font-size:15px;letter-spacing:1px;}
+  /* ── 화면이동 네비게이션 표준 (SMERP 공통) — [⧉ 새창열기][← 뒤로][⌂ 홈] 3버튼 (v15.47) ── */
+  .nav-group{display:flex;align-items:center;gap:6px;}
+  .nav-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 13px;border-radius:2px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;transition:all .18s;}
+  .nav-new{background:#fff;border:1.5px solid var(--accent3);color:var(--accent3);}
+  .nav-new:hover{background:var(--accent3);color:#fff;}
+  .nav-back{background:#fff;border:1.5px solid var(--border);color:var(--text);}
+  .nav-back:hover{border-color:var(--point);color:var(--point);}
+  .nav-home{background:var(--point);border:1.5px solid var(--point);color:#fff;}
+  .nav-home:hover{filter:brightness(1.08);}
+
+  /* 탭 — 표준 밑줄형. 알약형(배경 채움)은 원칙①에 위배 */
+  .tabbar{background:#fff;display:flex;gap:0;padding:0 24px;border-bottom:1px solid var(--border);overflow-x:auto;}
+  .tabbtn{padding:11px 17px;font-size:14px;font-weight:500;color:var(--text);cursor:pointer;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;white-space:nowrap;transition:all 0.15s;}
+  .tabbtn:hover:not(.active){background:var(--bg-sub);color:var(--point);}
+  .tabbtn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:var(--point-bg);}
+  .tabbtn.disabled{color:var(--muted);cursor:not-allowed;}
   .tabpanel{display:none;padding:0 24px 20px;}
   .tabpanel.active{display:block;}
 
-  .btn{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid;transition:all 0.2s;}
-  .hist-table-wrap{background:var(--surface);border-radius:9px;overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 380px);box-shadow:var(--shadow);}
+  .btn{padding:10px 18px;border-radius:2px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid;transition:all 0.2s;}
+  .hist-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:0;overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 380px);}
+  /* 스크롤바 — 트랙 회색 / 손잡이 남색 (v15.60 표준) */
+  .hist-table-wrap::-webkit-scrollbar{height:15px;width:15px;}
+  .hist-table-wrap::-webkit-scrollbar-track{background:var(--bg-sub);border:1px solid var(--border);}
+  .hist-table-wrap::-webkit-scrollbar-thumb{background:var(--point);border:3px solid var(--bg-sub);min-height:40px;min-width:40px;}
+  .hist-table-wrap::-webkit-scrollbar-thumb:hover{background:var(--point-dk);border-width:2px;}
+  .hist-table-wrap::-webkit-scrollbar-corner{background:var(--bg-sub);}
+  .hist-table-wrap{scrollbar-width:auto;scrollbar-color:var(--point) var(--bg-sub);}
   .hist-table-wrap table.dtab thead th{position:sticky;top:0;z-index:2;}
   table.dtab{border-collapse:collapse;table-layout:fixed;}
-  table.dtab th{position:relative;user-select:none;background:var(--navy);color:#c9d6ec;padding:8px;font-size:10px;font-weight:700;text-align:left;border-bottom:2px solid var(--navy2);cursor:pointer;white-space:nowrap;overflow:hidden;}
+  /* v15.60 — 다크 반전 헤더(background:var(--navy) + 흐린 글자)를 표준 회색 밴드로 */
+  table.dtab th{position:relative;user-select:none;background:var(--bg-sub);color:var(--text);padding:8px;font-size:11.5px;font-weight:700;text-align:left;border-bottom:2px solid var(--line-dk);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;overflow:hidden;}
+  table.dtab th:last-child{border-right:none;}
+  table.dtab th:hover{background:var(--point-bg);color:var(--point);}
+  .sort-icon{color:var(--point);font-size:10px;margin-left:3px;}
   table.dtab td{padding:7px 8px;font-size:12px;border-right:1px solid var(--border);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   table.dtab td:last-child{border-right:none;}
   table.dtab tbody tr{border-bottom:1px solid var(--border);}
-  table.dtab tbody tr:nth-child(even){background:rgba(109,40,217,0.02);}
-  .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+  table.dtab tbody tr:nth-child(even){background:var(--bg-sub);}
+  table.dtab tbody tr:hover td{background:var(--point-bg);}
+  .col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent;transition:background .12s;}
+  .col-resizer:hover{background:var(--point);}
   .mono{font-family:'Noto Sans KR',sans-serif;font-size:13.5px;}
 
-  input[type=date], select{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--text);}
+  input[type=date], select{padding:8px 12px;border:1.5px solid var(--border);border-radius:2px;font-size:13px;font-family:inherit;background:#fff;color:var(--text);}
 
   .kpi-period-btn{border:none;background:transparent;padding:7px 16px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text);border-left:1.5px solid var(--border);}
   .kpi-period-btn:first-child{border-left:none;}
-  .kpi-period-btn.active{background:var(--purple);color:#fff;}
-  .kpi-card{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .kpi-period-btn.active{background:var(--point);color:#fff;}
+  .kpi-card{background:var(--surface);border:1.5px solid var(--border);border-radius:0;padding:14px 16px;}
   .flat-tab{width:100%;border-collapse:collapse;font-size:13px;}
   .flat-tab th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:8px 12px;border:none;}
   .flat-tab td{padding:10px 12px;border:none;}
-  .flat-tab tbody tr:nth-child(odd){background:#f6f4ef;}
-  .flat-tab tbody tr.total-row{background:var(--navy);color:#fff;font-weight:800;}
+  .flat-tab th{border-bottom:2px solid var(--line-dk);}
+  .flat-tab tbody tr:nth-child(odd){background:var(--bg-sub);}
+  .flat-tab tbody tr.total-row{background:var(--point);color:#fff;font-weight:800;}
   .flat-tab tbody tr.total-row td{color:#fff;}
   .kpi-card-lbl{font-size:12px;color:var(--muted);margin-bottom:6px;}
   .kpi-card-val{font-size:20px;font-weight:800;color:var(--text);}
   .kpi-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;}
   .kpi-bar-name{width:60px;flex-shrink:0;color:var(--text);}
-  .kpi-bar-track{flex:1;background:var(--surface2);border-radius:4px;height:18px;position:relative;overflow:hidden;}
-  .kpi-bar-fill{height:100%;background:var(--purple);border-radius:4px;}
+  .kpi-bar-track{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:0;height:18px;position:relative;overflow:hidden;}
+  .kpi-bar-fill{height:100%;background:var(--point);border-radius:0;}
   .kpi-bar-val{width:100px;flex-shrink:0;text-align:right;font-family:'Noto Sans KR',sans-serif;color:var(--text);}
   .kpi-person-row{cursor:pointer;}
-  .kpi-person-row:hover{background:rgba(109,40,217,0.06);}
+  .kpi-person-row:hover{background:var(--point-bg);}
   .kpi-drill-row td{background:var(--surface2);padding:0 !important;}
   .kpi-drill-table{width:100%;font-size:11.5px;border-collapse:collapse;}
-  .kpi-drill-table th{background:var(--border2);color:var(--text);padding:5px 8px;text-align:left;font-weight:700;}
+  .kpi-drill-table th{background:var(--point-bg);color:var(--point);padding:5px 8px;text-align:left;font-weight:700;border-bottom:2px solid var(--line-dk);}
   .kpi-drill-table td{padding:5px 8px;border-bottom:1px solid var(--border);color:#111827;}
 
-  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.2);opacity:0;pointer-events:none;transition:all 0.25s;z-index:9999;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--point);color:#fff;padding:12px 20px;border-radius:2px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:all 0.25s;z-index:9999;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .toast.error{background:var(--accent);}
 </style>
@@ -89,15 +146,21 @@
 
 <div class="topbar">
   <div class="brand">
-    <div class="brand-badge">KPI</div>
-    <div><div class="brand-title">KPI 프로세스 - 출하팀</div><div class="brand-sub">부서 · 프로세스별 실적 지표</div></div>
+    <span class="brand-tag">SME</span>
+    <div class="brand-id">
+      <div class="brand-co">SMEKOREA</div>
+      <div class="brand-file">kpi_shipping</div>
+    </div>
+    <span class="brand-name">KPI 프로세스</span>
+    <span class="dept-badge">출하팀</span>
   </div>
   <div class="top-right">
+    <div class="clock" id="clock">--:--:--</div>
     <div class="nav-group">
+      <button class="nav-btn nav-new" onclick="openNewWindow()" title="이 화면을 새 탭에서 엽니다">⧉ 새창열기</button>
       <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
       <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
     </div>
-    <div class="clock" id="clock">--:--:--</div>
   </div>
 </div>
 
@@ -179,12 +242,12 @@
     <div class="hist-table-wrap">
       <table class="dtab" id="kpiTable">
         <thead><tr>
-          <th style="width:100px;">담당자<div class="col-resizer"></div></th>
-          <th style="width:90px;text-align:right;">출하건수<div class="col-resizer"></div></th>
-          <th style="width:90px;text-align:right;">품목종류<div class="col-resizer"></div></th>
-          <th style="width:130px;text-align:right;">출하금액<div class="col-resizer"></div></th>
-          <th style="width:100px;text-align:right;">평균소요<div class="col-resizer"></div></th>
-          <th style="width:110px;text-align:right;">부피<div class="col-resizer"></div></th>
+          <th style="width:100px;" onclick="sortKpi('person')">담당자<span class="sort-icon" id="si-kpi-person"></span><div class="col-resizer"></div></th>
+          <th style="width:90px;text-align:right;" onclick="sortKpi('count')">출하건수<span class="sort-icon" id="si-kpi-count"></span><div class="col-resizer"></div></th>
+          <th style="width:90px;text-align:right;" onclick="sortKpi('itemCount')">품목종류<span class="sort-icon" id="si-kpi-itemCount"></span><div class="col-resizer"></div></th>
+          <th style="width:130px;text-align:right;" onclick="sortKpi('amount')">출하금액<span class="sort-icon" id="si-kpi-amount"></span><div class="col-resizer"></div></th>
+          <th style="width:100px;text-align:right;" onclick="sortKpi('avgMin')">평균소요<span class="sort-icon" id="si-kpi-avgMin"></span><div class="col-resizer"></div></th>
+          <th style="width:110px;text-align:right;" onclick="sortKpi('volume')">부피<span class="sort-icon" id="si-kpi-volume"></span><div class="col-resizer"></div></th>
         </tr></thead>
         <tbody id="kpiTbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr></tbody>
       </table>
@@ -286,7 +349,13 @@
     return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
-  function switchTab(tab) {
+  // v15.60 — 화면이동 네비게이션 표준: 새창열기 (v15.47 3버튼 표준)
+function openNewWindow(){
+  const w = window.open(location.href, '_blank');
+  if(!w) showToast('팝업이 차단되어 새 탭을 열 수 없습니다. 주소창의 차단 아이콘에서 허용해주세요.', true);
+}
+
+function switchTab(tab) {
     ['integrated','ship','settings'].forEach(t => {
       document.getElementById('tabbtn-'+t).classList.toggle('active', t===tab);
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
@@ -448,7 +517,7 @@
     if (intCountChartObj) intCountChartObj.destroy();
     intCountChartObj = new Chart(document.getElementById('intCountChart'), {
       type: 'bar',
-      data: { labels: personList.map(p=>p.person), datasets: [{ data: personList.map(p=>p.count), backgroundColor:'#639922', borderRadius:0, barThickness:22 }] },
+      data: { labels: personList.map(p=>p.person), datasets: [{ data: personList.map(p=>p.count), backgroundColor:'#2E6B4F', borderRadius:0, barThickness:22 }] },
       options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{display:false},ticks:{precision:0}}, y:{grid:{display:false}} } }
     });
 
@@ -456,7 +525,7 @@
     if (intAmountChartObj) intAmountChartObj.destroy();
     intAmountChartObj = new Chart(document.getElementById('intAmountChart'), {
       type: 'bar',
-      data: { labels: personList.map(p=>p.person), datasets: [{ data: personList.map(p=>Math.round(p.amount/10000)), backgroundColor:'#3C3489', borderRadius:0, barThickness:22 }] },
+      data: { labels: personList.map(p=>p.person), datasets: [{ data: personList.map(p=>Math.round(p.amount/10000)), backgroundColor:'#1B3A6B', borderRadius:0, barThickness:22 }] },
       options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{display:false},ticks:{callback:v=>v+'만'}}, y:{grid:{display:false}} } }
     });
   }
@@ -678,7 +747,8 @@
     });
     let personList = Object.values(byPerson);
     if (personFilter) personList = personList.filter(p => p.person === personFilter);
-    personList.sort((a,b) => b.amount - a.amount);
+    applyKpiSort(personList);
+  updateKpiSortIcons();
 
     // 막대그래프 (출하금액 기준)
     const maxAmount = Math.max(1, ...personList.map(p=>p.amount));
@@ -726,7 +796,41 @@
     }).join('');
   }
 
-  function toggleKpiDrill(person) {
+  // ══ 헤더 클릭 정렬 (v15.60 신규 — 표준 4종 중 유일한 미적용 항목이었음) ══
+// 기존에는 th에 cursor:pointer만 있고 onclick이 없어 눌러도 아무 일이 없었다.
+let kpiSort = { key:'amount', asc:false };   // 기존 기본값(출하금액 내림차순)과 동일
+function sortKpi(key){
+  if(kpiSort.key === key) kpiSort.asc = !kpiSort.asc;
+  else { kpiSort.key = key; kpiSort.asc = (key === 'person'); }   // 이름만 오름차순 시작
+  renderKpiAll();
+}
+function kpiSortVal(p, key){
+  switch(key){
+    case 'person':    return p.person || '';
+    case 'count':     return p.schedules.length;
+    case 'itemCount': return p.itemCount;
+    case 'amount':    return p.amount;
+    case 'avgMin':    return p.schedules.length ? p.minutesSum / p.schedules.length : 0;
+    case 'volume':    return p.box + p.pl * 100;   // PL을 크게 쳐서 부피 순으로 읽히게
+    default:          return 0;
+  }
+}
+function applyKpiSort(list){
+  const { key, asc } = kpiSort;
+  list.sort((a,b)=>{
+    const va = kpiSortVal(a,key), vb = kpiSortVal(b,key);
+    const r = (typeof va === 'string') ? va.localeCompare(vb, 'ko') : (va - vb);
+    return asc ? r : -r;
+  });
+}
+function updateKpiSortIcons(){
+  ['person','count','itemCount','amount','avgMin','volume'].forEach(k=>{
+    const el = document.getElementById('si-kpi-' + k);
+    if(el) el.textContent = (kpiSort.key === k) ? (kpiSort.asc ? '↑' : '↓') : '';
+  });
+}
+
+function toggleKpiDrill(person) {
     kpiExpanded[person] = !kpiExpanded[person];
     renderKpiAll();
   }
