@@ -80,6 +80,9 @@
   /* ── 섹션 레이블 ── */
   /* v15.60 — 한글에 letter-spacing:2px + uppercase 는 자간이 늘어져 읽기 나쁘다 */
   .sec-label{display:flex;align-items:center;gap:8px;padding:9px 24px;background:var(--bg-sub);border-bottom:1px solid var(--border);font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;letter-spacing:0;color:var(--text);}
+  .sec-tools{margin-left:auto;display:flex;align-items:center;gap:7px;font-weight:500;font-size:12px;color:var(--muted);}
+  .rows-sel{height:26px;padding:0 6px;border:1px solid var(--border);border-radius:2px;background:#fff;color:var(--text);font-size:12px;font-family:'Noto Sans KR',sans-serif;cursor:pointer;}
+  .rows-sel:focus{outline:none;border-color:var(--point);}
   .sec-label .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 
   /* ── 메인 2열 ── */
@@ -94,8 +97,8 @@
   /* --today-bg/--week-bg(0.06)는 주간 달력 셀용이라 제목 띠로는 옅다. 여기만 조금 더 준다.
      두 색의 농도를 같은 0.10 으로 맞춰야 나란히 놓였을 때 구분이 산다
      (한쪽만 --point-bg(#EDF1F7)를 쓰면 거의 흰색으로 보여 대비가 죽는다). */
-  .col-header.today-header{background:rgba(179,38,30,0.10);border-left:4px solid var(--accent);}
-  .col-header.week-header{background:rgba(27,58,107,0.10);border-left:4px solid var(--point);}
+  .col-header.today-header{background:rgba(179,38,30,0.18);border-left:4px solid var(--accent);border-bottom-color:rgba(179,38,30,0.35);}
+  .col-header.week-header{background:rgba(27,58,107,0.18);border-left:4px solid var(--point);border-bottom-color:rgba(27,58,107,0.35);}
   .col-header.today-header .col-title,.col-header.today-header .col-date{color:var(--accent);}
   .col-header.week-header .col-title,.col-header.week-header .col-date{color:var(--point);}
   .col-header.today-header .count-badge{background:#fff;border-color:var(--accent);color:var(--accent);}
@@ -113,7 +116,12 @@
   /* ── 카드 목록 ── */
   /* v15.60 — max-height:260px 고정이라 카드가 2장만 보였다. 화면 높이에 따라 늘어나게 한다.
      (상단바 52 + 섹션라벨 35 + 패널 패딩 32 + 컬럼 제목 띠 50 + 여백 ≈ 290px) */
-  .ship-cards{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:calc(100vh - 290px);min-height:260px;padding-right:3px;}
+  /* v15.60 — 표시 카드 수를 사용자가 조절한다(모니터 크기·업무에 따라 다름).
+     --card-rows 가 0이면 화면 높이에 맞춰 자동, 숫자면 그 장수만큼만 보인다.
+     카드 1장 ≈ 68px + 간격 10px = 78px 기준. 선택값은 localStorage 에 저장. */
+  .ship-cards{display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:3px;
+    max-height:calc(100vh - 290px);min-height:200px;}
+  .ship-cards[data-rows]{max-height:calc(var(--card-rows) * 78px);min-height:0;}
   .ship-cards::-webkit-scrollbar{width:15px;}
   .ship-cards::-webkit-scrollbar-track{background:var(--bg-sub);border:1px solid var(--border);}
   .ship-cards::-webkit-scrollbar-thumb{background:var(--point);border:3px solid var(--bg-sub);min-height:40px;}
@@ -146,12 +154,14 @@
   .tags{display:flex;gap:9px;align-items:center;flex-shrink:0;}
   .qty-val{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
   .qty-val i{font-size:10px;font-weight:500;color:var(--muted);font-style:normal;}
-  .tag{font-size:10px;font-family:'Noto Sans KR',sans-serif;padding:2px 8px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
-  .tag::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;}
-  /* LOT 상태 — 완료는 남색, 대기·진행중은 노랑 (미완결 = 노랑으로 한눈에) */
-  .tag-lot-완료{background:var(--point-bg);color:var(--point);}
-  .tag-lot-대기,.tag-lot-진행중{background:rgba(138,97,22,0.12);color:var(--amber);}
-  .tag-done{background:rgba(46,107,79,0.12);color:var(--accent3);}
+  .tag{font-size:10.5px;font-weight:700;font-family:'Noto Sans KR',sans-serif;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;letter-spacing:.2px;}
+  .tag::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;opacity:.85;}
+  /* LOT 상태 — 글자색이 아니라 "배지 배경"을 채워 멀리서도 즉시 구분되게 한다.
+     완료 = 남색 채움 / 대기·진행중 = 노랑 채움. 미완결 두 상태를 같은 노랑으로 묶어
+     노란 게 보이면 아직 할 일이 남은 것으로 읽힌다. */
+  .tag-lot-완료{background:var(--point);color:#fff;}
+  .tag-lot-대기,.tag-lot-진행중{background:#EFC14A;color:#4A3305;}
+  .tag-done{background:var(--accent3);color:#fff;}
   .mark-edited{font-size:12px;color:var(--muted);cursor:default;}
   .card-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
   .card-meta{display:flex;gap:9px;font-size:11px;color:var(--muted);flex-wrap:wrap;align-items:center;min-width:0;}
@@ -385,7 +395,22 @@
   </div>
 </div>
 
-<div class="sec-label"><div class="dot" style="background:var(--accent)"></div>오늘 출하 · 선택 요일 상세</div>
+<div class="sec-label"><div class="dot" style="background:var(--accent)"></div>오늘 출하 · 선택 요일 상세
+  <span class="sec-tools">
+    <label for="rowsSel">표시 장수</label>
+    <select id="rowsSel" class="rows-sel" onchange="setCardRows(this.value)">
+      <option value="0">자동 (화면에 맞춤)</option>
+      <option value="3">3장</option>
+      <option value="4">4장</option>
+      <option value="5">5장</option>
+      <option value="6">6장</option>
+      <option value="7">7장</option>
+      <option value="8">8장</option>
+      <option value="10">10장</option>
+      <option value="12">12장</option>
+    </select>
+  </span>
+</div>
 
 <div class="main-grid">
   <div class="col-panel">
@@ -1128,6 +1153,27 @@
   }
 
   // ── 입력 모달 ──
+
+// ══ 카드 표시 장수 조절 (v15.60) ══
+// 모니터 크기와 업무에 따라 한 번에 보고 싶은 장수가 다르다.
+// 0 = 화면 높이에 맞춰 자동, 그 외 = 지정 장수만큼만 보이고 나머지는 스크롤.
+const CARD_ROWS_KEY = 'sh_card_rows';
+function setCardRows(v){
+  const n = parseInt(v, 10) || 0;
+  document.querySelectorAll('.ship-cards').forEach(el => {
+    if (n > 0) { el.dataset.rows = String(n); el.style.setProperty('--card-rows', n); }
+    else { delete el.dataset.rows; el.style.removeProperty('--card-rows'); }
+  });
+  try { localStorage.setItem(CARD_ROWS_KEY, String(n)); } catch(e) {}
+}
+function initCardRows(){
+  let saved = '0';
+  try { saved = localStorage.getItem(CARD_ROWS_KEY) || '0'; } catch(e) {}
+  const sel = document.getElementById('rowsSel');
+  if (sel) sel.value = saved;
+  setCardRows(saved);
+}
+
 
 // v15.60 — 화면이동 네비게이션 표준: 새창열기 (v15.47 3버튼 표준)
 function openNewWindow(){
@@ -2488,6 +2534,9 @@ function openNewWindow(){
       if (e.target === this) { closeEditModal(); closeInputModal(); closeCompleteModal(); }
     });
   });
+
+  // ── 초기화 ──
+  initCardRows();   // v15.60 — 저장된 카드 표시 장수 복원
 
   // ── 자동 갱신 ──
   let countdown = 30;
