@@ -78,7 +78,8 @@
   .nav-home:hover{filter:brightness(1.08);}
 
   /* ── 섹션 레이블 ── */
-  .sec-label{display:flex;align-items:center;gap:8px;padding:9px 24px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:12px;font-weight:800;font-family:'Noto Sans KR',sans-serif;letter-spacing:2px;color:var(--text);text-transform:uppercase;}
+  /* v15.60 — 한글에 letter-spacing:2px + uppercase 는 자간이 늘어져 읽기 나쁘다 */
+  .sec-label{display:flex;align-items:center;gap:8px;padding:9px 24px;background:var(--bg-sub);border-bottom:1px solid var(--border);font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;letter-spacing:0;color:var(--text);}
   .sec-label .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 
   /* ── 메인 2열 ── */
@@ -86,15 +87,19 @@
   .col-panel{padding:16px 20px;display:flex;flex-direction:column;}
   .col-panel:first-child{border-right:1px solid var(--border);}
   .col-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:11px 14px;border-radius:2px;border-bottom:1px solid var(--border);}
-  /* v15.60 — 컬럼 제목 띠. :root 의 --today-bg(적색 틴트)/--week-bg(남색 틴트)와
-     의미를 맞춰 오늘=적색 / 이번주=남색으로 구분 (구 주황/다크회색) */
-  .col-header.today-header{background:var(--accent);}
-  .col-header.week-header{background:var(--point);}
-  .col-header.today-header .col-title,.col-header.today-header .col-date,
-  .col-header.week-header .col-title,.col-header.week-header .col-date{color:#fff;}
-  .col-header.today-header .count-badge,.col-header.week-header .count-badge{background:rgba(255,255,255,0.16);border-color:rgba(255,255,255,0.3);color:#fff;}
-  .col-header.today-header .col-dot{background:#fff!important;box-shadow:none!important;}
-  .col-header.week-header .col-dot{background:#fff!important;box-shadow:none!important;}
+  /* v15.60 — 컬럼 제목 띠.
+     처음에 원색(적색/남색) 단색으로 채웠더니 면적이 넓어 화면에서 너무 튀었다.
+     :root 의 --today-bg/--week-bg 틴트를 배경으로 쓰고, 구분은 왼쪽 3px 실선과
+     글자색이 담당한다. 면적이 큰 곳에 원색을 쓰지 않는다는 원칙과도 맞는다. */
+  /* --today-bg/--week-bg(0.06)는 주간 달력 셀용이라 제목 띠로는 옅다. 여기만 조금 더 준다 */
+  .col-header.today-header{background:rgba(179,38,30,0.09);border-left:3px solid var(--accent);}
+  .col-header.week-header{background:var(--point-bg);border-left:3px solid var(--point);}
+  .col-header.today-header .col-title,.col-header.today-header .col-date{color:var(--accent);}
+  .col-header.week-header .col-title,.col-header.week-header .col-date{color:var(--point);}
+  .col-header.today-header .count-badge{background:#fff;border-color:var(--accent);color:var(--accent);}
+  .col-header.week-header .count-badge{background:#fff;border-color:var(--point);color:var(--point);}
+  .col-header.today-header .col-dot{background:var(--accent)!important;box-shadow:none!important;}
+  .col-header.week-header .col-dot{background:var(--point)!important;box-shadow:none!important;}
   .col-title-wrap{display:flex;align-items:center;gap:7px;}
   .col-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
   .col-title{font-size:17px;font-weight:800;}
@@ -104,7 +109,12 @@
   .count-badge{font-size:9px;font-family:'Noto Sans KR',sans-serif;background:var(--surface2);border:1px solid var(--border);padding:2px 7px;border-radius:2px;color:var(--muted);}
 
   /* ── 카드 목록 ── */
-  .ship-cards{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:260px;padding-right:3px;}
+  /* v15.60 — max-height:260px 고정이라 카드가 2장만 보였다. 화면 높이에 따라 늘어나게 한다.
+     (상단바 52 + 섹션라벨 35 + 패널 패딩 32 + 컬럼 제목 띠 50 + 여백 ≈ 290px) */
+  .ship-cards{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:calc(100vh - 290px);min-height:260px;padding-right:3px;}
+  .ship-cards::-webkit-scrollbar{width:15px;}
+  .ship-cards::-webkit-scrollbar-track{background:var(--bg-sub);border:1px solid var(--border);}
+  .ship-cards::-webkit-scrollbar-thumb{background:var(--point);border:3px solid var(--bg-sub);min-height:40px;}
   .ship-cards::-webkit-scrollbar{width:3px;}
   .ship-cards::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 
@@ -2465,7 +2475,12 @@ function openNewWindow(){
   }, 1000);
 </script>
 
-<!-- smerp-tweaks.js -->
-<script src="smerp-tweaks.js"></script>
+<!-- v15.60 — smerp-tweaks.js 로드 제거.
+     이 스크립트는 페이지 로드시 `.topbar{height:112px !important; background:#2c2420 !important}`
+     를 주입해 표준 상단바(흰 배경·52px)를 무조건 덮어썼고, body.style.fontFamily 로
+     Inter 를 Noto Sans KR 보다 앞에 두어 폰트 표준까지 깼다. 게다가 설정 패널을
+     여는 코드(classList.add('open'))가 파일 어디에도 없어 값을 바꿀 수도 없었다.
+     화면 색·글자 크기·다크모드는 SMERP 전체 공통 기능으로 재설계할 사안이므로
+     그때 다시 붙인다. smerp-tweaks.js 파일 자체는 저장소에 그대로 둔다. -->
 </body>
 </html>
