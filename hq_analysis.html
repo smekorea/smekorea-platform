@@ -736,7 +736,11 @@ function inPer(r,from,to){
 // 공급현황분석 표가 옛 기간 그대로"인 문제가 있었음. 각 탭이 자기 기간만
 // 책임지도록 분리하고, 탭별 선택값은 localStorage에 저장해 재진입 시 유지한다.
 const P_PFX={summary:'sm',corp:'cp',trade:'tr'};
-const P_LSKEY='hq_period_v1';
+// v15.61 — v1 → v2 로 키 교체. v1 에 예전 테스트 과정의 탭별 기간이 서로 다른 시점으로
+// 남아 있어, 자동감지가 정상이어도 loadPeriods() 가 그 잔재로 덮어써 3개 탭이 제각각
+// 보였다. 동작 로직은 그대로 두고 저장 키만 바꿔 예전 값을 한 번 무효화한다.
+// 이후에는 [조회]를 누른 기간만 다시 저장·복원된다(처음 열 때는 실제 데이터 범위).
+const P_LSKEY='hq_period_v2';
 function getFT(sc){
   const p=P_PFX[sc||'summary']||'sm';
   const fy=document.getElementById(p+'-fromYear');
@@ -2523,9 +2527,10 @@ let _dataMinYM='',_dataMaxYM=''; // (v15.46) 실제 데이터 전체 범위 — 
     const candMonths=['01','02','03','04','05','06','07','08','09','10','11','12'];
     // 존재 확인 1건 — 있으면 true, 없으면 false, 조회 실패면 null(=판정 불가)
     const hasRows=async(y,m)=>{
-      let q=sb.from('sales_data').select('id').eq('year',y).limit(1);
+      // 필터(eq)를 모두 건 뒤 limit 을 마지막에 — 체이닝 순서 의존을 없앤다
+      let q=sb.from('sales_data').select('id').eq('year',y);
       if(m)q=q.eq('month',m);
-      const {data,error}=await q;
+      const {data,error}=await q.limit(1);
       if(error){console.warn('기간감지 조회 실패',y,m||'',error.message);return null;}
       return (data||[]).length>0;
     };
