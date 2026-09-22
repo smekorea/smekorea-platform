@@ -434,12 +434,13 @@ th.sortable:hover{background:var(--point-bg);}
 .chart-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
 /* v15.61 — 목표대비 실적: 좌 월별재고금액(크게) / 우 LG사급·직거래 달성률(세로 2단) */
 .goal-split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:stretch;margin-bottom:14px;}
-.goal-split > .chart-card{margin:0;display:flex;flex-direction:column;}
 .goal-split .main-svg{flex:1;display:flex;align-items:center;}
-.goal-side{display:flex;flex-direction:column;gap:14px;min-width:0;}
-.goal-side .side-head{font-size:12px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px;margin:0 0 -4px 2px;}
-.goal-side .side-head small{font-weight:500;color:var(--text-mute);font-size:11px;}
-.goal-side .chart-card{flex:1;margin:0;padding:12px 16px;}
+.goal-col{display:flex;flex-direction:column;min-width:0;}
+.goal-col > .sec-label{margin-bottom:10px;}
+.goal-col > .chart-card{flex:1;margin:0;display:flex;flex-direction:column;}
+.goal-side{flex:1;display:flex;flex-direction:column;gap:14px;min-width:0;}
+.goal-side .chart-card{flex:1;margin:0;padding:12px 16px;display:flex;flex-direction:column;}
+.goal-side .chart-card .side-svg{flex:1;display:flex;align-items:center;}
 @media(max-width:1200px){.goal-split{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -2674,13 +2675,25 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
   const periodStr=`데이터 기간: ${months[0]} ~ ${months[months.length-1]}`;
   // v15.60 — 상태색 단일 정의. 이 함수 하나만 고치면 목표대비 전 구간 색이 바뀐다.
   const achColor=pct=>pct>130?'#B3261E':pct>100?'#8A6116':pct>=80?'#2E6B4F':'#1B3A6B';
+  // v15.61 — 그래프 팔레트. 예전엔 좌측 월별재고금액은 원색(#2A78D6/#EB6834), 우측 달성률은
+  //   진한 초록·황토에 opacity .75 를 씌워 탁하게 보여 두 영역 톤이 달랐다. 같은 채도의 한 벌로 맞춘다.
+  //   막대 = 연한색, 최근월 = 진한색(같은 색상 계열). 글자(%)는 가독성을 위해 진한색을 쓴다.
+  const C_LG='#5B8DD3', C_LG_D='#2F63AE';   // LG사급  (연/진)
+  const C_DT='#EFA36B', C_DT_D='#D4722F';   // 직거래  (연/진)
+  const achBar=(pct,latest)=>{               // 달성률 막대 — 상태색 연/진
+    if(pct>130) return latest?'#C0504D':'#E39A96';   // 과다
+    if(pct>100) return latest?'#C8892A':'#EBC07A';   // 초과
+    if(pct>=80) return latest?'#3E8C6F':'#8CC3AB';   // 적정
+    return latest?'#3F6FB5':'#94B2DD';               // 미달
+  };
+  const achText=pct=>pct>130?'#B3261E':pct>100?'#A06A12':pct>=80?'#2E7358':'#2F5E9E';
 
   // 목표선 라벨은 "목표" / 금액 두 줄로 분리해 좁은 왼쪽 여백 안에서도 겹치거나 카드 밖으로 넘치지 않게 각 차트 함수 내부에서 처리
 
   // 공통 SVG 막대그래프 빌더 (달성률 3분할 차트용) — 고정 전체폭 기준, 월 개수(최대 12개월)에 따라 막대폭 자동 축소
   // 막대 위: 금액(위 줄) + 달성률%(아래 줄) 두 줄 표시
   function buildTrendBarChart(vals, targetVal, computePct, chartH){
-    const totalW=520,padL=62,padR=14,padT=32,padB=26;
+    const totalW=520,padL=62,padR=14,padT=30,padB=24;
     const n=months.length;
     const slotW=(totalW-padL-padR)/Math.max(n,1);
     const bW=Math.min(34,slotW*0.6);
@@ -2690,9 +2703,9 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       const v=vals[i];const pct=computePct(v);const h=maxV>0?(v/maxV)*chartH:0;
       const x=padL+i*slotW+(slotW-bW)/2;const y=padT+chartH-h;
       const isLatest=i===months.length-1;
-      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${achColor(pct)}" rx="2" opacity="${isLatest?1:.75}"/>`;
+      bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${h}" fill="${achBar(pct,isLatest)}" rx="2"/>`;
       bars+=`<text x="${x+bW/2}" y="${y-16}" text-anchor="middle" font-size="9.5" font-family="'Noto Sans KR', sans-serif" fill="#1E2225" font-weight="700">${fmtA(v)}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${y-4}" text-anchor="middle" font-size="9.5" font-family="'Noto Sans KR', sans-serif" fill="${achColor(pct)}" font-weight="700">${Math.round(pct)}%</text>`;
+      bars+=`<text x="${x+bW/2}" y="${y-4}" text-anchor="middle" font-size="9.5" font-family="'Noto Sans KR', sans-serif" fill="${achText(pct)}" font-weight="700">${Math.round(pct)}%</text>`;
       bars+=`<text x="${x+bW/2}" y="${padT+chartH+15}" text-anchor="middle" font-size="9.5" font-family="'Noto Sans KR', sans-serif" fill="#565C64" font-weight="600">${m.slice(2)}</text>`;
     });
     if(targetVal>0&&targetVal<=maxV){
@@ -2714,7 +2727,8 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
     // v15.61 — 우측 달성률 2단과 나란히 두면서 좌측 폭이 줄었으므로 세로를 다시 키운다(93→250).
     //   v15.48의 "세로 60% 축소"는 전체폭 단독 배치 기준이었다. 나란히 배치에서는 viewBox 가
     //   컬럼 폭에 맞춰 줄어들어 같은 비율이면 막대가 납작해지므로 높이를 보강한다.
-    const totalW=680,padL=66,padR=14,padT=84,padB=40,chartH=250;
+    // v15.61(2) — 사용자 요청으로 전체 세로폭 약 20% 축소 (374 → 304)
+    const totalW=680,padL=66,padR=14,padT=78,padB=34,chartH=192;
     const n=yearSlots.length;
     const slotW=(totalW-padL-padR)/n;
     const bW=Math.min(40,slotW*0.64);
@@ -2736,8 +2750,8 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       const mLabel=parseInt(m.slice(5),10)+'월';
       if(!v.has){
         // 미입력 월 — 점선 빈 슬롯으로 자리를 남겨 연간 진행 상황을 보여준다
-        bars+=`<rect x="${x}" y="${padT+chartH-34}" width="${bW}" height="34" rx="3" fill="none" stroke="#C7CCD4" stroke-dasharray="3,3"/>`;
-        bars+=`<text x="${x+bW/2}" y="${padT+chartH+19}" text-anchor="middle" font-size="11" font-family="'Noto Sans KR', sans-serif" fill="#565C64">${mLabel}</text>`;
+        bars+=`<rect x="${x}" y="${padT+chartH-28}" width="${bW}" height="28" rx="3" fill="#F6F7F9" stroke="#D5D9DF" stroke-dasharray="3,3"/>`;
+        bars+=`<text x="${x+bW/2}" y="${padT+chartH+18}" text-anchor="middle" font-size="11" font-family="'Noto Sans KR', sans-serif" fill="#98A0AB">${mLabel}</text>`;
         return;
       }
       const totalH=(v.total/maxV)*chartH;
@@ -2749,12 +2763,13 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       // v15.61 — 범례(좌측상단 가이드)와 막대 색을 일치시킨다. v15.60 3차에서 막대만 남색/황토로
       // 바꾸고 범례 네모칸은 옛 파랑/주황으로 남아 서로 달랐다. 남색/황토는 채도가 낮아 두 공급
       // 유형이 잘 구분되지 않으므로 범례 쪽 파랑/주황으로 통일한다. 최신월=진하게 / 이전월=범례색.
-      bars+=`<rect x="${x}" y="${yTop}" width="${bW}" height="${lgH}" fill="${isLatest?'#185FA5':'#2A78D6'}"/>`;
-      bars+=`<rect x="${x}" y="${yTop+lgH}" width="${bW}" height="${dtH}" fill="${isLatest?'#D95926':'#EB6834'}" rx="0"/>`;
+      bars+=`<rect x="${x}" y="${yTop}" width="${bW}" height="${lgH}" fill="${isLatest?C_LG_D:C_LG}" rx="2"/>`;
+      bars+=`<rect x="${x}" y="${yTop+lgH}" width="${bW}" height="${dtH}" fill="${isLatest?C_DT_D:C_DT}"/>`;
+      if(lgH>0&&dtH>0)bars+=`<line x1="${x}" y1="${yTop+lgH}" x2="${x+bW}" y2="${yTop+lgH}" stroke="#fff" stroke-width="1.5"/>`;
       const pct=targetVal>0?v.total/targetVal*100:0;
       // (v15.48-fix) 재고 관점: 목표 초과 = 과잉(주황) / 목표 이하 = 정상(파랑)
       //   매출과 부호가 반대라 브리핑 과잉색(주황)과 방향을 맞춘다.
-      const pctColor=pct>100?'#8A6116':'#1B3A6B';
+      const pctColor=pct>100?'#A06A12':'#2F5E9E';
       // 전월대비는 "바로 앞 슬롯"이 아니라 "직전에 데이터가 있는 월" 기준
       let prev=null;for(let k=i-1;k>=0;k--){if(vals[k].has){prev=vals[k].total;break;}}
       const delta=prev!==null?v.total-prev:null;
@@ -2763,13 +2778,13 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
       const dNum=delta===null?'':(Math.abs(delta)/1e8).toFixed(1);
       const deltaStr=delta===null?'':(delta>0?`▲${dNum}`:(delta<0?`▼${dNum}`:'보합'));
       if(isLatest){
-        bars+=`<rect x="${x+bW/2-20}" y="${yTop-76}" width="40" height="17" rx="8.5" fill="#1B3A6B"/>`;
-        bars+=`<text x="${x+bW/2}" y="${yTop-63.5}" text-anchor="middle" font-size="10" font-family="'Noto Sans KR', sans-serif" fill="#fff" font-weight="700">최근</text>`;
+        bars+=`<rect x="${x+bW/2-20}" y="${yTop-74}" width="40" height="17" rx="8.5" fill="${C_LG_D}"/>`;
+        bars+=`<text x="${x+bW/2}" y="${yTop-61.5}" text-anchor="middle" font-size="10" font-family="'Noto Sans KR', sans-serif" fill="#fff" font-weight="700">최근</text>`;
       }
       bars+=`<text x="${x+bW/2}" y="${yTop-42}" text-anchor="middle" font-size="13" font-family="'Noto Sans KR', sans-serif" fill="#1E2225" font-weight="700">${fmtA(v.total)}</text>`;
       bars+=`<text x="${x+bW/2}" y="${yTop-26}" text-anchor="middle" font-size="11" font-family="'Noto Sans KR', sans-serif" fill="${pctColor}" font-weight="700">${Math.round(pct)}%</text>`;
       if(deltaStr)bars+=`<text x="${x+bW/2}" y="${yTop-10}" text-anchor="middle" font-size="10" font-family="'Noto Sans KR', sans-serif" fill="#565C64" font-weight="600">${deltaStr}</text>`;
-      bars+=`<text x="${x+bW/2}" y="${padT+chartH+19}" text-anchor="middle" font-size="11" font-family="'Noto Sans KR', sans-serif" fill="${isLatest?'#1B3A6B':'#565C64'}" font-weight="${isLatest?'700':'600'}">${mLabel}</text>`;
+      bars+=`<text x="${x+bW/2}" y="${padT+chartH+18}" text-anchor="middle" font-size="11" font-family="'Noto Sans KR', sans-serif" fill="${isLatest?'#1B3A6B':'#565C64'}" font-weight="${isLatest?'700':'600'}">${mLabel}</text>`;
     });
     bars+=`<line x1="${padL}" y1="${padT+chartH}" x2="${totalW-padR}" y2="${padT+chartH}" stroke="#C3C2B7" stroke-width="1"/>`;
     // (v15.48) "점선=재고조사 미입력" 문구 삭제(사용자 요청)
@@ -2782,27 +2797,34 @@ async function renderGoalTrend(allTarget,lgTarget,dtTarget,fmt,pctColor,barColor
   const barSvg=buildMainAmountChart(allTarget);
   // v15.61 — 전체 달성률 차트는 좌측 월별재고금액의 막대 위 %와 중복이라 제외(사용자 지정 레이아웃).
   //   totalVals 는 다른 곳에서 참조할 수 있어 계산은 남겨둔다.
-  const chartLg=buildTrendBarChart(lgVals,lgTarget,v=>lgTarget>0?v/lgTarget*100:0,84);
-  const chartDt=buildTrendBarChart(dtVals,dtTarget,v=>dtTarget>0?v/dtTarget*100:0,84);
+  const chartLg=buildTrendBarChart(lgVals,lgTarget,v=>lgTarget>0?v/lgTarget*100:0,67);
+  const chartDt=buildTrendBarChart(dtVals,dtTarget,v=>dtTarget>0?v/dtTarget*100:0,67);
 
-  // v15.61 — 좌: 월별 재고금액(크게) / 우: LG사급·직거래 달성률 세로 2단 (사용자 지정 레이아웃)
+  // v15.61 — 좌: 월별 재고금액 / 우: LG사급·직거래 달성률 세로 2단 (사용자 지정 레이아웃)
+  //   섹션 제목을 좌·우 컬럼에 각각 두어 "월별 재고금액"과 "월별 달성률" 제목이 같은 줄에 오고
+  //   아래 카드들의 윗선이 맞도록 한다(예전엔 제목줄이 전체폭이라 우측 제목이 한 줄 아래로 밀렸다).
   document.getElementById('goalTrendWrap').innerHTML=`
-    <div class="sec-label"><span class="sec-label-text">월별 재고금액</span><span class="period-label" style="margin-left:10px;">${periodStr}</span><div class="sec-label-line"></div></div>
     <div class="goal-split">
-      <div class="chart-card" style="padding:14px 18px;">
-        <div class="chart-card-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
-          <span>막대 위: 금액 · 목표대비 달성률 · 전월대비 증감</span>
-          <span style="font-weight:600;font-size:10.5px;"><span style="display:inline-block;width:9px;height:9px;background:#2A78D6;border-radius:2px;margin-right:3px;vertical-align:-1px;"></span>LG사급<span style="display:inline-block;width:9px;height:9px;background:#EB6834;border-radius:2px;margin:0 3px 0 10px;vertical-align:-1px;"></span>직거래</span>
+      <div class="goal-col">
+        <div class="sec-label"><span class="sec-label-text">월별 재고금액</span><span class="period-label" style="margin-left:10px;">${periodStr}</span><div class="sec-label-line"></div></div>
+        <div class="chart-card" style="padding:14px 18px;">
+          <div class="chart-card-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+            <span>막대 위: 금액 · 목표대비 달성률 · 전월대비 증감</span>
+            <span style="font-weight:600;font-size:10.5px;"><span style="display:inline-block;width:9px;height:9px;background:${C_LG};border-radius:2px;margin-right:3px;vertical-align:-1px;"></span>LG사급<span style="display:inline-block;width:9px;height:9px;background:${C_DT};border-radius:2px;margin:0 3px 0 10px;vertical-align:-1px;"></span>직거래</span>
+          </div>
+          <div class="main-svg">${barSvg}</div>
         </div>
-        <div class="main-svg">${barSvg}</div>
       </div>
-      <div class="goal-side">
-        <div class="side-head">월별 달성률 <small>(막대 = 실적, 점선 = 목표금액)</small></div>
-        <div class="chart-card"><div class="chart-card-title" style="color:var(--ng);margin-bottom:6px;">LG사급 달성률</div>${chartLg}</div>
-        <div class="chart-card"><div class="chart-card-title" style="color:var(--point);margin-bottom:6px;">직거래 달성률</div>${chartDt}</div>
+      <div class="goal-col">
+        <div class="sec-label"><span class="sec-label-text">월별 달성률 <small style="font-weight:500;color:var(--text-mute);">(막대 = 실적, 점선 = 목표금액)</small></span><div class="sec-label-line"></div></div>
+        <div class="goal-side">
+          <div class="chart-card"><div class="chart-card-title" style="color:var(--ng);margin-bottom:4px;">LG사급 달성률</div><div class="side-svg">${chartLg}</div></div>
+          <div class="chart-card"><div class="chart-card-title" style="color:var(--point);margin-bottom:4px;">직거래 달성률</div><div class="side-svg">${chartDt}</div></div>
+        </div>
       </div>
     </div>
   `;
+
 }
 
 // ── 탭6: 목표대비 세부 (전역 함수 — 필터버그 수정) ──
