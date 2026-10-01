@@ -115,7 +115,10 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .mpl-wrap{padding:10px 14px 14px 46px;background:var(--bg-sub);border-top:1px solid var(--border);}
 .mpl-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
 .mpl-title{font-size:12.5px;font-weight:700;color:var(--text);}
-.mpl-tbl{width:auto;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:2px;overflow:hidden;}
+.mpl-tbl{width:auto;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--border);border-radius:2px;}
+/* 세부납기 제목행 틀고정 — 바깥 메이커표 제목행 바로 아래(--mpl-top)에 고정 */
+.tbl-wrap .mpl-tbl thead th{position:sticky;top:var(--mpl-top,37px);z-index:2;}
+#maker-table > thead > tr > th{z-index:3;}
 .mpl-tbl th{background:var(--bg-sub);font-size:11.5px;font-weight:700;color:var(--text);padding:7px 12px;text-align:left;
   border-right:1px solid var(--border);border-bottom:1px solid var(--border);white-space:nowrap;}
 .mpl-tbl th:last-child{border-right:none;}
@@ -625,7 +628,7 @@ tr.dragging{opacity:.45;}
 
   <!-- 검색/필터 -->
   <div class="up-section" style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <input type="text" id="pf-keyword" placeholder="🔍 이름/별칭 검색" oninput="renderPartnersTable()" style="flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-family:'Noto Sans KR',sans-serif;font-size:13px;">
+    <input type="text" id="pf-keyword" placeholder="🔍 이름/별칭 검색" oninput="renderPartnersTable()" style="width:280px;flex:0 0 280px;padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-family:'Noto Sans KR',sans-serif;font-size:13px;">
     <select id="pf-type" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;">
       <option value="">구분 전체</option>
       <option value="매입처">매입처</option>
@@ -647,6 +650,7 @@ tr.dragging{opacity:.45;}
       <option value="FORECAST">예측발주만</option>
       <option value="PO_BASED">PO접수만</option>
     </select>
+    <span id="pf-result" style="margin-left:auto;font-size:12px;color:var(--muted);"></span>
   </div>
 
   <!-- 목록 -->
@@ -2162,6 +2166,7 @@ function renderPartnersTable() {
   if(fClosing==='basic') rows=rows.filter(r=>r.closing_basis!=='LG마감기준');
   if(fActive) rows=rows.filter(r=>(r.is_active!==false)===(fActive==='true'));
   if(fSupply) rows=rows.filter(r=>(r.supply_mode||'FORECAST')===fSupply);
+  const pfr=document.getElementById('pf-result'); if(pfr) pfr.innerHTML=`<b style="color:var(--text);">${rows.length.toLocaleString()}</b> / ${_partnersData.length.toLocaleString()}건`;
   if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
   if(!rows.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
@@ -4305,7 +4310,11 @@ function renderMakerTable() {
       </td>
     </tr>` + (open ? `<tr class="mpl-host"><td colspan="8" style="padding:0;">${mplRowsHtml(mn)}</td></tr>` : '');
   }).join('');
-  setTimeout(()=>initColResize('maker-table','al_maker_v2'),50);
+  setTimeout(()=>{
+    initColResize('maker-table','al_maker_v2');
+    const tb=document.getElementById('maker-table'), hd=tb&&tb.querySelector(':scope > thead');
+    if(hd&&hd.offsetHeight) tb.style.setProperty('--mpl-top', (hd.offsetHeight-2)+'px'); // -2: 바깥 제목행 하단 2px 경계 틈 덮기
+  },50);
 }
 
 function editMakerRow(id) {
@@ -4953,7 +4962,7 @@ function initColResize(tableId, storageKey) {
   const table = document.getElementById(tableId);
   if(!table) return;
   const verKey = storageKey + ':v3'; // 버전키 v3: colgroup 기반 방식으로 전환(반복 리사이즈 시 누적 드리프트 버그 근본수정) — 예전 저장값 자동 초기화
-  const ths = table.querySelectorAll('thead th');
+  const ths = table.querySelectorAll(':scope > thead > tr > th'); // 펼침 세부표(중첩 table)의 th는 제외
   let colgroup = table.querySelector('colgroup');
   if(!colgroup) { colgroup = document.createElement('colgroup'); table.insertBefore(colgroup, table.firstChild); }
   while(colgroup.children.length < ths.length) colgroup.appendChild(document.createElement('col'));
