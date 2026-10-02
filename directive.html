@@ -257,6 +257,7 @@ tbody tr:last-child td{border-bottom:none;}
 /* ══════════ directive.html 전용 (v1.0, 2026-10-02) ══════════ */
 .list-layout{height:calc(100vh - var(--hdr-h) - 46px);}
 :root{--panel-w:440px;}
+.badge{white-space:nowrap;}
 .badge-지시됨{background:#fce7f3;color:#be185d;}
 .badge-진행중{background:#ede9fe;color:#6d28d9;}
 .badge-완료보고{background:#fef9c3;color:#854d0e;}
@@ -288,6 +289,7 @@ tbody tr.row-late td{background:#fff7f7;}
 .mt-btn{height:26px;padding:0 9px;font-size:11.5px;margin:0 2px 3px 0;}
 .mt-last{font-size:11.5px;color:#374151;}
 .mt-last b{color:var(--muted);font-weight:500;}
+.mt-guide{font-size:11.5px;color:var(--muted);margin:-4px 0 12px;}
 .mt-new{display:inline-block;background:var(--brand);color:#fff;font-size:10px;padding:1px 5px;border-radius:2px;margin-right:4px;vertical-align:1px;}
 /* 평가 */
 .ev-wrap{padding:16px 20px;overflow:auto;height:calc(100vh - var(--hdr-h) - 46px);}
@@ -422,12 +424,24 @@ tbody tr.row-late td{background:#fff7f7;}
 <div class="tab-panel" id="panel-meet">
   <div class="mt-wrap">
     <div class="filter-bar">
-      <span style="font-size:13px;font-weight:700;" id="mtWeek"></span>
+      <span style="font-size:12px;font-weight:700;">지시일</span>
+      <input type="date" id="mtFrom" onchange="renderMeet()" title="지시일 시작">
+      <span style="font-size:12px;">~</span>
+      <input type="date" id="mtTo" onchange="renderMeet()" title="지시일 종료">
+      <button class="btn btn-outline" onclick="meetRange('week')">이번 주</button>
+      <button class="btn btn-outline" onclick="meetRange('last')">지난 주</button>
+      <button class="btn btn-outline" onclick="meetRange('month')">이번 달</button>
+      <button class="btn btn-outline" onclick="meetRange('all')">전체 기간</button>
+      <select id="mtStatus" onchange="renderMeet()">
+        <option value="open">미완료</option>
+        <option value="all">전체 상태</option>
+        <option value="done">완료</option>
+      </select>
       <select id="mtDept" onchange="renderMeet()"><option value="">전체 부서</option></select>
-      <label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;"><input type="checkbox" id="mtDone" onchange="renderMeet()" checked> 이번 주 완료 건 포함</label>
       <button class="btn btn-primary" onclick="openForm()">＋ 지시 등록</button>
       <span class="cnt-badge" id="mtCnt"></span>
     </div>
+    <div class="mt-guide" id="mtGuide"></div>
     <div id="mtBody"></div>
   </div>
 </div>
@@ -500,7 +514,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v1.0 (2026-10-02) — 지시사항 관리
+   directive.html v1.1 (2026-10-02) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
    기준: 담당부서·담당자·지시자는 employees(관리자설정 직원관리)에서만 선택.
         평가는 owner_dept(등록 시점 부서 스냅샷) + due_date_original(최초 납기)
@@ -1023,56 +1037,76 @@ async function saveForm(){
   btn.disabled=false;
 }
 
-/* ── 주간회의 ── */
+/* ── 주간회의 ──
+   v1.1 (2026-10-02): 「이번 주 (MM/DD 월요일~)」 고정 문구를 없애고 지시일 기간 검색으로 변경.
+   기본 화면 = 기간 전체 + 미완료 → 회의에서 점검할 건이 부서별로 전부 나온다.
+   이관 건(이관-확인필요)도 따로 모으지 않고 각 부서 묶음 안에 넣는다. */
+function meetRange(kind){
+  const f=document.getElementById('mtFrom'), e=document.getElementById('mtTo');
+  if(kind==='all'){ f.value=''; e.value=''; }
+  else if(kind==='month'){ const d=new Date(); f.value=ymd(new Date(d.getFullYear(),d.getMonth(),1)); e.value=ymd(new Date(d.getFullYear(),d.getMonth()+1,0)); }
+  else{ const m=toDate(thisMonday()); if(kind==='last') m.setDate(m.getDate()-7); f.value=ymd(m); m.setDate(m.getDate()+6); e.value=ymd(m); }
+  renderMeet();
+}
+function latestMeetingDate(){ let mx=''; allD.forEach(d=>{ if(d.meeting_date&&d.meeting_date>mx) mx=d.meeting_date; }); return mx; }
 function renderMeet(){
-  const mon=thisMonday(), dept=document.getElementById('mtDept').value, withDone=document.getElementById('mtDone').checked;
-  document.getElementById('mtWeek').textContent='이번 주 ('+md(mon)+' 월요일~)';
-  const inWeek=ts=>{const s=tsDay(ts);return !!s&&s>=mon;};
+  const from=document.getElementById('mtFrom').value, to=document.getElementById('mtTo').value;
+  const st=document.getElementById('mtStatus').value, dept=document.getElementById('mtDept').value;
+  const latest=latestMeetingDate(), ranged=!!(from||to);
+  const inRange=d=>(!from||d.meeting_date>=from)&&(!to||d.meeting_date<=to);
   const rows=allD.filter(d=>{
+    if(d.kind==='공지'){
+      if(st==='done') return false;
+      if(dept) return false;
+      // 공지는 완료 개념이 없다. 기간을 지정하면 그 기간의 공지, 지정하지 않으면 가장 최근 회의일 공지만 보인다
+      return ranged?inRange(d):d.meeting_date===latest;
+    }
     if(dept&&groupKey(d)!==dept) return false;
-    if(d.kind==='공지') return d.meeting_date>=mon;
-    if(d.status==='보류') return false;
-    if(d.status==='완료') return withDone&&inWeek(d.completed_at);
+    if(!inRange(d)) return false;
+    if(st==='open') return OPEN_ST.indexOf(d.status)>=0;
+    if(st==='done') return d.status==='완료';
     return true;
   });
   const order=['__notice__'].concat(groupKeys()), groups={};
-  rows.forEach(d=>{
-    const k=d.status==='이관-확인필요'?'__import__':(d.kind==='공지'?'__notice__':groupKey(d));
-    (groups[k]=groups[k]||[]).push(d);
-  });
-  if(order.indexOf('__import__')<0) order.push('__import__');
-  Object.keys(groups).forEach(k=>{if(order.indexOf(k)<0)order.splice(order.length-1,0,k);});
-  document.getElementById('mtCnt').textContent=rows.length+'건 · 지연 '+rows.filter(isLate).length+'건';
+  rows.forEach(d=>{ const k=d.kind==='공지'?'__notice__':groupKey(d); (groups[k]=groups[k]||[]).push(d); });
+  Object.keys(groups).forEach(k=>{if(order.indexOf(k)<0)order.push(k);});
+  const tasks=rows.filter(d=>d.kind==='지시');
+  document.getElementById('mtCnt').textContent='지시 '+tasks.length+'건 · 지연 '+tasks.filter(isLate).length+'건';
+  document.getElementById('mtGuide').textContent=
+    (ranged?'지시일 '+(from||'처음')+' ~ '+(to||'현재'):'전체 기간')+' · '+(st==='open'?'미완료':st==='done'?'완료':'전체 상태')
+    +' · 지연 건이 각 부서 맨 위에 옵니다'+(latest?' · 「신규」= 최근 회의일('+md(latest)+') 지시':'');
   let h='';
   order.forEach(k=>{
     const list=groups[k]; if(!list||!list.length) return;
-    list.sort((a,b)=>(isLate(b)-isLate(a))||((a.due_date||'9999')<(b.due_date||'9999')?-1:1));
-    const name=k==='__notice__'?'이번 주 공지·규칙':k==='__import__'?'이관-확인필요 (엑셀에서 옮겨온 건 — 완료 또는 계속 진행으로 정리)':k;
-    const late=list.filter(isLate).length;
-    h+=`<div class="mt-group"><div class="mt-head">${esc(name)}<span class="mt-cnt">${list.length}건${late?' · 지연 '+late+'건':''}</span></div>
-      <table class="mt-table"><colgroup><col style="width:78px"><col style="width:64px"><col><col style="width:132px"><col style="width:78px"><col style="width:26%"><col style="width:24%"></colgroup>
+    // 지연 → 납기 빠른 순 → 납기 없는 건은 최근 지시일 순
+    list.sort((a,b)=>(isLate(b)-isLate(a))||((a.due_date||'9999')<(b.due_date||'9999')?-1:(a.due_date||'9999')>(b.due_date||'9999')?1:0)||(a.meeting_date<b.meeting_date?1:a.meeting_date>b.meeting_date?-1:b.id-a.id));
+    const name=k==='__notice__'?'공지·규칙':k;
+    const late=list.filter(isLate).length, imp=list.filter(d=>d.status==='이관-확인필요').length;
+    h+=`<div class="mt-group"><div class="mt-head">${esc(name)}<span class="mt-cnt">${list.length}건${late?' · 지연 '+late+'건':''}${imp?' · 이관-확인필요 '+imp+'건':''}</span></div>
+      <table class="mt-table"><colgroup><col style="width:78px"><col style="width:64px"><col><col style="width:132px"><col style="width:112px"><col style="width:26%"><col style="width:24%"></colgroup>
       <thead><tr><th>지시일</th><th>지시자</th><th>지시 내용</th><th>납기</th><th>상태</th><th>최근 진행내용</th><th>회의 기록</th></tr></thead><tbody>`;
     list.forEach(d=>{
-      const lu=lastUpd(d), mng=canManage(d), isNew=d.meeting_date>=mon;
+      const lu=lastUpd(d), mng=canManage(d), isNew=!!latest&&d.meeting_date===latest;
       let ctl='';
       if(me&&d.kind==='지시'&&d.status!=='완료'){
         ctl=`<input class="mt-in" id="mtn-${d.id}" placeholder="진행내용 입력 후 Enter" onkeydown="if(event.key==='Enter')meetAct(${d.id},'note')"><div style="margin-top:4px;">
           <button class="btn btn-outline mt-btn" onclick="meetAct(${d.id},'note')">기록</button>`;
         if(mng&&d.status==='완료보고') ctl+=`<button class="btn btn-primary mt-btn" onclick="meetAct(${d.id},'confirm')">완료 확인</button><button class="btn btn-red mt-btn" onclick="meetAct(${d.id},'reject')">반려</button>`;
         else if(mng&&d.status==='이관-확인필요') ctl+=`<button class="btn btn-primary mt-btn" onclick="meetAct(${d.id},'close')">완료</button><button class="btn btn-outline mt-btn" onclick="meetAct(${d.id},'resume')">계속</button>`;
+        else if(mng&&d.status==='보류') ctl+=`<button class="btn btn-outline mt-btn" onclick="meetAct(${d.id},'resume')">보류 해제</button>`;
         else if(mng) ctl+=`<button class="btn btn-primary mt-btn" onclick="meetAct(${d.id},'close')">완료</button>`;
         ctl+='</div>';
       }
-      h+=`<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'?'row-done':''}">
+      h+=`<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''}">
         <td>${esc(md(d.meeting_date))}</td><td>${esc(d.issuer_name||'-')}</td>
-        <td class="clk" onclick="openPanel(${d.id})">${isNew?'<span class="mt-new">신규</span>':''}${esc(d.title)}${asgNames(d)?`<div style="font-size:11px;color:var(--muted);">담당: ${esc(asgNames(d))}</div>`:''}${k==='__import__'||k==='__notice__'?`<div style="font-size:11px;color:var(--muted);">${esc(deptLabel(d))}</div>`:''}</td>
+        <td class="clk" onclick="openPanel(${d.id})">${isNew?'<span class="mt-new">신규</span>':''}${esc(d.title)}${asgNames(d)?`<div style="font-size:11px;color:var(--muted);">담당: ${esc(asgNames(d))}</div>`:''}</td>
         <td>${ddayHtml(d)}</td><td>${statusBadge(d)}</td>
         <td class="mt-last">${lu?`<b>${esc(md(tsDay(lu.created_at)))} ${esc(lu.emp_name||'')}</b> ${esc(lu.content)}`:''}</td>
         <td>${ctl}</td></tr>`;
     });
     h+='</tbody></table></div>';
   });
-  document.getElementById('mtBody').innerHTML=h||'<div class="empty"><div class="empty-icon">📭</div><div class="empty-msg">회의에서 점검할 지시사항이 없습니다</div></div>';
+  document.getElementById('mtBody').innerHTML=h||'<div class="empty"><div class="empty-icon">📭</div><div class="empty-msg">조건에 해당하는 지시사항이 없습니다</div></div>';
 }
 function meetAct(id,kind){
   const el=document.getElementById('mtn-'+id);
