@@ -450,7 +450,7 @@ body{background:var(--bg);color:var(--t1);font-family:'Noto Sans KR',sans-serif;
     <div class="sb-item comm active" data-key="comm" onclick="showSection('comm')">
       <div class="sb-dot"></div>
       <div class="sb-name">커뮤니케이션</div>
-      <div class="sb-cnt">2</div>
+      <div class="sb-cnt">4</div>
     </div>
     <div class="sb-item red" data-key="parts" onclick="showSection('parts')">
       <div class="sb-dot"></div>
@@ -493,7 +493,7 @@ body{background:var(--bg);color:var(--t1);font-family:'Noto Sans KR',sans-serif;
       <div class="sec-hd comm">
         <div class="sec-dot comm"></div>
         <div class="sec-title">커뮤니케이션</div>
-        <div class="sec-cnt">3</div>
+        <div class="sec-cnt">4</div>
       </div>
       <table class="menu-tbl">
         <thead><tr>
@@ -521,6 +521,14 @@ body{background:var(--bg);color:var(--t1);font-family:'Noto Sans KR',sans-serif;
             <td><div class="m-desc">버그수정·기능추가·UI개선 요청 등록 / 처리 진행현황 확인</div></td>
             <td><span class="badge new-b">NEW</span></td>
             <td><div class="act-btns"><button class="act-btn" onclick="go(event,'collab.html')">→</button><button class="act-btn nw" onclick="goNew(event,'collab.html')">↗</button></div></td>
+          </tr>
+          <!-- 지시사항 관리 (directive.html v1.0, 2026-10-02) -->
+          <tr onclick="openWithPW('directive')">
+            <td><div class="m-icon" style="background:rgba(200,0,30,.10);color:#C8001E;">📌</div></td>
+            <td><div class="m-name">지시사항 관리</div><div class="m-desc">주간회의 지시 · 납기 · 진행현황</div></td>
+            <td><div class="m-desc">지시 등록·진행이력·완료확인 / 주간회의 점검 / 부서별 납기 준수율</div><div class="m-desc" id="dirBadge" style="display:none;margin-top:3px;font-weight:700;"></div></td>
+            <td><span class="badge new-b">NEW</span></td>
+            <td><div class="act-btns"><button class="act-btn" onclick="goDirective(event,false)">→</button><button class="act-btn nw" onclick="goDirective(event,true)">↗</button></div></td>
           </tr>
         </tbody>
       </table>
@@ -989,7 +997,7 @@ function checkPW(){
 }
 
 function handleTarget(t,n){
-  const map={ship:'shipment.html',shiplot:'ship_lot.html',po:'po_hub.html',stock:'stock_analysis.html',smartmat:'smart_material.html',schedule:'schedule.html',workflow:'workflow.html',collab:'collab.html'};
+  const map={ship:'shipment.html',shiplot:'ship_lot.html',po:'po_hub.html',stock:'stock_analysis.html',smartmat:'smart_material.html',schedule:'schedule.html',workflow:'workflow.html',collab:'collab.html',directive:'directive.html'};
   if(map[t]){
     writeLog(n,t);
     if(t==='workflow') { window.open(map[t]+'?user='+encodeURIComponent(n),'_blank'); return; }
@@ -1042,6 +1050,46 @@ function nav(u){
 }
 function go(e,u){e.stopPropagation();nav(u);}
 function goNew(e,u){e.stopPropagation();window.open(u,'_blank');}
+
+// ── 지시사항 관리 (directive.html) ──
+// directive.html 은 로그인 정보(sme_user)가 있어야 열리므로, → / ↗ 버튼도
+// 미로그인 상태에서는 로그인 창을 먼저 띄운다(다른 메뉴의 go/goNew 와 다른 점).
+function goDirective(e,newTab){
+  e.stopPropagation();
+  if(!(localStorage.getItem('sme_user')&&localStorage.getItem('sme_auth')==='1')){openWithPW('directive');return;}
+  if(newTab) window.open('directive.html','_blank'); else nav('directive.html');
+}
+// 메뉴 행에 「내 지시 N건 · 지연 N건 · 확인 대기 N건」 표시. 실패해도 메인 화면에는 영향 없음.
+async function loadDirectiveBadge(){
+  const el=document.getElementById('dirBadge'); if(!el) return;
+  try{
+    const n=localStorage.getItem('sme_user');
+    if(!n||localStorage.getItem('sme_auth')!=='1'){el.style.display='none';return;}
+    const H={headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}};
+    const emps=await(await fetch(`${SB_URL}/rest/v1/employees?select=id,entity,dept&active=eq.true&name=eq.${encodeURIComponent(n)}`,H)).json();
+    const me=(emps||[])[0]; if(!me){el.style.display='none';return;}
+    const st=encodeURIComponent('(지시됨,진행중,완료보고)');
+    const [ds,as]=await Promise.all([
+      fetch(`${SB_URL}/rest/v1/directives?select=id,status,due_date,entity,owner_dept,issuer_id&is_deleted=eq.false&kind=eq.${encodeURIComponent('지시')}&status=in.${st}`,H).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/directive_assignees?select=directive_id,employee_id`,H).then(r=>r.json())
+    ]);
+    if(!Array.isArray(ds)){el.style.display='none';return;}
+    // workflow 달력과 같은 기준: 담당자가 지정된 지시는 그 담당자에게만, 미지정이면 담당부서 전원에게
+    const asgBy={}; (Array.isArray(as)?as:[]).forEach(a=>{(asgBy[a.directive_id]=asgBy[a.directive_id]||[]).push(a.employee_id);});
+    const isMine=d=>{const g=asgBy[d.id]; return g&&g.length?g.indexOf(me.id)>=0:(d.entity===me.entity&&d.owner_dept===me.dept);};
+    const d0=new Date(), today=`${d0.getFullYear()}-${p2(d0.getMonth()+1)}-${p2(d0.getDate())}`;
+    const mine=ds.filter(d=>d.status!=='완료보고'&&isMine(d));
+    const late=mine.filter(d=>d.due_date&&d.due_date<today).length;
+    const wait=ds.filter(d=>d.status==='완료보고'&&d.issuer_id===me.id).length;
+    const parts=[];
+    if(mine.length) parts.push(`내 지시 ${mine.length}건`);
+    if(late) parts.push(`<span style="color:#C8001E;">지연 ${late}건</span>`);
+    if(wait) parts.push(`확인 대기 ${wait}건`);
+    if(parts.length){el.innerHTML='📌 '+parts.join(' · ');el.style.display='';}
+    else el.style.display='none';
+  }catch(err){el.style.display='none';}
+}
+loadDirectiveBadge();
 
 function mobileTab(key) {
   showSection(key);

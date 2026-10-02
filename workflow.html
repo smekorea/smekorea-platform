@@ -1438,7 +1438,8 @@ function renderLegend(){
     <div class="cat-item"><div class="cat-dot" style="background:#378ADD"></div>${t('일정')}</div>
     <div class="cat-item"><div class="cat-dot" style="background:#E2772E"></div>${t('진행중')}</div>
     <div class="cat-item"><div class="cat-dot" style="background:#E24B4A"></div>${t('지시/후속')}</div>
-    <div class="cat-item"><div class="cat-dot" style="background:#8E5FC7"></div>📢 ${t('공유')}</div>`;
+    <div class="cat-item"><div class="cat-dot" style="background:#8E5FC7"></div>📢 ${t('공유')}</div>
+    <div class="cat-item"><div class="cat-dot" style="background:#C8001E"></div>📌 ${t('지시사항')}</div>`;
 }
 
 function renderCal(){
@@ -1465,6 +1466,11 @@ function renderCal(){
     const dayAll=diaryRecords.filter(r=>(r.date||'').slice(0,10)===ds);
     const daySharedAll=sharedCalRecords.filter(r=>(r.date||'').slice(0,10)===ds);
     const dayTodos=getTodoForDate(ds);
+    // 지시사항(directive.html): 납기일 칸에 표시, 납기를 넘긴 건은 오늘 칸에 D+n 으로 표시
+    const dirChips=directiveCalRecords.filter(r=>r._calDate===ds).map(r=>{
+      return `<div class="event-chip directive-chip" style="background:#FFEBEE;border-left-color:#C8001E;color:#8E0016 !important;font-weight:${r._late?700:600};"
+        title="${escapeHtml(directiveChipText(r))}" onclick="event.stopPropagation();openDayPopup('${ds}')">📌 ${escapeHtml(directiveChipText(r))}</div>`;
+    }).join('');
     const chips=dayAll.map(r=>{
       const isFuture=(r.date||'').slice(0,10)>=todayStr;
       const status=r.status||'완료';
@@ -1491,7 +1497,7 @@ function renderCal(){
                <div class="day-num${isSun?' sun-num':''}${isSat?' sat-num':''}${isT?' today-num':''}">${dd}</div>${isSun?`<span class="week-badge">W${isoWeekNo(date)}</span>`:''}
              </div>`
           : dayDisplay}
-      </div>${chips}${sharedChips}${todoChips}${more}</div>`;
+      </div>${dirChips}${chips}${sharedChips}${todoChips}${more}</div>`;
   }
   document.getElementById('days').innerHTML=html;
 }
@@ -1519,6 +1525,18 @@ function renderDayPopupList(){
   const list=diaryRecords.filter(r=>r.date===dpDate);
   const shared=sharedCalRecords.filter(r=>(r.date||'').slice(0,10)===dpDate);
   const el=document.getElementById('dp-list');
+  const dirs=directiveCalRecords.filter(r=>r._calDate===dpDate);
+  // 지시사항은 읽기 전용 — 누르면 directive.html 의 해당 지시 상세로 이동(진행기록·완료보고는 그 화면에서)
+  const dirHtml=dirs.map(r=>{
+    return `<div class="dp-item" onclick="openDirective(${Number(r.id)})" style="cursor:pointer;background:#FFF5F5;">
+      <div class="dp-cat-bar" style="background:#C8001E"></div>
+      <div class="dp-item-body">
+        <div class="dp-item-title">📌 ${escapeHtml(r.title||'')}</div>
+        <div class="dp-item-cat">${t('지시사항')} · ${escapeHtml(r.issuer_name||'')} → ${escapeHtml(r.owner_dept||'')} · ${escapeHtml(r.status||'')} · ${t('납기')} ${escapeHtml(r.due_date||'')}${r._late?' (D+'+r._lateDays+')':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  if(!list.length && !shared.length && dirs.length){el.innerHTML=dirHtml;return;}
   if(!list.length && !shared.length){el.innerHTML=`<div class="dp-empty">${t('이 날짜에 등록된 일정이 없어요')}<br><small style="color:var(--text3)">${t('아래 추가 버튼으로 일정을 등록하세요')}</small></div>`;return;}
   const sharedHtml=shared.map(r=>{
     const rEnc=encodeURIComponent(JSON.stringify(r));
@@ -1555,6 +1573,7 @@ function renderDayPopupList(){
       </div>
     </div>`;
   }).join('') + sharedHtml;
+  if(dirHtml) el.innerHTML=dirHtml+el.innerHTML;
 }
 function escapeHtml(s){
   const d=document.createElement('div');d.textContent=s;return d.innerHTML;
@@ -1763,7 +1782,7 @@ function switchTab(tab){
     if(addBtn) addBtn.style.display='';
   }
   if(tab==='diary') renderDiary();
-  else if(tab==='cal'){ renderCal(); loadSharedCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); }
+  else if(tab==='cal'){ renderCal(); loadSharedCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); loadDirectiveCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); }
   else if(tab==='list') renderList();
   else if(tab==='share') loadShareView();
   else if(tab==='wfsettings') initWfSettingsView();
@@ -2125,6 +2144,51 @@ async function loadSharedCalRecords(){
     sharedCalRecords = items;
     console.log('[SharedCal] 총 '+sharedCalRecords.length+'건 로드');
   }catch(e){ console.warn('[SharedCal] error:', e); }
+}
+/* ═══ 지시사항 달력 표시 (directive.html 연동, 2026-10-02) ═══
+   directives 테이블을 읽어와 표시만 한다. work_diary 에는 아무것도 저장하지 않는다
+   (담당자별 복사 저장은 반복일정 중복 사고와 같은 문제를 만들기 때문).
+   표시 대상: ① 내가 담당자로 지정된 지시 ② 담당자가 지정되지 않은 우리 부서 지시
+             ③ 내가 지시자인 지시(납기 추적용, 부서명을 앞에 붙임)
+   이 블록은 실패해도 달력의 기존 기능에 영향을 주지 않도록 전부 try/catch 로 감싼다. */
+let directiveCalRecords=[];
+function directiveChipText(r){
+  return (r._late?'D+'+r._lateDays+' ':'')+(r._mine?'':'['+(r.owner_dept||'')+'] ')+(r.title||'')+(r.status==='완료보고'?' (완료보고)':'');
+}
+function openDirective(id){
+  const w=window.open('directive.html?id='+encodeURIComponent(id),'_blank');
+  if(!w) location.href='directive.html?id='+encodeURIComponent(id);
+}
+async function loadDirectiveCalRecords(){
+  if(!SB || !wfSession.empId) return;
+  try{
+    var aRes = await SB.from('directive_assignees').select('directive_id,employee_id').limit(5000);
+    var dRes = await SB.from('directives')
+      .select('id,title,status,due_date,entity,owner_dept,issuer_id,issuer_name')
+      .eq('is_deleted', false).eq('kind', '지시')
+      .in('status', ['지시됨','진행중','완료보고'])
+      .not('due_date', 'is', null)
+      .limit(1000);
+    if(aRes.error || dRes.error){ console.warn('[DirectiveCal] load error:', aRes.error||dRes.error); return; }
+    var asgBy = {};
+    (aRes.data||[]).forEach(function(a){ (asgBy[a.directive_id]=asgBy[a.directive_id]||[]).push(a.employee_id); });
+    var myId = wfSession.empId, myDept = wfSession.dept||'', myEntity = wfSession.entity||'';
+    var items = [];
+    (dRes.data||[]).forEach(function(r){
+      var asg = asgBy[r.id]||[];
+      var mine = asg.length ? asg.indexOf(myId)>=0 : (!!myDept && r.owner_dept===myDept && (r.entity||'')===myEntity);
+      var issued = (r.issuer_id===myId);
+      if(!mine && !issued) return;
+      if(mine && r.status==='완료보고') { if(!issued) return; mine=false; }   // 담당 측은 완료보고 후 달력에서 내림
+      var due = String(r.due_date).slice(0,10);
+      r._mine = mine;
+      r._late = due < todayStr;
+      r._lateDays = r._late ? Math.round((new Date(todayStr+'T00:00:00') - new Date(due+'T00:00:00'))/86400000) : 0;
+      r._calDate = r._late ? todayStr : due;
+      items.push(r);
+    });
+    directiveCalRecords = items;
+  }catch(e){ console.warn('[DirectiveCal] error:', e); }
 }
 let diaryPage=1;
 const DIARY_PER_PAGE=30;
@@ -3511,6 +3575,7 @@ const I18N_T = {
 "음":{zh:"农",en:"L"},
 "음력":{zh:"农历",en:"Lunar"},
 "지시/후속":{zh:"指示/跟进",en:"Directive/Follow-up"},
+"납기":{zh:"交期",en:"Due"},
 "년":{zh:"年",en:""},
 // 로그인 화면
 "로그인":{zh:"登录",en:"Log In"},
@@ -3806,6 +3871,7 @@ async function wfEnterMain() {
     await loadFromSb();
     await loadDiary();
     await loadSharedCalRecords();
+    await loadDirectiveCalRecords();
     await loadUserCategories();
     await loadHiddenDefaults();
     renderAll();
