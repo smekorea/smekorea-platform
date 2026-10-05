@@ -417,6 +417,8 @@ tbody tr.row-late td{background:#fff7f7;}
       <select id="mtView" onchange="renderMeet()" title="월 또는 지시일을 골라 봅니다"></select>
       <span class="fb-label" style="margin-left:6px;">부서</span>
       <select id="mtDept" onchange="renderMeet()"><option value="">전체 부서</option></select>
+      <span class="fb-label" style="margin-left:6px;">상태</span>
+      <select id="mtStatus" onchange="renderMeet()"><option value="">전체 상태</option><option value="open">미완료</option><option value="none">미진행</option><option value="doing">진행중</option><option value="held">보류</option><option value="report">완료 요청</option><option value="done">완료</option></select>
       <button class="btn btn-primary" onclick="openForm()">＋ 지시 등록</button>
       <span class="cnt-badge" id="mtCnt"></span>
     </div>
@@ -461,17 +463,8 @@ tbody tr.row-late td{background:#fff7f7;}
           <option value="recv">내가 받은 지시</option>
           <option value="sent">내가 낸 지시</option>
         </select>
-        <select id="fStatus" onchange="renderList()">
-          <option value="open">미완료</option>
-          <option value="">전체 상태</option>
-          <option value="late">지연</option>
-          <option value="wait">회신 대기</option>
-          <option value="지시됨">미진행</option>
-          <option value="진행중">진행중</option>
-          <option value="완료보고">완료·불가 보고</option>
-          <option value="완료">완료·종결</option>
-          <option value="rework">보류</option>
-        </select>
+<select id="fMonth" onchange="renderList()" title="지시일 기준"><option value="">전체 기간</option></select>
+        <select id="fStatus" onchange="renderList()"><option value="open">미완료</option><option value="">전체 상태</option><option value="none">미진행</option><option value="doing">진행중</option><option value="held">보류</option><option value="report">완료 요청</option><option value="done">완료</option><option value="late">지연</option></select>
         <select id="fKind" onchange="renderList()">
           <option value="">전체 성격</option>
           <option value="과제">과제</option>
@@ -613,7 +606,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.14 (2026-10-06) — 지시사항 관리
+   directive.html v2.15 (2026-10-06) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -868,6 +861,7 @@ function fillFilters(){
   document.getElementById('evLast').innerHTML=ds.map(x=>`<option value="${x}"${x===cur?' selected':''}>${x}${x===def?' (직전)':''}</option>`).join('')||`<option value="${todayStr()}">${todayStr()}</option>`;
   const months=[todayStr().slice(0,7)]; ds.forEach(x=>{if(months.indexOf(x.slice(0,7))<0)months.push(x.slice(0,7));}); months.sort().reverse();
   const cnt=f=>allD.filter(f).length;
+  const fm=keep('fMonth'); document.getElementById('fMonth').innerHTML='<option value="">전체 기간</option>'+months.map(m=>`<option value="${m}"${m===fm?' selected':''}>${m.slice(0,4)}년 ${+m.slice(5)}월</option>`).join('');
   const mvCur=(mv==='all'||mv==='open'||ds.indexOf(mv)>=0||months.indexOf(mv)>=0)?mv:'';
   document.getElementById('mtView').innerHTML=`<option value=""${mvCur===''?' selected':''}>선택하세요</option>`
     +`<option value="all"${mvCur==='all'?' selected':''}>전체 (${allD.length}건)</option>`
@@ -946,11 +940,14 @@ function doneCell(d){
   return '<span style="color:#c0c4cc;">-</span>';
 }
 // 보기: '' = 아직 고르지 않음 / 'all' = 전체 / 'open' = 미완료 전체 / 'YYYY-MM' = 월별 / 'YYYY-MM-DD' = 지시일별
+// 상태 선택값(주간회의·지시 목록 공통): 평가표와 같은 구분 — 미진행/진행중/보류/완료 요청/완료, 그리고 미완료(완료가 아닌 것 전부)
+function stMatch(d,st){if(!st)return true;const e=evState(d);return st==='open'?e!=='done':e===st;}
 function meetList(view,dept){
   if(!view) return null;
-  const inDept=d=>!dept||groupKey(d)===dept||d.owner_dept==='전체';
+  const st=document.getElementById('mtStatus').value;
+  const inDept=d=>!dept||groupKey(d)===dept;
   const f=view==='all'?(d=>true):view==='open'?isOpen:view.length===7?(d=>d.meeting_date.slice(0,7)===view):(d=>d.meeting_date===view);
-  return allD.filter(d=>inDept(d)&&f(d));
+  return allD.filter(d=>inDept(d)&&f(d)&&stMatch(d,st));
 }
 function viewTitle(view){
   if(view==='all') return '전체 지시사항';
@@ -1000,7 +997,7 @@ function renderMeet(){
     prev=d.meeting_date; h+=meetRow(d,L,mgr);
   });
   // 집계줄은 표 맨 아래에 둔다
-  h+=`<tr class="mt-sec"><td colspan="10">${esc(viewTitle(view))}${dept?' · '+esc(dept):''} · 합계 ${list.length}건${tasks.length?` — 완료 ${tasks.filter(d=>d.status==='완료').length}건 · 미완료 ${tasks.filter(isOpen).length}건`:''}</td></tr>`;
+  h+=`<tr class="mt-sec"><td colspan="10">${esc(viewTitle(view))}${dept?' · '+esc(dept):''}${document.getElementById('mtStatus').value?' · '+esc(document.getElementById('mtStatus').selectedOptions[0].text):''} · 합계 ${list.length}건${tasks.length?` — 완료 ${tasks.filter(d=>d.status==='완료').length}건 · 미완료 ${tasks.filter(isOpen).length}건`:''}</td></tr>`;
   tb.innerHTML=h;
   renderBulk();
 }
@@ -1285,18 +1282,17 @@ function clearPick(){listPick=null;document.getElementById('fPick').style.displa
 function filteredList(){
   const view=document.getElementById('fView').value, st=document.getElementById('fStatus').value;
   const cat=document.getElementById('fKind').value, dept=document.getElementById('fDept').value;
+  const mon=document.getElementById('fMonth').value;
   const iss=document.getElementById('fIssuer').value, kw=document.getElementById('fSearch').value.trim().toLowerCase();
   return allD.filter(d=>{
     if(listPick&&!listPick.ids[d.id]) return false;
     if(view==='recv'&&!isReceived(d)) return false;
     if(view==='sent'&&!(me&&(d.issuer_id===me.id||d.registered_by===me.id))) return false;
     if(cat&&catOf(d)!==cat) return false;
-    if(st==='open'){ if(!isOpen(d)) return false; }
-    else if(st==='late'){ if(!isLate(d)) return false; }
-    else if(st==='wait'){ if(!isWaiting(d)) return false; }
-    else if(st==='rework'){ if(!(isOpen(d)&&d.progress_state==='보완')) return false; }
-    else if(st){ if(d.kind==='공지'||d.status!==st) return false; }
-    if(dept&&groupKey(d)!==dept&&(d.coop_depts||[]).indexOf(dept)<0) return false;
+    if(mon&&String(d.meeting_date||'').slice(0,7)!==mon) return false;
+    if(st==='late'){ if(!isLate(d)) return false; }
+    else if(!stMatch(d,st)) return false;
+    if(dept&&groupKey(d)!==dept) return false;
     if(iss&&d.issuer_name!==iss) return false;
     if(kw&&((d.title||'')+' '+(d.content||'')).toLowerCase().indexOf(kw)<0) return false;
     return true;
@@ -1344,7 +1340,7 @@ function sortBy(key){
 function resetFilters(){
   listPick=null; document.getElementById('fPick').style.display='none';
   document.getElementById('fView').value='all'; document.getElementById('fStatus').value='open';
-  ['fKind','fDept','fIssuer','fSearch'].forEach(id=>document.getElementById(id).value='');
+  ['fMonth','fKind','fDept','fIssuer','fSearch'].forEach(id=>document.getElementById(id).value='');
   renderList();
 }
 
@@ -1595,7 +1591,7 @@ function goPick(ck){
   const c=evCells[ck]; if(!c) return;
   switchTab('list');
   document.getElementById('fView').value='all'; document.getElementById('fStatus').value='';
-  ['fKind','fDept','fIssuer','fSearch'].forEach(id=>document.getElementById(id).value='');
+  ['fMonth','fKind','fDept','fIssuer','fSearch'].forEach(id=>document.getElementById(id).value='');
   const ids={}; c.ids.forEach(id=>{ids[id]=1;}); listPick={label:c.label,ids:ids};
   const el=document.getElementById('fPick'); el.style.display=''; el.innerHTML=esc(c.label)+' <a href="javascript:clearPick()" style="margin-left:6px;color:#8a5a00;font-weight:700;">✕ 해제</a>';
   renderList();
