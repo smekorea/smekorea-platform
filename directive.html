@@ -311,7 +311,9 @@ tbody tr.row-late td{background:#fff7f7;}
 .mt-row{display:flex;gap:4px;margin-bottom:4px;}
 .mt-row select,.mt-row input[type=date]{height:28px;border:1px solid var(--line-dk);border-radius:2px;font-size:11.5px;font-family:'Noto Sans KR',sans-serif;background:#fff;padding:0 4px;color:#111827;}
 .mt-btn{height:26px;padding:0 9px;font-size:11.5px;margin:0 2px 3px 0;}
-.st-btn{display:block;margin:5px 0 0;}
+.st-btn{margin:0 0 0 4px;vertical-align:middle;}
+.mt-table td .badge+.st-btn{margin-left:6px;}
+.mt-table td .st-btn:first-child{margin-left:0;}
 .mt-table .btn-outline{border-color:var(--line-dk);color:var(--text);}
 .mt-last{font-size:12px;color:#111827;}
 .mt-last b{color:var(--point);font-weight:700;}
@@ -460,14 +462,12 @@ tbody tr.row-late td{background:#fff7f7;}
           <option value="완료보고">완료·불가 보고</option>
           <option value="완료">완료·종결</option>
           <option value="보류">보류</option>
-          <option value="이관-확인필요">이관-확인필요</option>
         </select>
         <select id="fKind" onchange="renderList()">
           <option value="">전체 성격</option>
           <option value="과제">과제</option>
           <option value="대외협의">대외 협의</option>
           <option value="정기보고">정기 보고</option>
-          <option value="방침">방침·공지</option>
         </select>
         <select id="fDept" onchange="renderList()"><option value="">전체 부서</option></select>
         <select id="fIssuer" onchange="renderList()"><option value="">전체 지시자</option></select>
@@ -542,7 +542,6 @@ tbody tr.row-late td{background:#fff7f7;}
             <option value="과제">과제 (결과물·확인 1회)</option>
             <option value="대외협의">대외 협의 (상대 회신 필요)</option>
             <option value="정기보고">정기 보고 (매주 반복)</option>
-            <option value="방침">방침·공지 (확인만)</option>
           </select></div>
       </div>
       <div class="form-row-3">
@@ -607,7 +606,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.4 (2026-10-05) — 지시사항 관리
+   directive.html v2.6 (2026-10-05) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -723,6 +722,8 @@ function statusLabel(d){
   if(d.status==='완료보고') return [d.close_type==='불가'?'불가 요청':'완료 요청','완료보고'];
   if(isOpen(d)&&d.progress_state==='보완') return ['보완 요청','보완'];
   if(isWaiting(d)) return ['회신 대기','대기'];
+  // 「이관-확인필요」는 v2.5부터 화면에 쓰지 않는다(DB도 지시됨으로 바꿈). 혹시 남아 있어도 지시됨으로 보여준다
+  if(d.status==='이관-확인필요') return ['지시됨','지시됨'];
   return [d.status,d.status];
 }
 function statusBadge(d){const s=statusLabel(d);return `<span class="badge badge-${s[1]}">${s[0]}</span>`;}
@@ -847,7 +848,7 @@ function fillFilters(){
   const fd=keep('fDept'), mdp=keep('mtDept'), fi=keep('fIssuer'), ml=keep('evLast'), mv=keep('mtView'), qd=keep('qk-dept'), qs=keep('qk-src');
   document.getElementById('fDept').innerHTML='<option value="">전체 부서</option>'+opt(fd);
   document.getElementById('mtDept').innerHTML='<option value="">전체 부서</option>'+opt(mdp);
-  document.getElementById('qk-dept').innerHTML='<option value="">담당부서</option>'+deptsOf(HQ,false).map(k=>`<option${k===(qd||mdp)?' selected':''}>${esc(k)}</option>`).join('');
+  document.getElementById('qk-dept').innerHTML='<option value="">담당부서</option>'+deptsOf(HQ,false).map(k=>`<option${k===(qd||mdp)?' selected':''}>${esc(k)}</option>`).join('')+`<option value="전체"${qd==='전체'?' selected':''}>전체 (전 부서)</option>`;
   document.getElementById('qk-src').innerHTML=sourceList().map(x=>`<option${x===(qs||srcDefault())?' selected':''}>${esc(x)}</option>`).join('');
   if(!document.getElementById('qk-due').value) document.getElementById('qk-due').value=nextMonday(todayStr());
   const iss=[];allD.forEach(d=>{if(d.issuer_name&&iss.indexOf(d.issuer_name)<0)iss.push(d.issuer_name);});
@@ -1012,13 +1013,15 @@ function meetRow(d,L,mgr){
       stBtn=`<button class="btn btn-primary mt-btn st-btn" onclick="decide(${d.id})" title="활동내용에 이상이 없으면 완료 확인">완료 확인</button>`;
     }
   }else if(d.status==='완료'&&canDecide()){
-    stBtn=`<button class="btn btn-outline mt-btn st-btn" onclick="undoDecide(${d.id})" title="잘못 눌렀으면 완료를 취소합니다">완료 취소</button>`;
+    ctl=`<button class="btn btn-outline mt-btn" onclick="undoDecide(${d.id})" title="잘못 눌렀으면 완료를 취소합니다">완료 취소</button>`;
   }
+  // 아직 아무 진행이 없는 「지시됨」은 상태 표시를 생략한다(완료 확인 버튼만 보이게)
+  const stHtml=(statusLabel(d)[0]==='지시됨'?'':statusBadge(d))+stBtn;
   return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
     <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}</td><td>${esc(d.issuer_name||'-')}</td>
     <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
-    <td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${statusBadge(d)}${stBtn}</td>
+    <td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${stHtml}</td>
     <td>${actHtml}</td>
     <td>${ctl}</td></tr>`;
 }
@@ -1093,7 +1096,7 @@ async function bulkClose(type){
 }
 async function bulkResume(){
   const ids=Object.keys(picked).map(Number).filter(id=>byId[id].status==='이관-확인필요'||byId[id].status==='지시됨');
-  if(!ids.length){showToast('「계속 진행」은 이관-확인필요·지시됨 상태 건에만 적용됩니다','err');return;}
+  if(!ids.length){showToast('「계속 진행」은 지시됨 상태 건에만 적용됩니다','err');return;}
   if(!confirm(`선택한 ${ids.length}건을 「진행중」으로 바꿀까요? 기한은 다음 회의일로 들어갑니다.`)) return;
   const now=new Date().toISOString(), due=nextMonday(todayStr());
   try{
@@ -1174,7 +1177,7 @@ async function decide(id){
 }
 // 완료 취소 — 잘못 눌렀을 때. 완료 확인 직전 상태로 되돌린다:
 //   담당 측의 완료 요청이 있었으면 「완료 요청」으로(보고 시각 유지), 활동이 있었으면 「진행중」,
-//   아무 활동도 없던 건은 원래 상태(이관 건은 이관-확인필요, 그 외 지시됨)로.
+//   아무 활동도 없던 건은 「지시됨」으로.
 async function undoDecide(id){
   const d=byId[id]; if(!d||!canDecide()||d.status!=='완료') return;
   if(!confirm('완료를 취소할까요?\n완료 확인 전 상태로 되돌립니다.')) return;
@@ -1185,7 +1188,7 @@ async function undoDecide(id){
   const patch={completed_at:null,confirmed_by:null,confirmed_name:null,updated_at:now};
   if(lastAct&&lastAct.type==='완료보고') Object.assign(patch,{status:'완료보고',close_type:lastAct.state==='불가'?'불가':'완료'});
   else if(lastAct) Object.assign(patch,{status:'진행중',close_type:null,reported_at:null,progress_state:(lastAct.type==='코멘트'||lastAct.type==='반려')?'보완':(lastAct.state||'진행')});
-  else Object.assign(patch,{status:d.origin?'이관-확인필요':'지시됨',close_type:null,reported_at:null,progress_state:null});
+  else Object.assign(patch,{status:'지시됨',close_type:null,reported_at:null,progress_state:null});
   try{
     await sbPatch('directives',id,patch);
     await sbPost('directive_updates',{directive_id:id,type:'완료취소',employee_id:me.id,emp_name:me.name,content:'완료 취소'});
@@ -1420,7 +1423,7 @@ function closeForm(){document.getElementById('formOv').classList.remove('open');
 function onCatChange(){
   const cat=document.getElementById('fmCat').value, dt=document.getElementById('fmDueType');
   if(!dt.disabled){
-    if(cat==='방침'||cat==='정기보고') dt.value='상시';
+    if(cat==='정기보고') dt.value='상시';
     else if(dt.value==='상시') dt.value='즉시';
   }
   fillDepts(document.getElementById('fmDept').value,checked('fmAssignees').map(Number),checked('fmCoop'));
@@ -1438,13 +1441,12 @@ function onDueTypeChange(keep){
 }
 function checked(boxId){return [...document.querySelectorAll('#'+boxId+' input:checked')].map(i=>i.value);}
 function fillDepts(selDept,selAsg,selCoop){
-  const en=HQ, isNotice=document.getElementById('fmCat').value==='방침';
+  const en=HQ;
   const depts=deptsOf(en,false);
   const cur=typeof selDept==='string'?selDept:'';
-  let opts='<option value="">선택하세요</option>'+depts.map(x=>`<option${x===cur?' selected':''}>${esc(x)}</option>`).join('');
-  if(isNotice) opts='<option value="전체"'+(cur==='전체'||!cur?' selected':'')+'>전체</option>'+opts;
+  let opts='<option value="">선택하세요</option>'+depts.map(x=>`<option${x===cur?' selected':''}>${esc(x)}</option>`).join('')
+    +`<option value="전체"${cur==='전체'?' selected':''}>전체 (전 부서)</option>`;
   if(cur&&cur!=='전체'&&depts.indexOf(cur)<0) opts+=`<option selected>${esc(cur)}</option>`;   // 부서명이 바뀐 과거 건
-  if(cur==='전체'&&!isNotice) opts+='<option value="전체" selected>전체</option>';             // 과제인데 전 부서 대상인 건
   document.getElementById('fmDept').innerHTML=opts;
   onDeptChange(selAsg||[],selCoop||[]);
 }
@@ -1620,7 +1622,7 @@ function applyResize(tableId,KEY,def){
 }
 function initColResize(){
   applyResize('listTable','directive_col_v3',[44,92,76,78,72,104,110,340,150,66,104,300]);
-  applyResize('mtTable','directive_meet_col_v3',[32,70,96,72,470,132,70,122,560,150]);
+  applyResize('mtTable','directive_meet_col_v5',[32,70,96,72,430,132,70,150,480,170]);
 }
 
 let toastTimer;
