@@ -254,7 +254,7 @@ tbody tr:last-child td{border-bottom:none;}
   .main-pad{padding:14px;}
 }
 
-/* ══════════ directive.html 전용 (v2.0, 2026-10-05) ══════════ */
+/* ══════════ directive.html 전용 (v2.1, 2026-10-05) ══════════ */
 .list-layout{height:calc(100vh - var(--hdr-h) - 46px);}
 :root{--panel-w:460px;}
 /* 상세 패널: 어느 탭에서든 오른쪽에서 열리는 서랍 */
@@ -310,7 +310,8 @@ tbody tr.row-late td{background:#fff7f7;}
 .mt-table{table-layout:fixed;width:100%;}
 .mt-table td{white-space:normal;line-height:1.5;vertical-align:top;cursor:default;}
 .mt-table td.clk{cursor:pointer;}
-.mt-sec td{background:#f6f7f9;font-size:11.5px;font-weight:700;color:var(--text);padding:5px 10px;border-bottom:1px solid var(--border);}
+.mt-date td{background:#fbfcfd;font-size:11px;color:var(--muted);padding:3px 10px;border-bottom:1px solid var(--line-lt);}
+.mt-sec td{background:var(--point-bg);font-size:12.5px;font-weight:700;color:var(--point);padding:7px 10px;border-top:2px solid var(--point);border-bottom:1px solid var(--border);}
 .mt-in{width:100%;height:28px;padding:0 8px;border:1px solid var(--bdr2);border-radius:2px;font-size:12px;font-family:'Noto Sans KR',sans-serif;background:#fff;}
 .mt-row{display:flex;gap:4px;margin-bottom:4px;}
 .mt-row select,.mt-row input[type=date]{height:28px;border:1px solid var(--bdr2);border-radius:2px;font-size:11.5px;font-family:'Noto Sans KR',sans-serif;background:#fff;padding:0 4px;}
@@ -395,17 +396,24 @@ tbody tr.row-late td{background:#fff7f7;}
 <div class="tab-panel active" id="panel-meet">
   <div class="mt-wrap">
     <div class="filter-bar">
-      <span style="font-size:12px;font-weight:700;">직전 회의일</span>
-      <select id="mtLast" onchange="renderMeet()" title="이 회의에서 나온 지시의 결과를 이번 회의에서 보고합니다"></select>
+      <span style="font-size:12px;font-weight:700;">보기</span>
+      <select id="mtView" onchange="renderMeet()" title="회의일(지시일) 기준으로 골라 봅니다"></select>
+      <span style="font-size:12px;font-weight:700;margin-left:6px;">부서</span>
       <select id="mtDept" onchange="renderMeet()"><option value="">전체 부서</option></select>
-      <span style="font-size:12px;font-weight:700;margin-left:6px;">빠른 등록 지시자</span>
-      <select id="mtIssuer" onchange="rememberIssuer()"></select>
       <button class="btn btn-primary" onclick="openForm()">＋ 지시 등록</button>
       <span class="cnt-badge" id="mtCnt"></span>
     </div>
-    <div class="filter-bar" id="mtChips"></div>
     <div class="mt-guide" id="mtGuide"></div>
-    <div class="tbl-wrap sum-wrap"><table class="sum-table" id="sumTable"><thead id="sumHead"></thead><tbody id="sumBody"></tbody></table></div>
+    <div class="mt-group" id="qkBox" style="display:none;">
+      <table class="mt-table"><tbody><tr class="mt-quick"><td><div class="mt-row">
+        <select id="mtIssuer" onchange="rememberIssuer()" title="지시자 (마지막에 고른 사람을 기억합니다)"></select>
+        <select id="qk-dept" onchange="suggestQuick()" title="담당부서"></select>
+        <input class="mt-in" id="qk-title" style="flex:1;" placeholder="＋ 새 지시 — 내용 입력 후 Enter" oninput="suggestQuick()" onkeydown="if(event.key==='Enter')quickAdd()">
+        <select id="qk-cat" title="성격"><option value="과제">과제</option><option value="대외협의">대외 협의</option><option value="정기보고">정기 보고</option></select>
+        <input type="date" id="qk-due" title="기한 (기본: 다음 회의일)">
+        <button class="btn btn-primary mt-btn" style="margin:0;height:28px;" onclick="quickAdd()">등록</button></div>
+        <div class="sug" id="qk-sug"></div></td></tr></tbody></table>
+    </div>
     <div id="mtBody"></div>
   </div>
 </div>
@@ -442,6 +450,7 @@ tbody tr.row-late td{background:#fff7f7;}
         </select>
         <select id="fDept" onchange="renderList()"><option value="">전체 부서</option></select>
         <select id="fIssuer" onchange="renderList()"><option value="">전체 지시자</option></select>
+        <label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="fGroup" onchange="renderList()" checked> 부서별로 묶기</label>
         <input type="text" id="fSearch" placeholder="제목·내용 검색..." style="width:170px;" oninput="renderList()">
         <button class="btn btn-outline" onclick="resetFilters()">초기화</button>
         <button class="btn btn-outline" onclick="exportExcel()">엑셀 내보내기</button>
@@ -460,9 +469,9 @@ tbody tr.row-late td{background:#fff7f7;}
               <th>담당자<div class="col-resizer"></div></th>
               <th class="sortable" onclick="sortBy('title')">지시 내용<span class="sort-icon" id="sort-title"></span><div class="col-resizer"></div></th>
               <th class="sortable" onclick="sortBy('due_date')">납기<span class="sort-icon" id="sort-due_date"></span><div class="col-resizer"></div></th>
+              <th>완료일<div class="col-resizer"></div></th>
               <th class="sortable" onclick="sortBy('status')">상태<span class="sort-icon" id="sort-status"></span><div class="col-resizer"></div></th>
-              <th>최근 진행내용<div class="col-resizer"></div></th>
-              <th class="sortable" onclick="sortBy('priority')">중요도<span class="sort-icon" id="sort-priority"></span></th>
+              <th>최근 진행내용</th>
             </tr>
           </thead>
           <tbody id="listBody"><tr><td colspan="12" class="loading">로딩중...</td></tr></tbody>
@@ -480,6 +489,13 @@ tbody tr.row-late td{background:#fff7f7;}
       <span style="font-size:12px;color:var(--muted);">응답률·재지시는 선택한 연도에 나온 지시 기준, 나머지는 현재 시점 기준</span>
     </div>
     <div class="tbl-wrap"><table class="ev-table" id="evTable"><thead id="evHead"></thead><tbody id="evBody"></tbody></table></div>
+    <div class="filter-bar" style="margin-top:22px;">
+      <span style="font-size:13px;font-weight:700;">부서별 현황 요약</span>
+      <span style="font-size:12px;color:var(--muted);">기준 회의일</span>
+      <select id="evLast" onchange="renderSummary()"></select>
+      <span style="font-size:12px;color:var(--muted);">이 회의 이후 답이 적혔는지로 응답·미응답을 셉니다. 안건 단위(이어지는 지시는 한 건)입니다.</span>
+    </div>
+    <div class="tbl-wrap sum-wrap"><table class="sum-table" id="sumTable"><thead id="sumHead"></thead><tbody id="sumBody"></tbody></table></div>
     <div class="ev-note">
       · <b>응답률</b> = 지시가 나온 뒤 <u>다음 회의일까지</u> 결과(진행내용·완료·불가)를 적은 지시 ÷ 판정 대상 지시. 다음 회의가 아직 오지 않은 지시는 판정하지 않습니다.<br>
       · <b>평균 경과 주수</b> = 열려 있는 안건이 최초 지시일부터 지난 주 수의 평균. 「회신 대기」 상태인 안건은 평균에서 뺍니다(상대 답을 기다리는 시간은 부서 책임이 아니므로).<br>
@@ -563,7 +579,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.0 (2026-10-05) — 지시사항 관리
+   directive.html v2.1 (2026-10-05) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -599,9 +615,8 @@ let threads={};              // 루트 id → [지시] (지시일·id 순)
 let sortKey='meeting_date', sortAsc=false;
 let selectedId=null, editId=null;
 let curTab='meet';
-let mtChip='all';            // 주간회의 예외 필터
 let picked={};               // 일괄 처리 선택 (id → true)
-let quickParent={};          // 빠른 등록에서 고른 이어지는 안건 (부서키 → 지시 id)
+let quickParent=0;           // 빠른 등록에서 고른 이어지는 안건 (지시 id)
 
 /* ── Supabase ── */
 function sbHeaders(extra){return Object.assign({'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'},extra||{});}
@@ -731,7 +746,7 @@ function isAnswer(u){return u.emp_name!==IMPORT_NAME&&u.state!=='후속대체'&&
 /* ── 회의일 ── */
 function meetingDates(){const s=[];allD.forEach(d=>{if(d.meeting_date&&s.indexOf(d.meeting_date)<0)s.push(d.meeting_date);});return s.sort().reverse();}
 function defaultLast(){const ds=meetingDates(),today=todayStr();for(let i=0;i<ds.length;i++){if(ds[i]<today)return ds[i];}return ds[0]||today;}
-function lastMeeting(){const v=document.getElementById('mtLast').value;return v||defaultLast();}
+function lastMeeting(){const el=document.getElementById('evLast');return (el&&el.value)||defaultLast();}   // 부서별 평가 요약표의 기준 회의일
 // 그 지시의 답을 들어야 하는 "다음 회의일": 실제 기록된 다음 회의일, 없으면 그 날 이후 첫 월요일
 function nextMeetingAfter(date){const ds=meetingDates();let best=null;ds.forEach(x=>{if(x>date&&(!best||x<best))best=x;});return best||nextMonday(date);}
 
@@ -787,14 +802,19 @@ function fillFilters(){
   const keys=groupKeys();
   const keep=id=>document.getElementById(id).value;
   const opt=sel=>keys.map(k=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(k)}</option>`).join('');
-  const fd=keep('fDept'), mdp=keep('mtDept'), fi=keep('fIssuer'), ml=keep('mtLast');
+  const fd=keep('fDept'), mdp=keep('mtDept'), fi=keep('fIssuer'), ml=keep('evLast'), mv=keep('mtView'), qd=keep('qk-dept');
   document.getElementById('fDept').innerHTML='<option value="">전체 부서</option>'+opt(fd);
   document.getElementById('mtDept').innerHTML='<option value="">전체 부서</option>'+opt(mdp);
+  document.getElementById('qk-dept').innerHTML='<option value="">담당부서</option>'+deptsOf('KOREA',false).map(k=>`<option${k===(qd||mdp)?' selected':''}>${esc(k)}</option>`).join('');
+  if(!document.getElementById('qk-due').value) document.getElementById('qk-due').value=nextMonday(todayStr());
   const iss=[];allD.forEach(d=>{if(d.issuer_name&&iss.indexOf(d.issuer_name)<0)iss.push(d.issuer_name);});
   document.getElementById('fIssuer').innerHTML='<option value="">전체 지시자</option>'+iss.map(n=>`<option${n===fi?' selected':''}>${esc(n)}</option>`).join('');
-  // 직전 회의일: 기본값은 오늘 이전의 가장 최근 회의일
+  // 회의일 목록: 주간회의 「보기」, 부서별 평가 요약표의 기준 회의일
   const ds=meetingDates(), def=defaultLast(), cur=ml&&ds.indexOf(ml)>=0?ml:def;
-  document.getElementById('mtLast').innerHTML=ds.map(x=>`<option value="${x}"${x===cur?' selected':''}>${x}${x===def?' (직전)':''}</option>`).join('')||`<option value="${todayStr()}">${todayStr()}</option>`;
+  document.getElementById('evLast').innerHTML=ds.map(x=>`<option value="${x}"${x===cur?' selected':''}>${x}${x===def?' (직전)':''}</option>`).join('')||`<option value="${todayStr()}">${todayStr()}</option>`;
+  const mvCur=(mv==='open'||ds.indexOf(mv)>=0)?mv:'default';
+  document.getElementById('mtView').innerHTML=`<option value="default"${mvCur==='default'?' selected':''}>전주(${md(def)}) + 당월 지시사항</option><option value="open"${mvCur==='open'?' selected':''}>미완료 전체</option>`
+    +ds.map(x=>`<option value="${x}"${x===mvCur?' selected':''}>${x} 회의</option>`).join('');
   // 빠른 등록 지시자: 마지막에 고른 사람 기억, 임원을 앞에
   let saved=null; try{saved=+localStorage.getItem('directive_issuer')||null;}catch(_){}
   const mi=+keep('mtIssuer')||saved||(me?me.id:0);
@@ -855,105 +875,71 @@ function meetThreads(L){
   });
   return out;
 }
-const CHIPS=[['all','전체'],['last','지난 회의 지시'],['noans','미응답'],['stale',STALE_WEEKS+'주+ 정체'],['re','재지시'],['wait','회신 대기'],['report','확정 대기'],['late','기한 지남'],['imp','이관-확인필요']];
-function chipMatch(i,c){
-  if(c==='all') return true;
-  if(c==='re') return i.open&&i.re>0;
-  if(c==='last') return i.last;
-  return !!i[c];
+/* 주간회의 화면 v2.1 (2026-10-05) — 부서별 묶음을 없애고 일자(회의일) 기준 한 표로 변경.
+   기본 보기 = ① 전주(직전 회의) 지시사항 → ② 당월 지시사항. 한 줄 = 지시 한 건, 지시일·완료일을 함께 보여준다.
+   부서는 위의 부서 선택으로 골라 본다. 부서별 묶음은 「지시 목록」 탭, 부서별 요약표는 「부서별 평가」 탭으로 옮겼다. */
+function doneDay(d){
+  if(d.status==='완료') return tsDay(d.completed_at)||tsDay(d.reported_at)||'';
+  return '';
 }
-function setChip(c){mtChip=c;renderMeet();}
+function doneCell(d){
+  if(d.kind==='공지') return '<span style="color:#c0c4cc;">-</span>';
+  if(d.status==='완료'){const x=doneDay(d);return x?esc(md(x)):'완료';}
+  if(d.status==='완료보고') return '<span style="color:#854d0e;">보고 '+esc(md(tsDay(d.reported_at)||''))+'</span>';
+  return '<span style="color:#c0c4cc;">-</span>';
+}
+function meetSections(L,view,dept){
+  const month=todayStr().slice(0,7);
+  const inDept=d=>!dept||groupKey(d)===dept||d.owner_dept==='전체';
+  const pick=f=>allD.filter(d=>inDept(d)&&f(d));
+  if(view==='open') return [['미완료 전체',pick(d=>isOpen(d))]];
+  if(view&&view!=='default') return [[md(view)+' 회의 지시사항',pick(d=>d.meeting_date===view)]];
+  return [['전주 지시사항 — '+md(L)+' 회의',pick(d=>d.meeting_date===L)],
+          ['당월 지시사항 — '+(+month.slice(5))+'월',pick(d=>d.meeting_date.slice(0,7)===month&&d.meeting_date!==L)]];
+}
 function renderMeet(){
-  const L=lastMeeting(), dept=document.getElementById('mtDept').value;
-  const all=meetThreads(L);
-  const inDept=all.filter(i=>!dept||i.key===dept);
-  // 예외 필터 칩
-  document.getElementById('mtChips').innerHTML=CHIPS.map(c=>{
-    const n=inDept.filter(i=>chipMatch(i,c[0])).length;
-    return `<button class="chip${mtChip===c[0]?' on':''}" onclick="setChip('${c[0]}')">${c[1]}<b>${n}</b></button>`;
-  }).join('');
-  const rows=inDept.filter(i=>chipMatch(i,mtChip));
-  const openN=inDept.filter(i=>i.open).length;
-  document.getElementById('mtCnt').textContent='열린 안건 '+openN+'건 · 미응답 '+inDept.filter(i=>i.noans).length+'건';
-  document.getElementById('mtGuide').innerHTML=
-    `직전 회의 <b>${esc(md(L))}</b>에서 나온 지시의 결과를 먼저 보고받고, 이어서 이월 안건을 봅니다. 한 줄이 안건 하나입니다. `
-    +`<span class="flag flag-noans">미응답</span>= ${esc(md(L))} 이후 답이 한 번도 적히지 않은 안건 · `
-    +`<span class="flag flag-stale">N주째</span>= ${STALE_WEEKS}주 이상 열려 있는 안건 · <span class="flag flag-re">재지시</span>= 같은 안건으로 다시 지시됨`;
-
-  // ① 브리핑 요약표
-  const keys=groupKeys();
-  document.getElementById('sumHead').innerHTML='<tr><th style="width:150px;">부서</th><th>열린 안건</th><th>지난 회의 지시</th><th>그중 응답</th><th>미응답</th><th>이월 안건</th><th>'+STALE_WEEKS+'주+ 정체</th><th>재지시</th><th>회신 대기</th><th>확정 대기</th><th>기한 지남</th></tr>';
-  const tot=[0,0,0,0,0,0,0,0,0,0]; let sb='';
-  keys.forEach(k=>{
-    const g=all.filter(i=>i.key===k); if(!g.length) return;
-    const lastG=g.filter(i=>i.last);
-    const v=[g.filter(i=>i.open).length, lastG.length, lastG.filter(i=>i.answered||!i.open).length, g.filter(i=>i.noans).length,
-      g.filter(i=>i.open&&!i.last&&!i.isNew).length, g.filter(i=>i.stale).length, g.filter(i=>i.open&&i.re>0).length,
-      g.filter(i=>i.wait).length, g.filter(i=>i.report).length, g.filter(i=>i.late).length];
-    v.forEach((x,ix)=>{tot[ix]+=x;});
-    sb+=`<tr><td class="clk" onclick="pickDept('${esc(k)}')">${esc(k)}</td>`+v.map((x,ix)=>`<td class="${(ix===3||ix===5||ix===9)&&x?'warn':''}">${x||'<span style="color:#c0c4cc;">-</span>'}</td>`).join('')+'</tr>';
-  });
-  sb+=sb?`<tr class="sum-total"><td>합계</td>`+tot.map(x=>`<td>${x}</td>`).join('')+'</tr>':'<tr><td colspan="11" class="loading">열린 안건이 없습니다</td></tr>';
-  document.getElementById('sumBody').innerHTML=sb;
-
-  // ② 부서 묶음
-  const mgrAny=isAdmin();
-  let h='';
-  // 방침·공지: 직전 회의일 이후에 나온 것만
-  const notices=allD.filter(d=>d.kind==='공지'&&d.meeting_date>=L&&!dept);
-  if(notices.length&&mtChip==='all'){
-    h+=`<div class="mt-group"><div class="mt-head">방침·공지<span class="mt-cnt">${esc(md(L))} 이후 ${notices.length}건 · 완료 처리 없이 확인만 받습니다</span></div><table class="mt-table"><colgroup><col style="width:78px"><col style="width:72px"><col><col style="width:140px"></colgroup>
-      <thead><tr><th>지시일</th><th>지시자</th><th>내용</th><th>확인</th></tr></thead><tbody>`
-      +notices.map(d=>{const cf=(updMap[d.id]||[]).filter(u=>u.type==='공지확인');return `<tr><td>${esc(md(d.meeting_date))}</td><td>${esc(d.issuer_name||'-')}</td><td class="clk" onclick="openPanel(${d.id})">${esc(d.title)}<div class="th-meta">${esc(deptLabel(d))}</div></td><td>${cf.length}명 확인</td></tr>`;}).join('')
-      +'</tbody></table></div>';
-  }
-  const SECS=[['last','지난 회의('+md(L)+') 지시 — 결과 보고'],['carry','이월 안건 — 오래된 순'],['reg','정기 보고'],['new','이번 회의 신규']];
-  keys.forEach(k=>{
-    if(dept&&k!==dept) return;
-    const g=rows.filter(i=>i.key===k);
-    const canQuick=!!me&&deptsOf('KOREA',false).indexOf(k)>=0&&mtChip==='all';
-    if(!g.length&&!canQuick) return;
-    if(!g.length&&!all.some(i=>i.key===k)&&!dept) return;   // 안건이 하나도 없는 부서는 부서를 골랐을 때만 빠른 등록 줄을 보여준다
-    const secOf=i=>i.isNew?'new':i.cat==='정기보고'?'reg':i.last?'last':'carry';
-    const gl=all.filter(i=>i.key===k);
-    h+=`<div class="mt-group"><div class="mt-head">${mgrAny&&g.some(i=>i.open)?`<input type="checkbox" title="이 부서의 열린 안건 전체 선택" ${g.filter(i=>i.open).every(i=>picked[i.h.id])?'checked':''} onchange="pickGroup('${esc(k)}',this.checked)">`:''}${esc(k)}
-      <span class="mt-cnt">열린 안건 ${gl.filter(i=>i.open).length}건 · 미응답 ${gl.filter(i=>i.noans).length}건${gl.filter(i=>i.stale).length?' · 정체 '+gl.filter(i=>i.stale).length+'건':''}</span></div>
-      <table class="mt-table"><colgroup>${mgrAny?'<col style="width:30px">':''}<col><col style="width:128px"><col style="width:116px"><col style="width:24%"><col style="width:27%"></colgroup>
-      <thead><tr>${mgrAny?'<th></th>':''}<th>안건 (지시 내용)</th><th>기한</th><th>상태</th><th>최근 답</th><th>회의 기록 — 결과 + 다음 조치</th></tr></thead><tbody>`;
-    SECS.forEach(sc=>{
-      const list=g.filter(i=>secOf(i)===sc[0]); if(!list.length) return;
-      // 지난 회의 지시: 미응답 먼저 / 이월: 미응답·오래된 순
-      list.sort((a,b)=>(b.noans-a.noans)||(b.late-a.late)||(b.weeks-a.weeks)||(a.h.meeting_date<b.h.meeting_date?1:-1));
-      h+=`<tr class="mt-sec"><td colspan="${mgrAny?6:5}">${esc(sc[1])} · ${list.length}건</td></tr>`;
-      list.forEach(i=>{h+=meetRow(i,L,mgrAny);});
+  const L=defaultLast(), view=document.getElementById('mtView').value||'default', dept=document.getElementById('mtDept').value;
+  const secs=meetSections(L,view,dept), mgr=isAdmin(), cols=mgr?9:8;
+  const all=[]; secs.forEach(sc=>{sc[1].forEach(d=>all.push(d));});
+  const tasks=all.filter(d=>d.kind==='지시');
+  document.getElementById('mtCnt').textContent='지시 '+tasks.length+'건 · 완료 '+tasks.filter(d=>d.status==='완료').length+'건 · 미완료 '+tasks.filter(isOpen).length+'건';
+  document.getElementById('mtGuide').innerHTML=view==='default'
+    ?`회의를 시작하면 전주(<b>${esc(md(L))}</b> 회의) 지시사항부터 브리핑하고, 이어서 당월 지시사항을 봅니다. 지시일 순이며, 부서는 위에서 골라 봅니다. 그 이전 달의 미완료 건은 보기에서 「미완료 전체」를 고르세요.`
+    :'지시일 순으로 보여줍니다. 부서는 위에서 골라 봅니다.';
+  const openIds=all.filter(isOpen).map(d=>d.id);
+  let h=`<div class="mt-group"><table class="mt-table"><colgroup>${mgr?'<col style="width:30px">':''}<col style="width:64px"><col style="width:92px"><col><col style="width:128px"><col style="width:70px"><col style="width:112px"><col style="width:22%"><col style="width:24%"></colgroup>
+    <thead><tr>${mgr?`<th style="padding:7px 2px;text-align:center;"><input type="checkbox" title="화면의 미완료 건 전체 선택" ${openIds.length&&openIds.every(id=>picked[id])?'checked':''} onchange="pickAll(this.checked)"></th>`:''}<th>지시일</th><th>부서</th><th>지시 내용</th><th>기한</th><th>완료일</th><th>상태</th><th>최근 답</th><th>회의 기록 — 결과 + 다음 조치</th></tr></thead><tbody>`;
+  secs.forEach(sc=>{
+    const list=sc[1].slice().sort((a,b)=>(a.meeting_date<b.meeting_date?1:a.meeting_date>b.meeting_date?-1:0)||(groupKey(a)<groupKey(b)?-1:groupKey(a)>groupKey(b)?1:a.id-b.id));
+    const tk=list.filter(d=>d.kind==='지시');
+    h+=`<tr class="mt-sec"><td colspan="${cols}">${esc(sc[0])} · ${list.length}건${tk.length?` (완료 ${tk.filter(d=>d.status==='완료').length} · 미완료 ${tk.filter(isOpen).length})`:''}</td></tr>`;
+    if(!list.length){h+=`<tr><td colspan="${cols}" style="color:var(--muted);text-align:center;padding:14px;">해당하는 지시사항이 없습니다</td></tr>`;return;}
+    let prev='';
+    list.forEach(d=>{
+      // 여러 회의일이 섞인 구역은 회의일이 바뀔 때마다 구분줄을 넣는다
+      if(d.meeting_date!==prev&&list[0].meeting_date!==list[list.length-1].meeting_date){
+        h+=`<tr class="mt-date"><td colspan="${cols}">${esc(d.meeting_date)} 회의 · ${list.filter(x=>x.meeting_date===d.meeting_date).length}건</td></tr>`;
+      }
+      prev=d.meeting_date; h+=meetRow(d,L,mgr);
     });
-    if(canQuick){
-      const qp=quickParent[k]&&byId[quickParent[k]];
-      h+=`<tr class="mt-quick"><td colspan="${mgrAny?6:5}"><div class="mt-row">
-        <input class="mt-in" id="qk-title-${esc(k)}" style="flex:1;" placeholder="＋ ${esc(k)} 새 지시 — 내용 입력 후 Enter" oninput="suggestQuick('${esc(k)}')" onkeydown="if(event.key==='Enter')quickAdd('${esc(k)}')">
-        <select id="qk-cat-${esc(k)}" title="성격"><option value="과제">과제</option><option value="대외협의">대외 협의</option><option value="정기보고">정기 보고</option></select>
-        <input type="date" id="qk-due-${esc(k)}" value="${nextMonday(todayStr())}" title="기한 (기본: 다음 회의일)">
-        <button class="btn btn-primary mt-btn" style="margin:0;height:28px;" onclick="quickAdd('${esc(k)}')">등록</button></div>
-        <div class="sug" id="qk-sug-${esc(k)}">${qp?'이어지는 안건: <a class="on" onclick="pickQuickParent(\''+esc(k)+'\',0)">'+esc(qp.title.slice(0,30))+' ✕</a>':''}</div></td></tr>`;
-    }
-    h+='</tbody></table></div>';
   });
-  document.getElementById('mtBody').innerHTML=h||'<div class="empty"><div class="empty-icon">📭</div><div class="empty-msg">조건에 해당하는 안건이 없습니다</div></div>';
+  h+='</tbody></table></div>';
+  document.getElementById('mtBody').innerHTML=h;
+  document.getElementById('qkBox').style.display=me?'':'none';
   renderBulk();
 }
-function meetRow(i,L,mgrAny){
-  const d=i.h, th=i.th, lu=lastUpd(d)||th.map(lastUpd).filter(Boolean).pop(), mng=canManage(d);
-  const flags=(i.isNew?'<span class="flag flag-new">신규</span>':'')
-    +(i.noans?'<span class="flag flag-noans">미응답</span>':(i.open&&i.answered&&!i.isNew?'<span class="flag flag-ans">답 있음</span>':''))
-    +(i.stale?`<span class="flag flag-stale">${i.weeks}주째</span>`:'')
-    +(i.re>0?`<span class="flag flag-re">재지시 ${i.re}회</span>`:'')
-    +(i.wait?'<span class="flag flag-wait">회신 대기</span>':'');
-  const meta=[`최초 ${md(th[0].meeting_date)}`+(i.weeks>0&&i.open&&!i.stale?` · ${i.weeks}주째`:''), CAT_LABEL[i.cat]||i.cat,
-    d.issuer_name?'지시 '+d.issuer_name:'', asgNames(d)?'담당 '+asgNames(d):'', d.next_check_date&&i.open?'다음 확인 '+md(d.next_check_date):''].filter(Boolean).join(' · ');
-  const hist=th.length>1?`<div class="th-meta">이전 지시: `+th.filter(x=>x.id!==d.id).map(x=>`${md(x.meeting_date)} ${esc(x.title.slice(0,24))}`).join(' → ')+'</div>':'';
+function meetRow(d,L,mgr){
+  const th=threadOf(d), i=threadInfo(th,L), lu=lastUpd(d), mng=canManage(d), open=isOpen(d);
+  const flags=(open&&!answeredSince(d,L)&&d.meeting_date<=L?'<span class="flag flag-noans">미응답</span>':'')
+    +(open&&i.stale?`<span class="flag flag-stale">${i.weeks}주째</span>`:'')
+    +(th.length>1?`<span class="flag flag-re">안건 ${th.indexOf(d)+1}/${th.length}</span>`:'')
+    +(isWaiting(d)?'<span class="flag flag-wait">회신 대기</span>':'');
+  const meta=[CAT_LABEL[catOf(d)]||catOf(d), d.issuer_name?'지시 '+d.issuer_name:'', asgNames(d)?'담당 '+asgNames(d):'', d.next_check_date&&open?'다음 확인 '+md(d.next_check_date):''].filter(Boolean).join(' · ');
   const fresh=lu&&isAnswer(lu)&&tsDay(lu.created_at)>L;
   let ctl='';
-  if(me&&d.status!=='완료'){
+  if(d.kind==='공지'){
+    ctl=`<span class="th-meta">${(updMap[d.id]||[]).filter(u=>u.type==='공지확인').length}명 확인</span>`;
+  }else if(me&&d.status!=='완료'&&d.status!=='보류'){
     if(d.status==='완료보고'){
       ctl=mng?`<button class="btn btn-primary mt-btn" onclick="act(${d.id},'confirm','')">${d.close_type==='불가'?'불가 종결 확정':'완료 확정'}</button><button class="btn btn-red mt-btn" onclick="meetReject(${d.id})">반려</button>`
              :'<span class="th-meta">지시자 확정 대기</span>';
@@ -965,14 +951,14 @@ function meetRow(i,L,mgrAny){
           <button class="btn btn-outline mt-btn" style="margin:0;height:28px;" onclick="meetRecord(${d.id})">기록</button></div>`;
     }
   }
-  return `<tr class="${i.late?'row-late':''} ${d.status==='완료'?'row-done':''}">
-    ${mgrAny?`<td style="text-align:center;padding:8px 2px;overflow:visible;">${i.open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>`:''}
-    <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div>${hist}</td>
-    <td>${ddayHtml(d)}</td><td>${statusBadge(d)}</td>
+  return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''}">
+    ${mgr?`<td style="text-align:center;padding:8px 2px;overflow:visible;">${open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>`:''}
+    <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}</td>
+    <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
+    <td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${statusBadge(d)}</td>
     <td class="mt-last ${fresh?'':'old'}">${lu?`<b>${esc(md(tsDay(lu.created_at)))} ${esc(lu.emp_name||'')}</b> ${esc(lu.content)}`:'<span style="color:#c0c4cc;">기록 없음</span>'}</td>
     <td>${ctl}</td></tr>`;
 }
-function pickDept(k){const el=document.getElementById('mtDept');el.value=el.value===k?'':k;renderMeet();}
 function meetStateChange(id){
   const st=document.getElementById('ms-'+id).value, dt=document.getElementById('md-'+id);
   dt.style.visibility=(st==='완료'||st==='불가')?'hidden':'visible';
@@ -990,9 +976,9 @@ function meetReject(id){
 
 /* ── 일괄 처리 (관리자) — 이관 건 정리용 ── */
 function pickOne(id,on){if(on)picked[id]=true;else delete picked[id];renderBulk();}
-function pickGroup(k,on){
-  const L=lastMeeting();
-  meetThreads(L).filter(i=>i.key===k&&i.open&&chipMatch(i,mtChip)).forEach(i=>{if(on)picked[i.h.id]=true;else delete picked[i.h.id];});
+function pickAll(on){
+  const L=defaultLast(), view=document.getElementById('mtView').value||'default', dept=document.getElementById('mtDept').value;
+  meetSections(L,view,dept).forEach(sc=>{sc[1].filter(isOpen).forEach(d=>{if(on)picked[d.id]=true;else delete picked[d.id];});});
   renderMeet();
 }
 function bulkClear(){picked={};renderCur();}
@@ -1056,30 +1042,33 @@ function suggestThreads(text,key){
   });
   return out.sort((a,b)=>b.score-a.score||b.h.id-a.h.id).slice(0,4);
 }
-function suggestQuick(k){
-  const el=document.getElementById('qk-sug-'+k); if(!el) return;
-  const sg=suggestThreads(document.getElementById('qk-title-'+k).value,k), cur=quickParent[k];
-  el.innerHTML=sg.length?'이어지는 안건? '+sg.map(s=>`<a class="${cur===s.h.id?'on':''}" onclick="pickQuickParent('${esc(k)}',${s.h.id})">${esc(md(s.h.meeting_date))} ${esc(s.h.title.slice(0,28))}</a>`).join(''):(cur&&byId[cur]?'이어지는 안건: <a class="on" onclick="pickQuickParent(\''+esc(k)+'\',0)">'+esc(byId[cur].title.slice(0,30))+' ✕</a>':'');
+function suggestQuick(){
+  const el=document.getElementById('qk-sug'); if(!el) return;
+  const k=document.getElementById('qk-dept').value;
+  const sg=suggestThreads(document.getElementById('qk-title').value,k), cur=quickParent;
+  el.innerHTML=sg.length?'이어지는 안건? '+sg.map(x=>`<a class="${cur===x.h.id?'on':''}" onclick="pickQuickParent(${x.h.id})">${esc(md(x.h.meeting_date))} ${esc(x.h.title.slice(0,28))}</a>`).join(''):(cur&&byId[cur]?'이어지는 안건: <a class="on" onclick="pickQuickParent(0)">'+esc(byId[cur].title.slice(0,30))+' ✕</a>':'');
 }
-function pickQuickParent(k,id){
-  quickParent[k]=(quickParent[k]===id||!id)?0:id;
-  suggestQuick(k);
+function pickQuickParent(id){
+  quickParent=(quickParent===id||!id)?0:id;
+  suggestQuick();
 }
-async function quickAdd(k){
+async function quickAdd(){
   if(!me) return;
-  const title=document.getElementById('qk-title-'+k).value.trim(); if(!title){showToast('지시 내용을 입력해주세요','err');return;}
+  const k=document.getElementById('qk-dept').value; if(!k){showToast('담당부서를 선택해주세요','err');return;}
+  const title=document.getElementById('qk-title').value.trim(); if(!title){showToast('지시 내용을 입력해주세요','err');return;}
   const issuer=emps.find(e=>e.id===+document.getElementById('mtIssuer').value)||me;
-  const cat=document.getElementById('qk-cat-'+k).value, due=cat==='정기보고'?null:(document.getElementById('qk-due-'+k).value||null);
+  const cat=document.getElementById('qk-cat').value, due=cat==='정기보고'?null:(document.getElementById('qk-due').value||null);
   const body={meeting_date:todayStr(),source:'주간회의',kind:'지시',category:cat,issuer_class:classOf(issuer),
     issuer_id:issuer.id,issuer_name:issuer.name,issuer_dept:issuer.dept,title:title,priority:'중',
     entity:'KOREA',owner_dept:k,coop_depts:[],is_internal:(issuer.entity==='KOREA'&&issuer.dept===k),
     due_type:cat==='정기보고'?'상시':'즉시',due_date:due,due_date_original:due,next_check_date:due||nextMonday(todayStr()),
-    status:'지시됨',parent_id:quickParent[k]||null,registered_by:me.id,registered_name:me.name};
+    status:'지시됨',parent_id:quickParent||null,registered_by:me.id,registered_name:me.name};
   try{
     const res=await sbPost('directives',body);
     if(body.parent_id) await supersede(body.parent_id,res[0].id);
-    quickParent[k]=0; showToast('등록되었습니다','ok'); await refresh();
-    const el=document.getElementById('qk-title-'+k); if(el) el.focus();
+    quickParent=0; document.getElementById('qk-title').value=''; document.getElementById('qk-sug').innerHTML='';
+    showToast('등록되었습니다','ok'); await refresh();
+    document.getElementById('qk-title').focus();
   }catch(e){ showToast('오류: '+e.message,'err'); }
 }
 // 후속 지시가 등록되면 같은 안건의 이전 열린 지시를 「후속 대체」로 닫는다 — 안건 하나에 열린 지시가 하나만 남도록
@@ -1201,9 +1190,24 @@ function renderList(){
     tbody.innerHTML='<tr><td colspan="12" class="empty" style="padding:40px;"><div class="empty-icon">📭</div><div class="empty-msg">해당하는 지시사항이 없습니다</div></td></tr>';
     return;
   }
+  // 부서별로 묶기: 부서 순서대로 모으고(안에서는 위 정렬 유지) 부서마다 구분줄을 넣는다
+  const grouped=document.getElementById('fGroup').checked;
+  if(grouped){
+    const order=groupKeys().concat(['전체']);
+    const rank=d=>{const k=d.owner_dept==='전체'?'전체':groupKey(d);const ix=order.indexOf(k);return ix<0?999:ix;};
+    data.forEach((d,i)=>{d._ord=i;}); data.sort((a,b)=>rank(a)-rank(b)||a._ord-b._ord);
+  }
+  let prevKey=null;
   tbody.innerHTML=data.map((d,i)=>{
     const lu=lastUpd(d), th=threadOf(d);
-    return `<tr onclick="openPanel(${d.id})" class="${d.id===selectedId?'selected':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''} ${isLate(d)?'row-late':''}">
+    const gk=d.owner_dept==='전체'?'전체':groupKey(d);
+    let head='';
+    if(grouped&&gk!==prevKey){
+      const g=data.filter(x=>(x.owner_dept==='전체'?'전체':groupKey(x))===gk);
+      head=`<tr class="mt-sec"><td colspan="12" style="cursor:default;">${esc(gk)} · ${g.length}건 (미완료 ${g.filter(isOpen).length} · 완료 ${g.filter(x=>x.status==='완료'&&x.kind==='지시').length}${g.some(x=>x.kind==='공지')?' · 방침 '+g.filter(x=>x.kind==='공지').length:''})</td></tr>`;
+      prevKey=gk;
+    }
+    return head+`<tr onclick="openPanel(${d.id})" class="${d.id===selectedId?'selected':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''} ${isLate(d)?'row-late':''}">
       <td style="text-align:center;color:var(--t3);">${data.length-i}</td>
       <td>${esc(d.meeting_date||'')}</td>
       <td>${esc(d.source||'')}</td>
@@ -1213,9 +1217,9 @@ function renderList(){
       <td title="${esc(asgNames(d))}">${esc(asgNames(d))}</td>
       <td title="${esc(d.title||'')}">${th.length>1?`<span class="flag flag-re">안건 ${th.indexOf(d)+1}/${th.length}</span>`:''}${esc(d.title||'')}</td>
       <td>${ddayHtml(d)}</td>
+      <td>${doneDay(d)?esc(md(doneDay(d))):''}</td>
       <td>${statusBadge(d)}</td>
       <td title="${esc(lu?lu.content:'')}">${lu?esc(md(tsDay(lu.created_at))+' '+lu.content):''}</td>
-      <td style="text-align:center;">${d.kind==='지시'?`<span class="badge badge-${esc(d.priority||'중')}">${esc(d.priority||'중')}</span>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -1504,11 +1508,28 @@ function renderEval(){
       <td class="${stale?'ev-bad':''}">${stale||'-'}</td><td>${wait||'-'}</td><td>${re||'-'}</td><td>${rate(onTime,due.length)}</td></tr>`;
   });
   document.getElementById('evBody').innerHTML=body||'<tr><td colspan="8" class="loading">평가 대상 부서가 없습니다</td></tr>';
+  renderSummary();
+}
+function renderSummary(){
+  const L=lastMeeting(), all=meetThreads(L), keys=groupKeys();
+  document.getElementById('sumHead').innerHTML='<tr><th style="width:150px;">부서</th><th>열린 안건</th><th>지난 회의 지시</th><th>그중 응답</th><th>미응답</th><th>이월 안건</th><th>'+STALE_WEEKS+'주+ 정체</th><th>재지시</th><th>회신 대기</th><th>확정 대기</th><th>기한 지남</th></tr>';
+  const tot=[0,0,0,0,0,0,0,0,0,0]; let sb='';
+  keys.concat(['전체']).forEach(k=>{
+    const g=all.filter(i=>i.key===k); if(!g.length) return;
+    const lastG=g.filter(i=>i.last);
+    const v=[g.filter(i=>i.open).length, lastG.length, lastG.filter(i=>i.answered||!i.open).length, g.filter(i=>i.noans).length,
+      g.filter(i=>i.open&&!i.last&&!i.isNew).length, g.filter(i=>i.stale).length, g.filter(i=>i.open&&i.re>0).length,
+      g.filter(i=>i.wait).length, g.filter(i=>i.report).length, g.filter(i=>i.late).length];
+    v.forEach((x,ix)=>{tot[ix]+=x;});
+    sb+=`<tr><td class="clk" onclick="goDept('${esc(k)}')">${esc(k)}</td>`+v.map((x,ix)=>`<td class="${(ix===3||ix===5||ix===9)&&x?'warn':''}">${x||'<span style="color:#c0c4cc;">-</span>'}</td>`).join('')+'</tr>';
+  });
+  sb+=sb?`<tr class="sum-total"><td>합계</td>`+tot.map(x=>`<td>${x}</td>`).join('')+'</tr>':'<tr><td colspan="11" class="loading">열린 안건이 없습니다</td></tr>';
+  document.getElementById('sumBody').innerHTML=sb;
 }
 function goDept(k){
   switchTab('list');
   document.getElementById('fView').value='all'; document.getElementById('fStatus').value='';
-  document.getElementById('fKind').value=''; document.getElementById('fDept').value=k;
+  document.getElementById('fKind').value=''; document.getElementById('fDept').value=(k==='전체'?'':k);
   renderList();
 }
 
@@ -1540,10 +1561,10 @@ async function exportExcel(){
 
 /* ── 컬럼 리사이즈 (독립 리사이즈 표준 — 컬럼 수 바꾸면 KEY 버전 갱신) ── */
 function initColResize(){
-  const KEY='directive_col_v2';
+  const KEY='directive_col_v3';
   const table=document.getElementById('listTable');
   const ths=[...table.querySelectorAll('thead th')];
-  const def=[44,92,76,78,72,104,110,340,150,96,280,62];
+  const def=[44,92,76,78,72,104,110,340,150,66,104,300];
   let saved=null; try{saved=JSON.parse(localStorage.getItem(KEY)||'null');}catch(_){}
   if(!saved||saved.length!==def.length) saved=null;
   ths.forEach((th,i)=>{th.style.width=(saved?saved[i]:def[i])+'px';th.style.position='sticky';});
