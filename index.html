@@ -1070,16 +1070,16 @@ async function loadDirectiveBadge(){
     const me=(emps||[])[0]; if(!me){el.style.display='none';return;}
     const st=encodeURIComponent('(지시됨,진행중,완료보고)');
     const [ds,as]=await Promise.all([
-      fetch(`${SB_URL}/rest/v1/directives?select=id,status,due_date,entity,owner_dept,issuer_id&is_deleted=eq.false&kind=eq.${encodeURIComponent('지시')}&status=in.${st}`,H).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/directives?select=id,status,due_date,entity,owner_dept,issuer_id,category&is_deleted=eq.false&kind=eq.${encodeURIComponent('지시')}&status=in.${st}`,H).then(r=>r.json()),
       fetch(`${SB_URL}/rest/v1/directive_assignees?select=directive_id,employee_id`,H).then(r=>r.json())
     ]);
     if(!Array.isArray(ds)){el.style.display='none';return;}
     // workflow 달력과 같은 기준: 담당자가 지정된 지시는 그 담당자에게만, 미지정이면 담당부서 전원에게
     const asgBy={}; (Array.isArray(as)?as:[]).forEach(a=>{(asgBy[a.directive_id]=asgBy[a.directive_id]||[]).push(a.employee_id);});
-    const isMine=d=>{const g=asgBy[d.id]; return g&&g.length?g.indexOf(me.id)>=0:(d.entity===me.entity&&d.owner_dept===me.dept);};
+    const isMine=d=>{const g=asgBy[d.id]; return g&&g.length?g.indexOf(me.id)>=0:(d.entity===me.entity&&(d.owner_dept===me.dept||d.owner_dept==='전체'));};
     const d0=new Date(), today=`${d0.getFullYear()}-${p2(d0.getMonth()+1)}-${p2(d0.getDate())}`;
     const mine=ds.filter(d=>d.status!=='완료보고'&&isMine(d));
-    const late=mine.filter(d=>d.due_date&&d.due_date<today).length;
+    const late=mine.filter(d=>d.due_date&&d.due_date<today&&d.category!=='행사일정').length;
     const wait=ds.filter(d=>d.status==='완료보고'&&d.issuer_id===me.id).length;
     const parts=[];
     if(mine.length) parts.push(`내 지시 ${mine.length}건`);

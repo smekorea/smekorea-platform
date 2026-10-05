@@ -2164,7 +2164,7 @@ async function loadDirectiveCalRecords(){
   try{
     var aRes = await SB.from('directive_assignees').select('directive_id,employee_id').limit(5000);
     var dRes = await SB.from('directives')
-      .select('id,title,status,due_date,entity,owner_dept,issuer_id,issuer_name')
+      .select('id,title,status,due_date,entity,owner_dept,issuer_id,issuer_name,category')
       .eq('is_deleted', false).eq('kind', '지시')
       .in('status', ['지시됨','진행중','완료보고'])
       .not('due_date', 'is', null)
@@ -2176,13 +2176,14 @@ async function loadDirectiveCalRecords(){
     var items = [];
     (dRes.data||[]).forEach(function(r){
       var asg = asgBy[r.id]||[];
-      var mine = asg.length ? asg.indexOf(myId)>=0 : (!!myDept && r.owner_dept===myDept && (r.entity||'')===myEntity);
+      // 담당부서 「전체」 지시는 같은 법인 전 직원에게 보인다(야유회 등 행사·일정)
+      var mine = asg.length ? asg.indexOf(myId)>=0 : ((r.entity||'')===myEntity && ((!!myDept && r.owner_dept===myDept) || r.owner_dept==='전체'));
       var issued = (r.issuer_id===myId);
       if(!mine && !issued) return;
       if(mine && r.status==='완료보고') { if(!issued) return; mine=false; }   // 담당 측은 완료보고 후 달력에서 내림
       var due = String(r.due_date).slice(0,10);
       r._mine = mine;
-      r._late = due < todayStr;
+      r._late = due < todayStr && r.category!=='행사일정';   // 행사·일정은 지난 뒤 오늘 칸으로 끌어오지 않는다
       r._lateDays = r._late ? Math.round((new Date(todayStr+'T00:00:00') - new Date(due+'T00:00:00'))/86400000) : 0;
       r._calDate = r._late ? todayStr : due;
       items.push(r);
