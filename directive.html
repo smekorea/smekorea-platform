@@ -287,6 +287,7 @@ tbody tr.row-late td{background:#fff7f7;}
 .flag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:2px;margin:0 4px 2px 0;white-space:nowrap;vertical-align:1px;}
 .flag-noans{background:#fee2e2;color:#b91c1c;}
 .flag-stale{background:#ffedd5;color:#c2410c;}
+.flag-days{background:#EEF0F3;color:#565C64;}
 .flag-re{background:#ede9fe;color:#6d28d9;}
 .flag-wait{background:#fff4d6;color:#8a5a00;}
 .flag-new{background:var(--brand);color:#fff;}
@@ -513,7 +514,7 @@ tbody tr.row-late td{background:#fff7f7;}
       <span style="font-size:13px;font-weight:700;">부서별 현황 요약</span>
       <span style="font-size:12px;color:var(--muted);">기준 회의일</span>
       <select id="evLast" onchange="renderSummary()"></select>
-      <span style="font-size:12px;color:var(--muted);">이 회의 이후 답이 적혔는지로 응답·미응답을 셉니다. 안건 단위(이어지는 지시는 한 건)입니다.</span>
+      <span style="font-size:12px;color:var(--muted);">이 회의 이후 답이 적혔는지로 응답·미진행을 셉니다. 안건 단위(이어지는 지시는 한 건)입니다.</span>
     </div>
     <div class="tbl-wrap sum-wrap"><table class="sum-table" id="sumTable"><thead id="sumHead"></thead><tbody id="sumBody"></tbody></table></div>
     <div class="ev-note">
@@ -606,7 +607,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.6 (2026-10-05) — 지시사항 관리
+   directive.html v2.9 (2026-10-05) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -858,8 +859,9 @@ function fillFilters(){
   document.getElementById('evLast').innerHTML=ds.map(x=>`<option value="${x}"${x===cur?' selected':''}>${x}${x===def?' (직전)':''}</option>`).join('')||`<option value="${todayStr()}">${todayStr()}</option>`;
   const months=[todayStr().slice(0,7)]; ds.forEach(x=>{if(months.indexOf(x.slice(0,7))<0)months.push(x.slice(0,7));}); months.sort().reverse();
   const cnt=f=>allD.filter(f).length;
-  const mvCur=(mv==='open'||ds.indexOf(mv)>=0||months.indexOf(mv)>=0)?mv:'';
+  const mvCur=(mv==='all'||mv==='open'||ds.indexOf(mv)>=0||months.indexOf(mv)>=0)?mv:'';
   document.getElementById('mtView').innerHTML=`<option value=""${mvCur===''?' selected':''}>선택하세요</option>`
+    +`<option value="all"${mvCur==='all'?' selected':''}>전체 (${allD.length}건)</option>`
     +`<optgroup label="월별">`+months.map(m=>`<option value="${m}"${m===mvCur?' selected':''}>${m.slice(0,4)}년 ${+m.slice(5)}월 (${cnt(d=>d.meeting_date.slice(0,7)===m)}건)</option>`).join('')+`</optgroup>`
     +`<optgroup label="지시일별">`+ds.map(x=>`<option value="${x}"${x===mvCur?' selected':''}>${x} (${'일월화수목금토'[toDate(x).getDay()]}) · ${cnt(d=>d.meeting_date===x)}건</option>`).join('')+`</optgroup>`
     +`<optgroup label="상태"><option value="open"${mvCur==='open'?' selected':''}>미완료 전체 (${cnt(isOpen)}건)</option></optgroup>`;
@@ -934,14 +936,15 @@ function doneCell(d){
   if(d.status==='완료보고') return '<span style="color:#854d0e;">보고 '+esc(md(tsDay(d.reported_at)||''))+'</span>';
   return '<span style="color:#c0c4cc;">-</span>';
 }
-// 보기: '' = 아직 고르지 않음 / 'open' = 미완료 전체 / 'YYYY-MM' = 월별 / 'YYYY-MM-DD' = 지시일별
+// 보기: '' = 아직 고르지 않음 / 'all' = 전체 / 'open' = 미완료 전체 / 'YYYY-MM' = 월별 / 'YYYY-MM-DD' = 지시일별
 function meetList(view,dept){
   if(!view) return null;
   const inDept=d=>!dept||groupKey(d)===dept||d.owner_dept==='전체';
-  const f=view==='open'?isOpen:view.length===7?(d=>d.meeting_date.slice(0,7)===view):(d=>d.meeting_date===view);
+  const f=view==='all'?(d=>true):view==='open'?isOpen:view.length===7?(d=>d.meeting_date.slice(0,7)===view):(d=>d.meeting_date===view);
   return allD.filter(d=>inDept(d)&&f(d));
 }
 function viewTitle(view){
+  if(view==='all') return '전체 지시사항';
   if(view==='open') return '미완료 전체';
   if(view.length===7) return view.slice(0,4)+'년 '+(+view.slice(5))+'월 지시사항';
   return view+' 지시사항';
@@ -994,8 +997,8 @@ function renderMeet(){
 }
 function meetRow(d,L,mgr){
   const th=threadOf(d), i=threadInfo(th,L), lu=lastUpd(d), mng=canManage(d), open=isOpen(d);
-  const flags=(open&&!answeredSince(d,L)&&d.meeting_date<=L?'<span class="flag flag-noans">미응답</span>':'')
-    +(open&&i.stale?`<span class="flag flag-stale">${i.weeks}주째</span>`:'')
+  // 미진행 = 직전 지시일 이후 활동이 한 번도 적히지 않은 건. 경과 일수 표시는 v2.9에서 뺐다
+  const flags=(open&&!answeredSince(d,L)&&d.meeting_date<=L?'<span class="flag flag-noans">미진행</span>':'')
     +(th.length>1?`<span class="flag flag-re">안건 ${th.indexOf(d)+1}/${th.length}</span>`:'')
     +(isWaiting(d)?'<span class="flag flag-wait">회신 대기</span>':'');
   const meta=[d.source||'', CAT_LABEL[catOf(d)]||catOf(d), asgNames(d)?'담당 '+asgNames(d):'', d.next_check_date&&open?'다음 확인 '+md(d.next_check_date):''].filter(Boolean).join(' · ');
@@ -1130,7 +1133,7 @@ async function quickAdd(){
     await sbPost('directives',body);
     document.getElementById('qk-title').value='';
     // 방금 등록한 건이 보이도록, 아직 보기를 고르지 않았으면 오늘 날짜로 맞춘다
-    const mv=document.getElementById('mtView'); const stay=mv.value==='open'||mv.value===todayStr()||mv.value===todayStr().slice(0,7);
+    const mv=document.getElementById('mtView'); const stay=mv.value==='all'||mv.value==='open'||mv.value===todayStr()||mv.value===todayStr().slice(0,7);
     showToast('등록되었습니다','ok'); await refresh();
     if(!stay){document.getElementById('mtView').value=todayStr();renderMeet();}
     document.getElementById('qk-title').focus();
@@ -1340,7 +1343,7 @@ function buildPanel(d){
   }
   // 안건 이력
   if(th.length>1){
-    h+=row(`이 안건의 지시 이력 (${th.length}건 · 최초 ${esc(th[0].meeting_date)} · ${ageWeeks(th)}주째)`,'<div class="hist">'+th.map(x=>
+    h+=row(`이 안건의 지시 이력 (${th.length}건 · 최초 ${esc(th[0].meeting_date)} · +${Math.max(0,dayDiff(th[0].meeting_date,todayStr()))}일)`,'<div class="hist">'+th.map(x=>
       `<div class="${x.id===d.id?'cur':''}">${x.id===d.id?'▶ ':''}<a onclick="openPanel(${x.id})">${esc(md(x.meeting_date))} ${esc(x.title)}</a> ${statusBadge(x)}</div>`).join('')+'</div>');
   }
   h+='<hr class="sp-sep">';
@@ -1543,7 +1546,7 @@ function renderEval(){
 }
 function renderSummary(){
   const L=lastMeeting(), all=meetThreads(L), keys=groupKeys();
-  document.getElementById('sumHead').innerHTML='<tr><th>부서</th><th>열린 안건</th><th>지난 회의 지시</th><th>그중 응답</th><th>미응답</th><th>이월 안건</th><th>'+STALE_WEEKS+'주+ 정체</th><th>재지시</th><th>회신 대기</th><th>확정 대기</th><th>기한 지남</th></tr>';
+  document.getElementById('sumHead').innerHTML='<tr><th>부서</th><th>열린 안건</th><th>지난 회의 지시</th><th>그중 응답</th><th>미진행</th><th>이월 안건</th><th>'+STALE_WEEKS+'주+ 정체</th><th>재지시</th><th>회신 대기</th><th>확정 대기</th><th>기한 지남</th></tr>';
   const tot=[0,0,0,0,0,0,0,0,0,0]; let sb='';
   keys.concat(['전체']).forEach(k=>{
     const g=all.filter(i=>i.key===k); if(!g.length) return;
