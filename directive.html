@@ -318,6 +318,7 @@ tbody tr.row-late td{background:#fff7f7;}
 .st-btn:hover{background:#D9CBA3;}
 .mt-table td .badge{border:1px solid transparent;}
 .mt-table td .badge+.st-btn{margin-left:5px;}
+.st-date{margin-left:5px;font-size:12px;color:#b91c1c;}
 .mt-table .btn-outline{border-color:var(--line-dk);color:var(--text);}
 .mt-last{font-size:12px;color:#111827;}
 .mt-last b{color:var(--point);font-weight:700;}
@@ -430,7 +431,7 @@ tbody tr.row-late td{background:#fff7f7;}
         <thead><tr>
           <th style="padding:7px 2px;text-align:center;"><input type="checkbox" id="mtAll" title="화면의 미완료 건 전체 선택" onchange="pickAll(this.checked)"></th>
           <th class="sortable" onclick="mtSort('meeting_date')">지시일<span class="sort-icon" id="msort-meeting_date">↓</span><div class="col-resizer"></div></th>
-          <th class="sortable" onclick="mtSort('owner_dept')">부서<span class="sort-icon" id="msort-owner_dept"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="mtSort('owner_dept')">부서 · 담당자<span class="sort-icon" id="msort-owner_dept"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('issuer_name')">지시자<span class="sort-icon" id="msort-issuer_name"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('title')">지시 내용<span class="sort-icon" id="msort-title"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('due_date')">기한<span class="sort-icon" id="msort-due_date"></span><div class="col-resizer"></div></th>
@@ -465,7 +466,7 @@ tbody tr.row-late td{background:#fff7f7;}
           <option value="진행중">진행중</option>
           <option value="완료보고">완료·불가 보고</option>
           <option value="완료">완료·종결</option>
-          <option value="보류">보류</option>
+          <option value="rework">보류</option>
         </select>
         <select id="fKind" onchange="renderList()">
           <option value="">전체 성격</option>
@@ -584,6 +585,7 @@ tbody tr.row-late td{background:#fff7f7;}
     <div class="modal-bd">
       <div class="form-row" id="actHead" style="font-size:13.5px;line-height:1.5;"></div>
       <div class="form-row"><label class="form-label">지금까지의 활동</label><div class="sp-content" id="actHist" style="max-height:150px;font-size:12px;"></div></div>
+      <div class="form-row" id="actAsgRow"><label class="form-label">담당자 <span style="color:var(--muted);font-weight:400;">— 이 지시를 맡은 사람 (여러 명 선택 가능)</span></label><div class="chk-box" id="actAsg"></div></div>
       <div class="form-row-2" id="actStateRow">
         <div class="form-row"><label class="form-label">구분<span>*</span></label>
           <select class="form-select" id="actState" onchange="actStateChange()">
@@ -610,7 +612,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.10 (2026-10-05) — 지시사항 관리
+   directive.html v2.12 (2026-10-05) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -724,11 +726,12 @@ function statusLabel(d){
   if(d.kind==='공지') return ['방침','공지'];
   if(d.status==='완료') return d.close_type==='불가'?['종결(불가)','종결']:d.close_type==='후속대체'?['후속 대체','종결']:['완료','완료'];
   if(d.status==='완료보고') return [d.close_type==='불가'?'불가 요청':'완료 요청','완료보고'];
-  if(isOpen(d)&&d.progress_state==='보완') return ['보완 요청','보완'];
+  if(isOpen(d)&&d.progress_state==='보완') return ['보류','보완'];
   if(isWaiting(d)) return ['회신 대기','대기'];
   // 「이관-확인필요」는 v2.5부터 화면에 쓰지 않는다(DB도 지시됨으로 바꿈). 혹시 남아 있어도 지시됨으로 보여준다
   // 아직 아무 활동이 없는 지시(DB 값 '지시됨')는 화면에 「미진행」으로 보여준다 — 이미 지시된 건에 「지시됨」은 정보가 없다
   if(d.status==='지시됨'||d.status==='이관-확인필요') return ['미진행','지시됨'];
+  if(d.status==='보류') return ['중단','보류'];   // v2.11까지 있던 「지시 중단」 — 버튼은 없앴고 남은 건만 이렇게 보인다
   return [d.status,d.status];
 }
 function statusBadge(d){const s=statusLabel(d);return `<span class="badge badge-${s[1]}">${s[0]}</span>`;}
@@ -785,7 +788,7 @@ function answeredSince(d,L){
   return realUpdates(d).some(u=>isAnswer(u)&&tsDay(u.created_at)>L);
 }
 // 담당 측의 실제 답으로 볼 기록인가: 이관 때 넣은 기록, 관리자의 일괄 정리, 후속 지시로 자동 대체된 기록은 제외
-function isAnswer(u){return u.emp_name!==IMPORT_NAME&&u.type!=='코멘트'&&u.type!=='반려'&&u.type!=='완료취소'&&u.state!=='후속대체'&&String(u.content||'').indexOf('일괄 정리')!==0;}
+function isAnswer(u){return u.emp_name!==IMPORT_NAME&&['진행','접수','완료보고'].indexOf(u.type)>=0&&u.type!=='코멘트'&&u.type!=='반려'&&u.type!=='완료취소'&&u.state!=='후속대체'&&String(u.content||'').indexOf('일괄 정리')!==0;}
 // 담당 측이 적은 가장 최근 활동 / 그 뒤에 달린 가장 최근 코멘트
 const ACT_TYPES=['진행','접수','완료보고'];   // 활동으로 보는 기록 유형
 function lastActivity(d){const arr=realUpdates(d).filter(u=>u.content&&ACT_TYPES.indexOf(u.type)>=0&&u.state!=='후속대체'&&String(u.content).indexOf('일괄 정리')!==0&&u.content!=='완료 취소');return arr.length?arr[arr.length-1]:null;}
@@ -1005,28 +1008,30 @@ function meetRow(d,L,mgr){
   const flags=(open&&!answeredSince(d,L)&&d.meeting_date<=L?'<span class="flag flag-noans">미진행</span>':'')
     +(th.length>1?`<span class="flag flag-re">안건 ${th.indexOf(d)+1}/${th.length}</span>`:'')
     +(isWaiting(d)?'<span class="flag flag-wait">회신 대기</span>':'');
-  const meta=[d.source||'', CAT_LABEL[catOf(d)]||catOf(d), asgNames(d)?'담당 '+asgNames(d):'', d.next_check_date&&open?'다음 확인 '+md(d.next_check_date):''].filter(Boolean).join(' · ');
+  const meta=[d.source||'', CAT_LABEL[catOf(d)]||catOf(d), d.next_check_date&&open?'다음 확인 '+md(d.next_check_date):''].filter(Boolean).join(' · ');
   const la=lastActivity(d), cm=pendingComment(d), fresh=la&&isAnswer(la)&&tsDay(la.created_at)>L;
   // 활동내용: 담당 측의 최근 활동, 그 뒤에 달린 코멘트가 있으면 함께 보여준다
   let actHtml=la?`<div class="mt-last ${fresh?'':'old'}"><b>${esc(md(tsDay(la.created_at)))} ${esc(la.emp_name||'')}</b> ${esc(la.content)}</div>`:'<span style="color:#9aa1ab;">활동 기록 없음</span>';
-  if(cm) actHtml+=`<div class="mt-cmt"><b>코멘트 ${esc(md(tsDay(cm.created_at)))} ${esc(cm.emp_name||'')}</b> ${esc(cm.content||'')}</div>`;
+  if(cm) actHtml+=`<div class="mt-cmt"><b>보류 사유 ${esc(md(tsDay(cm.created_at)))} ${esc(cm.emp_name||'')}</b> ${esc(cm.content||'')}</div>`;
+  const held=open&&d.progress_state==='보완';   // 확인했지만 보류한 상태 — 담당 측이 다시 활동을 적으면 풀린다
   let ctl='', stBtn='';
   if(d.kind==='공지'){
     ctl=`<span class="th-meta">${(updMap[d.id]||[]).filter(u=>u.type==='공지확인').length}명 확인</span>`;
   }else if(me&&d.status!=='완료'&&d.status!=='보류'){
     ctl=`<button class="btn btn-outline mt-btn" onclick="openAct(${d.id},'act')">활동 입력</button>`;
     if(canDecide()){
-      ctl+=`<button class="btn btn-red mt-btn" onclick="openAct(${d.id},'comment')" title="내용이 부족하면 코멘트를 달아 다시 활동하게 합니다">코멘트</button>`;
-      stBtn=`<button class="st-btn" onclick="decide(${d.id})" title="활동내용에 이상이 없으면 누릅니다">완료 확인</button>`;
+      ctl+=`<button class="btn btn-red mt-btn" onclick="openAct(${d.id},'comment')" title="확인했지만 내용이 부족하면 사유를 적고 보류합니다. 담당 측이 다시 활동을 적습니다">보류</button>`;
+      // 보류 중에는 완료 확인을 숨긴다(담당 측이 다시 활동을 적으면 다시 나온다)
+      if(!held) stBtn=`<button class="st-btn" onclick="decide(${d.id})" title="활동내용에 이상이 없으면 누릅니다">완료 확인</button>`;
     }
   }else if(d.status==='완료'&&canDecide()){
     ctl=`<button class="btn btn-outline mt-btn" onclick="undoDecide(${d.id})" title="잘못 눌렀으면 완료를 취소합니다">완료 취소</button>`;
   }
   // 주간회의 표에서는 「미진행」을 지시 내용 앞에 이미 표시하므로 상태 칸에서는 생략한다(완료 확인만 보이게)
-  const stHtml=(statusLabel(d)[0]==='미진행'?'':statusBadge(d))+stBtn;
+  const stHtml=(statusLabel(d)[0]==='미진행'?'':statusBadge(d))+(held&&cm?`<span class="st-date">${esc(md(tsDay(cm.created_at)))}</span>`:'')+stBtn;
   return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
-    <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}</td><td>${esc(d.issuer_name||'-')}</td>
+    <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}${asgNames(d)?`<div class="th-meta" title="담당자">${esc(asgNames(d))}</div>`:''}</td><td>${esc(d.issuer_name||'-')}</td>
     <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
     <td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${stHtml}</td>
     <td>${actHtml}</td>
@@ -1042,16 +1047,23 @@ function openAct(id,mode){
   const d=byId[id]; if(!d||!me) return;
   actId=id; actMode=mode;
   const isC=mode==='comment';
-  document.getElementById('actTitle').textContent=isC?'코멘트 — 보완 요청':'활동 입력';
+  document.getElementById('actTitle').textContent=isC?'보류 — 사유 입력':'활동 입력';
   document.getElementById('actHead').innerHTML=`<b>${esc(d.title)}</b><div class="th-meta">${esc(md(d.meeting_date))} · ${esc(deptLabel(d))} · 지시 ${esc(d.issuer_name||'-')} · ${statusLabel(d)[0]}</div>`;
   const hist=realUpdates(d).filter(u=>u.content).slice(-4);
-  document.getElementById('actHist').innerHTML=hist.length?hist.map(u=>`<div class="${u.type==='코멘트'||u.type==='반려'?'mt-cmt':''}" style="margin-bottom:5px;"><b>${u.type==='코멘트'||u.type==='반려'?'코멘트 ':''}${esc(md(tsDay(u.created_at)))} ${esc(u.emp_name||'')}</b> ${esc(u.content)}</div>`).join(''):'<span style="color:#9aa1ab;">아직 활동 기록이 없습니다</span>';
+  document.getElementById('actHist').innerHTML=hist.length?hist.map(u=>`<div class="${u.type==='코멘트'||u.type==='반려'?'mt-cmt':''}" style="margin-bottom:5px;"><b>${u.type==='코멘트'||u.type==='반려'?'보류 사유 ':''}${esc(md(tsDay(u.created_at)))} ${esc(u.emp_name||'')}</b> ${esc(u.content)}</div>`).join(''):'<span style="color:#9aa1ab;">아직 활동 기록이 없습니다</span>';
   document.getElementById('actStateRow').style.display=isC?'none':'';
+  // 담당자: 지시받은 부서의 직원 중에서 고른다(「전체」 부서 지시는 본사 전 직원). 이미 지정된 사람은 체크해 두고,
+  // 아직 아무도 없으면 지금 입력하는 사람이 그 부서 소속일 때 본인을 미리 체크한다
+  document.getElementById('actAsgRow').style.display=isC?'none':'';
+  const cur=(asgMap[id]||[]).map(a=>a.employee_id);
+  const pool=emps.filter(e=>e.entity===HQ&&EXEC_DEPTS.indexOf(e.dept)<0&&(d.owner_dept==='전체'||e.dept===d.owner_dept||cur.indexOf(e.id)>=0));
+  const pre=cur.length?cur:(pool.some(e=>e.id===me.id)&&d.owner_dept!=='전체'?[me.id]:[]);
+  document.getElementById('actAsg').innerHTML=pool.length?pool.map(e=>`<label><input type="checkbox" value="${e.id}"${pre.indexOf(e.id)>=0?' checked':''}>${esc(e.name)} ${esc(e.rank||'')}${d.owner_dept==='전체'?' <span style="color:var(--muted);">'+esc(e.dept||'')+'</span>':''}</label>`).join(''):'<span style="color:var(--muted);">이 부서에 등록된 직원이 없습니다</span>';
   document.getElementById('actState').value='진행';
   document.getElementById('actNext').value=nextMonday(todayStr());
   document.getElementById('actText').value='';
-  document.getElementById('actLabel').innerHTML=isC?'코멘트<span>*</span>':'활동 내용<span>*</span>';
-  document.getElementById('actSave').textContent=isC?'코멘트 등록':'저장';
+  document.getElementById('actLabel').innerHTML=isC?'보류 사유 — 무엇을 보완해 다시 보고할지<span>*</span>':'활동 내용<span>*</span>';
+  document.getElementById('actSave').textContent=isC?'보류':'저장';
   actStateChange();
   document.getElementById('actOv').classList.add('open');
   setTimeout(()=>document.getElementById('actText').focus(),50);
@@ -1065,11 +1077,21 @@ function actStateChange(){
 }
 async function saveAct(){
   const text=document.getElementById('actText').value.trim();
-  if(!text){showToast(actMode==='comment'?'코멘트를 적어주세요':'활동 내용을 적어주세요','err');return;}
+  if(!text){showToast(actMode==='comment'?'보류 사유를 적어주세요':'활동 내용을 적어주세요','err');return;}
   const id=actId, btn=document.getElementById('actSave'); btn.disabled=true;
   let ok;
   if(actMode==='comment') ok=await comment(id,text);
-  else ok=await record(id,document.getElementById('actState').value,text,document.getElementById('actNext').value);
+  else{
+    // 담당자가 바뀌었으면 먼저 저장한다(바뀌지 않았으면 건드리지 않는다)
+    const sel=checked('actAsg').map(Number).sort((a,b)=>a-b), old=(asgMap[id]||[]).map(a=>a.employee_id).sort((a,b)=>a-b);
+    if(sel.join(',')!==old.join(',')){
+      try{
+        await sbDelete('directive_assignees','directive_id=eq.'+id);
+        if(sel.length) await sbPost('directive_assignees',sel.map(v=>{const e=emps.find(x=>x.id===v);return {directive_id:id,employee_id:e.id,emp_name:e.name,role:'담당'};}));
+      }catch(e){ showToast('담당자 저장 오류: '+e.message,'err'); btn.disabled=false; return; }
+    }
+    ok=await record(id,document.getElementById('actState').value,text,document.getElementById('actNext').value);
+  }
   btn.disabled=false;
   if(ok) closeAct();
 }
@@ -1212,7 +1234,7 @@ async function comment(id,text){
   try{
     await sbPatch('directives',id,patch);
     await sbPost('directive_updates',{directive_id:id,type:'코멘트',state:'보완',employee_id:me.id,emp_name:me.name,content:text});
-    showToast('코멘트가 등록되었습니다','ok'); await refresh(); return true;
+    showToast('보류 처리되었습니다','ok'); await refresh(); return true;
   }catch(e){ showToast('오류: '+e.message,'err'); return false; }
 }
 async function act(id,kind,noteOverride){
@@ -1267,6 +1289,7 @@ function filteredList(){
     if(st==='open'){ if(!isOpen(d)) return false; }
     else if(st==='late'){ if(!isLate(d)) return false; }
     else if(st==='wait'){ if(!isWaiting(d)) return false; }
+    else if(st==='rework'){ if(!(isOpen(d)&&d.progress_state==='보완')) return false; }
     else if(st){ if(d.kind==='공지'||d.status!==st) return false; }
     if(dept&&groupKey(d)!==dept&&(d.coop_depts||[]).indexOf(dept)<0) return false;
     if(iss&&d.issuer_name!==iss) return false;
@@ -1361,22 +1384,20 @@ function buildPanel(d){
     h+=`<div class="sp-section-title">활동 이력</div>`;
     const shown=ups.filter(u=>u.type!=='공지확인');
     h+=shown.length?'<div class="tl">'+shown.map(u=>`<div class="tl-item tl-${esc(u.type)}">
-        <div class="tl-meta"><span class="tl-type">${esc(u.type==='완료보고'?(u.state==='불가'?'불가 요청':'완료 요청'):u.type==='반려'?'코멘트':u.state&&u.type==='진행'?(u.state==='대기'?'회신 대기':u.state):u.type)}</span>${esc(u.emp_name||'')} · ${fmtDT(u.created_at)}${u.new_due?' · 기한 '+esc(u.old_due||'-')+' → '+esc(u.new_due):''}${u.next_date?' · 다음 확인 '+esc(md(u.next_date)):''}</div>
+        <div class="tl-meta"><span class="tl-type">${esc(u.type==='완료보고'?(u.state==='불가'?'불가 요청':'완료 요청'):(u.type==='반려'||u.type==='코멘트')?'보류':u.state&&u.type==='진행'?(u.state==='대기'?'회신 대기':u.state):u.type)}</span>${esc(u.emp_name||'')} · ${fmtDT(u.created_at)}${u.new_due?' · 기한 '+esc(u.old_due||'-')+' → '+esc(u.new_due):''}${u.next_date?' · 다음 확인 '+esc(md(u.next_date)):''}</div>
         ${u.content?`<div class="tl-body">${esc(u.content)}</div>`:''}</div>`).join('')+'</div>'
       :'<div class="sp-value" style="color:var(--muted);margin-bottom:10px;">아직 기록이 없습니다</div>';
     if(me&&d.status!=='완료'&&d.status!=='보류'){
       h+=`<div class="sp-actions"><button class="btn btn-outline btn-sm" onclick="openAct(${d.id},'act')">활동 입력</button>`
-        +(canDecide()?`<button class="btn btn-primary btn-sm" onclick="decide(${d.id})">완료 확인</button><button class="btn btn-red btn-sm" onclick="openAct(${d.id},'comment')">코멘트</button>`:'')+'</div>';
+        +(canDecide()?(d.progress_state==='보완'?'':`<button class="btn btn-primary btn-sm" onclick="decide(${d.id})">완료 확인</button>`)+`<button class="btn btn-red btn-sm" onclick="openAct(${d.id},'comment')">보류</button>`:'')+'</div>';
     }
-    if(mng&&d.status!=='완료') h+=`<textarea class="sp-textarea" id="spNote" style="min-height:44px;" placeholder="보류·기한 변경 사유"></textarea>`;
+    if(mng&&d.status!=='완료') h+=`<textarea class="sp-textarea" id="spNote" style="min-height:44px;" placeholder="기한 변경 사유"></textarea>`;
   }
   if(mng){
     h+='<hr class="sp-sep"><div class="sp-section-title">지시자 처리</div><div class="sp-actions">';
     if(d.kind==='지시'){
-      if(d.status==='지시됨'||d.status==='진행중'||d.status==='이관-확인필요'||d.status==='완료보고'){
-        h+=`<button class="btn btn-outline btn-sm" onclick="act(${d.id},'hold')">보류</button>`;
-      }else if(d.status==='보류'){
-        h+=`<button class="btn btn-outline btn-sm" onclick="act(${d.id},'resume')">보류 해제</button>`;
+      if(d.status==='보류'){
+        h+=`<button class="btn btn-outline btn-sm" onclick="act(${d.id},'resume')">중단 해제</button>`;
       }else if(d.status==='완료'&&canDecide()){
         h+=`<button class="btn btn-outline btn-sm" onclick="undoDecide(${d.id})">완료 취소</button>`;
       }
@@ -1629,7 +1650,7 @@ function applyResize(tableId,KEY,def){
 }
 function initColResize(){
   applyResize('listTable','directive_col_v3',[44,92,76,78,72,104,110,340,150,66,104,300]);
-  applyResize('mtTable','directive_meet_col_v5',[32,70,96,72,430,132,70,150,480,170]);
+  applyResize('mtTable','directive_meet_col_v6',[32,70,112,72,420,132,70,150,470,170]);
 }
 
 let toastTimer;
