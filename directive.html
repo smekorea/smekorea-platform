@@ -266,6 +266,7 @@ tbody tr:last-child td{border-bottom:none;}
 .badge-대기{background:#fff4d6;color:#8a5a00;}
 .badge-완료보고{background:#fef9c3;color:#854d0e;}
 .badge-보완{background:#fee2e2;color:#b91c1c;}
+.badge-전달{background:#ede9fe;color:#5b21b6;}
 .badge-완료{background:#dbeafe;color:#1a4fa0;}
 .badge-보류,.badge-종결{background:#f1f5f9;color:#64748b;}
 .badge-이관-확인필요{background:#e5e7eb;color:#374151;}
@@ -418,7 +419,7 @@ tbody tr.row-late td{background:#fff7f7;}
       <span class="fb-label" style="margin-left:6px;">부서</span>
       <select id="mtDept" onchange="renderMeet()"><option value="">전체 부서</option></select>
       <span class="fb-label" style="margin-left:6px;">상태</span>
-      <select id="mtStatus" onchange="renderMeet()"><option value="">전체 상태</option><option value="open">미완료</option><option value="none">미진행</option><option value="doing">진행중</option><option value="held">보류</option><option value="report">완료 요청</option><option value="done">완료</option></select>
+      <select id="mtStatus" onchange="renderMeet()"><option value="">전체 상태</option><option value="done">완료</option><option value="open">미완료</option><option value="held">보류</option><option value="info">전달</option></select>
       <button class="btn btn-primary" onclick="openForm()">＋ 지시 등록</button>
       <span class="cnt-badge" id="mtCnt"></span>
     </div>
@@ -427,7 +428,7 @@ tbody tr.row-late td{background:#fff7f7;}
       <select id="mtIssuer" onchange="rememberIssuer()" title="지시자 (마지막에 고른 사람을 기억합니다)"></select>
       <select id="qk-src" title="구분 (주간회의에서 나온 지시인지, 평소에 나온 지시인지)"></select>
       <select id="qk-dept" title="담당부서"></select>
-      <select id="qk-cat" title="성격"><option value="과제">과제</option><option value="대외협의">대외 협의</option><option value="정기보고">정기 보고</option><option value="행사일정">행사·일정</option></select>
+      <select id="qk-cat" title="성격"><option value="과제">과제</option><option value="대외협의">대외 협의</option><option value="정기보고">정기 보고</option><option value="행사일정">행사·일정</option><option value="전달">전달 (기한 없음)</option></select>
       <input type="date" id="qk-due" title="기한 (기본: 다음 주 월요일)">
       <input class="mt-in" id="qk-title" style="flex:1;min-width:220px;" placeholder="지시 내용 입력 후 Enter" onkeydown="if(event.key==='Enter')quickAdd()">
       <button class="btn btn-primary" onclick="quickAdd()">등록</button>
@@ -464,13 +465,14 @@ tbody tr.row-late td{background:#fff7f7;}
           <option value="sent">내가 낸 지시</option>
         </select>
 <select id="fMonth" onchange="renderList()" title="지시일 기준"><option value="">전체 기간</option></select>
-        <select id="fStatus" onchange="renderList()"><option value="open">미완료</option><option value="">전체 상태</option><option value="none">미진행</option><option value="doing">진행중</option><option value="held">보류</option><option value="report">완료 요청</option><option value="done">완료</option><option value="late">지연</option></select>
+        <select id="fStatus" onchange="renderList()"><option value="open">미완료</option><option value="">전체 상태</option><option value="done">완료</option><option value="held">보류</option><option value="info">전달</option><option value="late">지연</option></select>
         <select id="fKind" onchange="renderList()">
           <option value="">전체 성격</option>
           <option value="과제">과제</option>
           <option value="대외협의">대외 협의</option>
           <option value="정기보고">정기 보고</option>
           <option value="행사일정">행사·일정</option>
+          <option value="전달">전달</option>
         </select>
         <select id="fDept" onchange="renderList()"><option value="">전체 부서</option></select>
         <select id="fIssuer" onchange="renderList()"><option value="">전체 지시자</option></select>
@@ -519,7 +521,7 @@ tbody tr.row-late td{background:#fff7f7;}
       · <b>미진행</b> = 활동 기록이 아직 없는 지시. <b>진행중</b> = 활동이 입력된 지시. <b>보류</b> = 확인했지만 보류해 재보고를 기다리는 지시. <b>완료 요청</b> = 담당 측이 완료·불가를 올려 확인을 기다리는 지시.<br>
       · <b>완료율</b> = 완료 ÷ 지시. <b>평균 처리일</b> = 완료된 지시의 지시일부터 완료일까지 일수 평균.<br>
       · <b>기한 지남</b>은 기한이 있는 지시가 있을 때만 나옵니다(기한이 지났는데 미완료인 건수).<br>
-      · 「전 부서 공통」은 담당부서가 전체인 지시로, 부서별 숫자에는 넣지 않습니다. 정기 보고·행사·일정·부서 내부 지시는 집계에서 뺍니다.
+      · 「전 부서 공통」은 담당부서가 전체인 지시로, 부서별 숫자에는 넣지 않습니다. 정기 보고·행사·일정·전달·부서 내부 지시는 집계에서 뺍니다.
     </div>
   </div>
 </div>
@@ -534,13 +536,14 @@ tbody tr.row-late td{background:#fff7f7;}
         <div class="form-row"><label class="form-label">구분<span>*</span></label>
           <input class="form-input" id="fmSource" list="sourceList" autocomplete="off" placeholder="선택 또는 새로 입력">
           <datalist id="sourceList"></datalist>
-          <div class="form-hint">주간회의 / 수시(평소 지시) / 전달 / 검토</div></div>
+          <div class="form-hint">주간회의 / 수시(평소 지시) / 검토</div></div>
         <div class="form-row"><label class="form-label">성격<span>*</span></label>
           <select class="form-select" id="fmCat" onchange="onCatChange()">
             <option value="과제">과제 (결과물·확인 1회)</option>
             <option value="대외협의">대외 협의 (상대 회신 필요)</option>
             <option value="정기보고">정기 보고 (매주 반복)</option>
             <option value="행사일정">행사·일정 (야유회·교육 등 — 기한에 행사 날짜)</option>
+            <option value="전달">전달 (알리기만 하는 사항 — 기한·완료 없음)</option>
           </select></div>
       </div>
       <div class="form-row-3">
@@ -606,7 +609,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.15 (2026-10-06) — 지시사항 관리
+   directive.html v2.16 (2026-10-06) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -624,9 +627,9 @@ const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const ADMIN_ID=2;                       // 박정용 상무 — 전체 관리 권한
 const EXEC_DEPTS=['대표이사','상무이사']; // 지시하는 쪽 — 담당부서·평가 대상에서 제외
-const SOURCE_DEFAULTS=['주간회의','수시','전달','검토'];
+const SOURCE_DEFAULTS=['주간회의','수시','검토'];
 const OPEN_ST=['지시됨','진행중','완료보고','이관-확인필요'];
-const CAT_LABEL={'과제':'과제','대외협의':'대외 협의','정기보고':'정기 보고','행사일정':'행사·일정','방침':'방침·공지'};
+const CAT_LABEL={'과제':'과제','대외협의':'대외 협의','정기보고':'정기 보고','행사일정':'행사·일정','전달':'전달','방침':'방침·공지'};
 const STALE_WEEKS=3;                    // 이 주 수 이상 열려 있으면 「정체」
 const IMPORT_NAME='엑셀이관';            // 이관 때 넣은 진행이력의 작성자명 — 응답 판정에서 제외
 
@@ -712,6 +715,8 @@ function issuerOptions(sel){
 
 /* ── 성격·상태 ── */
 function catOf(d){return d.category||(d.kind==='공지'?'방침':'과제');}
+// 전달 = 알리기만 하는 사항. 기한·활동·완료가 없고 미완료·평가·달력에 들어가지 않는다(DB: status='전달', category='전달')
+function isInfo(d){return d.status==='전달';}
 function isOpen(d){return d.kind==='지시'&&OPEN_ST.indexOf(d.status)>=0;}
 function isDone(d){return d.status==='완료'||d.status==='완료보고';}
 function isWaiting(d){return d.status==='진행중'&&d.progress_state==='대기';}
@@ -725,13 +730,15 @@ function statusLabel(d){
   // 「이관-확인필요」는 v2.5부터 화면에 쓰지 않는다(DB도 지시됨으로 바꿈). 혹시 남아 있어도 지시됨으로 보여준다
   // 아직 아무 활동이 없는 지시(DB 값 '지시됨')는 화면에 「미진행」으로 보여준다 — 이미 지시된 건에 「지시됨」은 정보가 없다
   if(d.status==='지시됨'||d.status==='이관-확인필요') return ['미진행','지시됨'];
-  if(d.status==='보류') return ['중단','보류'];   // v2.11까지 있던 「지시 중단」 — 버튼은 없앴고 남은 건만 이렇게 보인다
+  if(d.status==='보류') return ['중단','보류'];
+  if(isInfo(d)) return ['전달','전달'];   // v2.11까지 있던 「지시 중단」 — 버튼은 없앴고 남은 건만 이렇게 보인다
   return [d.status,d.status];
 }
 function statusBadge(d){const s=statusLabel(d);return `<span class="badge badge-${s[1]}">${s[0]}</span>`;}
 
 /* ── 납기 D-day 판정 (이 함수 한 곳에서만 정의) ── */
 function ddayInfo(d){
+  if(isInfo(d)) return {text:'-',cls:'dd-none'};
   if(d.kind==='공지') return {text:'-',cls:'dd-none'};
   if(d.status==='이관-확인필요') return {text:d.due_date?md(d.due_date):'-',cls:'dd-none'};
   if(isDone(d)){
@@ -941,7 +948,7 @@ function doneCell(d){
 }
 // 보기: '' = 아직 고르지 않음 / 'all' = 전체 / 'open' = 미완료 전체 / 'YYYY-MM' = 월별 / 'YYYY-MM-DD' = 지시일별
 // 상태 선택값(주간회의·지시 목록 공통): 평가표와 같은 구분 — 미진행/진행중/보류/완료 요청/완료, 그리고 미완료(완료가 아닌 것 전부)
-function stMatch(d,st){if(!st)return true;const e=evState(d);return st==='open'?e!=='done':e===st;}
+function stMatch(d,st){if(!st)return true;const e=evState(d);return st==='open'?(e==='none'||e==='doing'||e==='report'):e===st;}   // 미완료 = 완료·보류·전달이 아닌 것
 function meetList(view,dept){
   if(!view) return null;
   const st=document.getElementById('mtStatus').value;
@@ -975,7 +982,8 @@ function renderMeet(){
     renderBulk(); return;
   }
   const tasks=list.filter(d=>d.kind==='지시');
-  document.getElementById('mtCnt').textContent='지시 '+tasks.length+'건 · 완료 '+tasks.filter(d=>d.status==='완료').length+'건 · 미완료 '+tasks.filter(isOpen).length+'건';
+  const cntOf=k=>tasks.filter(d=>stMatch(d,k)).length, sumTxt='완료 '+cntOf('done')+'건 · 미완료 '+cntOf('open')+'건 · 보류 '+cntOf('held')+'건 · 전달 '+cntOf('info')+'건';
+  document.getElementById('mtCnt').textContent='합계 '+tasks.length+'건 · '+sumTxt;
   list.forEach(d=>{d._done=doneDay(d);});
   list.sort((a,b)=>{
     const av=a[mtSortKey], bv=b[mtSortKey];
@@ -997,7 +1005,7 @@ function renderMeet(){
     prev=d.meeting_date; h+=meetRow(d,L,mgr);
   });
   // 집계줄은 표 맨 아래에 둔다
-  h+=`<tr class="mt-sec"><td colspan="10">${esc(viewTitle(view))}${dept?' · '+esc(dept):''}${document.getElementById('mtStatus').value?' · '+esc(document.getElementById('mtStatus').selectedOptions[0].text):''} · 합계 ${list.length}건${tasks.length?` — 완료 ${tasks.filter(d=>d.status==='완료').length}건 · 미완료 ${tasks.filter(isOpen).length}건`:''}</td></tr>`;
+  h+=`<tr class="mt-sec"><td colspan="10">${esc(viewTitle(view))}${dept?' · '+esc(dept):''}${document.getElementById('mtStatus').value?' · '+esc(document.getElementById('mtStatus').selectedOptions[0].text):''} · 합계 ${list.length}건${tasks.length?' — '+sumTxt:''}</td></tr>`;
   tb.innerHTML=h;
   renderBulk();
 }
@@ -1010,12 +1018,14 @@ function meetRow(d,L,mgr){
   const meta=[d.source||'', CAT_LABEL[catOf(d)]||catOf(d), d.next_check_date&&open?'다음 확인 '+md(d.next_check_date):''].filter(Boolean).join(' · ');
   const la=lastActivity(d), cm=pendingComment(d), fresh=la&&isAnswer(la)&&tsDay(la.created_at)>L;
   // 활동내용: 담당 측의 최근 활동, 그 뒤에 달린 코멘트가 있으면 함께 보여준다
-  let actHtml=la?`<div class="mt-last ${fresh?'':'old'}"><b>${esc(md(tsDay(la.created_at)))} ${esc(la.emp_name||'')}</b> ${esc(la.content)}</div>`:'<span style="color:#9aa1ab;">활동 기록 없음</span>';
+  let actHtml=la?`<div class="mt-last ${fresh?'':'old'}"><b>${esc(md(tsDay(la.created_at)))} ${esc(la.emp_name||'')}</b> ${esc(la.content)}</div>`:(isInfo(d)?'<span style="color:#9aa1ab;">-</span>':'<span style="color:#9aa1ab;">활동 기록 없음</span>');
   if(cm) actHtml+=`<div class="mt-cmt"><b>보류 사유 ${esc(md(tsDay(cm.created_at)))} ${esc(cm.emp_name||'')}</b> ${esc(cm.content||'')}</div>`;
   const held=open&&d.progress_state==='보완';   // 확인했지만 보류한 상태 — 담당 측이 다시 활동을 적으면 풀린다
   let ctl='', stBtn='';
   if(d.kind==='공지'){
     ctl=`<span class="th-meta">${(updMap[d.id]||[]).filter(u=>u.type==='공지확인').length}명 확인</span>`;
+  }else if(isInfo(d)){
+    ctl='';   // 전달 건은 처리할 것이 없다(수정·삭제는 상세 창)
   }else if(me&&d.status!=='완료'&&d.status!=='보류'){
     ctl=`<button class="btn btn-outline mt-btn" onclick="openAct(${d.id},'act')">활동 입력</button>`;
     if(canDecide()){
@@ -1148,12 +1158,12 @@ async function quickAdd(){
   const k=document.getElementById('qk-dept').value; if(!k){showToast('담당부서를 선택해주세요','err');return;}
   const title=document.getElementById('qk-title').value.trim(); if(!title){showToast('지시 내용을 입력해주세요','err');return;}
   const issuer=emps.find(e=>e.id===+document.getElementById('mtIssuer').value)||me;
-  const cat=document.getElementById('qk-cat').value, due=cat==='정기보고'?null:(document.getElementById('qk-due').value||null);
+  const cat=document.getElementById('qk-cat').value, info=cat==='전달', due=(cat==='정기보고'||info)?null:(document.getElementById('qk-due').value||null);
   const body={meeting_date:todayStr(),source:document.getElementById('qk-src').value||srcDefault(),kind:'지시',category:cat,issuer_class:classOf(issuer),
     issuer_id:issuer.id,issuer_name:issuerName(issuer),issuer_dept:issuer.dept,title:title,priority:'중',
     entity:HQ,owner_dept:k,coop_depts:[],is_internal:(issuer.entity===HQ&&issuer.dept===k),
-    due_type:cat==='정기보고'?'상시':'즉시',due_date:due,due_date_original:due,next_check_date:due||nextMonday(todayStr()),
-    status:'지시됨',registered_by:me.id,registered_name:me.name};
+    due_type:info?'없음':cat==='정기보고'?'상시':'즉시',due_date:due,due_date_original:due,next_check_date:info?null:(due||nextMonday(todayStr())),
+    status:info?'전달':'지시됨',registered_by:me.id,registered_name:me.name};
   try{
     await sbPost('directives',body);
     document.getElementById('qk-title').value='';
@@ -1389,7 +1399,7 @@ function buildPanel(d){
         <div class="tl-meta"><span class="tl-type">${esc(u.type==='완료보고'?(u.state==='불가'?'불가 요청':'완료 요청'):(u.type==='반려'||u.type==='코멘트')?'보류':u.state&&u.type==='진행'?(u.state==='대기'?'회신 대기':u.state):u.type)}</span>${esc(u.emp_name||'')} · ${fmtDT(u.created_at)}${u.new_due?' · 기한 '+esc(u.old_due||'-')+' → '+esc(u.new_due):''}${u.next_date?' · 다음 확인 '+esc(md(u.next_date)):''}</div>
         ${u.content?`<div class="tl-body">${esc(u.content)}</div>`:''}</div>`).join('')+'</div>'
       :'<div class="sp-value" style="color:var(--muted);margin-bottom:10px;">아직 기록이 없습니다</div>';
-    if(me&&d.status!=='완료'&&d.status!=='보류'){
+    if(me&&d.status!=='완료'&&d.status!=='보류'&&!isInfo(d)){
       h+=`<div class="sp-actions"><button class="btn btn-outline btn-sm" onclick="openAct(${d.id},'act')">활동 입력</button>`
         +(canDecide()?(d.progress_state==='보완'?'':`<button class="btn btn-primary btn-sm" onclick="decide(${d.id})">완료 확인</button>`)+`<button class="btn btn-red btn-sm" onclick="openAct(${d.id},'comment')">보류</button>`:'')+'</div>';
     }
@@ -1454,6 +1464,7 @@ function onCatChange(){
   const cat=document.getElementById('fmCat').value, dt=document.getElementById('fmDueType');
   if(!dt.disabled){
     if(cat==='정기보고') dt.value='상시';
+    else if(cat==='전달') dt.value='없음';
     else if(dt.value==='상시') dt.value='즉시';
   }
   fillDepts(document.getElementById('fmDept').value,checked('fmAssignees').map(Number),checked('fmCoop'));
@@ -1495,7 +1506,8 @@ async function saveForm(){
   const g=id=>document.getElementById(id).value;
   const cat=g('fmCat'), kind=cat==='방침'?'공지':'지시', title=g('fmTitleIn').trim(), source=g('fmSource').trim(), dept=g('fmDept'), en=HQ;
   const issuer=emps.find(e=>e.id===+g('fmIssuer'));
-  const dueType=g('fmDueType'), due=g('fmDue')||null, mdate=g('fmDate');
+  const info=cat==='전달';
+  const dueType=info?'없음':g('fmDueType'), due=info?null:(g('fmDue')||null), mdate=g('fmDate');
   if(!mdate){showToast('지시일을 입력해주세요','err');return;}
   if(!source){showToast('구분을 입력해주세요','err');return;}
   if(!issuer&&!editId){showToast('지시자를 선택해주세요','err');return;}
@@ -1516,11 +1528,15 @@ async function saveForm(){
     let id=editId;
     if(editId){
       const old=byId[editId];
-      if(!old.due_date_original){ body.due_type=dueType; body.due_date=due; body.due_date_original=due; }
+      if(info) Object.assign(body,{status:'전달',due_type:'없음',due_date:null,due_date_original:null,next_check_date:null,progress_state:null});   // 전달로 바꾸면 기한·진행 상태를 비운다
+      else{
+        if(old.status==='전달') body.status='지시됨';                   // 전달 → 지시로 되돌림
+        if(!old.due_date_original){ body.due_type=dueType; body.due_date=due; body.due_date_original=due; }
+      }
       await sbPatch('directives',editId,body);
       await sbDelete('directive_assignees','directive_id=eq.'+editId);
     }else{
-      Object.assign(body,{priority:'중',due_type:dueType,due_date:due,due_date_original:due,next_check_date:due||nextMonday(mdate),status:'지시됨',registered_by:me.id,registered_name:me.name});
+      Object.assign(body,{priority:'중',due_type:dueType,due_date:due,due_date_original:due,next_check_date:info?null:(due||nextMonday(mdate)),status:info?'전달':'지시됨',registered_by:me.id,registered_name:me.name});
       const res=await sbPost('directives',body); id=res[0].id;
     }
     const asg=checked('fmAssignees').map(v=>{const e=emps.find(x=>x.id===+v);return {directive_id:id,employee_id:e.id,emp_name:e.name,role:'담당'};});
@@ -1543,13 +1559,14 @@ function respondedByNext(d){
 /* v2.13: 표 하나로 정리. 기간(연·월, 지시일 기준)에 나온 지시를 부서별로 지금 쓰는 상태 그대로 센다.
    상태는 서로 겹치지 않는다: 완료 / 미진행 / 진행중 / 보류 / 완료 요청. 엑셀 이관 건도 포함한다. */
 function evState(d){
+  if(isInfo(d)) return 'info';
   if(d.status==='완료') return 'done';
   if(d.status==='완료보고') return 'report';
   if(d.progress_state==='보완') return 'held';
   if(d.status==='지시됨'||d.status==='이관-확인필요') return 'none';
   return 'doing';
 }
-function evTarget(d){return d.kind==='지시'&&!d.is_internal&&catOf(d)!=='정기보고'&&catOf(d)!=='행사일정'&&d.status!=='보류'&&d.meeting_date;}
+function evTarget(d){return d.kind==='지시'&&!isInfo(d)&&!d.is_internal&&catOf(d)!=='정기보고'&&catOf(d)!=='행사일정'&&d.status!=='보류'&&d.meeting_date;}
 let evCells={};
 function renderEval(){
   const pSel=document.getElementById('evPeriod'), today=todayStr();
