@@ -296,6 +296,17 @@ tbody tr.row-late td{background:#fff7f7;}
 /* 주간회의 — v2.2 대비 강화: 흰 배경 + 진한 테두리 + 남색 헤더/구역줄 */
 .mt-wrap{padding:16px 20px 80px;overflow:auto;height:calc(100vh - var(--hdr-h) - 46px);background:#fff;}
 .fb-label{font-size:12.5px;font-weight:700;color:var(--text);}
+.ms-wrap{position:relative;display:inline-block;}
+.ms-btn{height:32px;min-width:190px;max-width:320px;padding:0 26px 0 10px;border:1px solid var(--bdr2);background:#fff;color:#111827;font-size:12.5px;font-family:inherit;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;}
+.ms-btn::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#6b7280;font-size:11px;}
+.ms-btn.on{border-color:var(--point);font-weight:700;}
+.ms-dd{display:none;position:absolute;left:0;top:34px;z-index:60;width:270px;max-height:420px;overflow:auto;background:#fff;border:1px solid var(--line-dk);box-shadow:0 6px 18px rgba(0,0,0,.16);padding:6px 0;font-size:12.5px;color:#111827;}
+.ms-dd.open{display:block;}
+.ms-dd label{display:flex;align-items:center;gap:7px;padding:5px 12px;cursor:pointer;white-space:nowrap;}
+.ms-dd label:hover{background:var(--bg-sub);}
+.ms-dd .ms-grp{padding:7px 12px 3px;font-size:11px;font-weight:700;color:#6b7280;border-top:1px solid var(--bdr2);margin-top:4px;}
+.ms-dd .ms-foot{display:flex;justify-content:space-between;padding:7px 12px 3px;border-top:1px solid var(--bdr2);margin-top:4px;}
+.ms-dd .ms-foot a{color:var(--point);font-weight:700;cursor:pointer;text-decoration:none;}
 .mt-wrap .filter-bar select,.qk-box select,.qk-box input{border-color:var(--line-dk);color:#111827;}
 .qk-box{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;padding:9px 12px;background:var(--point-bg);border:1px solid var(--point);border-left:4px solid var(--point);}
 .qk-box select,.qk-box input{height:30px;padding:0 8px;border:1px solid var(--line-dk);border-radius:2px;background:#fff;font-size:12px;font-family:'Noto Sans KR',sans-serif;}
@@ -414,8 +425,11 @@ tbody tr.row-late td{background:#fff7f7;}
 <div class="tab-panel active" id="panel-meet">
   <div class="mt-wrap">
     <div class="filter-bar">
-      <span class="fb-label">보기</span>
-      <select id="mtView" onchange="renderMeet()" title="월 또는 지시일을 골라 봅니다"></select>
+      <span class="fb-label">일자선택</span>
+      <div class="ms-wrap" id="mtViewWrap">
+        <button type="button" class="ms-btn" id="mtViewBtn" onclick="toggleMtView(event)" title="월이나 지시일을 여러 개 골라 함께 볼 수 있습니다">선택하세요</button>
+        <div class="ms-dd" id="mtViewDD" onclick="event.stopPropagation()"></div>
+      </div>
       <span class="fb-label" style="margin-left:6px;">부서</span>
       <select id="mtDept" onchange="renderMeet()"><option value="">전체 부서</option></select>
       <span class="fb-label" style="margin-left:6px;">상태</span>
@@ -609,7 +623,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v2.16 (2026-10-06) — 지시사항 관리
+   directive.html v2.17 (2026-10-06) — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -855,7 +869,7 @@ function fillFilters(){
   const keys=groupKeys();
   const keep=id=>document.getElementById(id).value;
   const opt=sel=>keys.map(k=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(k)}</option>`).join('');
-  const fd=keep('fDept'), mdp=keep('mtDept'), fi=keep('fIssuer'), ml=keep('evLast'), mv=keep('mtView'), qd=keep('qk-dept'), qs=keep('qk-src');
+  const fd=keep('fDept'), mdp=keep('mtDept'), fi=keep('fIssuer'), ml=keep('evLast'), qd=keep('qk-dept'), qs=keep('qk-src');
   document.getElementById('fDept').innerHTML='<option value="">전체 부서</option>'+opt(fd);
   document.getElementById('mtDept').innerHTML='<option value="">전체 부서</option>'+opt(mdp);
   document.getElementById('qk-dept').innerHTML='<option value="">담당부서</option>'+deptsOf(HQ,false).map(k=>`<option${k===(qd||mdp)?' selected':''}>${esc(k)}</option>`).join('')+`<option value="전체"${qd==='전체'?' selected':''}>전체 (전 부서)</option>`;
@@ -869,12 +883,7 @@ function fillFilters(){
   const months=[todayStr().slice(0,7)]; ds.forEach(x=>{if(months.indexOf(x.slice(0,7))<0)months.push(x.slice(0,7));}); months.sort().reverse();
   const cnt=f=>allD.filter(f).length;
   const fm=keep('fMonth'); document.getElementById('fMonth').innerHTML='<option value="">전체 기간</option>'+months.map(m=>`<option value="${m}"${m===fm?' selected':''}>${m.slice(0,4)}년 ${+m.slice(5)}월</option>`).join('');
-  const mvCur=(mv==='all'||mv==='open'||ds.indexOf(mv)>=0||months.indexOf(mv)>=0)?mv:'';
-  document.getElementById('mtView').innerHTML=`<option value=""${mvCur===''?' selected':''}>선택하세요</option>`
-    +`<option value="all"${mvCur==='all'?' selected':''}>전체 (${allD.length}건)</option>`
-    +`<optgroup label="월별">`+months.map(m=>`<option value="${m}"${m===mvCur?' selected':''}>${m.slice(0,4)}년 ${+m.slice(5)}월 (${cnt(d=>d.meeting_date.slice(0,7)===m)}건)</option>`).join('')+`</optgroup>`
-    +`<optgroup label="지시일별">`+ds.map(x=>`<option value="${x}"${x===mvCur?' selected':''}>${x} (${'일월화수목금토'[toDate(x).getDay()]}) · ${cnt(d=>d.meeting_date===x)}건</option>`).join('')+`</optgroup>`
-    +`<optgroup label="상태"><option value="open"${mvCur==='open'?' selected':''}>미완료 전체 (${cnt(isOpen)}건)</option></optgroup>`;
+  mtDates=ds; mtMonths=months; mtSel=mtSel.filter(k=>k==='all'||ds.indexOf(k)>=0||months.indexOf(k)>=0); renderMtView();
   let saved=null; try{saved=+localStorage.getItem('directive_issuer')||null;}catch(_){}
   const mi=+keep('mtIssuer')||saved||(me?me.id:0);
   document.getElementById('mtIssuer').innerHTML=issuerOptions(mi);
@@ -950,13 +959,41 @@ function doneCell(d){
 // 상태 선택값(주간회의·지시 목록 공통): 평가표와 같은 구분 — 미진행/진행중/보류/완료 요청/완료, 그리고 미완료(완료가 아닌 것 전부)
 function stMatch(d,st){if(!st)return true;const e=evState(d);return st==='open'?(e==='none'||e==='doing'||e==='report'):e===st;}   // 미완료 = 완료·보류·전달이 아닌 것
 function meetList(view,dept){
-  if(!view) return null;
+  if(!view||!view.length) return null;
   const st=document.getElementById('mtStatus').value;
   const inDept=d=>!dept||groupKey(d)===dept;
-  const f=view==='all'?(d=>true):view==='open'?isOpen:view.length===7?(d=>d.meeting_date.slice(0,7)===view):(d=>d.meeting_date===view);
+  const f=d=>view.some(k=>k==='all'||(k.length===7?d.meeting_date.slice(0,7)===k:d.meeting_date===k));
   return allD.filter(d=>inDept(d)&&f(d)&&stMatch(d,st));
 }
+/* 일자선택(v2.17): 월·지시일을 여러 개 골라 함께 본다. mtSel = ['all'] 또는 ['2026-09','2026-10-05', …] */
+let mtSel=[], mtDates=[], mtMonths=[];
+function mtLabel(k){return k==='all'?'전체':k.length===7?k.slice(0,4)+'년 '+(+k.slice(5))+'월':k+' ('+'일월화수목금토'[toDate(k).getDay()]+')';}
+function renderMtView(){
+  const cnt=f=>allD.filter(f).length, on=k=>mtSel.indexOf(k)>=0?' checked':'';
+  const row=(k,n)=>`<label><input type="checkbox" value="${k}"${on(k)} onchange="pickMtView('${k}',this.checked)">${esc(mtLabel(k))} <span style="color:#9aa1ab;">· ${n}건</span></label>`;
+  document.getElementById('mtViewDD').innerHTML=row('all',allD.length)
+    +'<div class="ms-grp">월별</div>'+mtMonths.map(m=>row(m,cnt(d=>d.meeting_date.slice(0,7)===m))).join('')
+    +'<div class="ms-grp">지시일별</div>'+mtDates.map(x=>row(x,cnt(d=>d.meeting_date===x))).join('')
+    +'<div class="ms-foot"><a onclick="mtSel=[];renderMtView();renderMeet();">선택 해제</a><a onclick="closeMtView()">닫기</a></div>';
+  const btn=document.getElementById('mtViewBtn');
+  btn.textContent=!mtSel.length?'선택하세요':mtSel.length===1?mtLabel(mtSel[0]):mtLabel(mtSel[0])+' 외 '+(mtSel.length-1)+'개';
+  btn.classList.toggle('on',mtSel.length>0);
+}
+function pickMtView(k,chk){
+  if(k==='all') mtSel=chk?['all']:[];
+  else{ mtSel=mtSel.filter(x=>x!=='all'&&x!==k); if(chk) mtSel.push(k); mtSel.sort().reverse(); }
+  renderMtView(); renderMeet();
+}
+function setMtView(keys){mtSel=keys.slice();renderMtView();renderMeet();}
+function toggleMtView(ev){ev.stopPropagation();document.getElementById('mtViewDD').classList.toggle('open');}
+function closeMtView(){document.getElementById('mtViewDD').classList.remove('open');}
+document.addEventListener('click',closeMtView);
 function viewTitle(view){
+  if(Array.isArray(view)){
+    if(view.length===1) return viewTitle(view[0]);
+    const srt=view.slice().sort();
+    return srt.slice(0,3).map(mtLabel).join(', ')+(srt.length>3?' 외 '+(srt.length-3)+'개':'')+' 지시사항';
+  }
   if(view==='all') return '전체 지시사항';
   if(view==='open') return '미완료 전체';
   if(view.length===7) return view.slice(0,4)+'년 '+(+view.slice(5))+'월 지시사항';
@@ -971,14 +1008,14 @@ function mtSort(key){
   renderMeet();
 }
 function renderMeet(){
-  const L=defaultLast(), view=document.getElementById('mtView').value, dept=document.getElementById('mtDept').value;
+  const L=defaultLast(), view=mtSel, dept=document.getElementById('mtDept').value;
   const list=meetList(view,dept), mgr=canDecide(), tb=document.getElementById('mtTbody');
   document.getElementById('qkBox').style.display=me?'':'none';
   document.getElementById('mtAll').style.visibility=mgr?'visible':'hidden';
   if(!list){
     document.getElementById('mtCnt').textContent='';
     document.getElementById('mtAll').checked=false;
-    tb.innerHTML='<tr><td colspan="10" class="mt-pick">「보기」에서 월 또는 지시일을 선택하세요</td></tr>';
+    tb.innerHTML='<tr><td colspan="10" class="mt-pick">「일자선택」에서 월 또는 지시일을 선택하세요 (여러 개 선택 가능)</td></tr>';
     renderBulk(); return;
   }
   const tasks=list.filter(d=>d.kind==='지시');
@@ -1107,7 +1144,7 @@ async function saveAct(){
 /* ── 일괄 처리 (관리자) — 이관 건 정리용 ── */
 function pickOne(id,on){if(on)picked[id]=true;else delete picked[id];renderBulk();}
 function pickAll(on){
-  const list=meetList(document.getElementById('mtView').value,document.getElementById('mtDept').value)||[];
+  const list=meetList(mtSel,document.getElementById('mtDept').value)||[];
   list.filter(isOpen).forEach(d=>{if(on)picked[d.id]=true;else delete picked[d.id];});
   renderMeet();
 }
@@ -1168,9 +1205,9 @@ async function quickAdd(){
     await sbPost('directives',body);
     document.getElementById('qk-title').value='';
     // 방금 등록한 건이 보이도록, 아직 보기를 고르지 않았으면 오늘 날짜로 맞춘다
-    const mv=document.getElementById('mtView'); const stay=mv.value==='all'||mv.value==='open'||mv.value===todayStr()||mv.value===todayStr().slice(0,7);
     showToast('등록되었습니다','ok'); await refresh();
-    if(!stay){document.getElementById('mtView').value=todayStr();renderMeet();}
+    // 방금 등록한 건이 보이도록, 지금 고른 일자에 오늘이 들어 있지 않으면 오늘을 추가로 선택한다
+    if(!mtSel.some(k=>k==='all'||k===todayStr()||k===todayStr().slice(0,7))) setMtView(mtSel.concat([todayStr()]).sort().reverse());
     document.getElementById('qk-title').focus();
   }catch(e){ showToast('오류: '+e.message,'err'); }
 }
