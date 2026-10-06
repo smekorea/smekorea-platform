@@ -2177,7 +2177,10 @@ async function loadDirectiveCalRecords(){
     (dRes.data||[]).forEach(function(r){
       var asg = asgBy[r.id]||[];
       // 담당부서 「전체」 지시는 같은 법인 전 직원에게 보인다(야유회 등 행사·일정)
-      var mine = asg.length ? asg.indexOf(myId)>=0 : ((r.entity||'')===myEntity && ((!!myDept && r.owner_dept===myDept) || r.owner_dept==='전체'));
+      // 법인회의 지시: 담당부서 자리에 법인 이름이 들어간다(SME노이다/SME천진/SME태국/법인전체)
+      var corpOf = {'GSMEIN':'SME노이다','SMECN':'SME천진','SMEGLOBAL':'SME태국'}[myEntity];
+      var corpMine = (!!corpOf && r.owner_dept===corpOf) || (r.owner_dept==='법인전체' && myEntity!=='KOREA' && !!myEntity);
+      var mine = asg.length ? asg.indexOf(myId)>=0 : (corpMine || ((r.entity||'')===myEntity && ((!!myDept && r.owner_dept===myDept) || r.owner_dept==='전체')));
       var issued = (r.issuer_id===myId);
       if(!mine && !issued) return;
       if(mine && r.status==='완료보고') { if(!issued) return; mine=false; }   // 담당 측은 완료보고 후 달력에서 내림
