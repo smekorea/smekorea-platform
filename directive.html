@@ -401,6 +401,7 @@ tbody tr.row-late td{background:#fff7f7;}
 .tabs-grp{display:none;align-items:stretch;}
 .tabs-grp.on{display:flex;}
 .tabs-grp select{align-self:center;height:30px;margin-right:8px;font-weight:700;}
+#panel-dvlog .filter-bar input,#panel-dvmaster .filter-bar input,#panel-dvplan input{font-size:12px;font-family:inherit;color:#111827;height:32px;}
 .dv-table{table-layout:fixed;border-collapse:separate;border-spacing:0;}
 /* 틀고정: 표 영역 안에서만 스크롤되게 높이를 잡아 머리글이 위에 붙는다 */
 #panel-dvlog .mt-wrap,#panel-dvmaster .mt-wrap,#panel-dvplan .mt-wrap{padding-bottom:10px;overflow:hidden;}
@@ -611,11 +612,13 @@ tbody tr.row-late td{background:#fff7f7;}
 <div class="tab-panel" id="panel-dvlog">
   <div class="mt-wrap">
     <div class="filter-bar">
-      <span class="fb-label">기간</span><select id="dvPeriod" onchange="renderDvLog()"></select>
-      <span class="fb-label" style="margin-left:6px;">구분</span><select id="dvKind" onchange="renderDvLog()"><option value="">전체</option><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select>
-      <span class="fb-label" style="margin-left:6px;">업체</span><input type="text" id="dvVendor" list="dvVendorList" placeholder="업체명 (전체)" style="width:170px;height:32px;" oninput="dvVendorInput()"><datalist id="dvVendorList"></datalist>
+      <span class="fb-label">기간</span><input type="date" id="dvFrom" title="시작일" onkeydown="if(event.key==='Enter')renderDvLog()"><span style="color:var(--muted);">~</span><input type="date" id="dvTo" title="종료일" onkeydown="if(event.key==='Enter')renderDvLog()">
+      <select id="dvPeriod" onchange="dvSetRange(this.value,true)" title="자주 쓰는 기간을 날짜 칸에 넣습니다. 넣은 뒤 조회를 누르세요"></select>
+      <span class="fb-label" style="margin-left:6px;">구분</span><select id="dvKind"><option value="">전체</option><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select>
+      <span class="fb-label" style="margin-left:6px;">업체</span><input type="text" id="dvVendor" list="dvVendorList" placeholder="업체명 (전체)" style="width:170px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()"><datalist id="dvVendorList"></datalist>
       <input type="text" id="dvKw" placeholder="건명·내용 검색" style="width:170px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
-      <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvKw').value='';renderDvLog()">초기화</button>
+      <button class="btn btn-primary" onclick="renderDvLog()">🔍 조회</button>
+      <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvKw').value='';document.getElementById('dvKind').value='';dvSetRange('w1')">초기화</button>
       <button class="btn btn-primary dv-edit" onclick="dvOpenLog()">＋ 활동 입력</button>
       <button class="btn btn-outline" onclick="dvPrint('log')">인쇄</button>
       <button class="btn btn-outline" onclick="dvExcel('log')">엑셀 내보내기</button>
@@ -627,9 +630,11 @@ tbody tr.row-late td{background:#fff7f7;}
 <div class="tab-panel" id="panel-dvmaster">
   <div class="mt-wrap">
     <div class="filter-bar">
-      <span class="fb-label">구분</span><select id="dvGrp" onchange="renderDvMaster()"></select>
-      <span class="fb-label" style="margin-left:6px;">상태</span><select id="dvPst" onchange="renderDvMaster()"><option value="">전체</option><option value="진행">진행</option><option value="완료">완료</option><option value="Drop">Drop</option></select>
-      <input type="text" id="dvMsKw" placeholder="업체·제품·내용 검색" style="width:190px;height:32px;" onkeydown="if(event.key==='Enter')renderDvMaster()">
+      <span class="fb-label">구분</span><select id="dvGrp"></select>
+      <span class="fb-label" style="margin-left:6px;">상태</span><select id="dvPst"><option value="">전체</option><option value="진행">진행</option><option value="완료">완료</option><option value="Drop">Drop</option></select>
+      <input type="text" id="dvMsKw" list="dvMsList" placeholder="업체·제품·내용 검색" style="width:190px;height:32px;" onkeydown="if(event.key==='Enter')renderDvMaster()"><datalist id="dvMsList"></datalist>
+      <button class="btn btn-primary" onclick="renderDvMaster()">🔍 조회</button>
+      <button class="btn btn-outline" onclick="document.getElementById('dvMsKw').value='';document.getElementById('dvGrp').value='';document.getElementById('dvPst').value='';renderDvMaster()">초기화</button>
       <button class="btn btn-primary dv-edit" onclick="dvOpenProj()">＋ 마스터 등록</button>
       <select id="dvPrintMode" title="외부용은 연간매출·거래조건을 뺍니다"><option value="in">출력: 내부용</option><option value="out">출력: 외부용</option></select>
       <button class="btn btn-outline" onclick="dvPrint('master')">인쇄</button>
@@ -642,7 +647,8 @@ tbody tr.row-late td{background:#fff7f7;}
 <div class="tab-panel" id="panel-dvplan">
   <div class="mt-wrap">
     <div class="filter-bar">
-      <span class="fb-label">주</span><select id="dvWeek" onchange="renderDvPlan()"></select>
+      <span class="fb-label">주</span><select id="dvWeek"></select>
+      <button class="btn btn-primary" onclick="renderDvPlan()">🔍 조회</button>
       <span class="cnt-badge" id="dvPlanCnt"></span>
     </div>
     <div class="qk-box dv-edit" id="dvPlanAdd" style="display:flex;gap:6px;align-items:center;margin-bottom:10px;padding:8px 10px;border:1px solid var(--point);border-left:4px solid var(--point);background:var(--point-bg);">
@@ -769,7 +775,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v3.2 (2026-10-06) — 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
+   directive.html v3.4 (2026-10-06) — 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -1934,11 +1940,14 @@ function dvFillFilters(){
   const kinds=[];dvPlans.forEach(p=>{if(p.kind&&kinds.indexOf(p.kind)<0)kinds.push(p.kind);});
   ['신규개발','신규거래','견적제출','단가협의','납기협의','업체내방','회의참석','4M','HSMS'].forEach(k=>{if(kinds.indexOf(k)<0)kinds.push(k);});
   document.getElementById('dvKindList').innerHTML=kinds.map(k=>`<option value="${esc(k)}">`).join('');
-  // 기간
-  const pSel=document.getElementById('dvPeriod'), keepP=pSel.options.length?pSel.value:'w1';
+  // 기간: 시작·끝 날짜를 직접 고른다. 옆의 선택은 자주 쓰는 기간을 날짜 칸에 넣어 주는 단축 버튼
   const months=[];dvLogs.forEach(l=>{if(l.log_date){const m=l.log_date.slice(0,7);if(months.indexOf(m)<0)months.push(m);}});months.sort().reverse();
-  pSel.innerHTML=[['w1','지난주 ~ 오늘'],['w0','이번 주'],['d30','최근 30일'],['all','전체 기간']].map(o=>`<option value="${o[0]}"${o[0]===keepP?' selected':''}>${o[1]}</option>`).join('')
-    +'<optgroup label="월별">'+months.map(m=>`<option value="${m}"${m===keepP?' selected':''}>${m.slice(0,4)}년 ${+m.slice(5)}월</option>`).join('')+'</optgroup>';
+  document.getElementById('dvPeriod').innerHTML='<option value="">빠른 선택</option>'+[['w1','지난주 ~ 오늘'],['w0','이번 주'],['d30','최근 30일'],['all','전체 기간']].map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')
+    +'<optgroup label="월별">'+months.map(m=>`<option value="${m}">${m.slice(0,4)}년 ${+m.slice(5)}월</option>`).join('')+'</optgroup>';
+  if(!dvRangeInit){ dvRangeInit=true; dvSetRange('w1',true); }
+  // 마스터 검색 자동완성: 업체명
+  const mv=[];dvP.forEach(p=>{if(p.vendor&&mv.indexOf(p.vendor)<0)mv.push(p.vendor);});mv.sort((x,y)=>x.localeCompare(y));
+  document.getElementById('dvMsList').innerHTML=mv.map(v=>`<option value="${esc(v)}">`).join('');
   const gSel=document.getElementById('dvGrp'), keepG=gSel.value; const grps=[];dvP.forEach(p=>{const g=p.grp||'신규개발';if(grps.indexOf(g)<0)grps.push(g);});
   gSel.innerHTML='<option value="">전체</option>'+grps.map(g=>`<option${g===keepG?' selected':''}>${esc(g)}</option>`).join('');
   // 주
@@ -1951,14 +1960,25 @@ function dvFillFilters(){
 }
 
 /* ── 세부 진척현황 ── */
-function dvLogRange(){
-  const p=document.getElementById('dvPeriod').value, today=todayStr();
-  if(p==='w1') return [dvAddDays(dvWeekStart(today),-7),'9999'];
-  if(p==='w0') return [dvWeekStart(today),'9999'];
-  if(p==='d30') return [dvAddDays(today,-30),'9999'];
-  if(p==='all') return null;
-  return [p+'-01',p+'-31'];
+let dvRangeInit=false;
+function dvSetRange(key,noRender){
+  const today=todayStr(); let f='', e='';
+  if(key==='w1'){f=dvAddDays(dvWeekStart(today),-7);e=today;}
+  else if(key==='w0'){f=dvWeekStart(today);e=today;}
+  else if(key==='d30'){f=dvAddDays(today,-30);e=today;}
+  else if(key&&key!=='all'){ f=key+'-01'; const d=toDate(f); d.setMonth(d.getMonth()+1); d.setDate(0); e=ymd(d); }
+  else if(!key) return;
+  document.getElementById('dvFrom').value=f; document.getElementById('dvTo').value=e;
+  document.getElementById('dvPeriod').value='';
+  if(!noRender) renderDvLog();
 }
+// 시작·끝이 둘 다 비어 있으면 전체 기간(날짜 없는 기록 포함)
+function dvLogRange(){
+  const f=document.getElementById('dvFrom').value, e=document.getElementById('dvTo').value;
+  if(!f&&!e) return null;
+  return [f||'0000-00-00',e||'9999-99-99'];
+}
+function dvRangeText(){const f=document.getElementById('dvFrom').value, e=document.getElementById('dvTo').value;return !f&&!e?'전체 기간':(f||'처음')+' ~ '+(e||'오늘');}
 // 지금 조건에 맞는 [건, 그 건의 활동들] 목록
 function dvLogGroups(){
   const rg=dvLogRange(), vq=document.getElementById('dvVendor').value.trim(), kw=document.getElementById('dvKw').value.trim().toLowerCase();
@@ -2005,11 +2025,12 @@ function renderDvLog(){
 // 업체 입력은 잠깐 멈췄을 때 반영한다(입력 중 표를 다시 그리면 그 순간의 버튼 클릭이 사라진다)
 let dvVTimer=null;
 function dvVendorInput(){clearTimeout(dvVTimer);dvVTimer=setTimeout(renderDvLog,350);}
+function dvAllRange(){document.getElementById('dvFrom').value='';document.getElementById('dvTo').value='';}
 function dvPickVendor(itemId){
   const it=dvIById[itemId]; if(!it) return;
-  document.getElementById('dvVendor').value=it.vendor; document.getElementById('dvPeriod').value='all'; renderDvLog();
+  document.getElementById('dvVendor').value=it.vendor; dvAllRange(); renderDvLog();
 }
-function dvGoVendor(v){ switchTab('dvlog'); document.getElementById('dvVendor').value=v; document.getElementById('dvKw').value=''; document.getElementById('dvPeriod').value='all'; renderDvLog(); }
+function dvGoVendor(v){ switchTab('dvlog'); document.getElementById('dvVendor').value=v; document.getElementById('dvKw').value=''; dvAllRange(); renderDvLog(); }
 function dvGoDir(id){ switchMode('dir'); openPanel(id); }
 function dvDirective(itemId){
   const it=dvIById[itemId]; if(!it) return;
@@ -2275,7 +2296,7 @@ function dvRows(kind,itemId){
   const gs=kind==='item'?[{it:dvIById[itemId],logs:dvLogsBy[itemId]||[]}]:dvLogGroups();
   const rows=[]; gs.forEach(g=>{ (g.logs.length?g.logs:[null]).forEach((l,ix)=>{ rows.push([ix===0?g.it.vendor:'',ix===0?(g.it.title||''):'',ix===0?(g.it.supply_type||''):'',l?(l.log_date||l.date_text||''):'',l&&l.stage?dvStageName(l.stage):'',l?(l.content||''):'']); }); });
   const vq=kind==='log'?document.getElementById('dvVendor').value.trim():'';
-  const pTxt=kind==='log'?document.getElementById('dvPeriod').selectedOptions[0].text:'';
+  const pTxt=kind==='log'?dvRangeText():'';
   return {title:'세부 진척현황'+(kind==='item'?' — '+gs[0].it.vendor:(vq?' — '+vq:'')),sub:pTxt,head:['업체','건명','공급구분','일자','단계','활동내용'],rows:rows,full:kind==='log'?gs:null};
 }
 function dvPrint(kind,itemId){
