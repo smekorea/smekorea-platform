@@ -595,6 +595,7 @@ tbody tr.row-late td{background:#fff7f7;}
   <div class="mt-wrap">
     <div class="filter-bar">
       <span class="fb-label">기간</span><select id="dvPeriod" onchange="renderDvLog()"></select>
+      <span class="fb-label" style="margin-left:6px;">구분</span><select id="dvKind" onchange="renderDvLog()"><option value="">전체</option><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select>
       <span class="fb-label" style="margin-left:6px;">업체</span><input type="text" id="dvVendor" list="dvVendorList" placeholder="업체명 (전체)" style="width:170px;height:32px;" oninput="dvVendorInput()"><datalist id="dvVendorList"></datalist>
       <input type="text" id="dvKw" placeholder="건명·내용 검색" style="width:170px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
       <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvKw').value='';renderDvLog()">초기화</button>
@@ -603,7 +604,7 @@ tbody tr.row-late td{background:#fff7f7;}
       <button class="btn btn-outline" onclick="dvExcel('log')">엑셀 내보내기</button>
       <span class="cnt-badge" id="dvLogCnt"></span>
     </div>
-    <div class="tbl-wrap"><table class="dv-table" id="dvLogTable"><thead><tr><th>업체</th><th>건명</th><th>공급구분</th><th>일자</th><th>단계</th><th>활동내용</th><th>처리</th></tr></thead><tbody id="dvLogBody"></tbody></table></div>
+    <div class="tbl-wrap"><table class="dv-table" id="dvLogTable"><thead><tr><th>업체 / 과제</th><th>건명</th><th>공급구분</th><th>일자</th><th>단계</th><th>활동내용</th><th>처리</th></tr></thead><tbody id="dvLogBody"></tbody></table></div>
   </div>
 </div>
 <div class="tab-panel" id="panel-dvmaster">
@@ -648,7 +649,7 @@ tbody tr.row-late td{background:#fff7f7;}
     </div>
     <div class="form-row-2" id="dvLgNewRow">
       <div class="form-row"><label class="form-label">새 건명<span>*</span></label><input class="form-input" id="dvLgNewTitle" placeholder="예: Photo Coupler 소싱"></div>
-      <div class="form-row"><label class="form-label">공급구분</label><input class="form-input" id="dvLgNewSup" list="dvSupList" placeholder="사급 / 직거래"><datalist id="dvSupList"><option value="사급"><option value="직거래"><option value="직송사급"><option value="사급전환"></datalist></div>
+      <div class="form-row"><label class="form-label">구분 / 공급구분</label><div style="display:flex;gap:6px;"><select class="form-select" id="dvLgNewKind" style="width:130px;"><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select><input class="form-input" id="dvLgNewSup" list="dvSupList" placeholder="사급 / 직거래"></div><datalist id="dvSupList"><option value="사급"><option value="직거래"><option value="직송사급"><option value="사급전환"></datalist></div>
     </div>
     <div class="form-row-2">
       <div class="form-row"><label class="form-label">일자<span>*</span></label><input type="date" class="form-input" id="dvLgDate"></div>
@@ -1944,8 +1945,9 @@ function dvLogRange(){
 // 지금 조건에 맞는 [건, 그 건의 활동들] 목록
 function dvLogGroups(){
   const rg=dvLogRange(), vq=document.getElementById('dvVendor').value.trim(), kw=document.getElementById('dvKw').value.trim().toLowerCase();
-  const out=[];
+  const out=[], kq=document.getElementById('dvKind').value;
   dvI.forEach(it=>{
+    if(kq&&(it.kind||'업체개발')!==kq) return;
     if(vq&&!dvSame(it.vendor,vq)&&String(it.vendor).toLowerCase().indexOf(vq.toLowerCase())<0) return;
     let logs=dvLogsBy[it.id]||[];
     // 업체를 골랐거나 전체 기간이면 날짜 없는 기록까지 전부, 아니면 기간 안의 것만
@@ -1968,7 +1970,7 @@ function renderDvLog(){
   const gs=dvLogGroups(), ed=dvCanEdit(); let h='', n=0;
   gs.forEach(g=>{
     const it=g.it, rows=g.logs.length||1, dirs=dvDirCount(it.id);
-    const head=`<td class="dv-v" rowspan="${rows}" onclick="dvPickVendor(${it.id})" title="이 업체의 전체 진척 보기">${esc(it.vendor)}</td>
+    const head=`<td class="dv-v" rowspan="${rows}" onclick="dvPickVendor(${it.id})" title="이 업체의 전체 진척 보기">${esc(it.vendor)}${it.kind==='법인과제'?'<span class="dv-note">법인·과제</span>':''}</td>
       <td class="dv-ti" rowspan="${rows}" onclick="dvOpenItem(${it.id})" title="건 상세">${esc(it.title||'(건명 없음)')}${dirs.length?`<span class="dv-dir" onclick="event.stopPropagation();dvGoDir(${dirs[0].id})" title="이 건에 걸린 지시">📌 지시 ${dirs.length}</span>`:''}</td>
       <td rowspan="${rows}">${esc(it.supply_type||'')}</td>`;
     const tail=`<td rowspan="${rows}">${ed?`<button class="btn btn-outline mt-btn" onclick="dvOpenLog(null,${it.id})">＋ 활동</button>`:''}${me?`<button class="btn btn-red mt-btn" onclick="dvDirective(${it.id})" title="이 건에 대한 지시를 등록합니다">지시 등록</button>`:''}</td>`;
@@ -2007,13 +2009,13 @@ function dvOpenItem(id){
   selectedId=null;
   const logs=dvLogsBy[id]||[], ed=dvCanEdit(), pj=it.project_id?dvPById[it.project_id]:null, dirs=dvDirCount(id);
   const cand=dvP.filter(p=>dvSame(p.vendor,it.vendor));
-  let h=`<div class="dv-kv"><b>업체</b><span>${esc(it.vendor)}</span><b>건명</b><span>${esc(it.title||'-')}</span><b>공급구분</b><span>${esc(it.supply_type||'-')}</span>
+  let h=`<div class="dv-kv"><b>구분</b><span>${it.kind==='법인과제'?'법인·과제':'업체 개발'}</span><b>업체 / 과제</b><span>${esc(it.vendor)}</span><b>건명</b><span>${esc(it.title||'-')}</span><b>공급구분</b><span>${esc(it.supply_type||'-')}</span>
     <b>등록 / 완료</b><span>${esc(it.reg_text||'-')} / ${esc(it.done_text||'-')}</span><b>목표일자</b><span>${esc(it.target_text||'-')}</span><b>비고</b><span style="white-space:pre-wrap;">${esc(it.remark||'-')}</span>
     <b>마스터</b><span>${pj?`<a href="javascript:dvOpenProjView(${pj.id})">${esc(pj.vendor)} · ${esc(pj.product||'')} ${esc(pj.part_no||'')}</a>`:'연결 안 됨'}</span></div>`;
   if(ed){
     h+=`<div class="sp-section-title">건 정보 수정</div>
       <div class="form-row-2"><input class="form-input" id="dvItVendor" list="dvVendorList" value="${esc(it.vendor)}" placeholder="업체"><input class="form-input" id="dvItTitle" value="${esc(it.title||'')}" placeholder="건명"></div>
-      <div class="form-row-2" style="margin-top:6px;"><input class="form-input" id="dvItSup" list="dvSupList" value="${esc(it.supply_type||'')}" placeholder="공급구분">
+      <div class="form-row-2" style="margin-top:6px;"><select class="form-select" id="dvItKind"><option value="업체개발"${it.kind!=='법인과제'?' selected':''}>업체 개발</option><option value="법인과제"${it.kind==='법인과제'?' selected':''}>법인·과제</option></select><input class="form-input" id="dvItSup" list="dvSupList" value="${esc(it.supply_type||'')}" placeholder="공급구분">
         <select class="form-select" id="dvItProj"><option value="">마스터 연결 안 함</option>${cand.map(p=>`<option value="${p.id}"${p.id===it.project_id?' selected':''}>${esc(p.vendor)} · ${esc(p.product||'')} ${esc(p.part_no||'')}</option>`).join('')}</select></div>
       <div class="sp-actions" style="margin-top:8px;"><button class="btn btn-outline btn-sm" onclick="dvSaveItem(${id})">건 정보 저장</button><button class="btn btn-outline btn-sm" onclick="dvOpenLog(null,${id})">＋ 활동 입력</button><button class="btn btn-red btn-sm" onclick="dvDelItem(${id})">건 삭제</button></div>`;
   }
@@ -2028,7 +2030,7 @@ function dvOpenItem(id){
 async function dvSaveItem(id){
   const v=document.getElementById('dvItVendor').value.trim(); if(!v){showToast('업체명을 입력해주세요','err');return;}
   try{
-    await sbPatch('dev_items',id,{vendor:v,title:document.getElementById('dvItTitle').value.trim()||null,supply_type:document.getElementById('dvItSup').value.trim()||null,project_id:+document.getElementById('dvItProj').value||null,updated_at:new Date().toISOString()});
+    await sbPatch('dev_items',id,{vendor:v,kind:document.getElementById('dvItKind').value,title:document.getElementById('dvItTitle').value.trim()||null,supply_type:document.getElementById('dvItSup').value.trim()||null,project_id:+document.getElementById('dvItProj').value||null,updated_at:new Date().toISOString()});
     showToast('저장되었습니다','ok'); await dvRefresh(); dvOpenItem(id);
   }catch(e){showToast('오류: '+e.message,'err');}
 }
@@ -2051,7 +2053,7 @@ function dvOpenLog(logId,itemId,plan){
   document.getElementById('dvLgStage').value=dvEditLog&&dvEditLog.stage?dvEditLog.stage:'';
   document.getElementById('dvLgDate').value=dvEditLog?(dvEditLog.log_date||''):todayStr();
   document.getElementById('dvLgText').value=dvEditLog?(dvEditLog.content||''):(plan?'- '+(plan.content||''):'');
-  document.getElementById('dvLgNewTitle').value=''; document.getElementById('dvLgNewSup').value='';
+  document.getElementById('dvLgNewTitle').value=''; document.getElementById('dvLgNewSup').value=''; document.getElementById('dvLgNewKind').value='업체개발';
   document.getElementById('dvLgMsState').value='';
   dvLogVendorChange(it?it.id:null);
   document.getElementById('dvLogOv').classList.add('open');
@@ -2086,7 +2088,7 @@ async function dvSaveLog(){
     let itemId=+itemSel||null;
     if(itemSel==='new'){
       const maxSort=dvI.reduce((m,i)=>Math.max(m,i.sort_no||0),0);
-      const res=await sbPost('dev_items',{vendor:vendor,title:document.getElementById('dvLgNewTitle').value.trim(),supply_type:document.getElementById('dvLgNewSup').value.trim()||null,sort_no:maxSort+1,
+      const res=await sbPost('dev_items',{vendor:vendor,kind:document.getElementById('dvLgNewKind').value,title:document.getElementById('dvLgNewTitle').value.trim(),supply_type:document.getElementById('dvLgNewSup').value.trim()||null,sort_no:maxSort+1,
         reg_text:date||todayStr(),created_by:me.id,created_name:me.name});
       itemId=res[0].id;
     }
