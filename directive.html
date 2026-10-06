@@ -401,9 +401,22 @@ tbody tr.row-late td{background:#fff7f7;}
 .tabs-grp{display:none;align-items:stretch;}
 .tabs-grp.on{display:flex;}
 .tabs-grp select{align-self:center;height:30px;margin-right:8px;font-weight:700;}
-.dv-table{table-layout:fixed;}
+.dv-table{table-layout:fixed;border-collapse:separate;border-spacing:0;}
+/* 틀고정: 표 영역 안에서만 스크롤되게 높이를 잡아 머리글이 위에 붙는다 */
+#panel-dvlog .mt-wrap,#panel-dvmaster .mt-wrap,#panel-dvplan .mt-wrap{padding-bottom:10px;overflow:hidden;}
+#panel-dvlog .tbl-wrap,#panel-dvmaster .tbl-wrap{max-height:calc(100vh - var(--hdr-h) - 46px - 86px);}
+#panel-dvplan .tbl-wrap{max-height:calc(100vh - var(--hdr-h) - 46px - 142px);}
+.dv-table thead th{position:sticky;top:0;z-index:6;}
+.dv-table .dv-stk{position:sticky;top:40px;}
+#dvLogTable td.dv-v,#dvLogTable td.dv-ti{overflow:visible;}
+.dv-ms td.fx,.dv-ms th.fx{position:sticky;z-index:3;background:#fff;}
+.dv-ms thead th.fx{z-index:8;background:#DCE3EE;}
+.dv-ms td.fx2,.dv-ms th.fx2{border-right:2px solid #6b7686 !important;}
+.dv-ms tbody tr:hover td.fx{background:#F4F7FB;}
+.dv-ms tr.g1 td{border-top:1.5px solid #6b7686;}
+.dv-ms tr.dv-grp td{position:sticky;left:0;}
 .dv-table thead th{background:#DCE3EE;color:#142C52;border-bottom:2px solid var(--point);border-right:1px solid #B9C2D0;font-size:12px;white-space:normal;line-height:1.3;}
-.dv-table td{white-space:normal;line-height:1.5;vertical-align:top;cursor:default;color:#111827;border-bottom:1px solid var(--line-lt);border-right:1px solid var(--line-lt);font-size:12.5px;word-break:break-word;}
+.dv-table td{white-space:normal;line-height:1.5;vertical-align:top;cursor:default;color:#111827;border-bottom:1px solid #C7CCD4;border-right:1px solid #C7CCD4;font-size:12.5px;word-break:break-word;}
 .dv-table tr.g1 td{border-top:1.5px solid #6b7686;}
 .dv-table td.dv-v{font-weight:700;color:var(--point);cursor:pointer;}
 .dv-table td.dv-v:hover,.dv-table td.dv-ti:hover{text-decoration:underline;}
@@ -465,8 +478,8 @@ tbody tr.row-late td{background:#fff7f7;}
   </div>
   <div class="tabs-grp" id="tabs-report">
     <select id="rpDept" title="부서 선택 — 지금은 개발기획팀만 열려 있습니다"><option>개발기획팀</option><option disabled>자재구매팀 (준비중)</option><option disabled>개발구매팀 (준비중)</option><option disabled>출하팀 (준비중)</option><option disabled>제조팀 (준비중)</option></select>
-    <button class="tab-btn" onclick="switchTab('dvlog')" id="tab-dvlog">📝 세부 진척현황</button>
     <button class="tab-btn" onclick="switchTab('dvmaster')" id="tab-dvmaster">📑 신규개발 마스터</button>
+    <button class="tab-btn" onclick="switchTab('dvlog')" id="tab-dvlog">📝 세부 진척현황</button>
     <button class="tab-btn" onclick="switchTab('dvplan')" id="tab-dvplan">🗓 금주계획</button>
   </div>
 </div>
@@ -752,7 +765,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v3.0 (2026-10-06) — 업무보고(개발기획팀) + 지시사항 — 지시사항 관리
+   directive.html v3.1 (2026-10-06) — 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -1867,7 +1880,7 @@ function showToast(msg,type){
 const DV_DEPT='개발기획팀';
 const DV_STAGES=['공급논의','견적제출','전산등록(HSMS)','단가합의','D,GQMS(초품)','수입검사설계','양산납품','양산관리'];
 const DV_NUM='①②③④⑤⑥⑦⑧';
-let curMode='dir', dvLoaded=false, dvTabCur='dvlog', dirTabCur='meet';
+let curMode='dir', dvLoaded=false, dvTabCur='dvmaster', dirTabCur='meet';
 let dvP=[], dvI=[], dvLogs=[], dvPlans=[], dvIById={}, dvPById={}, dvLogsBy={};
 let dvEditLog=null, dvEditProj=null, dvFromPlan=null, pendingDevItem=null;
 
@@ -1970,10 +1983,10 @@ function renderDvLog(){
   const gs=dvLogGroups(), ed=dvCanEdit(); let h='', n=0;
   gs.forEach(g=>{
     const it=g.it, rows=g.logs.length||1, dirs=dvDirCount(it.id);
-    const head=`<td class="dv-v" rowspan="${rows}" onclick="dvPickVendor(${it.id})" title="이 업체의 전체 진척 보기">${esc(it.vendor)}${it.kind==='법인과제'?'<span class="dv-note">법인·과제</span>':''}</td>
-      <td class="dv-ti" rowspan="${rows}" onclick="dvOpenItem(${it.id})" title="건 상세">${esc(it.title||'(건명 없음)')}${dirs.length?`<span class="dv-dir" onclick="event.stopPropagation();dvGoDir(${dirs[0].id})" title="이 건에 걸린 지시">📌 지시 ${dirs.length}</span>`:''}</td>
+    const head=`<td class="dv-v" rowspan="${rows}" onclick="dvPickVendor(${it.id})" title="이 업체의 전체 진척 보기"><div class="dv-stk">${esc(it.vendor)}${it.kind==='법인과제'?'<span class="dv-note">법인·과제</span>':''}</div></td>
+      <td class="dv-ti" rowspan="${rows}" onclick="dvOpenItem(${it.id})" title="건 상세"><div class="dv-stk">${esc(it.title||'(건명 없음)')}${dirs.length?`<span class="dv-dir" onclick="event.stopPropagation();dvGoDir(${dirs[0].id})" title="이 건에 걸린 지시">📌 지시 ${dirs.length}</span>`:''}</div></td>
       <td rowspan="${rows}">${esc(it.supply_type||'')}</td>`;
-    const tail=`<td rowspan="${rows}">${ed?`<button class="btn btn-outline mt-btn" onclick="dvOpenLog(null,${it.id})">＋ 활동</button>`:''}${me?`<button class="btn btn-red mt-btn" onclick="dvDirective(${it.id})" title="이 건에 대한 지시를 등록합니다">지시 등록</button>`:''}</td>`;
+    const tail=`<td rowspan="${rows}">${ed?`<button class="btn btn-outline mt-btn" onclick="dvOpenLog(null,${it.id})">＋ 활동</button>`:''}</td>`;
     if(!g.logs.length){ h+=`<tr class="g1">${head}<td class="dv-d">-</td><td></td><td style="color:#9aa1ab;">활동 기록 없음</td>${tail}</tr>`; return; }
     g.logs.forEach((l,ix)=>{
       n++;
@@ -1983,7 +1996,7 @@ function renderDvLog(){
   });
   document.getElementById('dvLogBody').innerHTML=h||'<tr><td colspan="7" class="mt-pick">해당하는 활동 기록이 없습니다. 기간이나 업체를 바꿔 보세요.</td></tr>';
   document.getElementById('dvLogCnt').textContent='건 '+gs.length+' · 활동 '+n;
-  applyResize('dvLogTable','report_dvlog_col_v1',[150,220,80,84,120,760,150]);
+  applyResize('dvLogTable','report_dvlog_col_v2',[150,220,80,84,120,820,84]);
 }
 // 업체 입력은 잠깐 멈췄을 때 반영한다(입력 중 표를 다시 그리면 그 순간의 버튼 클릭이 사라진다)
 let dvVTimer=null;
@@ -2134,21 +2147,30 @@ function dvProjList(){
   return dvP.filter(p=>(!g||(p.grp||'신규개발')===g)&&(!ps||dvProjStatus(p)===ps)&&(!kw||[p.vendor,p.product,p.part_no,p.summary,p.remark].join(' ').toLowerCase().indexOf(kw)>=0));
 }
 function renderDvMaster(){
-  document.getElementById('dvMsHead').innerHTML='<tr><th>No</th><th>업체</th><th>제품군</th><th>PART NO</th><th>공급구분</th><th>내용</th><th>연간매출</th><th>목표 등록</th><th>목표 완료</th><th>실행 시작</th><th>실행 완료</th>'
+  document.getElementById('dvMsHead').innerHTML='<tr><th class="fx">No</th><th class="fx fx2">업체</th><th>제품군</th><th>PART NO</th><th>공급구분</th><th>내용</th><th>연간매출</th><th>목표 등록</th><th>목표 완료</th><th>실행 시작</th><th>실행 완료</th>'
     +DV_STAGES.map((s,ix)=>`<th>${DV_NUM[ix]}<br>${s}</th>`).join('')+'<th>기타</th><th>최근 활동</th><th>비고</th></tr>';
   const list=dvProjList(); let h='', prev=null; const dt=x=>esc(/^\d{4}-\d\d-\d\d$/.test(x||'')?x.slice(2).replace(/-/g,'.'):(x||''));
-  list.forEach(p=>{
+  list.forEach((p,ix)=>{
     const g=p.grp||'신규개발';
     if(g!==prev){ h+=`<tr class="dv-grp"><td colspan="22">${esc(g)} · ${list.filter(x=>(x.grp||'신규개발')===g).length}건</td></tr>`; prev=g; }
     const st=p.stages||{}, last=dvProjLast(p);
-    h+=`<tr class="p-${dvProjStatus(p)}" onclick="dvOpenProjView(${p.id})"><td>${p.seq||''}</td><td class="l dv-v">${esc(p.vendor)}</td><td class="l">${esc(p.product||'')}</td><td class="l">${esc(p.part_no||'')}</td><td>${esc(p.supply_type||'')}</td><td class="l">${esc(p.summary||'')}</td><td>${esc(p.annual_sales||'')}</td>
+    const same=(a,b)=>!!a&&!!b&&(a.grp||'신규개발')===(b.grp||'신규개발')&&a.vendor===b.vendor;
+    const first=!same(list[ix-1],p); let span=1; if(first){ while(same(list[ix+span],p)) span++; }
+    h+=`<tr class="p-${dvProjStatus(p)}${first?' g1':''}" onclick="dvOpenProjView(${p.id})"><td class="fx">${p.seq||''}</td>${first?`<td class="l dv-v fx fx2" rowspan="${span}">${esc(p.vendor)}</td>`:''}<td class="l">${esc(p.product||'')}</td><td class="l">${esc(p.part_no||'')}</td><td>${esc(p.supply_type||'')}</td><td class="l">${esc(p.summary||'')}</td><td>${esc(p.annual_sales||'')}</td>
       <td>${dt(p.target_reg)}</td><td>${dt(p.target_done)}</td><td>${dt(p.exec_start)}</td><td>${dt(p.exec_done)}</td>`
       +[1,2,3,4,5,6,7,8].map(k=>`<td>${dvStageCell(st[k])}</td>`).join('')+`<td class="l">${esc(p.stage_etc||'')}</td><td>${last?last.slice(2).replace(/-/g,'.'):''}</td><td class="l">${esc((p.remark||'').slice(0,60))}${(p.remark||'').length>60?'…':''}</td></tr>`;
   });
   document.getElementById('dvMsBody').innerHTML=h||'<tr><td colspan="22" class="mt-pick">등록된 신규개발 건이 없습니다</td></tr>';
   const c=k=>list.filter(p=>dvProjStatus(p)===k).length;
   document.getElementById('dvMsCnt').textContent='합계 '+list.length+'건 · 진행 '+c('진행')+' · 완료 '+c('완료')+' · Drop '+c('Drop');
-  applyResize('dvMsTable','report_dvms_col_v1',[44,130,120,120,76,220,70,76,76,76,76,82,82,82,82,82,82,82,82,120,76,200]);
+  applyResize('dvMsTable','report_dvms_col_v2',[44,140,120,120,76,220,70,76,76,76,76,82,82,82,82,82,82,82,82,120,76,200]);
+  dvFixLeft();
+}
+// 왼쪽 고정 칸(No·업체)의 위치를 지금 칸 너비에 맞춘다
+function dvFixLeft(){
+  const ths=document.querySelectorAll('#dvMsTable thead th'); if(ths.length<2) return;
+  const w0=parseInt(ths[0].style.width)||44;
+  document.querySelectorAll('#dvMsTable .fx').forEach(el=>{el.style.left=el.classList.contains('fx2')?w0+'px':'0px';});
 }
 function dvOpenProjView(id){
   const p=dvPById[id]; if(!p) return;
