@@ -404,6 +404,11 @@ tbody tr.row-late td{background:#fff7f7;}
 .tabs-grp.on{display:flex;}
 .tabs-grp select{align-self:center;height:30px;margin-right:8px;font-weight:700;}
 #panel-dvlog .filter-bar input,#panel-dvmaster .filter-bar input,#panel-dvplan input{font-size:12px;font-family:inherit;color:#111827;height:32px;}
+/* 자동완성 목록 — 브라우저 기본 목록(크고 굵은 글씨) 대신 선택 칸과 같은 모양으로 직접 그린다 */
+#acDD{display:none;position:fixed;z-index:3000;background:#fff;border:1px solid var(--line-dk);box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:264px;overflow:auto;font-size:12px;color:#111827;font-family:'Noto Sans KR',sans-serif;}
+#acDD div{padding:5px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5;}
+#acDD div.on,#acDD div:hover{background:#6b7280;color:#fff;}
+#acDD div.none{color:#9aa1ab;cursor:default;background:#fff;}
 .dv-table{table-layout:fixed;border-collapse:separate;border-spacing:0;}
 /* 틀고정: 표 영역 안에서만 스크롤되게 높이를 잡아 머리글이 위에 붙는다 */
 #panel-dvlog .mt-wrap,#panel-dvmaster .mt-wrap,#panel-dvplan .mt-wrap{padding-bottom:10px;overflow:hidden;}
@@ -696,6 +701,7 @@ tbody tr.row-late td{background:#fff7f7;}
   <div class="modal-ft"><button class="btn btn-red" id="dvPrDel" onclick="dvDelProj()" style="margin-right:auto;">삭제</button><button class="btn btn-outline" onclick="dvClosePr()">취소</button><button class="btn btn-primary" onclick="dvSaveProj()">저장</button></div>
 </div></div>
 <div id="printArea"></div>
+<div id="acDD"></div>
 
 <!-- ── 등록/수정 모달 (바깥 클릭으로 닫히지 않음) ── -->
 <div class="modal-ov" id="formOv">
@@ -780,7 +786,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v3.7 (2026-10-06) — 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
+   directive.html v3.8 (2026-10-06) — 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -2328,6 +2334,51 @@ async function dvExcel(kind){
     XLSX.writeFile(wb,(kind==='master'?'신규개발마스터_':'세부진척현황_')+todayStr().replace(/-/g,'')+'.xlsx');
   }catch(e){showToast('오류: '+e.message,'err');}
 }
+
+/* ── 자동완성(v3.8) ── list 속성이 달린 입력칸을 모두 이 목록으로 바꿔 보여준다. 후보는 해당 datalist 에서 읽는다 */
+let acInput=null, acIdx=-1, acItems=[];
+function acOpen(inp){
+  if(inp.getAttribute('list')){ inp.dataset.ac=inp.getAttribute('list'); inp.removeAttribute('list'); inp.setAttribute('autocomplete','off'); }
+  if(!inp.dataset.ac) return;
+  acInput=inp; acRender(true);
+}
+// showAll: 칸을 눌러 열 때는 이미 적힌 값과 상관없이 전체 후보를 보여준다. 글자를 치기 시작하면 그 글자로 거른다
+function acRender(showAll){
+  const dd=document.getElementById('acDD'), dl=document.getElementById(acInput.dataset.ac); if(!dl){acClose();return;}
+  const q=acInput.value.trim().toLowerCase();
+  const all=[...dl.querySelectorAll('option')].map(o=>o.value).filter(Boolean);
+  acItems=(q&&!showAll?all.filter(v=>v.toLowerCase().indexOf(q)>=0):all).slice(0,300);
+  // 입력한 글자와 똑같은 후보 하나만 남았으면 목록을 띄울 필요가 없다
+  if(!acItems.length||(!showAll&&acItems.length===1&&acItems[0].toLowerCase()===q)){ dd.style.display='none'; dd.innerHTML=''; return; }
+  acIdx=-1;
+  dd.innerHTML=acItems.map((v,ix)=>`<div data-ix="${ix}">${esc(v)}</div>`).join('');
+  const r=acInput.getBoundingClientRect(), below=window.innerHeight-r.bottom;
+  dd.style.display='block'; dd.style.left=r.left+'px'; dd.style.minWidth=r.width+'px'; dd.style.maxWidth=Math.max(r.width,360)+'px';
+  const h=Math.min(264,dd.scrollHeight);
+  dd.style.top=(below<h+8&&r.top>h+8?r.top-h-2:r.bottom+1)+'px';
+  dd.scrollTop=0;
+}
+function acClose(){document.getElementById('acDD').style.display='none';acInput=null;acIdx=-1;}
+function acPick(ix){
+  const inp=acInput; if(!inp||acItems[ix]==null) return;
+  inp.value=acItems[ix]; acClose();
+  inp.dispatchEvent(new Event('change',{bubbles:true}));
+}
+document.addEventListener('focusin',ev=>{const el=ev.target; if(el&&el.tagName==='INPUT'&&(el.getAttribute('list')||el.dataset.ac)) acOpen(el);});
+document.addEventListener('click',ev=>{const el=ev.target; if(el&&el.tagName==='INPUT'&&el.dataset.ac&&document.getElementById('acDD').style.display==='none') acOpen(el);});
+document.addEventListener('input',ev=>{if(ev.target===acInput) acRender(); else if(ev.target&&ev.target.dataset&&ev.target.dataset.ac) acOpen(ev.target);});
+document.addEventListener('focusout',ev=>{if(ev.target===acInput) setTimeout(()=>{if(document.activeElement!==acInput) acClose();},150);});
+document.getElementById('acDD').addEventListener('mousedown',ev=>{ev.preventDefault();const d=ev.target.closest('div[data-ix]');if(d)acPick(+d.dataset.ix);});
+document.addEventListener('keydown',ev=>{
+  const dd=document.getElementById('acDD'); if(!acInput||ev.target!==acInput||dd.style.display==='none') return;
+  if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){
+    ev.preventDefault(); acIdx=Math.max(0,Math.min(acItems.length-1,acIdx+(ev.key==='ArrowDown'?1:-1)));
+    [...dd.children].forEach((c,ix)=>c.classList.toggle('on',ix===acIdx)); const cur=dd.children[acIdx]; if(cur) cur.scrollIntoView({block:'nearest'});
+  }else if(ev.key==='Enter'&&acIdx>=0){ ev.preventDefault(); ev.stopPropagation(); acPick(acIdx); }
+  else if(ev.key==='Escape'||ev.key==='Enter'){ dd.style.display='none'; }
+},true);
+window.addEventListener('resize',()=>{if(acInput)acClose();});
+document.addEventListener('scroll',ev=>{if(acInput&&ev.target!==document.getElementById('acDD'))document.getElementById('acDD').style.display='none';},true);
 
 init();
 </script>
