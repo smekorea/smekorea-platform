@@ -1046,6 +1046,21 @@
     const res = await fetch(SB_URL + '/rest/v1/' + table + '?' + params, { headers: SB_HEADERS });
     return res.json();
   }
+  // 1,000건 응답 제한과 무관하게 전체 행을 가져온다 (limit/offset 반복, v15.69)
+  // params에는 반드시 order를 포함할 것(페이지 간 순서 고정)
+  async function sbGetAll(table, params) {
+    const pageSize = 1000;
+    let out = [];
+    let offset = 0;
+    while (true) {
+      const page = await sbGet(table, params + '&limit=' + pageSize + '&offset=' + offset);
+      if (!Array.isArray(page)) throw new Error(sbErrMsg(page));
+      if (page.length === 0) break;
+      out = out.concat(page);
+      offset += page.length;
+    }
+    return out;
+  }
   function isSbError(data) {
     // Supabase/PostgREST 에러 응답은 배열이 아니라 {code, message, ...} 형태로 옴
     return !Array.isArray(data) && data && (data.code || data.message);
@@ -3031,44 +3046,70 @@
 
     document.getElementById('histTbody').innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--muted);">조회 중...</td></tr>';
 
-    let q = 'order=scanned_at.desc&limit=1000';
-    if (from) q += '&scanned_at=gte.' + from + 'T00:00:00';
-    if (to) q += '&scanned_at=lte.' + to + 'T23:59:59';
+    // v15.69 — 체크이력 조회 누락 수정
+    //   ① 최신 1,000건만 가져온 뒤 매출처를 거르던 방식 → 매출처에 해당하는 일정ID로 먼저 좁혀서 조회
+    //   ② 1,000건 제한 없이 전체 조회(sbGetAll)  ③ 일정ID 200개 제한 제거(나눠서 전부 조회)
+    //   ④ 날짜 경계를 한국시간(+09:00) 기준으로 지정
+    let dateQ = '';
+    if (from) dateQ += '&scanned_at=gte.' + encodeURIComponent(from + 'T00:00:00+09:00');
+    if (to) dateQ += '&scanned_at=lte.' + encodeURIComponent(to + 'T23:59:59.999+09:00');
+    const logQ = 'order=scanned_at.desc,id.desc' + dateQ;
 
-    const logs = await sbGet('ship_lot_log', q);
-    let rows = Array.isArray(logs) ? logs : [];
-
-    if (resultFilter !== 'all') {
-      if (resultFilter === '미매칭') rows = rows.filter(r => !r.item_code);
-      else rows = rows.filter(r => r.pair_status === resultFilter);
-    }
-
-    if (itemFilter) {
-      await ensureItemsMaster();
-      const kw = itemFilter.toLowerCase();
-      const matchCodes = new Set(itemsMaster.filter(it =>
-        (it.description||'').toLowerCase().includes(kw) || (it.item_code||'').toLowerCase().includes(kw)
-      ).map(it => it.item_code));
-      rows = rows.filter(r => r.item_code && matchCodes.has(r.item_code));
-    }
-
-    const sids = [...new Set(rows.map(r => r.ship_schedule_id))];
+    let rows = [];
     let schedMap = {};
-    if (sids.length > 0) {
-      const chunk = sids.slice(0, 200).join(',');
-      const scheds = await sbGet('ship_schedule', `id=in.(${chunk})&select=id,customer,extra_category`);
-      if (Array.isArray(scheds)) scheds.forEach(s => schedMap[s.id] = custDisplay(s.customer, s.extra_category));
-    }
-    if (custFilter) rows = rows.filter(r => (schedMap[r.ship_schedule_id]||'').toLowerCase().includes(custFilter.toLowerCase()));
-
-    // 지시수량 매핑: (일정ID + 품번) 기준으로 ship_lot_item에서 현재값 조회
     let qtyReqMap = {};
-    if (sids.length > 0) {
-      const chunk = sids.slice(0, 200).join(',');
-      const itemRowsForQty = await sbGet('ship_lot_item', `ship_schedule_id=in.(${chunk})&select=ship_schedule_id,item_code,qty_required`);
-      if (Array.isArray(itemRowsForQty)) {
+    try {
+      if (custFilter) {
+        // 매출처명 → 일정ID 선조회 (표시명 "매출처/구분" 기준, 기존 검색 규칙 동일)
+        const custKw = custFilter.toLowerCase();
+        const allScheds = await sbGetAll('ship_schedule', 'select=id,customer,extra_category&order=id');
+        allScheds.forEach(s => {
+          const dispName = custDisplay(s.customer, s.extra_category);
+          if (dispName.toLowerCase().includes(custKw)) schedMap[s.id] = dispName;
+        });
+        const custSids = Object.keys(schedMap);
+        for (let i = 0; i < custSids.length; i += 100) {
+          const part = await sbGetAll('ship_lot_log', logQ + '&ship_schedule_id=in.(' + custSids.slice(i, i + 100).join(',') + ')');
+          rows = rows.concat(part);
+        }
+        rows.sort((a, b) => (new Date(b.scanned_at) - new Date(a.scanned_at)) || (b.id - a.id));
+      } else {
+        rows = await sbGetAll('ship_lot_log', logQ);
+      }
+
+      if (resultFilter !== 'all') {
+        if (resultFilter === '미매칭') rows = rows.filter(r => !r.item_code);
+        else rows = rows.filter(r => r.pair_status === resultFilter);
+      }
+
+      if (itemFilter) {
+        await ensureItemsMaster();
+        const kw = itemFilter.toLowerCase();
+        const matchCodes = new Set(itemsMaster.filter(it =>
+          (it.description||'').toLowerCase().includes(kw) || (it.item_code||'').toLowerCase().includes(kw)
+        ).map(it => it.item_code));
+        rows = rows.filter(r => r.item_code && matchCodes.has(r.item_code));
+      }
+
+      const sids = [...new Set(rows.map(r => r.ship_schedule_id).filter(v => v != null))];
+
+      // 매출처명 매핑 (매출처 검색을 안 한 경우) — 200개씩 나눠 전부 조회
+      const needSched = sids.filter(id => !(id in schedMap));
+      for (let i = 0; i < needSched.length; i += 200) {
+        const scheds = await sbGetAll('ship_schedule', 'id=in.(' + needSched.slice(i, i + 200).join(',') + ')&select=id,customer,extra_category&order=id');
+        scheds.forEach(s => { schedMap[s.id] = custDisplay(s.customer, s.extra_category); });
+      }
+
+      // 지시수량 매핑: (일정ID + 품번) 기준으로 ship_lot_item에서 현재값 조회 — 100개씩 나눠 전부 조회
+      for (let i = 0; i < sids.length; i += 100) {
+        const itemRowsForQty = await sbGetAll('ship_lot_item', 'ship_schedule_id=in.(' + sids.slice(i, i + 100).join(',') + ')&select=ship_schedule_id,item_code,qty_required&order=id');
         itemRowsForQty.forEach(ir => { qtyReqMap[ir.ship_schedule_id + '_' + ir.item_code] = ir.qty_required; });
       }
+    } catch (e) {
+      console.error('체크이력 조회 실패:', e);
+      historyResults = [];
+      document.getElementById('histTbody').innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--danger, #c0392b);">조회 실패: ' + (e && e.message ? e.message : e) + '</td></tr>';
+      return;
     }
 
     historyResults = rows.map(r => ({
