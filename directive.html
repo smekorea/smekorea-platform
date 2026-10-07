@@ -658,10 +658,10 @@ tbody tr.row-late td{background:#fff7f7;}
       <button class="btn btn-outline" onclick="rpOpenFolder()" title="첨부 경로를 복사할 때 기준이 되는 폴더를 정합니다">📁 내 보고서 폴더</button>
       <span class="cnt-badge" id="rpCnt"></span>
     </div>
-    <div class="tbl-wrap"><table class="dv-table" id="rpTable"><thead><tr><th>부서</th><th>구분</th><th>대분류</th><th>중분류</th><th>업체 / 소분류</th><th>세부내용</th><th>담당</th><th>일정</th><th>완료</th><th>첨부</th><th>처리</th></tr></thead><tbody id="rpBody"></tbody></table></div>
+    <div class="tbl-wrap"><table class="dv-table" id="rpTable"><thead><tr><th>부서</th><th>구분</th><th>대분류</th><th>중분류</th><th>업체 / 소분류</th><th>세부내용</th><th>담당</th><th>작성일자</th><th>목표일정</th><th>완료일정</th><th>첨부</th><th>처리</th></tr></thead><tbody id="rpBody"></tbody></table></div>
   </div>
 </div>
-<datalist id="rpSubList"></datalist><datalist id="rpWhoList"></datalist>
+<datalist id="rpVendorList"></datalist><datalist id="rpSubList"></datalist><datalist id="rpWhoList"></datalist>
 <!-- 주간업무 입력/수정 -->
 <div class="modal-ov" id="rpOv"><div class="modal" style="width:760px;">
   <div class="modal-hd"><span id="rpFmTitle">주간업무 입력</span><button class="sp-close" onclick="rpClose()">✕</button></div>
@@ -672,20 +672,20 @@ tbody tr.row-late td{background:#fff7f7;}
       <div class="form-row"><label class="form-label">담당</label><input class="form-input" id="rpFmWho" list="rpWhoList" placeholder="이름 (여럿이면 / 로 구분)"></div>
     </div>
     <div class="form-row-3">
-      <div class="form-row"><label class="form-label">보고 주 <span style="color:var(--muted);font-weight:400;">(그 주의 아무 날짜)</span></label><input type="date" class="form-input" id="rpFmDate" onchange="rpDateChange()"></div>
+      <div class="form-row"><label class="form-label">작성일자 <span style="color:var(--muted);font-weight:400;">(주차 자동 계산)</span></label><input type="date" class="form-input" id="rpFmDate" onchange="rpDateChange()"><div class="form-hint" id="rpFmDateHint"></div></div>
       <div class="form-row" style="grid-column:span 2;"><label class="form-label">연 · 월 · 주차<span>*</span></label>
         <div style="display:flex;gap:6px;align-items:center;"><input type="number" class="form-input" id="rpFmY" style="width:90px;" oninput="rpWeekHint()"><span>년</span><input type="number" class="form-input" id="rpFmM" min="1" max="12" style="width:64px;" oninput="rpWeekHint()"><span>월</span><input type="number" class="form-input" id="rpFmW" min="1" max="6" style="width:64px;" oninput="rpWeekHint()"><span>주차</span><span class="form-hint" id="rpFmWkHint" style="margin:0 0 0 6px;"></span></div></div>
     </div>
     <div class="form-row-3">
       <div class="form-row"><label class="form-label">대분류</label><select class="form-select" id="rpFmCat" onchange="rpCatChange()"></select></div>
       <div class="form-row"><label class="form-label">중분류</label><input class="form-input" id="rpFmSub" list="rpSubList" placeholder="예: 단가관련"></div>
-      <div class="form-row"><label class="form-label">업체 / 소분류</label><input class="form-input" id="rpFmVendor" list="dvVendorList" placeholder="업체명 또는 주제"></div>
+      <div class="form-row"><label class="form-label">업체 / 소분류</label><input class="form-input" id="rpFmVendor" list="rpVendorList" placeholder="거래처 정보에서 선택 (없으면 입력 → 등록)"></div>
     </div>
     <div class="form-hint" id="rpFmDevHint" style="display:none;margin:-6px 0 10px;color:var(--point);font-weight:600;">신규개발 건은 프로젝트 활동으로 저장됩니다. 「프로젝트 활동으로 계속」을 누르면 업체·내용을 그대로 들고 활동 입력 창으로 넘어갑니다.</div>
     <div class="form-row"><label class="form-label">세부내용<span>*</span></label><textarea class="form-textarea" id="rpFmText" style="min-height:160px;"></textarea></div>
     <div class="form-row-3">
-      <div class="form-row"><label class="form-label">일정</label><input type="date" class="form-input" id="rpFmDue"></div>
-      <div class="form-row"><label class="form-label">일정 (기간 등 글자로)</label><input class="form-input" id="rpFmDueTx" placeholder="예: 9/16~19"></div>
+      <div class="form-row"><label class="form-label">목표일정</label><input type="date" class="form-input" id="rpFmTarget"></div>
+      <div class="form-row"><label class="form-label">완료일정</label><input type="date" class="form-input" id="rpFmDoneDt" onchange="rpDoneDtChange()"></div>
       <div class="form-row"><label class="form-label">완료유무</label><select class="form-select" id="rpFmDone"><option value="">-</option><option>진행중</option><option>완료</option><option>미결</option></select></div>
     </div>
     <div class="form-row-2">
@@ -872,7 +872,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v3.15 (2026-10-07) — 부서별보고 주간업무(rp_weekly) 탭 추가 / v3.14 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
+   directive.html v3.16 (2026-10-07) — 주간업무: 작성일자·목표일정·완료일정, 업체는 거래처 정보 기준 / v3.15 부서별보고 주간업무(rp_weekly) 탭 추가 / v3.14 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -2037,7 +2037,7 @@ async function dvLoad(){
     ]);
     dvAllP=res[0]; dvAllI=res[1]; dvLogs=res[2]; dvAllPlans=res[3];
     // 관리자설정 > 거래처 정보(partners)의 업체명도 선택 목록에 넣는다. 못 불러와도 화면은 그대로 쓴다
-    try{ dvPartners=(await sbGetAll('partners','select=name,is_active&order=name.asc')).filter(x=>x.name&&x.is_active!==false).map(x=>x.name); }catch(_){ dvPartners=[]; }
+    try{ dvPartnerAll=await sbGetAll('partners','select=name,alias1,alias2,is_active&order=name.asc'); dvPartners=dvPartnerAll.filter(x=>x.name&&x.is_active!==false).map(x=>x.name); }catch(_){ dvPartnerAll=[]; dvPartners=[]; }
   }catch(e){ dvAllP=[];dvAllI=[];dvLogs=[];dvAllPlans=[]; showToast('부서별보고 불러오기 오류: '+e.message,'err'); }
   await rpLoad();
   dvIById={}; dvPById={}; dvLogsBy={};
@@ -2458,6 +2458,8 @@ async function dvExcel(kind){
 
 /* ══════════════ 부서별보고 · 주간업무 (v3.15) ══════════════
    부서 공통 탭. 한 줄 = 그 주에 한 일(실적) 또는 할 일(계획) 하나. 테이블 rp_weekly.
+   · v3.16: 엑셀의 「일정」은 그 일을 한(적은) 날짜라 「작성일자」로 부른다(due_date). 기한 관리가 필요한 줄은 목표일정(target_date)·완료일정(done_date)을 따로 적는다.
+   · v3.16: 업체는 관리자설정 > 거래처 정보(partners) 기준. 없는 업체를 적으면 물어보고 거래처로 등록한다.
    · 주차는 「수요일이 든 달」 기준(월~금 중 3일 이상이 든 달) — 자재구매팀 엑셀과 같은 방식. 10/5~10/11 = 10월 1주차.
    · 대분류에서 「신규개발」을 고르면 이 표가 아니라 프로젝트 활동(dev_logs)으로 저장한다(담당부서 = 작성 부서).
      그렇게 들어간 활동은 이 목록에 「신규개발」 줄로 함께 보인다.
@@ -2467,7 +2469,7 @@ const RP_CATS=['영업','구매','품질','재고','마감','사내','기타'];
 const RP_DEV='신규개발';
 const RP_ORDER=['영업','구매','품질','재고','마감','사내',RP_DEV,'기타'];
 let rpAll=[], rpDev=[], rpById={}, rpEdit=null, rpInit=false;
-let rpPromote=null, rpPass=false, dvDeptOverride=null;
+let rpPromote=null, rpPass=false, dvDeptOverride=null, dvPartnerAll=[];
 
 function rpWeekOf(s){                       // 날짜 → {y,m,w,range}
   const mon=dvWeekStart(s), wed=toDate(dvAddDays(mon,2)), sun=toDate(dvAddDays(mon,6)), m0=toDate(mon);
@@ -2500,7 +2502,7 @@ function rpBuildDev(){
     if(!wk) return;
     const due=/일정\s*(.+)$/.exec(l.date_text||'');
     rpDev.push({_dev:true,id:'L'+l.id,log:l,it:it,dept:rpLogDept(l,it),rpt_year:wk.y,rpt_month:wk.m,week_no:wk.w,week_range:l.log_date?wk.range:null,kind:'실적',category:RP_DEV,
-      sub_category:it.title||'',vendor:it.vendor||'',content:l.content||'',assignee:(l.emp_name&&l.emp_name!=='엑셀이관')?l.emp_name:'',due_date:l.log_date||null,due_text:due?due[1]:null,done_state:null});
+      target_date:null,done_date:null,sub_category:it.title||'',vendor:it.vendor||'',content:l.content||'',assignee:(l.emp_name&&l.emp_name!=='엑셀이관')?l.emp_name:'',due_date:l.log_date||null,due_text:due?due[1]:null,done_state:null});
   });
 }
 async function rpLoad(){
@@ -2525,6 +2527,7 @@ function rpFill(){
   wSel.innerHTML='<option value="">전체 담당</option>'+who.map(n=>`<option${n===kw?' selected':''}>${esc(n)}</option>`).join('');
   const subs=[]; rpAll.forEach(r=>{if(r.sub_category&&subs.indexOf(r.sub_category)<0)subs.push(r.sub_category);}); subs.sort((a,b)=>a.localeCompare(b,'ko'));
   document.getElementById('rpSubList').innerHTML=subs.map(s=>`<option value="${esc(s)}">`).join('');
+  rpFillVendors();
   document.querySelectorAll('.rp-edit').forEach(el=>{el.style.display=rpCanAdd()?'':'none';});
 }
 // 신규개발 마스터 탭은 개발기획팀 것. 다른 부서는 마스터에 올린 건이 있을 때만 보인다
@@ -2544,6 +2547,7 @@ function rpList(){
     .sort((a,b)=>(b.rpt_year-a.rpt_year)||(b.rpt_month-a.rpt_month)||((b.week_no||0)-(a.week_no||0))||a.dept.localeCompare(b.dept,'ko')||((a.kind==='계획')-(b.kind==='계획'))||(ord(a.category)-ord(b.category))
       ||((a._dev?1:0)-(b._dev?1:0))||((a._dev?a.log.id:a.id)-(b._dev?b.log.id:b.id)));
 }
+function rpMd(d){return d?d.slice(5).replace('-','/'):'';}
 function rpDueText(r){return r.due_date?r.due_date.slice(5).replace('-','/'):(r.due_text||'');}
 function rpIsAbs(p){return /^(\\\\|[A-Za-z]:[\\\/]|https?:)/.test(p||'');}
 function rpHasPath(r){return !!r.attach_path||rpIsAbs(r.attach_text);}
@@ -2556,7 +2560,7 @@ function renderRpWeek(){
       prev=k; const g=grp[k], rs=[]; g.forEach(x=>{if(x.week_range&&rs.indexOf(x.week_range)<0)rs.push(x.week_range);});
       // 기간: 줄에 적힌 기간이 하나로 같으면 그것, 적힌 것이 없으면 달력으로 계산한 기간, 여러 가지로 적혀 있으면 표시하지 않는다
       const range=rs.length===1?rs[0]:(rs.length===0?rpRangeOf(r.rpt_year,r.rpt_month,r.week_no):'');
-      h+=`<tr class="rp-wk"><td colspan="11"><span>${r.rpt_year}년 ${r.rpt_month}월 ${r.week_no||'-'}주차${range?' ('+esc(range)+')':''} · 실적 ${g.filter(x=>x.kind!=='계획').length} · 계획 ${g.filter(x=>x.kind==='계획').length}</span></td></tr>`;
+      h+=`<tr class="rp-wk"><td colspan="12"><span>${r.rpt_year}년 ${r.rpt_month}월 ${r.week_no||'-'}주차${range?' ('+esc(range)+')':''} · 실적 ${g.filter(x=>x.kind!=='계획').length} · 계획 ${g.filter(x=>x.kind==='계획').length}</span></td></tr>`;
     }
     const dev=!!r._dev, ed=dev?dvCanEdit():rpCanEdit(r.dept), cat=r.category||'';
     const open=dev?`dvOpenLog(${r.log.id})`:`rpOpen(${r.id})`;
@@ -2570,16 +2574,21 @@ function renderRpWeek(){
     h+=`<tr class="rp-row${dev?' rp-dev':''}"><td>${esc(r.dept.replace(/팀$/,''))}</td><td><span class="rp-k k-${r.kind==='계획'?'p':'r'}">${esc(r.kind)}</span></td>
       <td>${cat?`<span class="rp-c${dev?' dev':''}">${esc(cat)}</span>`:''}</td><td>${dev?'':esc(r.sub_category||'')}</td>
       <td class="${dev?'dv-v':'rp-v'}"${dev?` onclick="dvOpenItem(${r.it.id})" title="프로젝트 상세"`:''}>${esc(r.vendor||'')}${dev&&r.sub_category&&r.sub_category!==r.vendor?`<span class="dv-note">${esc(r.sub_category)}</span>`:''}</td>
-      <td class="dv-c"${ed?` onclick="${open}" title="눌러서 수정"`:''}>${esc(r.content||'')}</td><td>${esc(r.assignee||'')}</td><td class="dv-d">${esc(rpDueText(r))}</td>
-      <td class="dv-d">${r.done_state?`<span class="dv-st s-${r.done_state==='완료'?'완료':'진행중'}">${esc(r.done_state)}</span>`:''}</td><td>${att}</td>
+      <td class="dv-c"${ed?` onclick="${open}" title="눌러서 수정"`:''}>${esc(r.content||'')}</td><td>${esc(r.assignee||'')}</td><td class="dv-d">${esc(rpDueText(r))}</td><td class="dv-d">${esc(rpMd(r.target_date))}</td>
+      <td class="dv-d">${r.done_date?esc(rpMd(r.done_date)):(r.done_state?`<span class="dv-st s-${r.done_state==='완료'?'완료':'진행중'}">${esc(r.done_state)}</span>`:'')}</td><td>${att}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="${open}">수정</button>`:''}</td></tr>`;
   });
-  document.getElementById('rpBody').innerHTML=h||'<tr><td colspan="11" class="mt-pick">해당하는 주간업무가 없습니다. 기간이나 부서를 바꿔 보세요.</td></tr>';
+  document.getElementById('rpBody').innerHTML=h||'<tr><td colspan="12" class="mt-pick">해당하는 주간업무가 없습니다. 기간이나 부서를 바꿔 보세요.</td></tr>';
   const nd=list.filter(r=>r._dev).length;
   document.getElementById('rpCnt').textContent='합계 '+list.length+'건 · 실적 '+list.filter(r=>r.kind!=='계획').length+' · 계획 '+list.filter(r=>r.kind==='계획').length+(nd?' · 신규개발 '+nd:'');
-  applyResize('rpTable','report_rpweek_col_v1',[86,62,88,100,150,640,104,78,68,132,72]);
+  applyResize('rpTable','report_rpweek_col_v2',[86,62,88,100,150,600,104,78,78,78,132,72]);
 }
 function rpReset(){ ['rpWk','rpKind','rpCat','rpWho','rpKw'].forEach(id=>{document.getElementById(id).value='';}); rpInit=false; rpFill(); renderRpWeek(); }
+
+// 거래처 정보(관리자설정)에 있는 업체인지 — 이름·별칭을 띄어쓰기·괄호·대소문자 무시하고 견준다. 사용 안 함으로 둔 거래처도 「있는 업체」로 본다
+function rpKnownPartner(v){ const ks=dvKeys(v); return dvPartnerAll.some(p=>[p.name,p.alias1,p.alias2].some(n=>n&&dvKeys(n).some(k=>ks.indexOf(k)>=0))); }
+function rpFillVendors(){ document.getElementById('rpVendorList').innerHTML=dvPartners.slice().sort((a,b)=>a.localeCompare(b,'ko')).map(v=>`<option value="${esc(v)}">`).join(''); }
+function rpDoneDtChange(){ if(document.getElementById('rpFmDoneDt').value) document.getElementById('rpFmDone').value='완료'; }
 
 /* 입력 / 수정 창 */
 function rpOpen(id){
@@ -2594,9 +2603,10 @@ function rpOpen(id){
   g('rpFmCat').innerHTML='<option value="">(없음)</option>'+RP_CATS.map(c=>`<option>${c}</option>`).join('')+`<option value="${RP_DEV}">${RP_DEV} → 프로젝트 활동으로 입력</option>`;
   g('rpFmCat').value=r.category||(rpEdit?'':'영업');
   g('rpFmSub').value=r.sub_category||''; g('rpFmVendor').value=r.vendor||''; g('rpFmText').value=r.content||'';
-  g('rpFmDue').value=r.due_date||''; g('rpFmDueTx').value=r.due_text||''; g('rpFmDone').value=r.done_state||'';
+  g('rpFmTarget').value=r.target_date||''; g('rpFmDoneDt').value=r.done_date||''; g('rpFmDone').value=r.done_state||'';
+  g('rpFmDateHint').textContent=rpEdit&&!r.due_date&&r.due_text?'엑셀에 적힌 일정: '+r.due_text:'';
   g('rpFmAtt').value=r.attach_text||''; g('rpFmPath').value=r.attach_path||'';
-  if(rpEdit){ g('rpFmDate').value=''; g('rpFmY').value=r.rpt_year||''; g('rpFmM').value=r.rpt_month||''; g('rpFmW').value=r.week_no||''; g('rpFmWho').value=r.assignee||''; }
+  if(rpEdit){ g('rpFmDate').value=r.due_date||''; g('rpFmY').value=r.rpt_year||''; g('rpFmM').value=r.rpt_month||''; g('rpFmW').value=r.week_no||''; g('rpFmWho').value=r.assignee||''; }
   else{ g('rpFmDate').value=todayStr(); rpDateChange(); g('rpFmWho').value=me?me.name:''; }
   rpDeptChange(); rpCatChange(); rpWeekHint();
   g('rpOv').classList.add('open'); g('rpFmText').focus();
@@ -2623,7 +2633,7 @@ function rpFormBody(){
   const g=k=>document.getElementById(k).value.trim(), who=g('rpFmWho'), e=emps.find(x=>x.name===who);
   const y=+g('rpFmY')||null, m=+g('rpFmM')||null, w=+g('rpFmW')||null;
   return {dept:g('rpFmDept'),rpt_year:y,rpt_month:m,week_no:w,kind:g('rpFmKind'),category:g('rpFmCat')||null,sub_category:g('rpFmSub')||null,vendor:g('rpFmVendor')||null,
-    content:document.getElementById('rpFmText').value.replace(/\s+$/,''),assignee:who||null,employee_id:e?e.id:null,emp_name:who||null,due_date:g('rpFmDue')||null,due_text:g('rpFmDueTx')||null,
+    content:document.getElementById('rpFmText').value.replace(/\s+$/,''),assignee:who||null,employee_id:e?e.id:null,emp_name:who||null,due_date:g('rpFmDate')||null,target_date:g('rpFmTarget')||null,done_date:g('rpFmDoneDt')||null,
     done_state:g('rpFmDone')||null,attach_text:g('rpFmAtt')||null,attach_path:g('rpFmPath')||null,updated_at:new Date().toISOString()};
 }
 async function rpSave(){
@@ -2631,8 +2641,12 @@ async function rpSave(){
   if(b.category===RP_DEV){ rpToProject(); return; }
   if(!b.rpt_year||!b.rpt_month||!b.week_no||b.rpt_month>12||b.week_no>6){showToast('연·월·주차를 확인해주세요','err');return;}
   if(!b.content.trim()){showToast('세부내용을 입력해주세요','err');return;}
+  // 업체는 관리자설정 > 거래처 정보 기준. 새로 적었거나 바꾼 이름이 거기 없으면 거래처로 등록한 뒤 저장한다(엑셀에서 온 기존 이름은 그대로 둬도 된다)
+  const newVendor=b.vendor&&(!rpEdit||rpEdit.vendor!==b.vendor)&&!rpKnownPartner(b.vendor);
+  if(newVendor&&!confirm('「'+b.vendor+'」은(는) 관리자설정의 거래처 정보에 없는 업체입니다.\n거래처로 새로 등록하고 저장할까요?\n\n취소를 누르면 입력 화면으로 돌아갑니다.')) return;
   const btn=document.getElementById('rpFmSave'); btn.disabled=true;
   try{
+    if(newVendor){ await sbPost('partners',{name:b.vendor,note:'업무보고 주간업무에서 등록('+todayStr()+' '+(me?me.name:'')+')'}); dvPartnerAll.push({name:b.vendor,is_active:true}); dvPartners.push(b.vendor); rpFillVendors(); }
     // 기간 글자는 엑셀에서 온 줄의 것을 그대로 두고, 주차를 바꿨거나 새로 쓰는 줄만 달력 기준으로 넣는다
     if(!rpEdit||rpEdit.rpt_year!==b.rpt_year||rpEdit.rpt_month!==b.rpt_month||rpEdit.week_no!==b.week_no) b.week_range=rpRangeOf(b.rpt_year,b.rpt_month,b.week_no);
     if(rpEdit) await sbPatch('rp_weekly',rpEdit.id,b);
@@ -2714,15 +2728,15 @@ function rpSaveFolder(){
 
 /* 인쇄 / 엑셀 — 화면에 보이는 조건 그대로 */
 function rpExportRows(withPath){
-  const head=['부서','연','월','주차','기간','구분','대분류','중분류','업체/소분류','세부내용','담당','일정','완료유무','첨부'].concat(withPath?['첨부경로']:[]);
-  const rows=rpList().map(r=>[r.dept,r.rpt_year,r.rpt_month,r.week_no,r.week_range||rpRangeOf(r.rpt_year,r.rpt_month,r.week_no),r.kind,r.category||'',r.sub_category||'',r.vendor||'',r.content||'',r.assignee||'',rpDueText(r),r.done_state||'',r._dev?'':(r.attach_text||'')]
+  const head=['부서','연','월','주차','기간','구분','대분류','중분류','업체/소분류','세부내용','담당','작성일자','목표일정','완료일정','완료유무','첨부'].concat(withPath?['첨부경로']:[]);
+  const rows=rpList().map(r=>[r.dept,r.rpt_year,r.rpt_month,r.week_no,r.week_range||rpRangeOf(r.rpt_year,r.rpt_month,r.week_no),r.kind,r.category||'',r.sub_category||'',r.vendor||'',r.content||'',r.assignee||'',r.due_date||r.due_text||'',r.target_date||'',r.done_date||'',r.done_state||'',r._dev?'':(r.attach_text||'')]
     .concat(withPath?[r._dev?'':(rpFullPath(r)||r.attach_path||'')]:[]));
   return {head:head,rows:rows};
 }
 function rpPrint(){
   const r=rpExportRows(false); if(!r.rows.length){showToast('출력할 내용이 없습니다','err');return;}
   const ym=document.getElementById('rpYm').value, wk=document.getElementById('rpWk').value;
-  const cols=[0,3,5,6,7,8,9,10,11,12];
+  const cols=[0,3,5,6,7,8,9,10,11,12,13];
   document.getElementById('printArea').innerHTML=`<h1>주간업무</h1><div class="ph"><span>부서명 : ${esc(dvCur())} · 기간 : ${ym?ym.slice(0,4)+'년 '+(+ym.slice(5))+'월':'전체 기간'}${wk?' '+wk+'주차':''}</span><span>SME KOREA CO.,LTD. · 출력일 ${todayStr()}</span></div>
     <table><thead><tr>${cols.map(c=>`<th>${esc(r.head[c])}</th>`).join('')}</tr></thead><tbody>${r.rows.map(row=>'<tr>'+cols.map(c=>`<td>${esc(c===3?row[2]+'월 '+row[3]+'주':row[c])}</td>`).join('')+'</tr>').join('')}</tbody></table>`;
   document.body.classList.add('printing');
