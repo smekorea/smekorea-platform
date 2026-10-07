@@ -410,6 +410,22 @@ tbody tr.row-late td{background:#fff7f7;}
 .tabs-grp.on{display:flex;}
 .tabs-grp select{align-self:center;height:32px;min-width:128px;margin-right:12px;padding:0 10px;border:1px solid var(--point);border-radius:2px;background:#fff;color:var(--point);font-size:13.5px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;}
 #panel-dvlog .filter-bar input,#panel-dvmaster .filter-bar input,#panel-dvplan input{font-size:12px;font-family:inherit;color:#111827;height:32px;}
+/* 지시 상세 팝업(v3.17) — 지시사항에서는 오른쪽 서랍 대신 화면 가운데 뜨는 창. 제목줄을 잡고 옮긴다. 부서별보고의 프로젝트·마스터 상세는 기존 서랍 그대로 */
+.side-panel.float{display:none;transform:none;transition:none;top:9vh;left:calc(50vw - 480px);right:auto;bottom:auto;width:960px;max-width:96vw;max-height:84vh;overflow:hidden;flex-direction:column;z-index:400;border:1px solid var(--point);border-top:3px solid var(--point);box-shadow:0 12px 44px rgba(0,0,0,.3);}
+.side-panel.float.open{display:flex;}
+.side-panel.float .sp-header{position:static;cursor:move;user-select:none;background:#EEF1F5;padding:10px 16px;flex-shrink:0;}
+.side-panel.float .sp-header h3{font-size:14px;font-weight:700;}
+.side-panel.float .sp-body{overflow:auto;padding:14px 18px 16px;}
+.sp-sec{border:1px solid #C9CED6;margin-bottom:12px;}
+.sp-sec-hd{padding:6px 12px;background:#DCE3EE;color:#142C52;font-size:12.5px;font-weight:700;border-bottom:1px solid #B9C2D0;}
+.sp-sec-bd{padding:12px 14px 4px;}
+.sp-ttl{font-size:16px;font-weight:700;line-height:1.5;color:#111827;margin-bottom:10px;}
+.sp-meta{display:grid;grid-template-columns:1.3fr 1fr 1.3fr 1fr 1fr;gap:4px 16px;margin-bottom:6px;}
+.sp-meta .sp-row{margin-bottom:6px;} .sp-meta .sp-value{font-size:12.5px;}
+.sp-content.sp-main{max-height:34vh;font-size:14px;line-height:1.75;background:#fff;border-color:#C9CED6;padding:10px 14px;margin-bottom:10px;color:#111827;}
+.side-panel.float .tl-item{font-size:13.5px;line-height:1.65;}
+.side-panel.float .sp-sep{display:none;}
+@media(max-width:800px){.sp-meta{grid-template-columns:1fr 1fr;}.side-panel.float{left:2vw;top:4vh;}}
 /* 주간업무(v3.15) */
 #panel-rpweek .filter-bar input{font-size:12px;font-family:inherit;color:#111827;height:32px;}
 #panel-rpweek .mt-wrap{padding-bottom:10px;overflow:hidden;}
@@ -873,7 +889,7 @@ tbody tr.row-late td{background:#fff7f7;}
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v3.16 (2026-10-07) — 주간업무: 작성일자·목표일정·완료일정, 업체는 메이커관리·거래처 정보 기준 / v3.15 부서별보고 주간업무(rp_weekly) 탭 추가 / v3.14 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
+   directive.html v3.17 (2026-10-07) — 지시 상세를 움직이는 팝업으로(위 지시 내용·아래 활동 내용) + 주간회의 처리 칸 수정 버튼 / v3.16 — 주간업무: 작성일자·목표일정·완료일정, 업체는 메이커관리·거래처 정보 기준 / v3.15 부서별보고 주간업무(rp_weekly) 탭 추가 / v3.14 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -1338,6 +1354,7 @@ function meetRow(d,L,mgr){
   }
   // 주간회의 표에서는 「미진행」을 지시 내용 앞에 이미 표시하므로 상태 칸에서는 생략한다(완료 확인만 보이게)
   const stHtml=(statusLabel(d)[0]==='미진행'?'':statusBadge(d))+(held&&cm?`<span class="st-date">${esc(md(tsDay(cm.created_at)))}</span>`:'')+stBtn;
+  if(mng) ctl+=`<button class="btn btn-outline mt-btn" onclick="openForm(${d.id})" title="지시 내용을 수정합니다">수정</button>`;
   return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
     <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}${asgNames(d)?`<div class="th-meta" title="담당자">${esc(asgNames(d))}</div>`:''}</td><td>${esc(d.issuer_name||'-')}</td>
@@ -1661,15 +1678,26 @@ function openPanel(id,stay){
   if(curTab==='list') renderList();   // 선택 행 강조. 패널은 탭을 바꾸지 않고 그 자리에서 연다
   document.getElementById('spTitle').textContent=(d.kind==='공지'?'방침·공지':'지시')+' 상세  #'+d.id;
   document.getElementById('spBody').innerHTML=buildPanel(d);
-  document.getElementById('sidePanel').classList.add('open');
+  const sp=document.getElementById('sidePanel'); sp.classList.add('float'); spPlace(sp); sp.classList.add('open');
 }
-function closePanel(){selectedId=null;document.getElementById('sidePanel').classList.remove('open');if(curTab==='list')renderList();}
+function closePanel(){selectedId=null;const sp=document.getElementById('sidePanel');sp.classList.remove('open');sp.classList.remove('float');sp.style.left='';sp.style.top='';if(curTab==='list')renderList();}
+// 팝업 위치: 한 번 옮기면 그 자리를 기억한다(이 화면을 닫을 때까지). 화면 밖으로는 나가지 않게 한다
+let spPos=null;
+function spPlace(sp){ if(spPos){ sp.style.left=Math.max(0,Math.min(window.innerWidth-120,spPos.x))+'px'; sp.style.top=Math.max(0,Math.min(window.innerHeight-60,spPos.y))+'px'; } else { sp.style.left=''; sp.style.top=''; } }
+document.addEventListener('mousedown',ev=>{
+  const hd=ev.target.closest&&ev.target.closest('.side-panel.float .sp-header'); if(!hd||ev.target.closest('.sp-close')) return;
+  const sp=document.getElementById('sidePanel'), r=sp.getBoundingClientRect(), dx=ev.clientX-r.left, dy=ev.clientY-r.top; ev.preventDefault();
+  const mv=e2=>{ spPos={x:e2.clientX-dx,y:e2.clientY-dy}; spPlace(sp); };
+  const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+});
 function row(label,html){return `<div class="sp-row"><div class="sp-label">${label}</div><div class="sp-value">${html}</div></div>`;}
 function buildPanel(d){
   const mng=canManage(d), ups=updMap[d.id]||[], th=threadOf(d);
-  let h='';
-  h+=`<div class="sp-row"><div class="sp-value" style="font-size:14px;font-weight:700;line-height:1.5;">${esc(d.title)}</div></div>`;
-  if(d.content) h+=`<div class="sp-row"><div class="sp-content">${esc(d.content)}</div></div>`;
+  let h='<div class="sp-sec"><div class="sp-sec-hd">지시 내용</div><div class="sp-sec-bd">';
+  h+=`<div class="sp-ttl">${esc(d.title)}</div>`;
+  if(d.content) h+=`<div class="sp-content sp-main">${esc(d.content)}</div>`;
+  h+='<div class="sp-meta">';
   h+=row('지시일 · 구분 · 성격',esc(d.meeting_date||'')+' · '+esc(d.source||'')+' · '+esc(CAT_LABEL[catOf(d)]||catOf(d))+(d.origin?' <span style="color:var(--muted);">('+esc(d.origin)+')</span>':''));
   h+=row('지시자',esc(d.issuer_name||'-')+(d.registered_name&&d.registered_name!==d.issuer_name?' <span style="color:var(--muted);">(등록: '+esc(d.registered_name)+')</span>':''));
   h+=row('담당부서 · 담당자',esc(deptLabel(d)||'-')+(asgNames(d)?' · '+esc(asgNames(d)):'')+((d.coop_depts||[]).length?'<br><span style="color:var(--muted);">협조: '+esc(d.coop_depts.join(', '))+'</span>':''));
@@ -1680,12 +1708,13 @@ function buildPanel(d){
     h+=row('기한',due);
     h+=row('상태',statusBadge(d)+(d.is_internal?' <span style="color:var(--muted);font-size:11px;">(부서 내부 지시 — 평가 제외)</span>':''));
   }
+  h+='</div>';
   // 안건 이력
   if(th.length>1){
     h+=row(`이 안건의 지시 이력 (${th.length}건 · 최초 ${esc(th[0].meeting_date)} · +${Math.max(0,dayDiff(th[0].meeting_date,todayStr()))}일)`,'<div class="hist">'+th.map(x=>
       `<div class="${x.id===d.id?'cur':''}">${x.id===d.id?'▶ ':''}<a onclick="openPanel(${x.id})">${esc(md(x.meeting_date))} ${esc(x.title)}</a> ${statusBadge(x)}</div>`).join('')+'</div>');
   }
-  h+='<hr class="sp-sep">';
+  h+=`</div></div><div class="sp-sec"><div class="sp-sec-hd">${d.kind==='공지'?'확인 현황':'활동 내용'}</div><div class="sp-sec-bd">`;
   if(d.kind==='공지'){
     const cf=ups.filter(u=>u.type==='공지확인');
     const mine=me&&cf.some(u=>u.employee_id===me.id);
@@ -1693,7 +1722,6 @@ function buildPanel(d){
     h+=`<div class="sp-value" style="margin-bottom:10px;">${cf.length?esc(cf.map(u=>u.emp_name).join(', ')):'아직 확인한 사람이 없습니다'}</div>`;
     if(me&&!mine) h+=`<div class="sp-actions"><button class="btn btn-primary btn-sm" onclick="act(${d.id},'ack')">확인했습니다</button></div>`;
   }else{
-    h+=`<div class="sp-section-title">활동 이력</div>`;
     const shown=ups.filter(u=>u.type!=='공지확인');
     h+=shown.length?'<div class="tl">'+shown.map(u=>`<div class="tl-item tl-${esc(u.type)}">
         <div class="tl-meta"><span class="tl-type">${esc(u.type==='완료보고'?(u.state==='불가'?'불가 요청':'완료 요청'):(u.type==='반려'||u.type==='코멘트')?'보류':u.state&&u.type==='진행'?(u.state==='대기'?'회신 대기':u.state):u.type)}</span>${esc(u.emp_name||'')} · ${fmtDT(u.created_at)}${u.new_due?' · 기한 '+esc(u.old_due||'-')+' → '+esc(u.new_due):''}${u.next_date?' · 다음 확인 '+esc(md(u.next_date)):''}</div>
@@ -1703,8 +1731,8 @@ function buildPanel(d){
       h+=`<div class="sp-actions"><button class="btn btn-outline btn-sm" onclick="openAct(${d.id},'act')">활동 입력</button>`
         +(canDecide()?(d.progress_state==='보완'?'':`<button class="btn btn-primary btn-sm" onclick="decide(${d.id})">완료 확인</button>`)+`<button class="btn btn-red btn-sm" onclick="openAct(${d.id},'comment')">보류</button>`:'')+'</div>';
     }
-    if(mng&&d.status!=='완료') h+=`<textarea class="sp-textarea" id="spNote" style="min-height:44px;" placeholder="기한 변경 사유"></textarea>`;
   }
+  h+='</div></div>';
   if(mng){
     h+='<hr class="sp-sep"><div class="sp-section-title">지시자 처리</div><div class="sp-actions">';
     if(d.kind==='지시'){
@@ -1716,8 +1744,8 @@ function buildPanel(d){
     }
     h+=`<button class="btn btn-outline btn-sm" onclick="openForm(${d.id})">수정</button><button class="btn btn-red btn-sm" onclick="act(${d.id},'delete')">삭제</button></div>`;
     if(d.kind==='지시'&&d.status!=='완료'){
-      h+=`<div class="sp-row" style="margin-top:6px;"><div class="sp-label">기한 변경 ${d.due_date_original?'(연장은 위 칸에 사유 필수 · 최초 기한은 평가용으로 보존)':'(기한 최초 지정)'}</div>
-        <div style="display:flex;gap:6px;"><input type="date" class="sp-input" id="spNewDue" value="${esc(d.due_date||'')}" style="margin:0;flex:1;"><button class="btn btn-outline btn-sm" style="height:32px;" onclick="act(${d.id},'due')">기한 변경</button></div></div>`;
+      h+=`<div class="sp-row" style="margin-top:6px;"><div class="sp-label">기한 변경 ${d.due_date_original?'(연장은 사유 필수 · 최초 기한은 평가용으로 보존)':'(기한 최초 지정)'}</div>
+        <div style="display:flex;gap:6px;"><input type="date" class="sp-input" id="spNewDue" value="${esc(d.due_date||'')}" style="margin:0;width:170px;"><input class="sp-input" id="spNote" placeholder="기한 변경 사유" style="margin:0;flex:1;"><button class="btn btn-outline btn-sm" style="height:32px;" onclick="act(${d.id},'due')">기한 변경</button></div></div>`;
     }
   }
   return h;
