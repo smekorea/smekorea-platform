@@ -623,14 +623,14 @@ tr.dragging{opacity:.45;}
       <button class="up-btn up-btn-green" onclick="downloadPartnersData()">⬇ 현재 데이터 다운로드</button>
       <button class="up-btn up-btn-secondary" onclick="downloadPartnersTemplate()">📄 양식 다운로드</button>
     </div>
-    <div class="up-info">💡 이름(name)은 stock_inventory의 브랜드명(brand_std)과 정확히 일치해야 매칭됩니다. <b>마감기준(closing_basis)</b>에 "LG마감기준"으로 등록된 브랜드는 stock_analysis.html 목표대비분석에서 LG사급 실적 계산 시 제외됩니다(재고 미보유·LG마감정산 매입처). 엑셀 업로드 시 이름 기준으로 upsert(같으면 갱신, 없으면 추가)되며 기존 목록은 삭제되지 않습니다.</div>
+    <div class="up-info">💡 이름(name)은 stock_inventory의 브랜드명(brand_std)과 정확히 일치해야 매칭됩니다. <b>마감방식</b>은 인보이스마감 / 당월말 / LG마감 중 선택하며, 목록에는 <b>당월말/60일현금</b> 형태로 결제조건과 함께 표시됩니다. <b>LG마감</b>으로 등록된 브랜드는 stock_analysis.html 목표대비분석에서 LG사급 실적 계산 시 제외됩니다(재고 미보유·LG마감정산 매입처). 엑셀 업로드 시 이름 기준으로 upsert(같으면 갱신, 없으면 추가)되며 기존 목록은 삭제되지 않습니다.</div>
   </div>
 
   <!-- 프리뷰 -->
   <div class="up-section" id="partnersPreviewSection" style="display:none;">
     <div class="up-section-title">📊 업로드 미리보기</div>
     <div class="up-stat" id="partnersPreviewStat"></div>
-    <div class="up-preview"><table class="up-table"><thead><tr><th>이름</th><th>별칭1</th><th>별칭2</th><th>구분</th><th>국가</th><th>마감기준</th><th>결제조건</th><th>비고</th></tr></thead><tbody id="partnersPreviewBody"></tbody></table></div>
+    <div class="up-preview"><table class="up-table"><thead><tr><th>이름</th><th>별칭1</th><th>별칭2</th><th>구분</th><th>국가</th><th>마감방식</th><th>결제조건</th><th>계약</th><th>비고</th></tr></thead><tbody id="partnersPreviewBody"></tbody></table></div>
     <div style="margin-top:12px;display:flex;gap:8px;">
       <button class="up-btn up-btn-primary" onclick="submitPartnersData()" id="partnersSubmitBtn">✓ 등록 확인</button>
       <button class="up-btn up-btn-secondary" onclick="clearPartnersPreview()">✕ 취소</button>
@@ -647,9 +647,21 @@ tr.dragging{opacity:.45;}
       <option value="매입매출처">매입매출처</option>
     </select>
     <select id="pf-closing" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;">
-      <option value="">마감기준 전체</option>
-      <option value="LG마감기준">LG마감기준만</option>
-      <option value="basic">일반(실재고보유)만</option>
+      <option value="">마감방식 전체</option>
+      <option value="인보이스마감">인보이스마감</option>
+      <option value="당월말">당월말</option>
+      <option value="LG마감기준">LG마감</option>
+      <option value="none">미지정</option>
+    </select>
+    <select id="pf-contract" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;">
+      <option value="">계약 전체</option>
+      <option value="Y">계약 체결</option>
+      <option value="N">계약 미체결</option>
+    </select>
+    <select id="pf-maker" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;">
+      <option value="">메이커 구분 전체</option>
+      <option value="Y">메이커 겸 거래처만</option>
+      <option value="N">메이커 아닌 거래처만</option>
     </select>
     <select id="pf-active" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;">
       <option value="">상태 전체</option>
@@ -673,10 +685,10 @@ tr.dragging{opacity:.45;}
         <th style="width:140px;">별칭(alias1~2)</th>
         <th style="width:90px;">구분</th>
         <th style="width:80px;">국가</th>
-        <th style="width:130px;">마감기준</th>
+        <th style="width:150px;">마감방식/결제조건</th>
         <th style="width:100px;">공급방식</th>
         <th style="width:90px;">담당자</th>
-        <th style="width:140px;">결제조건</th>
+        <th style="width:170px;">계약</th>
         <th>비고</th>
         <th class="center" style="width:90px;">상태</th>
         <th class="center" style="width:130px;">관리</th>
@@ -688,7 +700,7 @@ tr.dragging{opacity:.45;}
 
 <!-- 거래처 정보 추가/수정 모달 -->
 <div class="modal-overlay" id="partnersModal">
-  <div class="modal-box" style="width:480px;">
+  <div class="modal-box" style="width:540px;max-height:90vh;overflow-y:auto;">
     <div class="modal-hdr">
       <div class="modal-title" id="partnersModalTitle">거래처 추가</div>
       <button class="modal-close" onclick="closePartnersModal()">✕</button>
@@ -710,11 +722,32 @@ tr.dragging{opacity:.45;}
         </div>
         <div class="form-group"><label>국가</label><input id="pm-country" placeholder="예) 국내/인도/태국 (선택)"></div>
       </div>
-      <div class="form-group full"><label>마감기준</label>
-        <select id="pm-closing">
-          <option value="">실재고보유 (기본, SME 재고 소유)</option>
-          <option value="LG마감기준">LG마감기준 (재고 미보유 — LG사급 실적 제외 대상)</option>
-        </select>
+      <div class="modal-row">
+        <div class="form-group"><label>마감방식</label>
+          <select id="pm-closing">
+            <option value="">(미지정)</option>
+            <option value="인보이스마감">인보이스마감</option>
+            <option value="당월말">당월말</option>
+            <option value="LG마감기준">LG마감 (재고 미보유 — LG사급 실적 제외)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>결제조건</label>
+          <select id="pm-terms">
+            <option value="">(미지정)</option>
+            <optgroup label="현금">
+              <option value="30일현금">30일현금</option>
+              <option value="60일현금">60일현금</option>
+              <option value="90일현금">90일현금</option>
+              <option value="120일현금">120일현금</option>
+            </optgroup>
+            <optgroup label="어음">
+              <option value="어음30일">어음30일</option>
+              <option value="어음60일">어음60일</option>
+              <option value="어음90일">어음90일</option>
+              <option value="어음120일">어음120일</option>
+            </optgroup>
+          </select>
+        </div>
       </div>
       <div class="modal-row">
         <div class="form-group"><label>공급방식</label>
@@ -727,7 +760,26 @@ tr.dragging{opacity:.45;}
           <select id="pm-manager"><option value="">(미지정)</option></select>
         </div>
       </div>
-      <div class="form-group full"><label>결제조건</label><input id="pm-terms" placeholder="예) 월말마감 익월30일 (선택, 향후 사용예정)"></div>
+      <div style="border-top:1px solid var(--border);margin:6px 0 10px;padding-top:10px;font-size:12.5px;font-weight:700;color:var(--text);">📄 계약 정보</div>
+      <div class="modal-row">
+        <div class="form-group"><label>계약서 체결유무</label>
+          <select id="pm-c-signed">
+            <option value="false">미체결</option>
+            <option value="true">체결</option>
+          </select>
+        </div>
+        <div class="form-group"><label>계약일자</label><input type="date" id="pm-c-date"></div>
+      </div>
+      <div class="form-group full"><label>계약기간</label>
+        <select id="pm-c-term" onchange="onPartnersTermChange()">
+          <option value="">(미지정)</option>
+          <option value="3년계약 1년자동연장">3년계약 1년자동연장</option>
+          <option value="SME개발진행시 5년계약보장요청">SME개발진행시 5년계약보장요청</option>
+          <option value="__etc">기타 (직접입력)</option>
+        </select>
+        <input id="pm-c-term-etc" placeholder="계약기간 직접입력" style="display:none;margin-top:6px;">
+      </div>
+      <div class="form-group full"><label>계약 중요내용</label><textarea id="pm-c-note" rows="3" placeholder="예) 단가 연 1회 협의, 품질보증 2년, 독점공급 조항 등" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:2px;font-family:'Noto Sans KR',sans-serif;font-size:13px;resize:vertical;"></textarea></div>
       <div class="form-group full"><label>비고</label><input id="pm-note"></div>
       <div class="form-group"><label>상태</label>
         <select id="pm-active">
@@ -790,6 +842,8 @@ tr.dragging{opacity:.45;}
         <option value="multi">표기 2개 이상</option>
         <option value="single">단일표기</option>
         <option value="unreg">미등록(실적만 있음)</option>
+        <option value="partner">거래처 겸용 메이커</option>
+        <option value="nopartner">거래처 미등록 메이커</option>
       </select>
       <input type="text" id="alias-search" placeholder="메이커명 / 표기 검색..." oninput="renderAliasTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 12px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;width:200px;">
       <div style="margin-left:auto;display:flex;gap:8px;">
@@ -806,9 +860,10 @@ tr.dragging{opacity:.45;}
         <th style="width:180px;cursor:pointer;" onclick="sortAliasTable('name')" title="클릭하여 정렬 (한글 → 영문 순)">대표 메이커명 <span id="al-sort-name"></span></th>
         <th style="cursor:pointer;" onclick="sortAliasTable('chips')" title="클릭하여 표기 수로 정렬">동일 메이커 표기 <span id="al-sort-chips"></span></th>
         <th style="width:150px;cursor:pointer;" onclick="sortAliasTable('usage')" title="클릭하여 사용실적으로 정렬">사용실적 / 기간 <span id="al-sort-usage">↓</span></th>
+        <th class="center" style="width:150px;cursor:pointer;" onclick="sortAliasTable('partner')" title="거래처정보에 같은 이름(이름·별칭)이 등록되어 있는지">거래처등록 <span id="al-sort-partner"></span></th>
         <th class="center" style="width:110px;">관리</th>
       </tr></thead>
-      <tbody id="alias-tbody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="alias-tbody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -2150,6 +2205,78 @@ function downloadExportTemplate(){
 // ── 탭2-3: 거래처 정보 (partners) ──
 // ════════════════════════════════════════════════════
 let _partnersData=[], _partnersRows=[];
+let _makerKeySet=null;   // 메이커 표기(정규화) 집합 — 거래처의 메이커 겸용 여부 판정용
+
+// 메이커·거래처 이름 비교용 정규화: (주)/주식회사/CO.,LTD/괄호내용/공백·기호 제거 후 대문자
+function _nameKey(v){
+  return String(v||'')
+    .replace(/\(주\)|주식회사|㈜|CO\.?,?\s*LTD\.?|\([^)]*\)/gi,'')
+    .toUpperCase().replace(/[^A-Z0-9가-힣]/g,'');
+}
+// 거래처 1건의 이름·별칭 키 목록
+function _partnerKeys(r){ return [r.name,r.alias1,r.alias2].map(_nameKey).filter(k=>k.length>=2); }
+// 메이커 표기 집합 (brand_usage_summary 실적 브랜드 + maker_alias 대표명·표기)
+async function _ensureMakerKeySet(){
+  if(_makerKeySet) return _makerKeySet;
+  const [al, us] = await Promise.all([
+    sb.from('maker_alias').select('standard_name,alias'),
+    sb.rpc('brand_usage_summary')
+  ]);
+  const setK=new Set();
+  (al.data||[]).forEach(r=>{ [r.standard_name,r.alias].forEach(v=>{const k=_nameKey(v); if(k.length>=2) setK.add(k);}); });
+  (us.data||[]).forEach(r=>{ const k=_nameKey(r.brand); if(k.length>=2) setK.add(k); });
+  _makerKeySet=setK;
+  return setK;
+}
+function _isMakerPartner(r){ return !!_makerKeySet && _partnerKeys(r).some(k=>_makerKeySet.has(k)); }
+// 마감방식 표시명 (DB값 'LG마감기준'은 분석화면 호환을 위해 유지, 화면에는 'LG마감')
+function _closingLabel(v){ return v==='LG마감기준' ? 'LG마감' : (v||''); }
+// 엑셀 입력값 → DB값
+function _closingFromText(v){
+  const x=String(v||'').replace(/\s/g,'');
+  if(!x) return null;
+  if(x.startsWith('LG마감')) return 'LG마감기준';
+  if(x.startsWith('인보이스')) return '인보이스마감';
+  if(x==='당월말'||x==='당월'||x==='당월마감'||x==='월말') return '당월말';
+  return String(v).trim();
+}
+// 목록 표시: 당월말/60일현금
+function _closingTermsText(r){
+  return [_closingLabel(r.closing_basis), r.payment_terms||''].filter(Boolean).join('/');
+}
+// 계약 요약
+function _contractHtml(r){
+  if(!r.contract_signed) return '<span style="color:var(--muted);font-size:11.5px;">미체결</span>';
+  const termShort = r.contract_term==='3년계약 1년자동연장' ? '3년+1년자동'
+                  : r.contract_term==='SME개발진행시 5년계약보장요청' ? '개발시 5년보장' : (r.contract_term||'');
+  const tip = String(r.contract_note||'').replace(/"/g,'&quot;');
+  return `<span class="badge b-green">체결</span> <span style="font-size:11.5px;">${termShort}</span>`+
+         (r.contract_date?`<div style="font-size:10.5px;color:var(--muted);">${r.contract_date}</div>`:'')+
+         (r.contract_note?`<div style="font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${tip}">📌 ${tip}</div>`:'');
+}
+const PARTNER_TERM_PRESETS=['3년계약 1년자동연장','SME개발진행시 5년계약보장요청'];
+function onPartnersTermChange(){
+  const etc=document.getElementById('pm-c-term').value==='__etc';
+  document.getElementById('pm-c-term-etc').style.display=etc?'block':'none';
+}
+function _setPartnersContractForm(r){
+  document.getElementById('pm-c-signed').value=r&&r.contract_signed?'true':'false';
+  document.getElementById('pm-c-date').value=(r&&r.contract_date)||'';
+  const term=(r&&r.contract_term)||'';
+  const isPreset=!term||PARTNER_TERM_PRESETS.includes(term);
+  document.getElementById('pm-c-term').value=isPreset?term:'__etc';
+  document.getElementById('pm-c-term-etc').value=isPreset?'':term;
+  onPartnersTermChange();
+  document.getElementById('pm-c-note').value=(r&&r.contract_note)||'';
+}
+// 셀렉트에 없는 기존 자유입력값도 보존되도록 옵션 추가 후 선택
+function _setSelectKeep(id,val){
+  const el=document.getElementById(id);
+  if(val && ![...el.options].some(o=>o.value===val)){
+    const o=document.createElement('option'); o.value=val; o.textContent=_closingLabel(val)+' (기존값)'; el.appendChild(o);
+  }
+  el.value=val||'';
+}
 
 async function loadPartnersData() {
   const tbody=document.getElementById('partners-tbody');
@@ -2159,8 +2286,9 @@ async function loadPartnersData() {
   _partnersData=data||[];
   document.getElementById('partners-count').textContent=`(${_partnersData.length}개)`;
   if(_empData.length===0) await loadEmpData(); // 담당자 드롭다운용 직원목록 확보
+  try{ await _ensureMakerKeySet(); }catch(e){ console.warn('메이커 목록 로드 실패',e); }
   renderPartnersTable();
-  setTimeout(()=>initColResize('partners-table','al_partners_v2'),50);
+  setTimeout(()=>initColResize('partners-table','al_partners_v3'),50);
 }
 
 function renderPartnersTable() {
@@ -2170,11 +2298,15 @@ function renderPartnersTable() {
   const fClosing=document.getElementById('pf-closing')?.value||'';
   const fActive=document.getElementById('pf-active')?.value||'';
   const fSupply=document.getElementById('pf-supply')?.value||'';
+  const fContract=document.getElementById('pf-contract')?.value||'';
+  const fMaker=document.getElementById('pf-maker')?.value||'';
   let rows=_partnersData;
   if(kw) rows=rows.filter(r=>(r.name||'').toLowerCase().includes(kw)||(r.alias1||'').toLowerCase().includes(kw)||(r.alias2||'').toLowerCase().includes(kw));
   if(fType) rows=rows.filter(r=>r.type===fType);
-  if(fClosing==='LG마감기준') rows=rows.filter(r=>r.closing_basis==='LG마감기준');
-  if(fClosing==='basic') rows=rows.filter(r=>r.closing_basis!=='LG마감기준');
+  if(fClosing==='none') rows=rows.filter(r=>!r.closing_basis);
+  else if(fClosing) rows=rows.filter(r=>r.closing_basis===fClosing);
+  if(fContract) rows=rows.filter(r=>!!r.contract_signed===(fContract==='Y'));
+  if(fMaker) rows=rows.filter(r=>_isMakerPartner(r)===(fMaker==='Y'));
   if(fActive) rows=rows.filter(r=>(r.is_active!==false)===(fActive==='true'));
   if(fSupply) rows=rows.filter(r=>(r.supply_mode||'FORECAST')===fSupply);
   const pfr=document.getElementById('pf-result'); if(pfr) pfr.innerHTML=`<b style="color:var(--text);">${rows.length.toLocaleString()}</b> / ${_partnersData.length.toLocaleString()}건`;
@@ -2183,20 +2315,24 @@ function renderPartnersTable() {
   tbody.innerHTML=rows.map((r,i)=>{
     const aliases=[r.alias1,r.alias2].filter(Boolean).join(', ');
     const active=r.is_active!==false;
-    const closingBadge=r.closing_basis==='LG마감기준'?'<span class="badge b-gray" style="background:#fff;border:1px solid var(--accent);color:var(--accent);">LG마감기준</span>':(r.closing_basis||'');
+    const ctText=_closingTermsText(r);
+    const closingBadge=r.closing_basis==='LG마감기준'
+      ?`<span class="badge b-gray" style="background:#fff;border:1px solid var(--accent);color:var(--accent);">${ctText}</span>`
+      :ctText;
+    const makerBadge=_isMakerPartner(r)?' <span class="badge b-gray" style="background:#fff;border:1px solid var(--point);color:var(--point);font-size:10.5px;" title="동일메이커관리의 메이커와 이름이 같은 거래처">메이커</span>':'';
     const supply=r.supply_mode||'FORECAST';
     const supplyBadge=supply==='PO_BASED'?'<span class="badge b-gray" style="background:#fff;border:1px solid var(--point);color:var(--point);">PO접수</span>':'<span class="badge b-gray" style="background:#fff;border:1px solid var(--line-dk);color:var(--muted);">예측발주</span>';
     return `
     <tr>
       <td class="center mono">${i+1}</td>
-      <td><b>${r.name||''}</b></td>
+      <td><b>${r.name||''}</b>${makerBadge}</td>
       <td style="color:var(--muted);">${aliases}</td>
       <td class="center">${r.type||''}</td>
       <td class="center">${r.country||''}</td>
       <td class="center">${closingBadge}</td>
       <td class="center">${supplyBadge}</td>
       <td class="center">${r.sales_manager||''}</td>
-      <td>${r.payment_terms||''}</td>
+      <td>${_contractHtml(r)}</td>
       <td>${r.note||''}</td>
       <td class="center"><span class="badge ${active?'b-green':'b-gray'}" style="cursor:pointer;" onclick="togglePartnersActive(${r.id},${active})">${active?'활성':'비활성'}</span></td>
       <td class="center">
@@ -2241,6 +2377,7 @@ function openPartnersAddModal(){
   document.getElementById('pm-supply').value='FORECAST';
   document.getElementById('pm-manager').innerHTML=_partnersManagerOptions('');
   document.getElementById('pm-terms').value='';
+  _setPartnersContractForm(null);
   document.getElementById('pm-note').value='';
   document.getElementById('pm-active').value='true';
   document.getElementById('partnersModal').classList.add('show');
@@ -2254,10 +2391,11 @@ function openPartnersEditModal(id){
   document.getElementById('pm-alias2').value=r.alias2||'';
   document.getElementById('pm-type').value=r.type||'매입처';
   document.getElementById('pm-country').value=r.country||'';
-  document.getElementById('pm-closing').value=r.closing_basis||'';
+  _setSelectKeep('pm-closing',r.closing_basis||'');
   document.getElementById('pm-supply').value=r.supply_mode||'FORECAST';
   document.getElementById('pm-manager').innerHTML=_partnersManagerOptions(r.sales_manager||'');
-  document.getElementById('pm-terms').value=r.payment_terms||'';
+  _setSelectKeep('pm-terms',r.payment_terms||'');
+  _setPartnersContractForm(r);
   document.getElementById('pm-note').value=r.note||'';
   document.getElementById('pm-active').value=(r.is_active!==false)?'true':'false';
   document.getElementById('partnersModal').classList.add('show');
@@ -2268,6 +2406,8 @@ async function savePartnersModal() {
   const id=document.getElementById('pm-id').value;
   const name=document.getElementById('pm-name').value.trim();
   if(!name){alert('이름은 필수입니다.');return;}
+  const termSel=document.getElementById('pm-c-term').value;
+  const contractTerm=termSel==='__etc'?(document.getElementById('pm-c-term-etc').value.trim()||null):(termSel||null);
   const payload={
     name,
     alias1:document.getElementById('pm-alias1').value.trim()||null,
@@ -2277,7 +2417,11 @@ async function savePartnersModal() {
     closing_basis:document.getElementById('pm-closing').value||null,
     supply_mode:document.getElementById('pm-supply').value||'FORECAST',
     sales_manager:document.getElementById('pm-manager').value||null,
-    payment_terms:document.getElementById('pm-terms').value.trim()||null,
+    payment_terms:document.getElementById('pm-terms').value||null,
+    contract_signed:document.getElementById('pm-c-signed').value==='true',
+    contract_term:contractTerm,
+    contract_date:document.getElementById('pm-c-date').value||null,
+    contract_note:document.getElementById('pm-c-note').value.trim()||null,
     note:document.getElementById('pm-note').value.trim()||null,
     is_active:document.getElementById('pm-active').value==='true',
     updated_at:new Date().toISOString(),
@@ -2296,22 +2440,39 @@ function loadPartnersExcel(e){
     const wb=XLSX.read(ev.target.result,{type:'array'});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
-    _partnersRows=raw.map(r=>({
+    const hdr=raw.length?Object.keys(raw[0]):[];
+    const has=(...ks)=>ks.some(k=>hdr.includes(k));
+    const pick=(r,...ks)=>{for(const k of ks){ if(r[k]!==undefined && String(r[k]).trim()!=='') return r[k]; } return '';};
+    _partnersRows=raw.map(r=>{
+      const row={
       name:String(r['name(매입처명)']||r['이름']||r['name']||'').trim(),
       alias1:String(r['alias1']||r['별칭1']||'').trim()||null,
       alias2:String(r['alias2']||r['별칭2']||'').trim()||null,
       type:String(r['type']||r['구분']||'').trim()||null,
       country:String(r['country']||r['국가']||'').trim()||null,
-      closing_basis:String(r['closing_basis']||r['마감기준']||'').trim()||null,
-      payment_terms:String(r['payment_terms']||r['결제조건']||'').trim()||null,
+      closing_basis:_closingFromText(pick(r,'closing_basis','마감방식','마감기준')),
+      payment_terms:String(pick(r,'payment_terms','결제조건')).trim()||null,
       note:String(r['note']||r['비고']||'').trim()||null,
       is_active:String(r['is_active']||'TRUE').trim().toUpperCase()!=='FALSE',
       updated_at:new Date().toISOString(),
-    })).filter(r=>r.name);
+      };
+      // 계약 항목은 엑셀에 해당 열이 있을 때만 반영 (없으면 기존값 유지)
+      if(has('contract_signed','계약서체결유무')){
+        const sv=String(pick(r,'contract_signed','계약서체결유무')).trim().toUpperCase();
+        row.contract_signed=['체결','Y','TRUE','O','1'].includes(sv);
+      }
+      if(has('contract_term','계약기간')) row.contract_term=String(pick(r,'contract_term','계약기간')).trim()||null;
+      if(has('contract_date','계약일자')){
+        const dv=pick(r,'contract_date','계약일자');
+        row.contract_date=dv===''?null:(typeof dv==='number'?new Date(Math.round((dv-25569)*86400000)).toISOString().slice(0,10):String(dv).trim().replace(/[./]/g,'-').slice(0,10));
+      }
+      if(has('contract_note','계약중요내용')) row.contract_note=String(pick(r,'contract_note','계약중요내용')).trim()||null;
+      return row;
+    }).filter(r=>r.name && !r.name.startsWith('※'));
     const stat=document.getElementById('partnersPreviewStat');
     stat.innerHTML=`<div class="up-stat-card"><b>${_partnersRows.length}</b>건</div>`;
     const tbody=document.getElementById('partnersPreviewBody');
-    tbody.innerHTML=_partnersRows.map(r=>`<tr><td>${r.name}</td><td>${r.alias1||''}</td><td>${r.alias2||''}</td><td>${r.type||''}</td><td>${r.country||''}</td><td>${r.closing_basis||''}</td><td>${r.payment_terms||''}</td><td>${r.note||''}</td></tr>`).join('');
+    tbody.innerHTML=_partnersRows.map(r=>`<tr><td>${r.name}</td><td>${r.alias1||''}</td><td>${r.alias2||''}</td><td>${r.type||''}</td><td>${r.country||''}</td><td>${_closingLabel(r.closing_basis)}</td><td>${r.payment_terms||''}</td><td>${r.contract_signed===undefined?'(유지)':(r.contract_signed?'체결':'미체결')}${r.contract_term?' · '+r.contract_term:''}${r.contract_date?' · '+r.contract_date:''}</td><td>${r.note||''}</td></tr>`).join('');
     document.getElementById('partnersPreviewSection').style.display='block';
   };
   reader.readAsArrayBuffer(file); e.target.value='';
@@ -2335,18 +2496,19 @@ async function downloadPartnersData(){
   const {data}=await sb.from('partners').select('*').order('name');
   const ws=XLSX.utils.json_to_sheet((data||[]).map(r=>({
     'name(매입처명)':r.name,'별칭1':r.alias1||'','별칭2':r.alias2||'','구분':r.type||'',
-    '국가':r.country||'','마감기준':r.closing_basis||'','결제조건':r.payment_terms||'','비고':r.note||'','상태':(r.is_active!==false)?'활성':'비활성'
+    '국가':r.country||'','마감방식':_closingLabel(r.closing_basis),'결제조건':r.payment_terms||'',
+    '계약서체결유무':r.contract_signed?'체결':'미체결','계약기간':r.contract_term||'','계약일자':r.contract_date||'','계약중요내용':r.contract_note||'',
+    '비고':r.note||'','상태':(r.is_active!==false)?'활성':'비활성'
   })));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'거래처정보');
   XLSX.writeFile(wb,'SME_거래처정보.xlsx');
 }
 function downloadPartnersTemplate(){
   const ws=XLSX.utils.aoa_to_sheet([
-    ['name(매입처명)','alias1','alias2','type','country','closing_basis','payment_terms','note'],
-    ['Glory Faith','','','매입처','','LG마감기준','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
-    ['ZPO','','','매입처','','LG마감기준','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
-    ['베이스원','','','매입처','','LG마감기준','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
-    ['㈜예시상사(일반 브랜드는 closing_basis 비워두세요)','','','매입처','','','','']
+    ['name(매입처명)','alias1','alias2','type','country','마감방식','결제조건','계약서체결유무','계약기간','계약일자','계약중요내용','note'],
+    ['※ 마감방식: 인보이스마감 / 당월말 / LG마감 · 결제조건: 30·60·90·120일현금 / 어음30·60·90·120일 · 계약기간: 3년계약 1년자동연장 / SME개발진행시 5년계약보장요청 (이 줄은 지우고 업로드)','','','','','','','','','','',''],
+    ['Glory Faith','','','매입처','','LG마감','','미체결','','','','SME 재고 미보유 — LG 공급수량 기준 마감정산'],
+    ['㈜예시상사','','','매입처','','당월말','60일현금','체결','3년계약 1년자동연장','2026-01-01','단가 연 1회 협의','']
   ]);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'거래처정보');
   XLSX.writeFile(wb,'SME_거래처정보_양식.xlsx');
@@ -3952,14 +4114,21 @@ function closeStockSummaryModal() {
 let _aliasData = [], _makerData = [];
 
 let _brandUsage = {};
+let _alPartnerIdx = {};   // 정규화키 → [{name,type}]
 async function loadAliasData() {
   const tbody = document.getElementById('alias-tbody');
-  tbody.innerHTML = '<tr><td colspan="5"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
-  const [aliasRes, usageRes] = await Promise.all([
+  tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  const [aliasRes, usageRes, partnerRes] = await Promise.all([
     sb.from('maker_alias').select('*').order('standard_name'),
-    sb.rpc('brand_usage_summary')
+    sb.rpc('brand_usage_summary'),
+    sb.from('partners').select('name,alias1,alias2,type,is_active')
   ]);
-  if(aliasRes.error){tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:red;padding:20px;">${aliasRes.error.message}</td></tr>`;return;}
+  _alPartnerIdx = {};
+  (partnerRes.data||[]).forEach(p=>{
+    _partnerKeys(p).forEach(k=>{ (_alPartnerIdx[k]=_alPartnerIdx[k]||[]).push({name:p.name,type:p.type||'',active:p.is_active!==false}); });
+  });
+  _makerKeySet=null;   // 메이커 매핑이 바뀌었을 수 있으므로 거래처 탭 판정 캐시 초기화
+  if(aliasRes.error){tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:red;padding:20px;">${aliasRes.error.message}</td></tr>`;return;}
   _aliasData = aliasRes.data || [];
   _brandUsage = {};
   (usageRes.data||[]).forEach(r=>{
@@ -4166,9 +4335,20 @@ function renderAliasTable() {
     return {p,s,ym1,ym2,used:p+s};
   };
   const esc = s2 => String(s2==null?'':s2).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // 대표명·표기 중 거래처(이름·별칭)와 같은 것
+  const partnerOf = std => {
+    const seen = {}; const out = [];
+    [std, ...(groups[std]||[]).map(x=>x.alias)].forEach(v=>{
+      const k=_nameKey(v); if(k.length<2) return;
+      (_alPartnerIdx[k]||[]).forEach(p=>{ if(!seen[p.name]){ seen[p.name]=1; out.push(p); } });
+    });
+    return out;
+  };
   let stdList = Object.keys(groups).filter(std => {
     const cnt = groups[std].length;
     const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
+    if(filter==='partner'   && !partnerOf(std).length) return false;
+    if(filter==='nopartner' &&  partnerOf(std).length) return false;
     if(filter==='multi'  && cnt < 1) return false;
     if(filter==='single' && cnt >= 1) return false;
     if(filter==='unreg'  && isReg) return false;
@@ -4184,11 +4364,15 @@ function renderAliasTable() {
       const d=(groups[a].length-groups[b].length)*dir;
       return d!==0 ? d : alNameCmp(a,b);
     }
+    if(_alSortKey==='partner'){
+      const d=(partnerOf(a).length-partnerOf(b).length)*dir;
+      return d!==0 ? d : alNameCmp(a,b);
+    }
     const d=(usageOf(a).used-usageOf(b).used)*dir;
     return d!==0 ? d : alNameCmp(a,b);
   });
   // 헤더 정렬 아이콘
-  ['name','chips','usage'].forEach(k=>{
+  ['name','chips','usage','partner'].forEach(k=>{
     const el=document.getElementById('al-sort-'+k);
     if(el) el.textContent = (k===_alSortKey) ? (_alSortAsc?'↑':'↓') : '';
   });
@@ -4206,6 +4390,10 @@ function renderAliasTable() {
          <div style="font-size:10.5px;color:var(--muted);">${esc(u.ym1)}~${esc(u.ym2)}</div>`
       : '<span style="font-size:11.5px;color:var(--muted);">실적 없음</span>';
     const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
+    const pList = partnerOf(std);
+    const partnerHtml = pList.length
+      ? pList.map(p=>`<div style="font-size:11.5px;" title="${esc(p.name)}"><span style="color:var(--point);font-weight:700;">✓</span> ${esc(p.type||'거래처')}${p.name!==std?` <span style="color:var(--muted);">(${esc(p.name)})</span>`:''}${p.active?'':' <span style="color:var(--muted);">·비활성</span>'}</div>`).join('')
+      : '<span style="font-size:11.5px;color:var(--muted);">미등록</span>';
     return `<tr>
       <td class="center mono">${i+1}</td>
       <td style="font-weight:700;">${esc(std)}</td>
@@ -4215,15 +4403,17 @@ function renderAliasTable() {
         </div>
       </td>
       <td>${usageHtml}</td>
+      <td class="center">${partnerHtml}</td>
       <td class="center">
         ${isReg ? `<button class="row-btn row-btn-del" onclick="deleteAliasGroup('${esc(std).replace(/'/g,"\\'")}')">매핑 해제</button>` : '<span style="color:var(--muted);font-size:11px;">—</span>'}
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">해당 조건의 메이커가 없습니다</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">해당 조건의 메이커가 없습니다</td></tr>';
   const multiCnt = Object.keys(groups).filter(k=>groups[k].length>0).length;
+  const partnerCnt = Object.keys(groups).filter(k=>partnerOf(k).length>0).length;
   document.getElementById('alias-count-label').textContent =
-    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개)`;
-  setTimeout(()=>initColResize('alias-table','al_alias_v3'),50);
+    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개 · 거래처겸용 ${partnerCnt}개)`;
+  setTimeout(()=>initColResize('alias-table','al_alias_v4'),50);
 }
 
 // 표기 1개 인라인 수정
