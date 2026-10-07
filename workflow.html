@@ -1027,7 +1027,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     <div class="dm-row">
       <div class="dm-field">
         <label class="dm-label" data-i18n="날짜">날짜</label>
-        <input type="date" id="dm-date" class="dm-input">
+        <input type="date" id="dm-date" class="dm-input" onchange="onPeriodChange()">
       </div>
       <div class="dm-field">
         <label class="dm-label" data-i18n="업무유형">업무유형</label>
@@ -1191,6 +1191,24 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       </div>
     </div>
 
+    <!-- 기간 설정 (출장 등 여러 날 일정 — 날짜별 복사 등록) -->
+    <div id="dm-period-section" style="margin-top:12px;padding:12px;background:#f7f5f2;border-radius:8px;border:1.5px solid #e5ddd4;">
+      <div style="font-size:11px;font-weight:700;color:#9a8e82;letter-spacing:1px;margin-bottom:8px;" data-i18n="기간 설정 (여러 날 일정)">기간 설정 (여러 날 일정)</div>
+      <div id="dm-period-info" style="display:none;font-size:12px;color:#1a4fa0;font-weight:700;margin-bottom:8px;"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--text2);" data-i18n="종료일">종료일</span>
+        <input type="date" id="dm-period-end" class="dm-input" style="width:auto;min-width:140px;" onchange="onPeriodChange()">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" id="dm-period-weekend" checked onchange="onPeriodChange()"> <span data-i18n="주말 포함">주말 포함</span></label>
+        <span id="dm-period-count" style="font-size:12px;font-weight:700;color:#1a4fa0;"></span>
+      </div>
+      <div id="dm-period-hint" style="font-size:11px;color:var(--text3);margin-top:6px;" data-i18n="시작일(위 날짜)부터 종료일까지 같은 내용이 날짜별로 복사되어 달력에 표시됩니다">시작일(위 날짜)부터 종료일까지 같은 내용이 날짜별로 복사되어 달력에 표시됩니다</div>
+      <div id="dm-period-scope" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #d9cfc3;font-size:12px;">
+        <div style="font-weight:700;margin-bottom:6px;" data-i18n="저장 범위">저장 범위</div>
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;"><input type="radio" name="dm-scope" value="one" checked onchange="onScopeChange()"> <span data-i18n="이 날짜만 수정">이 날짜만 수정</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="dm-scope" value="all" onchange="onScopeChange()"> <span data-i18n="전체 기간에 반영 (개별 수정한 날짜의 같은 항목은 유지)">전체 기간에 반영 (개별 수정한 날짜의 같은 항목은 유지)</span></label>
+      </div>
+    </div>
+
     <!-- 반복 설정 (신규 작성 시만 표시) -->
     <div id="dm-repeat-section" style="margin-top:12px;padding:12px;background:#f7f5f2;border-radius:8px;border:1.5px solid #e5ddd4;">
       <div style="font-size:11px;font-weight:700;color:#9a8e82;letter-spacing:1px;margin-bottom:8px;" data-i18n="반복 설정">반복 설정</div>
@@ -1217,6 +1235,19 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       <button id="diary-copy-btn" class="btn-cancel" style="display:none;border-color:var(--accent);color:var(--accent);" onclick="openMoveCopyDate()" data-i18n="이동복사">이동복사</button>
       <button id="diary-del-btn" class="btn-del" style="display:none" onclick="deleteDiary()" data-i18n="삭제">삭제</button>
       <button class="btn-save" onclick="saveDiary()" data-i18n="저장">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="scope-modal-overlay" style="z-index:500;">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-handle"></div>
+    <h3 id="scope-modal-title" data-i18n="기간 일정 삭제">기간 일정 삭제</h3>
+    <p id="scope-modal-msg" style="font-size:12px;color:var(--text2);margin-bottom:12px;"></p>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button id="scope-one-btn" class="btn-cancel" style="height:40px;" onclick="scopeChoose('one')" data-i18n="이 날짜만 삭제">이 날짜만 삭제</button>
+      <button id="scope-all-btn" class="btn-del" style="height:40px;" onclick="scopeChoose('all')">전체 기간 삭제</button>
+      <button class="btn-cancel" style="height:40px;" onclick="scopeChoose(null)" data-i18n="취소">취소</button>
     </div>
   </div>
 </div>
@@ -1450,6 +1481,7 @@ function renderCal(){
   const first=new Date(y,m,1),last=new Date(y,m+1,0),startDay=first.getDay();
   const totalCells=Math.ceil((startDay+last.getDate())/7)*7;
   let html='';
+  const gmap=buildGroupMap();   // 기간 일정 (n/m) 표시용
   for(let i=0;i<totalCells;i++){
     const date=new Date(y,m,1-startDay+i);
     const dy=date.getFullYear(),dm=date.getMonth(),dd=date.getDate();
@@ -1479,7 +1511,7 @@ function renderCal(){
       const bar=isHighImp?'#E24B4A':isFuture?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
       const txt=isHighImp?'color:#E24B4A !important;font-weight:700;':'';
       return `<div class="event-chip" style="background:${bg};border-left-color:${bar};${txt}"
-        onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}</div>`;
+        onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}${grpTag(r,gmap)}</div>`;
     }).join('');
     const sharedChips=daySharedAll.map(r=>{
       return `<div class="event-chip shared-chip" style="background:#F3E9FF;border-left-color:#8E5FC7;color:#5A3286 !important;"
@@ -1549,6 +1581,7 @@ function renderDayPopupList(){
       </div>
     </div>`;
   }).join('');
+  const gmapP=buildGroupMap();
   el.innerHTML=list.map(r=>{
     const status=r.status||'완료';
     // 오늘 이후 날짜면 일정, 이전이면 업무일지
@@ -1562,7 +1595,7 @@ function renderDayPopupList(){
     return `<div class="dp-item${isSchedule?' dp-item-schedule':''}">
       <div class="dp-cat-bar" style="background:${barColor}"></div>
       <div class="dp-item-body" onclick="editDiary('${r.id}');closeDayPopup();" style="cursor:pointer;">
-        <div class="dp-item-title">${escapeHtml(r.title||r.partner||'')}</div>
+        <div class="dp-item-title">${escapeHtml(r.title||r.partner||'')}${grpTag(r,gmapP)}</div>
         <div class="dp-item-cat">${t(r.category||'')} · <span class="status-badge sb-${status}" style="font-size:10px;padding:1px 5px;">${t(status)}</span></div>
         ${r.content?`<div class="dp-item-memo">${escapeHtml(r.content.slice(0,80))}${r.content.length>80?'...':''}</div>`:''}
       </div>
@@ -1604,12 +1637,22 @@ function convertToWorkDiary(id){
   document.getElementById('dm-followup').value=r.follow_up||'';
   document.getElementById('dm-imp').value=r.importance||'중';
   document.getElementById('dm-status').value='완료'; // 기본값: 완료로 전환
+  resetPeriodUI('hide');
   document.getElementById('diary-del-btn').style.display='';
   var aiSec2 = document.getElementById('ai-memo-section');
   if(aiSec2) aiSec2.style.display = (wfSession.empId === 2) ? 'block' : 'none';
   document.getElementById('diary-modal-overlay').classList.add('open');
 }
 async function deleteFromPopup(id){
+  var rec1=diaryRecords.find(function(r){return String(r.id)===String(id);});
+  if(rec1 && rec1.group_id){
+    var pcnt=getGroupRecs(rec1.group_id).length;
+    if(pcnt>1){
+      var psc=await askGroupScope(pcnt);
+      if(!psc) return;
+      if(psc==='all'){ await deleteGroupAll(rec1.group_id); renderDayPopupList();renderAll(); return; }
+    }
+  }
   diaryRecords=diaryRecords.filter(r=>String(r.id)!==String(id));
   if(SB){try{await SB.from('work_diary').delete().eq('id',id).eq('employee_id',wfSession.empId);}catch(e){console.warn(e);}}
   renderDayPopupList();renderAll();
@@ -1964,6 +2007,10 @@ function onRepeatChange(){
 function onDmRepeatChange(){
   var v = document.getElementById('dm-repeat').value;
   document.getElementById('dm-repeat-until').style.display = v==='none' ? 'none' : '';
+  if(v!=='none' && !_periodGroup){   // 기간과 반복은 동시에 쓸 수 없음
+    var pe=document.getElementById('dm-period-end'); if(pe) pe.value='';
+    var pc=document.getElementById('dm-period-count'); if(pc) pc.textContent='';
+  }
 }
 
 async function saveEvent(){
@@ -3135,6 +3182,7 @@ function openDiaryModal(date){
   diaryCopyOrigin=null;
   document.getElementById('diary-del-btn').style.display='none';
   document.getElementById('diary-copy-btn').style.display='none';
+  resetPeriodUI('new');   // 기간 설정 초기화 (종료일 비움, 주말 포함)
   // 반복설정 — 신규 시 표시, 초기화
   var repSec = document.getElementById('dm-repeat-section');
   if(repSec) {
@@ -3221,6 +3269,7 @@ function editDiary(id){
   }
   document.getElementById('diary-del-btn').style.display='';
   document.getElementById('diary-copy-btn').style.display='';
+  setupPeriodForEdit(r);   // 기간 일정이면 안내 + 저장 범위(이 날짜만/전체 기간) 선택 표시
   document.getElementById('diary-modal-overlay').classList.add('open');
 }
 
@@ -3264,6 +3313,215 @@ function closeDiaryModal(){
   window.addEventListener('mouseup',endDrag);
   window.addEventListener('touchend',endDrag);
 })();
+
+/* ═══ 기간 일정 (출장 등 여러 날 — 날짜별 복사 등록, group_id로 묶음) ═══ */
+var _periodGroup=null;   // 수정 중인 레코드가 기간 일정일 때 {gid,first,last,total,pos}
+var _scopeResolve=null;
+var GROUP_FIELDS=['category','action_type','partner','dept_contact','content_type','title','content','follow_up','importance','status','task_start_date','task_end_date','task_stage','is_shared','share_target','share_type'];
+
+function wfUuid(){
+  try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+}
+function parseYmd(s){ var a=String(s).slice(0,10).split('-'); return new Date(+a[0],+a[1]-1,+a[2]); }
+function fmtYmd(d){ return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function nvGrp(v){ return (v===undefined||v===null||v==='')?'':v; }
+// 시작일~종료일 날짜 목록. forceFirst=true면 시작일은 주말이어도 항상 포함
+function periodDates(startStr,endStr,incWeekend,forceFirst){
+  var out=[];
+  if(!startStr||!endStr) return out;
+  var d=parseYmd(startStr), e=parseYmd(endStr), guard=0;
+  if(isNaN(d.getTime())||isNaN(e.getTime())||e<d) return out;
+  while(d<=e && guard<366){
+    var dow=d.getDay();
+    if(incWeekend || (dow!==0&&dow!==6) || (forceFirst && out.length===0 && guard===0)) out.push(fmtYmd(d));
+    d.setDate(d.getDate()+1); guard++;
+  }
+  return out;
+}
+function getGroupRecs(gid){
+  return diaryRecords.filter(function(r){return r.group_id===gid;})
+    .sort(function(a,b){return String(a.date).slice(0,10)<String(b.date).slice(0,10)?-1:1;});
+}
+function buildGroupMap(){
+  var m={};
+  diaryRecords.forEach(function(r){ if(r.group_id){ (m[r.group_id]=m[r.group_id]||[]).push(String(r.date).slice(0,10)); } });
+  Object.keys(m).forEach(function(k){ m[k].sort(); });
+  return m;
+}
+// 달력 칩/팝업 제목 옆에 붙는 "(2/4)" 표시 — 기간 일정이고 2건 이상일 때만
+function grpTag(r,gmap){
+  if(!r.group_id||!gmap[r.group_id]||gmap[r.group_id].length<2) return '';
+  var i=gmap[r.group_id].indexOf(String(r.date).slice(0,10));
+  return i<0?'':' ('+(i+1)+'/'+gmap[r.group_id].length+')';
+}
+function periodCountLabel(n){ return WF_LANG==='zh' ? '共'+n+'天' : WF_LANG==='en' ? n+(n>1?' days':' day') : '총 '+n+'일'; }
+function periodInfoText(pos,total,first,last){
+  var rg=first.slice(5).replace('-','/')+' ~ '+last.slice(5).replace('-','/');
+  if(WF_LANG==='zh') return '期间日程 · 第'+pos+'/'+total+'天 ('+rg+')';
+  if(WF_LANG==='en') return 'Multi-day event · day '+pos+' of '+total+' ('+rg+')';
+  return '기간 일정 · '+pos+'/'+total+'일째 ('+rg+')';
+}
+function itemCountLabel(n){ return WF_LANG==='zh' ? n+'条' : WF_LANG==='en' ? n+(n>1?' items':' item') : n+'건'; }
+
+function resetPeriodUI(mode){
+  _periodGroup=null;
+  var sec=document.getElementById('dm-period-section'); if(!sec) return;
+  var end=document.getElementById('dm-period-end');
+  end.value=''; end.disabled=false;
+  document.getElementById('dm-period-weekend').checked=true;
+  document.getElementById('dm-period-count').textContent='';
+  document.getElementById('dm-period-info').style.display='none';
+  document.getElementById('dm-period-scope').style.display='none';
+  document.getElementById('dm-period-hint').style.display='';
+  var one=document.querySelector('input[name="dm-scope"][value="one"]'); if(one) one.checked=true;
+  sec.style.display = mode==='hide' ? 'none' : '';
+}
+function onScopeChange(){
+  var all=(document.querySelector('input[name="dm-scope"]:checked')||{}).value==='all';
+  var end=document.getElementById('dm-period-end');
+  if(end) end.disabled=!all;
+  var wk=document.getElementById('dm-period-weekend'); if(wk) wk.disabled=!all;
+  onPeriodChange();
+}
+function onPeriodChange(){
+  var endEl=document.getElementById('dm-period-end'); if(!endEl) return;
+  var cntEl=document.getElementById('dm-period-count');
+  var start=document.getElementById('dm-date').value;
+  var inc=document.getElementById('dm-period-weekend').checked;
+  var end=endEl.value;
+  if(_periodGroup){
+    // 기간 일정 수정: 종료일을 늘리면 +N일 추가, 줄이면 N건 삭제 예정으로 안내
+    cntEl.textContent='';
+    if(end && end>_periodGroup.last){
+      var nd=parseYmd(_periodGroup.last); nd.setDate(nd.getDate()+1);
+      var n=periodDates(fmtYmd(nd),end,inc,false).length;
+      if(n>0) cntEl.textContent='+'+(WF_LANG==='zh'?n+'天':WF_LANG==='en'?n+(n>1?' days':' day'):n+'일');
+    } else if(end && end<_periodGroup.last){
+      var dn=getGroupRecs(_periodGroup.gid).filter(function(r){return String(r.date).slice(0,10)>end;}).length;
+      if(dn>0) cntEl.textContent='-'+itemCountLabel(dn);
+    }
+    return;
+  }
+  if(end && start && end<start){ endEl.value=''; end=''; }
+  endEl.min=start||'';
+  var cnt=(start&&end)?periodDates(start,end,inc,true).length:0;
+  cntEl.textContent = cnt>1 ? periodCountLabel(cnt) : '';
+  // 기간과 반복은 동시에 사용할 수 없음
+  var rep=document.getElementById('dm-repeat');
+  if(cnt>1 && rep && rep.value!=='none'){ rep.value='none'; onDmRepeatChange(); }
+}
+function setupPeriodForEdit(r){
+  resetPeriodUI('new');
+  var repSec=document.getElementById('dm-repeat-section');
+  if(!r.group_id){ return; }
+  var recs=getGroupRecs(r.group_id);
+  if(recs.length<2){ return; }   // 1건만 남은 묶음은 일반 일정처럼 취급
+  var first=String(recs[0].date).slice(0,10), last=String(recs[recs.length-1].date).slice(0,10);
+  var pos=recs.findIndex(function(x){return String(x.id)===String(r.id);})+1;
+  _periodGroup={gid:r.group_id,first:first,last:last,total:recs.length,pos:pos};
+  var info=document.getElementById('dm-period-info');
+  info.textContent=periodInfoText(pos,recs.length,first,last); info.style.display='';
+  document.getElementById('dm-period-hint').style.display='none';
+  document.getElementById('dm-period-scope').style.display='';
+  var end=document.getElementById('dm-period-end'); end.value=last; end.min='';
+  if(repSec) repSec.style.display='none';   // 기간 일정에는 반복 설정을 쓰지 않음
+  onScopeChange();                           // 기본 "이 날짜만" → 종료일 입력 비활성
+}
+
+// 이 날짜만 / 전체 기간 선택 모달 (삭제용). 취소하면 null
+function askGroupScope(count){
+  return new Promise(function(resolve){
+    _scopeResolve=resolve;
+    document.getElementById('scope-modal-msg').textContent=periodCountLabel(count);
+    document.getElementById('scope-all-btn').textContent=t('전체 기간 삭제')+' ('+itemCountLabel(count)+')';
+    document.getElementById('scope-modal-overlay').classList.add('open');
+  });
+}
+function scopeChoose(v){
+  document.getElementById('scope-modal-overlay').classList.remove('open');
+  var r=_scopeResolve; _scopeResolve=null;
+  if(r) r(v);
+}
+async function deleteGroupAll(gid){
+  diaryRecords=diaryRecords.filter(function(x){return x.group_id!==gid;});
+  if(SB){
+    try{
+      var res=await SB.from('work_diary').delete().eq('group_id',gid).eq('employee_id',wfSession.empId);
+      if(res&&res.error) alert('삭제 실패: '+res.error.message);
+    }catch(e){console.warn(e);}
+  }
+}
+
+// 수정 저장 후 처리: 전체 기간 반영 / 기간 늘리기·줄이기 / 단건 → 기간 확장
+async function applyPeriodOnEdit(oldRec,obj,scopeAll,pEnd,pInc){
+  var gid=oldRec.group_id, msg='';
+  if(_periodGroup && gid && _periodGroup.gid===gid){
+    if(!scopeAll) return;
+    var members=getGroupRecs(gid);
+    // ① 바뀐 항목을 다른 날짜에 반영 — 그 날짜에서 개별 수정해 값이 달라진 항목은 덮어쓰지 않음
+    var jobs=[];
+    members.forEach(function(m){
+      if(String(m.id)===String(oldRec.id)) return;
+      var patch={};
+      GROUP_FIELDS.forEach(function(f){
+        if(obj[f]===undefined) return;
+        if(nvGrp(obj[f])!==nvGrp(oldRec[f]) && nvGrp(m[f])===nvGrp(oldRec[f])) patch[f]=obj[f];
+      });
+      if(Object.keys(patch).length){
+        Object.assign(m,patch);
+        jobs.push(SB.from('work_diary').update(patch).eq('id',m.id).eq('employee_id',wfSession.empId));
+      }
+    });
+    if(jobs.length){
+      var rs=await Promise.all(jobs);
+      var bad=rs.filter(function(x){return x&&x.error;});
+      if(bad.length) alert('일부 날짜 수정 실패: '+bad[0].error.message);
+      else msg+=jobs.length+'건 반영';
+    }
+    // ② 종료일 변경 — 늘리면 새 날짜에 복사 추가, 줄이면 종료일 이후 날짜 삭제
+    var last=members[members.length-1].date.slice(0,10);
+    if(pEnd && pEnd>last){
+      var nd=parseYmd(last); nd.setDate(nd.getDate()+1);
+      var addDates=periodDates(fmtYmd(nd),pEnd,pInc,false);
+      if(addDates.length){
+        var rows=addDates.map(function(ds){
+          return Object.assign({},obj,{date:ds,group_id:gid,employee_id:wfSession.empId,emp_name:wfSession.name});
+        });
+        var ins=await SB.from('work_diary').insert(rows).select();
+        if(ins.error) alert('기간 연장 실패: '+ins.error.message);
+        else { (ins.data||[]).forEach(function(d){diaryRecords.unshift(d);}); msg+=(msg?' / ':'')+'+'+addDates.length+'일 추가'; }
+      }
+    } else if(pEnd && pEnd<last){
+      var del=members.filter(function(m){return m.date.slice(0,10)>pEnd && String(m.id)!==String(oldRec.id);});
+      if(del.length && confirm('종료일('+pEnd+') 이후 '+del.length+'건을 삭제할까요?')){
+        var ids=del.map(function(m){return m.id;});
+        var dr=await SB.from('work_diary').delete().in('id',ids).eq('employee_id',wfSession.empId);
+        if(dr.error) alert('기간 단축 실패: '+dr.error.message);
+        else { diaryRecords=diaryRecords.filter(function(x){return ids.indexOf(x.id)<0;}); msg+=(msg?' / ':'')+'-'+del.length+'건 삭제'; }
+      }
+    }
+    if(msg) alert('기간 일정 수정 완료: '+msg);
+    return;
+  }
+  // 일반(단건) 일정을 수정하면서 종료일을 지정한 경우 → 이 날짜부터 종료일까지 복사 생성하고 하나의 기간 일정으로 묶음
+  if(!oldRec.group_id && pEnd){
+    var dates=periodDates(obj.date,pEnd,pInc,true);
+    if(dates.length>1){
+      var ngid=wfUuid();
+      var u=await SB.from('work_diary').update({group_id:ngid}).eq('id',oldRec.id);
+      if(u.error){ alert('기간 설정 실패: '+u.error.message); return; }
+      var idx2=diaryRecords.findIndex(function(x){return String(x.id)===String(oldRec.id);});
+      if(idx2>=0) diaryRecords[idx2].group_id=ngid;
+      var rows2=dates.slice(1).map(function(ds){
+        return Object.assign({},obj,{date:ds,group_id:ngid,employee_id:wfSession.empId,emp_name:wfSession.name});
+      });
+      var ins2=await SB.from('work_diary').insert(rows2).select();
+      if(ins2.error) alert('기간 복사 실패: '+ins2.error.message);
+      else { (ins2.data||[]).forEach(function(d){diaryRecords.unshift(d);}); alert('현재 건 수정 + '+rows2.length+'일 복사 등록 완료'); }
+    }
+  }
+}
 
 async function saveDiary(){
   const ctVal=document.getElementById('dm-content-type').value;
@@ -3313,14 +3571,25 @@ async function saveDiary(){
   }
 
   if(!obj.date){alert('날짜를 입력해주세요.');return;}
+  var pEnd=(document.getElementById('dm-period-end')||{}).value||'';
+  var pInc=document.getElementById('dm-period-weekend')?document.getElementById('dm-period-weekend').checked:true;
+  var editRec=diaryEditId?diaryRecords.find(function(x){return String(x.id)===String(diaryEditId);}):null;
+  var scopeAll=!!(editRec && _periodGroup && editRec.group_id===_periodGroup.gid && (document.querySelector('input[name="dm-scope"]:checked')||{}).value==='all');
+  var repChosen=(document.getElementById('dm-repeat')||{}).value||'none';
+  if(repChosen!=='none') pEnd='';   // 기간과 반복은 동시에 쓰지 않음
+  if(pEnd && (parseYmd(pEnd)-parseYmd(obj.date))/86400000>366){alert('기간은 최대 366일까지 설정할 수 있습니다.');return;}
 
   if(diaryEditId){
     const idx=diaryRecords.findIndex(x=>String(x.id)===String(diaryEditId));
+    const oldRec=idx>=0?Object.assign({},diaryRecords[idx]):null;   // 수정 전 값(전체 기간 반영 시 비교 기준)
     if(idx>=0) Object.assign(diaryRecords[idx],obj);
     if(SB){
       try{
         await SB.from('work_diary').update(obj).eq('id',diaryEditId);
       }catch(e){console.warn('update 오류:',e);}
+      if(oldRec){
+        try{ await applyPeriodOnEdit(oldRec,obj,scopeAll,pEnd,pInc); }catch(e){console.warn('기간 처리 오류:',e);}
+      }
     }
     // 수정 시 반복설정 — 이 날짜 다음날부터 추가 생성
     var repeatType2 = (document.getElementById('dm-repeat')?.value) || 'none';
@@ -3354,7 +3623,22 @@ async function saveDiary(){
     // 반복일정 처리
     var repeatType = (document.getElementById('dm-repeat')?.value) || 'none';
     var repeatUntil = parseInt(document.getElementById('dm-repeat-until')?.value || '2030');
-    if(repeatType !== 'none' && obj.date) {
+    var periodList = (repeatType==='none' && pEnd) ? periodDates(obj.date,pEnd,pInc,true) : [];
+    if(periodList.length>1) {
+      // 기간 일정: 시작일~종료일 날짜마다 같은 내용을 1건씩 복사 저장 (group_id로 묶음)
+      var pgid=wfUuid();
+      var pRows=periodList.map(function(ds){ return Object.assign({}, obj, {date:ds, group_id:pgid}); });
+      if(SB){
+        try{
+          const {data:pd,error:pe}=await SB.from('work_diary').insert(pRows).select();
+          if(pe){ alert('기간 일정 등록 실패: '+pe.message); return; }
+          (pd||[]).forEach(function(d){ diaryRecords.unshift(d); });
+          alert(pRows.length+'일 일정 등록 완료');
+        }catch(e){ console.warn('기간insert 오류:',e); alert('기간 일정 등록 실패'); return; }
+      } else {
+        pRows.forEach(function(r0,i0){ diaryRecords.unshift(Object.assign({id:Date.now()+i0},r0)); });
+      }
+    } else if(repeatType !== 'none' && obj.date) {
       var toInsert = [];
       var current = new Date(obj.date);
       while(true) {
@@ -3404,13 +3688,27 @@ async function saveDiary(){
   renderAll();
 }
 async function deleteDiaryById(id){
+  var rec0=diaryRecords.find(function(x){return String(x.id)===String(id);});
+  if(rec0 && rec0.group_id){
+    var gcnt=getGroupRecs(rec0.group_id).length;
+    if(gcnt>1){
+      var sc=await askGroupScope(gcnt);
+      if(!sc) return 'cancel';
+      if(sc==='all'){ await deleteGroupAll(rec0.group_id); renderDiary(); renderAll(); return true; }
+      diaryRecords=diaryRecords.filter(function(x){return String(x.id)!==String(id);});
+      if(SB){try{await SB.from('work_diary').delete().eq('id',id).eq('employee_id',wfSession.empId);}catch(e){console.warn(e);}}
+      renderDiary(); renderAll();
+      return true;
+    }
+  }
   if(!confirm('이 업무일지를 삭제할까요?')) return;
   diaryRecords=diaryRecords.filter(x=>String(x.id)!==String(id));
   if(SB){try{await SB.from('work_diary').delete().eq('id',id).eq('employee_id',wfSession.empId);}catch(e){console.warn(e);}}
   renderDiary();
 }
 async function deleteDiary(){
-  await deleteDiaryById(diaryEditId);
+  var dres=await deleteDiaryById(diaryEditId);
+  if(dres==='cancel') return;   // 이 날짜만/전체 기간 선택에서 취소하면 수정창 유지
   closeDiaryModal();
 }
 
@@ -3480,6 +3778,7 @@ async function confirmMoveCopy(){
 
   // 원본은 그대로 두고, 현재 수정창은 새로 복사된 건을 계속 편집하도록 전환
   diaryEditId=newRec.id;
+  resetPeriodUI('new');
   document.getElementById('dm-date').value=newDate;
   document.getElementById('diary-modal-title').textContent=t('업무일지 수정');
   closeMoveCopyModal();
@@ -3520,6 +3819,15 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"기간 설정 (여러 날 일정)":{zh:"期间设置（多日日程）",en:"Period (multi-day event)"},
+"주말 포함":{zh:"包含周末",en:"Include weekends"},
+"시작일(위 날짜)부터 종료일까지 같은 내용이 날짜별로 복사되어 달력에 표시됩니다":{zh:"从开始日期（上方日期）到结束日期，相同内容将按日期复制并显示在日历中",en:"The same entry is copied to each date from the start date (above) to the end date and shown on the calendar"},
+"저장 범위":{zh:"保存范围",en:"Apply to"},
+"이 날짜만 수정":{zh:"仅修改此日期",en:"This date only"},
+"전체 기간에 반영 (개별 수정한 날짜의 같은 항목은 유지)":{zh:"应用于整个期间（已单独修改日期的同项内容保持不变）",en:"Apply to the whole period (individually edited dates keep their own values)"},
+"기간 일정 삭제":{zh:"删除期间日程",en:"Delete period event"},
+"이 날짜만 삭제":{zh:"仅删除此日期",en:"Delete this date only"},
+"전체 기간 삭제":{zh:"删除整个期间",en:"Delete whole period"},
 "← 뒤로":{zh:"← 返回",en:"← Back"},
 "⌂ 홈":{zh:"⌂ 首页",en:"⌂ Home"},
 "공유자 검색":{zh:"搜索共享人",en:"Search shared by"},
