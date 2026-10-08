@@ -290,7 +290,7 @@ tr.dragging{opacity:.45;}
 .ui-range::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:0;background:var(--point);border:2px solid #fff;cursor:pointer;}
 .ui-val{font-family:'Noto Sans KR',sans-serif;font-size:11px;color:var(--muted);width:50px;text-align:right;flex-shrink:0;}
 .al-chip-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
-.al-chip{display:inline-flex;align-items:center;gap:4px;background:var(--point-bg);border:1px solid var(--border);border-radius:2px;padding:3px 4px 3px 9px;font-size:12.5px;color:var(--bg-sub);}
+.al-chip{display:inline-flex;align-items:center;gap:4px;background:var(--point-bg);border:1px solid var(--border);border-radius:2px;padding:3px 4px 3px 9px;font-size:12.5px;color:#111827;}
 .al-chip-txt{cursor:pointer;font-weight:600;}
 .al-chip-txt:hover{text-decoration:underline;color:var(--point);}
 .al-chip-x{cursor:pointer;color:var(--accent);font-weight:800;padding:0 4px;border-radius:0;line-height:1;}
@@ -1863,7 +1863,7 @@ async function saveItemsModal() {
 }
 
 async function deleteItemsRow(id, pn) {
-  if (!confirm(`[${pn}] 품목을 삭제하시겠습니까?\n연결된 LG품번·ERP품목코드도 함께 삭제됩니다.`)) return;
+  if (!confirm('정말 삭제하시겠습니까?')) return;
   await sb.from('maker_pn_lgpn_map').delete().eq('maker_pn_id', id);
   await sb.from('maker_pn_itemcode_map').delete().eq('maker_pn_id', id);
   const {error} = await sb.from('maker_pn_master').delete().eq('id', id);
@@ -1998,7 +1998,7 @@ function renderLgTable() {
 }
 
 async function deleteLgRow(id, brand) {
-  if(!confirm(`[${brand}] 기준을 삭제하시겠습니까?`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error}=await sb.from('lg_classify_rules').delete().eq('id',id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _lgData=_lgData.filter(x=>x.id!==id);
@@ -2112,7 +2112,7 @@ async function toggleExportActive(id, current) {
 }
 
 async function deleteExportRow(id, customer) {
-  if(!confirm(`[${customer}] 매출처를 삭제하시겠습니까?`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error}=await sb.from('export_customers').delete().eq('id',id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _exportData=_exportData.filter(x=>x.id!==id);
@@ -2408,7 +2408,7 @@ async function togglePartnersActive(id, current) {
 }
 
 async function deletePartnersRow(id, name) {
-  if(!confirm(`[${name}] 거래처를 삭제하시겠습니까?`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error}=await sb.from('partners').delete().eq('id',id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _partnersData=_partnersData.filter(x=>x.id!==id);
@@ -2667,7 +2667,7 @@ function editBsrRow(id) {
 }
 
 async function deleteBsrRow(id, brand) {
-  if(!confirm(`[${brand}] 기준을 삭제하시겠습니까?`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error} = await sb.from('brand_stock_rule').delete().eq('id', id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _bsrData = _bsrData.filter(x=>x.id!==id);
@@ -4166,14 +4166,21 @@ let _aliasData = [], _makerData = [];
 
 let _brandUsage = {};
 let _alPartnerIdx = {};   // 정규화키 → [{name,type}]
+let _brandUsageAt = '';   // 사용실적 요약표(brand_usage_mv) 마지막 갱신시각 — 매일 06:00 자동갱신
 async function loadAliasData() {
   const tbody = document.getElementById('alias-tbody');
   tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
-  const [aliasRes, usageRes, partnerRes] = await Promise.all([
+  const [aliasRes, usageRes, partnerRes, builtRes] = await Promise.all([
     sb.from('maker_alias').select('*').order('standard_name'),
     sb.rpc('brand_usage_summary'),
-    sb.from('partners').select('name,alias1,alias2,type,is_active')
+    sb.from('partners').select('name,alias1,alias2,type,is_active'),
+    sb.rpc('brand_usage_built_at')
   ]);
+  _brandUsageAt = '';
+  if(builtRes && builtRes.data){
+    const bd=new Date(builtRes.data);
+    if(!isNaN(bd)) _brandUsageAt=`${String(bd.getMonth()+1).padStart(2,'0')}/${String(bd.getDate()).padStart(2,'0')} ${String(bd.getHours()).padStart(2,'0')}:${String(bd.getMinutes()).padStart(2,'0')}`;
+  }
   _alPartnerIdx = {};
   (partnerRes.data||[]).forEach(p=>{
     _partnerKeys(p).forEach(k=>{ (_alPartnerIdx[k]=_alPartnerIdx[k]||[]).push({name:p.name,type:p.type||'',active:p.is_active!==false}); });
@@ -4437,7 +4444,7 @@ function renderAliasTable() {
       </span>`).join('');
     const single = items.length ? '' : '<span style="color:var(--muted);font-size:11.5px;">단일표기</span>';
     const usageHtml = u.used
-      ? `<div style="font-size:11.5px;color:var(--bg-sub);">매입 ${u.p.toLocaleString()} · 매출 ${u.s.toLocaleString()}</div>
+      ? `<div style="font-size:11.5px;color:#111827;">매입 ${u.p.toLocaleString()} · 매출 ${u.s.toLocaleString()}</div>
          <div style="font-size:10.5px;color:var(--muted);">${esc(u.ym1)}~${esc(u.ym2)}</div>`
       : '<span style="font-size:11.5px;color:var(--muted);">실적 없음</span>';
     const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
@@ -4463,7 +4470,7 @@ function renderAliasTable() {
   const multiCnt = Object.keys(groups).filter(k=>groups[k].length>0).length;
   const partnerCnt = Object.keys(groups).filter(k=>partnerOf(k).length>0).length;
   document.getElementById('alias-count-label').textContent =
-    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개 · 거래처겸용 ${partnerCnt}개)`;
+    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개 · 거래처겸용 ${partnerCnt}개${_brandUsageAt?` · 실적 기준: ${_brandUsageAt}`:''})`;
   setTimeout(()=>initColResize('alias-table','al_alias_v4'),50);
 }
 
@@ -4495,7 +4502,7 @@ async function addAliasChip(std){
 // 기준명 전체(그 기준명의 모든 표기) 삭제
 async function deleteAliasGroup(std){
   const items=_aliasData.filter(r=>(r.standard_name||'').trim()===std);
-  if(!confirm(`[${std}] 의 표기 매핑 ${items.length}건을 모두 해제하시겠습니까?\n\n해제하면 각 표기가 별도 메이커로 집계됩니다.`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const ids=items.map(r=>r.id);
   const {error}=await sb.from('maker_alias').delete().in('id', ids);
   if(error){ alert('삭제 실패: '+error.message); return; }
@@ -4503,7 +4510,7 @@ async function deleteAliasGroup(std){
 }
 
 async function deleteAliasRow(id, name) {
-  if(!confirm(`표기 [${name}] 를 삭제하시겠습니까?`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error} = await sb.from('maker_alias').delete().eq('id', id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _aliasData = _aliasData.filter(x=>x.id!==id);
@@ -4668,7 +4675,7 @@ async function addMplRow(makerName) {
 async function deleteMplRow(id) {
   const x = _mplData.find(v => v.id === id);
   if (!x) return;
-  if (!confirm(`[${x.maker_name}] 접두 "${x.pfx}" 규칙을 삭제하시겠습니까?`)) return;
+  if (!confirm('정말 삭제하시겠습니까?')) return;
   const {error} = await sb.from('maker_pn_leadtime').delete().eq('id', id);
   if (error) { alert('삭제 실패: ' + error.message); return; }
   await loadMplData();
@@ -4676,7 +4683,7 @@ async function deleteMplRow(id) {
 }
 
 async function deleteMakerRow(id, name) {
-  if(!confirm(`[${name}] 메이커를 삭제하시겠습니까?`)) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error} = await sb.from('makers').delete().eq('id', id);
   if(error){alert('삭제 실패: '+error.message);return;}
   _makerData = _makerData.filter(x=>x.id!==id);
