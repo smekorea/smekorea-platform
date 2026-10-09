@@ -1,6 +1,8 @@
 /* ================================================================
    SMERP Tweaks — 전역 테마/폰트/화면꾸미기 설정 패널
-   smerp-tweaks.js  v2.0  2026-06-25
+   smerp-tweaks.js  v2.1  2026-10-10
+   v2.1: 메인화면(index.html) 새 디자인(흰 바탕 + 네이비) — 메인 전용 화면 꾸미기
+         기본값·저장소 분리. 다른 화면의 동작은 그대로.
    모든 HTML 하단에 <script src="smerp-tweaks.js"></script> 추가
    ================================================================ */
 
@@ -28,6 +30,26 @@
     mainBg:   '#ffffff',
     tblHdBg:  '#ece8e2',
   };
+
+  /* ── 1-1. 메인화면(index.html) 전용 화면 꾸미기 기본값 ──
+     메인화면은 2026-10-10 새 디자인(흰 바탕 + 네이비 선)으로 바뀌어 기본값이 다르다.
+     화면 꾸미기 값은 메인화면만 별도 저장소(smerp_tweaks_main)에 저장하므로,
+     예전에 저장해 둔 다크 브라운 설정은 메인화면에 더 이상 적용되지 않는다(1회 초기화 효과).
+     다른 화면은 지금까지와 같이 smerp_tweaks 값을 그대로 쓴다. */
+  const UI_KEYS = ['hdrH','hdrBg','sideBg','sideW','logoSize','menuSize','tblHdSize','rowH','mainBg','tblHdBg'];
+  const MAIN_DEFAULTS = {
+    hdrH:     96,
+    hdrBg:    '#ffffff',
+    sideBg:   '#ffffff',
+    logoSize: 34,
+    menuSize: 15,
+    rowH:     22,
+  };
+  const MAIN_KEY = 'smerp_tweaks_main';
+  const IS_MAIN = !!document.querySelector('.topbar .tb-logo');
+  function uiDefault(k) {
+    return (IS_MAIN && k in MAIN_DEFAULTS) ? MAIN_DEFAULTS[k] : DEFAULTS[k];
+  }
 
   /* ── 2. Google Fonts URL 맵 ── */
   const FONT_URLS = {
@@ -61,6 +83,11 @@
     const saved = JSON.parse(localStorage.getItem('smerp_tweaks') || '{}');
     state = { ...state, ...saved };
   } catch(e) {}
+  if (IS_MAIN) {
+    let savedMain = {};
+    try { savedMain = JSON.parse(localStorage.getItem(MAIN_KEY) || '{}') || {}; } catch(e) {}
+    UI_KEYS.forEach(k => { state[k] = (k in savedMain) ? savedMain[k] : uiDefault(k); });
+  }
 
   /* ── 4. 폰트 로드 ── */
   const loadedFonts = new Set();
@@ -128,7 +155,7 @@
       .sb-name { font-size: ${state.menuSize}px !important; }
       .main { background: ${state.mainBg} !important; }
       .menu-tbl thead th { font-size: ${state.tblHdSize}px !important; background: ${state.tblHdBg} !important; }
-      .menu-tbl td { padding: ${rowPad}px 20px !important; }
+      .menu-tbl tbody tr { padding: ${rowPad}px 8px !important; }
       .app-body { min-height: calc(100vh - ${state.hdrH}px) !important; }
     `;
   }
@@ -159,7 +186,20 @@
     });
     applyUICustom();
     syncPanelUI();
-    try { localStorage.setItem('smerp_tweaks', JSON.stringify(state)); } catch(e) {}
+    try {
+      if (IS_MAIN) {
+        // 메인화면: 화면 꾸미기 값은 메인 전용 저장소에, 나머지(테마·폰트)는 공용 저장소에 저장.
+        // 공용 저장소의 화면 꾸미기 값(다른 화면용)은 건드리지 않고 그대로 둔다.
+        const ui = {}; UI_KEYS.forEach(k => { ui[k] = state[k]; });
+        localStorage.setItem(MAIN_KEY, JSON.stringify(ui));
+        let shared = {};
+        try { shared = JSON.parse(localStorage.getItem('smerp_tweaks') || '{}') || {}; } catch(e) {}
+        Object.keys(state).forEach(k => { if (UI_KEYS.indexOf(k) < 0) shared[k] = state[k]; });
+        localStorage.setItem('smerp_tweaks', JSON.stringify(shared));
+      } else {
+        localStorage.setItem('smerp_tweaks', JSON.stringify(state));
+      }
+    } catch(e) {}
   }
 
   /* ── 8. 패널 HTML ── */
@@ -589,14 +629,14 @@
     // 초기화
     document.getElementById('stk-reset-ui-btn').addEventListener('click', () => {
       if (!confirm('화면 꾸미기를 기본값으로 초기화할까요?')) return;
-      ['hdrH','hdrBg','sideBg','sideW','logoSize','menuSize','tblHdSize','rowH','mainBg','tblHdBg']
-        .forEach(k => { state[k] = DEFAULTS[k]; });
+      UI_KEYS.forEach(k => { state[k] = uiDefault(k); });
       applyState();
     });
 
     document.getElementById('stk-reset-btn').addEventListener('click', () => {
       if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) return;
       state = { ...DEFAULTS };
+      UI_KEYS.forEach(k => { state[k] = uiDefault(k); });
       applyState();
     });
   }
