@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <style>
   /* ══════════════════════════════════════════════════════════════
+     v15.76 (2026-10-10) — 업무보고 「행사·일정」 연동 제거 (본사 내부 건이 섞여 나옴)
      v15.75 (2026-10-10) — 전법인 통합 일정표 역할 재정의
      ── 범위: 법인 휴무 · 당직 · 전 법인 공통 일정(창립기념일 등)만.
         개인 연차·반차, 출장·미팅은 워크플로우에서 관리한다.
@@ -509,22 +510,17 @@
 
   // ── 데이터 로드 ──
   async function loadEvents(){
-    let ok = true, cal = [], dir = [];
+    let ok = true, cal = [];
     try{
       cal = await sbFetch(`sme_calendar?select=id,event_date,entity,type,title,duty,writer,note&type=in.(${TYPES.map(q).join(',')})&order=event_date.asc,id.asc&limit=2000`) || [];
     }catch(e){ ok = false; }
-    // 업무보고(지시사항)의 「행사·일정」 중 담당부서가 전체인 건 = 전 직원 공통 일정 (읽기 전용)
-    try{
-      dir = await sbFetch(`directives?select=id,title,due_date,status&is_deleted=eq.false&kind=eq.${q('지시')}&category=eq.${q('행사일정')}&owner_dept=eq.${q('전체')}&due_date=not.is.null&limit=500`) || [];
-    }catch(e){ dir = []; }
+    // 이 화면은 sme_calendar 에 직접 등록한 것만 보여 준다.
+    // 업무보고(지시사항)의 「행사·일정」은 본사 내부 건이라 끌어오지 않는다 (v15.76 — 연동 제거).
     if(!ok){ showToast('일정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'); return; }
     allEvents = cal.map(r => ({
       id:r.id, date:String(r.event_date).slice(0,10), entity:r.entity, type:r.type,
       title:r.title, duty:r.duty, writer:r.writer, note:r.note, src:'cal'
-    })).concat(dir.map(r => ({
-      id:'d'+r.id, dirId:r.id, date:String(r.due_date).slice(0,10), entity:'HQ', type:'공통',
-      title:r.title, duty:null, writer:null, note:null, src:'directive'
-    })));
+    }));
     allEvents.sort((a,b)=>a.date.localeCompare(b.date));
     renderAll();
     const k = kstNow();
@@ -573,14 +569,13 @@
       `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DAYS_KO[d.getDay()]})`;
     document.getElementById('dayEvList').innerHTML = evs.length
       ? evs.map(e => {
-          const isDir = e.src==='directive';
           return `<div class="day-ev-item" style="border-left-color:${evColor(e)}" onclick="openEvent('${e.id}')">
             <div class="day-ev-info">
-              <div class="day-ev-type">${evFlag(e,11)}<span>${esc(evWho(e))} · ${esc(e.type)}${isDir?' · 업무보고 등록':''}</span></div>
+              <div class="day-ev-type">${evFlag(e,11)}<span>${esc(evWho(e))} · ${esc(e.type)}</span></div>
               <div class="day-ev-title">${esc(evLabel(e))}</div>
               ${e.note?`<div class="day-ev-note">${esc(e.note)}</div>`:''}
             </div>
-            <div class="day-ev-arrow">${isDir?'업무보고 ↗':'수정 →'}</div>
+            <div class="day-ev-arrow">수정 →</div>
           </div>`;
         }).join('')
       : '<div class="day-empty">이 날짜에 등록된 일정이 없습니다</div>';
@@ -589,15 +584,10 @@
   function closeDayPopup(){ document.getElementById('dayPopup').classList.remove('open'); }
   function openInputFromDay(){ closeDayPopup(); openInputModal(dayPopupDate); }
 
-  // 일정 열기 — 업무보고에서 온 건은 그 화면에서 수정한다
+  // 일정 열기 (수정 창)
   function openEvent(id){
     const ev = allEvents.find(e => String(e.id)===String(id));
     if(!ev) return;
-    if(ev.src==='directive'){
-      const url = 'directive.html?id='+encodeURIComponent(ev.dirId);
-      const w = window.open(url, '_blank'); if(!w) location.href = url;
-      return;
-    }
     closeDayPopup();
     openInputModal(null, ev);
   }
@@ -853,7 +843,7 @@
           <div class="list-date-w">${DAYS_KO[d.getDay()]}요일</div>
         </div>
         <div class="list-info">
-          <div class="list-meta">${evFlag(e,11)}<span>${esc(evWho(e))}</span><span class="list-type" style="color:${evColor(e)}">${esc(e.type)}</span>${e.src==='directive'?'<span>업무보고</span>':''}</div>
+          <div class="list-meta">${evFlag(e,11)}<span>${esc(evWho(e))}</span><span class="list-type" style="color:${evColor(e)}">${esc(e.type)}</span></div>
           <div class="list-title">${esc(evLabel(e))}</div>
           ${e.note?`<div class="list-note">${esc(e.note)}</div>`:''}
         </div>
