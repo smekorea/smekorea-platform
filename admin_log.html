@@ -299,6 +299,15 @@ tr.dragging{opacity:.45;}
 .al-chip-ok:hover{background:var(--bg-sub);border-radius:0;}
 .al-chip-input{border:1.5px solid var(--point);border-radius:0;padding:2px 6px;font-size:12.5px;font-family:'Noto Sans KR',sans-serif;min-width:150px;outline:none;}
 .al-add-btn{background:#fff;border:1.5px dashed var(--line-dk);color:var(--muted);border-radius:2px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+#alias-table{width:100%;}
+#alias-table tbody td{padding:6px 10px;color:#111827;border-right:1px solid #e8edf5;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;}
+#alias-table tbody td:last-child{border-right:none;}
+#alias-table .al-add-btn{padding:2px 8px;}
+#alias-table .row-btn{padding:3px 10px;}
+.al-none{color:var(--muted);font-size:11.5px;}
+.al-pline{display:flex;align-items:center;gap:4px;height:22px;line-height:22px;font-size:12.5px;}
+td.center .al-pline{justify-content:center;}
+.al-pname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 .mpm-list{border:1px solid var(--border);max-height:320px;overflow-y:auto;}
 .mpm-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e8edf5;font-size:13px;color:#111827;cursor:pointer;}
 .mpm-row:last-child{border-bottom:none;}
@@ -883,19 +892,22 @@ tr.dragging{opacity:.45;}
         <label class="up-btn up-btn-secondary" style="cursor:pointer;">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" onchange="uploadAliasExcel(event)" style="display:none;"></label>
       </div>
     </div>
-    <div class="up-info">💡 <b>매입·매출에 실제 사용된 메이커 전체</b>를 표시합니다. 같은 회사가 여러 표기로 갈린 경우 [+ 표기추가]로 묶어주세요(개수 제한 없음). 표기를 클릭하면 수정, ×로 삭제됩니다. <b>단일표기 메이커는 등록 없이도 정상 집계</b>되며, 표기가 갈릴 때만 등록이 필요합니다.</div>
+    <div class="up-info">💡 <b>매입·매출에 실제 사용된 메이커 전체</b>를 표시합니다. 같은 회사가 여러 표기로 갈린 경우 표기추가 칸의 [+ 추가]로 묶어주세요(개수 제한 없음). 표기를 클릭하면 수정, ×로 삭제됩니다. <b>단일표기 메이커는 등록 없이도 정상 집계</b>되며, 표기가 갈릴 때만 등록이 필요합니다.</div>
   </div>
   <div class="tbl-wrap">
     <table id="alias-table">
       <thead><tr>
-        <th style="width:50px;">No</th>
-        <th style="width:180px;cursor:pointer;" onclick="sortAliasTable('name')" title="클릭하여 정렬 (한글 → 영문 순)">대표 메이커명 <span id="al-sort-name"></span></th>
+        <th style="width:46px;">No</th>
+        <th style="width:170px;cursor:pointer;" onclick="sortAliasTable('name')" title="클릭하여 정렬 (한글 → 영문 순)">대표 메이커명 <span id="al-sort-name"></span></th>
         <th style="cursor:pointer;" onclick="sortAliasTable('chips')" title="클릭하여 표기 수로 정렬">동일 메이커 표기 <span id="al-sort-chips"></span></th>
-        <th style="width:150px;cursor:pointer;" onclick="sortAliasTable('usage')" title="클릭하여 사용실적으로 정렬">사용실적 / 기간 <span id="al-sort-usage">↓</span></th>
-        <th class="center" style="width:210px;cursor:pointer;" onclick="sortAliasTable('partner')" title="거래처정보에 같은 이름(이름·별칭)이 있거나, [+ 공급처 지정]으로 직접 연결한 거래처">거래처등록 <span id="al-sort-partner"></span></th>
-        <th class="center" style="width:110px;">관리</th>
+        <th style="width:84px;">표기추가</th>
+        <th style="width:140px;cursor:pointer;" onclick="sortAliasTable('period')" title="매입·매출에 사용된 기간 — 클릭하여 최근 사용월 순으로 정렬">사용기간 <span id="al-sort-period"></span></th>
+        <th style="width:96px;cursor:pointer;" onclick="sortAliasTable('partner')" title="거래처정보에 같은 이름(이름·별칭)이 있거나, [+ 지정]으로 직접 연결한 거래처">거래처 구분 <span id="al-sort-partner"></span></th>
+        <th style="width:260px;">거래처명</th>
+        <th style="width:84px;">공급처 지정</th>
+        <th style="width:96px;">관리</th>
       </tr></thead>
-      <tbody id="alias-tbody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="alias-tbody"><tr><td colspan="9"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -4250,7 +4262,7 @@ async function removeMakerPartner(mapId){
 
 async function loadAliasData() {
   const tbody = document.getElementById('alias-tbody');
-  tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const [aliasRes, usageRes, partnerRes, builtRes] = await Promise.all([
     sb.from('maker_alias').select('*').order('standard_name'),
     sb.rpc('brand_usage_summary'),
@@ -4268,7 +4280,7 @@ async function loadAliasData() {
     _partnerKeys(p).forEach(k=>{ (_alPartnerIdx[k]=_alPartnerIdx[k]||[]).push({name:p.name,type:p.type||'',active:p.is_active!==false}); });
   });
   _makerKeySet=null;   // 메이커 매핑이 바뀌었을 수 있으므로 거래처 탭 판정 캐시 초기화
-  if(aliasRes.error){tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:red;padding:20px;">${aliasRes.error.message}</td></tr>`;return;}
+  if(aliasRes.error){tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;color:red;padding:20px;">${aliasRes.error.message}</td></tr>`;return;}
   _aliasData = aliasRes.data || [];
   _brandUsage = {};
   (usageRes.data||[]).forEach(r=>{
@@ -4514,11 +4526,19 @@ function renderAliasTable() {
       const d=(partnerOf(a).length-partnerOf(b).length)*dir;
       return d!==0 ? d : alNameCmp(a,b);
     }
+    if(_alSortKey==='period'){
+      const ua=usageOf(a), ub=usageOf(b);
+      if(!!ua.used!==!!ub.used) return ua.used ? -1 : 1;          // 실적 없는 메이커는 항상 아래
+      const d=String(ua.ym2||'').localeCompare(String(ub.ym2||''))*dir;
+      if(d!==0) return d;
+      const d2=ub.used-ua.used;                                    // 같은 달이면 실적 많은 순
+      return d2!==0 ? d2 : alNameCmp(a,b);
+    }
     const d=(usageOf(a).used-usageOf(b).used)*dir;
     return d!==0 ? d : alNameCmp(a,b);
   });
   // 헤더 정렬 아이콘
-  ['name','chips','usage','partner'].forEach(k=>{
+  ['name','chips','period','partner'].forEach(k=>{
     const el=document.getElementById('al-sort-'+k);
     if(el) el.textContent = (k===_alSortKey) ? (_alSortAsc?'↑':'↓') : '';
   });
@@ -4532,36 +4552,37 @@ function renderAliasTable() {
       </span>`).join('');
     const single = items.length ? '' : '<span style="color:var(--muted);font-size:11.5px;">단일표기</span>';
     const usageHtml = u.used
-      ? `<div style="font-size:11.5px;color:#111827;">매입 ${u.p.toLocaleString()} · 매출 ${u.s.toLocaleString()}</div>
-         <div style="font-size:10.5px;color:var(--muted);">${esc(u.ym1)}~${esc(u.ym2)}</div>`
-      : '<span style="font-size:11.5px;color:var(--muted);">실적 없음</span>';
+      ? `<span title="매입 ${u.p.toLocaleString()}건 · 매출 ${u.s.toLocaleString()}건">${esc(u.ym1)}~${esc(u.ym2)}</span>`
+      : '<span class="al-none">실적 없음</span>';
     const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
     const pList = partnerOf(std);
     const stdJs = esc(std).replace(/'/g,"\\'");
-    const partnerHtml = (pList.length
-      ? pList.map(p=>`<div style="font-size:11.5px;" title="${esc(p.name)}${p.mapId?' (직접 지정)':' (이름 일치)'}"><span style="color:var(--point);font-weight:700;">✓</span> ${esc(p.type||'거래처')}${p.name!==std?` <span style="color:var(--muted);">(${esc(p.name)})</span>`:''}${p.active?'':' <span style="color:var(--muted);">·비활성</span>'}${p.mapId?` <span class="al-chip-x" onclick="removeMakerPartner(${p.mapId})" title="공급처 지정 해제">×</span>`:''}</div>`).join('')
-      : '<span style="font-size:11.5px;color:var(--muted);">미등록</span>')
-      + `<div style="margin-top:4px;"><button class="al-add-btn" onclick="openMakerPartnerModal('${stdJs}')">+ 공급처 지정</button></div>`;
+    // 거래처가 여러 곳이면 구분·거래처명 칸이 같은 순서로 줄 맞춰 늘어남
+    const pTypeHtml = pList.length
+      ? pList.map(p=>`<div class="al-pline">${esc(p.type||'거래처')}${p.active?'':' <span class="al-none">·비활성</span>'}</div>`).join('')
+      : '<span class="al-none">미등록</span>';
+    const pNameHtml = pList.length
+      ? pList.map(p=>`<div class="al-pline" title="${esc(p.name)}${p.mapId?' (직접 지정)':' (이름 일치)'}"><span class="al-pname">${esc(p.name)}</span>${p.mapId?`<span class="al-chip-x" onclick="removeMakerPartner(${p.mapId})" title="공급처 지정 해제">×</span>`:''}</div>`).join('')
+      : '<span class="al-none">—</span>';
     return `<tr>
       <td class="center mono">${i+1}</td>
       <td style="font-weight:700;">${esc(std)}</td>
-      <td>
-        <div class="al-chip-wrap">${chips}${single}
-          <button class="al-add-btn" onclick="addAliasChip('${esc(std).replace(/'/g,"\\'")}')">+ 표기추가</button>
-        </div>
-      </td>
-      <td>${usageHtml}</td>
-      <td class="center">${partnerHtml}</td>
+      <td><div class="al-chip-wrap">${chips}${single}</div></td>
+      <td class="center"><button class="al-add-btn" onclick="addAliasChip('${stdJs}')">+ 추가</button></td>
+      <td class="center">${usageHtml}</td>
+      <td class="center">${pTypeHtml}</td>
+      <td>${pNameHtml}</td>
+      <td class="center"><button class="al-add-btn" onclick="openMakerPartnerModal('${stdJs}')">+ 지정</button></td>
       <td class="center">
-        ${isReg ? `<button class="row-btn row-btn-del" onclick="deleteAliasGroup('${esc(std).replace(/'/g,"\\'")}')">매핑 해제</button>` : '<span style="color:var(--muted);font-size:11px;">—</span>'}
+        ${isReg ? `<button class="row-btn row-btn-del" onclick="deleteAliasGroup('${stdJs}')">매핑 해제</button>` : '<span class="al-none">—</span>'}
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">해당 조건의 메이커가 없습니다</td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">해당 조건의 메이커가 없습니다</td></tr>';
   const multiCnt = Object.keys(groups).filter(k=>groups[k].length>0).length;
   const partnerCnt = Object.keys(groups).filter(k=>partnerOf(k).length>0).length;
   document.getElementById('alias-count-label').textContent =
     `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개 · 거래처연결 ${partnerCnt}개${_brandUsageAt?` · 실적 기준: ${_brandUsageAt}`:''})`;
-  setTimeout(()=>initColResize('alias-table','al_alias_v5'),50);
+  setTimeout(()=>initColResize('alias-table','al_alias_v6'),50);
 }
 
 // 표기 1개 인라인 수정
