@@ -299,6 +299,14 @@ tr.dragging{opacity:.45;}
 .al-chip-ok:hover{background:var(--bg-sub);border-radius:0;}
 .al-chip-input{border:1.5px solid var(--point);border-radius:0;padding:2px 6px;font-size:12.5px;font-family:'Noto Sans KR',sans-serif;min-width:150px;outline:none;}
 .al-add-btn{background:#fff;border:1.5px dashed var(--line-dk);color:var(--muted);border-radius:2px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.mpm-list{border:1px solid var(--border);max-height:320px;overflow-y:auto;}
+.mpm-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e8edf5;font-size:13px;color:#111827;cursor:pointer;}
+.mpm-row:last-child{border-bottom:none;}
+.mpm-row:hover{background:var(--point-bg);}
+.mpm-row.on{cursor:default;background:var(--bg-sub);color:var(--muted);}
+.mpm-name{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mpm-type{font-size:11.5px;color:var(--muted);white-space:nowrap;}
+.mpm-act{font-size:11.5px;font-weight:700;color:var(--point);white-space:nowrap;}
 .al-add-btn:hover{border-color:var(--point);color:var(--point);background:var(--point-bg);}
 </style>
 </head>
@@ -866,7 +874,7 @@ tr.dragging{opacity:.45;}
         <option value="multi">표기 2개 이상</option>
         <option value="single">단일표기</option>
         <option value="unreg">미등록(실적만 있음)</option>
-        <option value="partner">거래처 겸용 메이커</option>
+        <option value="partner">거래처 연결된 메이커</option>
         <option value="nopartner">거래처 미등록 메이커</option>
       </select>
       <input type="text" id="alias-search" placeholder="메이커명 / 표기 검색..." oninput="renderAliasTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 12px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;width:200px;">
@@ -884,7 +892,7 @@ tr.dragging{opacity:.45;}
         <th style="width:180px;cursor:pointer;" onclick="sortAliasTable('name')" title="클릭하여 정렬 (한글 → 영문 순)">대표 메이커명 <span id="al-sort-name"></span></th>
         <th style="cursor:pointer;" onclick="sortAliasTable('chips')" title="클릭하여 표기 수로 정렬">동일 메이커 표기 <span id="al-sort-chips"></span></th>
         <th style="width:150px;cursor:pointer;" onclick="sortAliasTable('usage')" title="클릭하여 사용실적으로 정렬">사용실적 / 기간 <span id="al-sort-usage">↓</span></th>
-        <th class="center" style="width:150px;cursor:pointer;" onclick="sortAliasTable('partner')" title="거래처정보에 같은 이름(이름·별칭)이 등록되어 있는지">거래처등록 <span id="al-sort-partner"></span></th>
+        <th class="center" style="width:210px;cursor:pointer;" onclick="sortAliasTable('partner')" title="거래처정보에 같은 이름(이름·별칭)이 있거나, [+ 공급처 지정]으로 직접 연결한 거래처">거래처등록 <span id="al-sort-partner"></span></th>
         <th class="center" style="width:110px;">관리</th>
       </tr></thead>
       <tbody id="alias-tbody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
@@ -892,17 +900,34 @@ tr.dragging{opacity:.45;}
   </div>
 </div>
 
+<!-- 메이커 공급처 지정 모달 -->
+<div class="modal-overlay" id="makerPartnerModal">
+  <div class="modal-box" style="width:520px;">
+    <div class="modal-hdr">
+      <div class="modal-title" id="mpm-title">공급처 지정</div>
+      <button class="modal-close" onclick="closeMakerPartnerModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>이 메이커를 공급하는 거래처 <span style="font-weight:400;color:var(--muted);font-size:11px;">(거래처 정보에 등록된 곳 중 선택 — 여러 곳 지정 가능)</span></label><input id="mpm-search" placeholder="거래처명 검색..." oninput="renderMakerPartnerList()"></div>
+      <div id="mpm-list" class="mpm-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-cancel" onclick="closeMakerPartnerModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- alias 추가 모달 -->
 <div class="modal-overlay" id="aliasModal">
   <div class="modal-box" style="width:460px;">
     <div class="modal-hdr">
-      <div class="modal-title" id="aliasModalTitle">메이커 Alias 추가</div>
+      <div class="modal-title" id="aliasModalTitle">메이커 신규 추가</div>
       <button class="modal-close" onclick="closeAliasModal()">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="am-id">
-      <div class="form-group"><label>기준명 <span class="req">*</span></label><input id="am-std" placeholder="예) SAMSUNG"></div>
-      <div class="form-group"><label>동일메이커 표기 <span style="font-weight:400;color:var(--muted);font-size:11px;">(1개만 입력 — 추가 표기는 목록에서 [+ 표기추가])</span></label><input id="am-alias" placeholder="예) SAMSUNG ELECTRONICS"></div>
+      <div class="form-group"><label>대표 메이커명 <span class="req">*</span></label><input id="am-std" placeholder="예) SAMSUNG"></div>
+      <div class="form-group"><label>동일메이커 표기 <span style="font-weight:400;color:var(--muted);font-size:11px;">(선택 — 다른 표기가 있을 때만 1개 입력, 없으면 비워두세요)</span></label><input id="am-alias" placeholder="비워두면 대표 메이커명만 등록됩니다"></div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeAliasModal()">취소</button>
@@ -4167,15 +4192,72 @@ let _aliasData = [], _makerData = [];
 let _brandUsage = {};
 let _alPartnerIdx = {};   // 정규화키 → [{name,type}]
 let _brandUsageAt = '';   // 사용실적 요약표(brand_usage_mv) 마지막 갱신시각 — 매일 06:00 자동갱신
+// 메이커 ↔ 공급 거래처 직접 지정 (maker_partner_map)
+let _alPartnerAll = [];      // 거래처 전체 (지정 팝업용)
+let _alMakerPartners = {};   // 대표 메이커명 → [{mapId,id,name,type,active}]
+function _alLoadMap(mapRes, partnerRes){
+  _alPartnerAll = (partnerRes && partnerRes.data) || [];
+  const byId = {}; _alPartnerAll.forEach(p=>{ byId[p.id]=p; });
+  _alMakerPartners = {};
+  if(mapRes && mapRes.error) console.warn('공급처 지정 로드 실패', mapRes.error);
+  ((mapRes && mapRes.data) || []).forEach(m=>{
+    const p = byId[m.partner_id]; if(!p) return;
+    const mk = (m.maker_name||'').trim(); if(!mk) return;
+    (_alMakerPartners[mk]=_alMakerPartners[mk]||[]).push({mapId:m.id, id:p.id, name:p.name, type:p.type||'', active:p.is_active!==false});
+  });
+}
+let _mpmStd = '';
+function openMakerPartnerModal(std){
+  _mpmStd = std;
+  document.getElementById('mpm-title').textContent = `공급처 지정 — ${std}`;
+  document.getElementById('mpm-search').value = '';
+  renderMakerPartnerList();
+  document.getElementById('makerPartnerModal').classList.add('show');
+  setTimeout(()=>document.getElementById('mpm-search').focus(),50);
+}
+function closeMakerPartnerModal(){ document.getElementById('makerPartnerModal').classList.remove('show'); }
+function renderMakerPartnerList(){
+  const esc = s2 => String(s2==null?'':s2).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const q = (document.getElementById('mpm-search').value||'').trim().toLowerCase();
+  const done = new Set((_alMakerPartners[_mpmStd]||[]).map(x=>x.id));
+  const typeRank = v => (String(v||'').indexOf('매입')>=0 ? 0 : 1);   // 매입처 먼저
+  const list = _alPartnerAll
+    .filter(p => !q || [p.name,p.alias1,p.alias2].some(v=>String(v||'').toLowerCase().includes(q)))
+    .sort((a,b)=> typeRank(a.type)-typeRank(b.type) || alNameCmp(a.name,b.name));
+  const box = document.getElementById('mpm-list');
+  if(!list.length){ box.innerHTML = '<div style="padding:18px;text-align:center;color:var(--muted);font-size:12.5px;">해당하는 거래처가 없습니다.<br>먼저 [거래처 정보] 탭에서 거래처를 등록해주세요.</div>'; return; }
+  box.innerHTML = list.slice(0,300).map(p=>{
+    const on = done.has(p.id);
+    return `<div class="mpm-row${on?' on':''}" ${on?'':`onclick="assignMakerPartner(${p.id})"`}>
+      <span class="mpm-name">${esc(p.name)}${p.is_active===false?' <span style="color:var(--muted);font-weight:400;">·비활성</span>':''}</span>
+      <span class="mpm-type">${esc(p.type||'')}</span>
+      <span class="mpm-act">${on?'✓ 지정됨':'선택'}</span>
+    </div>`;
+  }).join('') + (list.length>300?`<div style="padding:8px;text-align:center;color:var(--muted);font-size:11.5px;">…외 ${list.length-300}건 — 검색어를 입력해 좁혀주세요</div>`:'');
+}
+async function assignMakerPartner(partnerId){
+  const {error} = await sb.from('maker_partner_map').insert({maker_name:_mpmStd, partner_id:partnerId});
+  if(error){ alert('지정 실패: '+error.message); return; }
+  closeMakerPartnerModal();
+  await loadAliasData();
+}
+async function removeMakerPartner(mapId){
+  if(!confirm('정말 삭제하시겠습니까?')) return;
+  const {error} = await sb.from('maker_partner_map').delete().eq('id', mapId);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  await loadAliasData();
+}
+
 async function loadAliasData() {
   const tbody = document.getElementById('alias-tbody');
   tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const [aliasRes, usageRes, partnerRes, builtRes] = await Promise.all([
     sb.from('maker_alias').select('*').order('standard_name'),
     sb.rpc('brand_usage_summary'),
-    sb.from('partners').select('name,alias1,alias2,type,is_active'),
-    sb.rpc('brand_usage_built_at')
-  ]);
+    sb.from('partners').select('id,name,alias1,alias2,type,is_active'),
+    sb.rpc('brand_usage_built_at'),
+    sb.from('maker_partner_map').select('id,maker_name,partner_id')
+  ]).then(arr=>{ _alLoadMap(arr[4], arr[2]); return arr; });
   _brandUsageAt = '';
   if(builtRes && builtRes.data){
     const bd=new Date(builtRes.data);
@@ -4380,6 +4462,11 @@ function renderAliasTable() {
     if(mappedAlias.has(b)) return;     // 다른 대표명의 표기로 등록됨
     groups[b] = [];                    // 단일표기(미등록) 메이커
   });
+  // ②-2 공급처만 지정된 메이커(실적·표기 등록 없음)도 목록에 유지
+  Object.keys(_alMakerPartners).forEach(b => {
+    if(!b || groups[b] || mappedAlias.has(b)) return;
+    groups[b] = [];
+  });
   // ③ 대표명별 사용실적 합산(대표명 + 소속 표기들)
   const usageOf = std => {
     const keys = [std, ...(groups[std]||[]).map(x=>x.alias)];
@@ -4396,6 +4483,7 @@ function renderAliasTable() {
   // 대표명·표기 중 거래처(이름·별칭)와 같은 것
   const partnerOf = std => {
     const seen = {}; const out = [];
+    (_alMakerPartners[std]||[]).forEach(p=>{ if(!seen[p.name]){ seen[p.name]=1; out.push(p); } });   // 직접 지정한 공급처
     [std, ...(groups[std]||[]).map(x=>x.alias)].forEach(v=>{
       const k=_nameKey(v); if(k.length<2) return;
       (_alPartnerIdx[k]||[]).forEach(p=>{ if(!seen[p.name]){ seen[p.name]=1; out.push(p); } });
@@ -4449,9 +4537,11 @@ function renderAliasTable() {
       : '<span style="font-size:11.5px;color:var(--muted);">실적 없음</span>';
     const isReg = _aliasData.some(r=>(r.standard_name||'').trim()===std);
     const pList = partnerOf(std);
-    const partnerHtml = pList.length
-      ? pList.map(p=>`<div style="font-size:11.5px;" title="${esc(p.name)}"><span style="color:var(--point);font-weight:700;">✓</span> ${esc(p.type||'거래처')}${p.name!==std?` <span style="color:var(--muted);">(${esc(p.name)})</span>`:''}${p.active?'':' <span style="color:var(--muted);">·비활성</span>'}</div>`).join('')
-      : '<span style="font-size:11.5px;color:var(--muted);">미등록</span>';
+    const stdJs = esc(std).replace(/'/g,"\\'");
+    const partnerHtml = (pList.length
+      ? pList.map(p=>`<div style="font-size:11.5px;" title="${esc(p.name)}${p.mapId?' (직접 지정)':' (이름 일치)'}"><span style="color:var(--point);font-weight:700;">✓</span> ${esc(p.type||'거래처')}${p.name!==std?` <span style="color:var(--muted);">(${esc(p.name)})</span>`:''}${p.active?'':' <span style="color:var(--muted);">·비활성</span>'}${p.mapId?` <span class="al-chip-x" onclick="removeMakerPartner(${p.mapId})" title="공급처 지정 해제">×</span>`:''}</div>`).join('')
+      : '<span style="font-size:11.5px;color:var(--muted);">미등록</span>')
+      + `<div style="margin-top:4px;"><button class="al-add-btn" onclick="openMakerPartnerModal('${stdJs}')">+ 공급처 지정</button></div>`;
     return `<tr>
       <td class="center mono">${i+1}</td>
       <td style="font-weight:700;">${esc(std)}</td>
@@ -4470,8 +4560,8 @@ function renderAliasTable() {
   const multiCnt = Object.keys(groups).filter(k=>groups[k].length>0).length;
   const partnerCnt = Object.keys(groups).filter(k=>partnerOf(k).length>0).length;
   document.getElementById('alias-count-label').textContent =
-    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개 · 거래처겸용 ${partnerCnt}개${_brandUsageAt?` · 실적 기준: ${_brandUsageAt}`:''})`;
-  setTimeout(()=>initColResize('alias-table','al_alias_v4'),50);
+    `(표시 ${stdList.length}개 / 전체 메이커 ${Object.keys(groups).length}개 · 표기통합 ${multiCnt}개 · 거래처연결 ${partnerCnt}개${_brandUsageAt?` · 실적 기준: ${_brandUsageAt}`:''})`;
+  setTimeout(()=>initColResize('alias-table','al_alias_v5'),50);
 }
 
 // 표기 1개 인라인 수정
@@ -4535,7 +4625,7 @@ async function addAlias() {
   const std = document.getElementById('alias-new-std').value.trim();
   const val = document.getElementById('alias-new-val').value.trim();
   if(!std) { alert('기준명을 입력해주세요.'); return; }
-  const {error} = await sb.from('maker_alias').insert({standard_name:std, alias:val});
+  const {error} = await sb.from('maker_alias').insert({standard_name:std, alias:val||null});
   if(!error) { await loadAliasData(); }
   else alert('추가 실패: '+error.message);
 }
@@ -5053,7 +5143,7 @@ function uploadAliasExcel(e){
     const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
     _aliasUpRows=raw.map(r=>({
       standard_name:String(r['기준명']||r['standard_name']||'').trim(),
-      alias:String(r['alias']||r['메이커명']||'').trim(),
+      alias:String(r['alias']||r['메이커명']||'').trim()||null,
     })).filter(r=>r.standard_name);
     if(!_aliasUpRows.length){alert('데이터가 없습니다.');return;}
     // 중복 표기 사전 검사 (DB 유니크 제약 위반 방지 + 집계 중복 방지)
@@ -5091,15 +5181,28 @@ function openAliasAddModal(){
   document.getElementById('am-id').value='';
   document.getElementById('am-std').value='';
   document.getElementById('am-alias').value='';
-  document.getElementById('aliasModalTitle').textContent='메이커 Alias 추가';
+  document.getElementById('aliasModalTitle').textContent='메이커 신규 추가';
   document.getElementById('aliasModal').classList.add('show');
 }
 function closeAliasModal(){document.getElementById('aliasModal').classList.remove('show');}
 async function saveAliasModal(){
   const id=document.getElementById('am-id').value;
   const std=document.getElementById('am-std').value.trim();
-  if(!std){alert('기준명은 필수입니다.');return;}
-  const payload={standard_name:std, alias:document.getElementById('am-alias').value.trim()||null};
+  if(!std){alert('대표 메이커명은 필수입니다.');return;}
+  let alv=document.getElementById('am-alias').value.trim();
+  if(alv===std) alv='';   // 대표명과 같은 표기는 등록할 필요 없음
+  if(!id){
+    // 이미 다른 대표명의 표기로 묶여 있는 이름이면 차단(집계가 갈림)
+    const asAlias=_aliasData.find(r=>(r.alias||'').trim()===std);
+    if(asAlias){ alert(`[${std}] 는 이미 [${asAlias.standard_name}] 의 동일 표기로 등록되어 있습니다.`); return; }
+    if(alv){
+      const dup=_aliasData.find(r=>(r.alias||'').trim()===alv);
+      if(dup){ alert(`이미 [${dup.standard_name}] 에 등록된 표기입니다.\n같은 표기를 두 곳에 등록하면 집계가 중복됩니다.`); return; }
+    } else if(_aliasData.some(r=>(r.standard_name||'').trim()===std)){
+      alert(`[${std}] 는 이미 등록된 메이커입니다.`); return;
+    }
+  }
+  const payload={standard_name:std, alias:alv||null};
   let error;
   if(id){({error}=await sb.from('maker_alias').update(payload).eq('id',id));}
   else{({error}=await sb.from('maker_alias').insert(payload));}
