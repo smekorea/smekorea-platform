@@ -155,6 +155,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   border-left:2px solid transparent;color:#111 !important;}
 .more-chip{font-size:9px;color:var(--text2);padding:0 3px;font-weight:600;}
 .event-chip.shared-chip{font-weight:600;}
+/* 전법인 통합일정표(schedule.html)의 법인 휴무·당직 — 날짜 칸 상단 한 줄 표시 (2026-10-10) */
+.corp-line{display:flex;align-items:center;gap:3px;font-size:9px;font-weight:700;line-height:1.4;
+  padding:0 2px;margin-bottom:1px;white-space:nowrap;overflow:hidden;}
+.corp-line span{overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.corp-line svg{flex:none;border:1px solid #DFE3E8;}
+.day-cell.other-month .corp-line{opacity:.45;}
+.corp-line .corp-pre{font-style:normal;}
+@media(max-width:767px){ .corp-line .corp-pre{display:none;} .corp-line svg{display:none;} }
 @media(min-width:768px){
   .calendar-wrap{padding:0 12px 20px;}
   .day-hdr{padding:8px 0;font-size:14px;}
@@ -163,6 +171,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   .other-label{font-size:10px;}
   .lunar{font-size:10px;}
   .event-chip{font-size:10px;padding:2px 5px;}
+  .corp-line{font-size:10px;padding:0 3px;}
   .more-chip{font-size:10px;padding:0 4px;}
 }
 
@@ -509,7 +518,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 }
 </style>
 </head>
-<body data-m-keepfont=".lunar,.event-chip,.more-chip,.other-label,.week-badge">
+<body data-m-keepfont=".lunar,.event-chip,.more-chip,.other-label,.week-badge,.corp-line">
 <div class="loading-bar" id="loading-bar"></div>
 <div class="dd-close" id="dd-close" onclick="closeSettings()"></div>
 
@@ -1518,7 +1527,9 @@ function renderLegend(){
     <div class="cat-item"><div class="cat-dot" style="background:#E2772E"></div>${t('진행중')}</div>
     <div class="cat-item"><div class="cat-dot" style="background:#E24B4A"></div>${t('지시/후속')}</div>
     <div class="cat-item"><div class="cat-dot" style="background:#8E5FC7"></div>📢 ${t('공유')}</div>
-    <div class="cat-item"><div class="cat-dot" style="background:#C8001E"></div>📌 ${t('지시사항')}</div>`;
+    <div class="cat-item"><div class="cat-dot" style="background:#C8001E"></div>📌 ${t('지시사항')}</div>
+    <div class="cat-item"><div class="cat-dot" style="background:${CORP_DUTY_COLOR}"></div>${t('당직')}</div>
+    <div class="cat-item"><div class="cat-dot" style="background:#B3261E"></div>${t('법인 휴무')}</div>`;
 }
 
 function renderCal(){
@@ -1530,6 +1541,7 @@ function renderCal(){
   const totalCells=Math.ceil((startDay+last.getDate())/7)*7;
   let html='';
   const gmap=buildGroupMap();   // 기간 일정 (n/m) 표시용
+  const myCorp=myCorpCode();
   for(let i=0;i<totalCells;i++){
     const date=new Date(y,m,1-startDay+i);
     const dy=date.getFullYear(),dm=date.getMonth(),dd=date.getDate();
@@ -1546,6 +1558,13 @@ function renderCal(){
     const dayAll=diaryRecords.filter(r=>(r.date||'').slice(0,10)===ds);
     const daySharedAll=sharedCalRecords.filter(r=>(r.date||'').slice(0,10)===ds);
     const dayTodos=getTodoForDate(ds);
+    // 법인 휴무·당직(전법인 통합일정표): 날짜 칸 상단에 한 줄씩. 눌러도 일반 날짜 팝업이 열린다.
+    const dayCorp=corpCalRecords.filter(r=>r._date===ds);
+    const isCorpOff=dayCorp.some(r=>r.type==='휴무'&&r.entity===myCorp);
+    const corpLines=dayCorp.map(r=>{
+      const who=(CORP_CAL[r.entity]||{}).ko||r.entity||'';
+      return `<div class="corp-line" style="color:${corpColor(r)}" title="${escapeHtml(who+' · '+corpLabel(r))}">${r.type==='당직'?'':corpFlag(r.entity,9)}<span>${(r.type==='당직'&&r.duty&&r.duty!=='당직생략')?`<i class="corp-pre">${t('당직')} </i>${escapeHtml(r.duty)}`:escapeHtml(corpLabel(r))}</span></div>`;
+    }).join('');
     // 지시사항(directive.html): 납기일 칸에 표시, 납기를 넘긴 건은 오늘 칸에 D+n 으로 표시
     const dirChips=directiveCalRecords.filter(r=>r._calDate===ds).map(r=>{
       return `<div class="event-chip directive-chip" style="background:#FFEBEE;border-left-color:#C8001E;color:#8E0016 !important;font-weight:${r._late?700:600};"
@@ -1574,10 +1593,10 @@ function renderCal(){
         <div class="lunar${holiday?' lunar-holiday':''}">${lbl?t('음')+lbl:''}</div>
         ${isThis
           ? `<div style="display:flex;align-items:center;">
-               <div class="day-num${isSun?' sun-num':''}${isSat?' sat-num':''}${isT?' today-num':''}">${dd}</div>${isSun?`<span class="week-badge">W${isoWeekNo(date)}</span>`:''}
+               <div class="day-num${(isSun||isCorpOff)?' sun-num':''}${(isSat&&!isCorpOff)?' sat-num':''}${isT?' today-num':''}">${dd}</div>${isSun?`<span class="week-badge">W${isoWeekNo(date)}</span>`:''}
              </div>`
           : dayDisplay}
-      </div>${dirChips}${chips}${sharedChips}${todoChips}${more}</div>`;
+      </div>${corpLines}${dirChips}${chips}${sharedChips}${todoChips}${more}</div>`;
   }
   document.getElementById('days').innerHTML=html;
 }
@@ -1606,6 +1625,17 @@ function renderDayPopupList(){
   const shared=sharedCalRecords.filter(r=>(r.date||'').slice(0,10)===dpDate);
   const el=document.getElementById('dp-list');
   const dirs=directiveCalRecords.filter(r=>r._calDate===dpDate);
+  // 법인 휴무·당직은 읽기 전용 — 누르면 전법인 통합일정표가 열린다(등록·수정은 그 화면에서)
+  const corpHtml=corpCalRecords.filter(r=>r._date===dpDate).map(r=>{
+    const who=(CORP_CAL[r.entity]||{}).ko||r.entity||'';
+    return `<div class="dp-item" onclick="window.open('schedule.html','_blank')" style="cursor:pointer;" title="전법인 통합일정표에서 등록·수정합니다">
+      <div class="dp-cat-bar" style="background:${corpColor(r)}"></div>
+      <div class="dp-item-body">
+        <div class="dp-item-title" style="display:flex;align-items:center;gap:6px;">${corpFlag(r.entity,11)}${escapeHtml(corpLabel(r))}</div>
+        <div class="dp-item-cat">${escapeHtml(who)} · ${t(r.type)}${r.note?' · '+escapeHtml(r.note):''}</div>
+      </div>
+    </div>`;
+  }).join('');
   // 지시사항은 읽기 전용 — 누르면 directive.html 의 해당 지시 상세로 이동(진행기록·완료보고는 그 화면에서)
   const dirHtml=dirs.map(r=>{
     return `<div class="dp-item" onclick="openDirective(${Number(r.id)})" style="cursor:pointer;background:#FFF5F5;">
@@ -1617,7 +1647,7 @@ function renderDayPopupList(){
       <button class="dp-link-btn" onclick="event.stopPropagation();openDiaryForDirective(${Number(r.id)})" title="이 지시사항에 대한 활동을 업무일지로 작성합니다">✏️ 활동 작성</button>
     </div>`;
   }).join('');
-  if(!list.length && !shared.length && dirs.length){el.innerHTML=dirHtml;return;}
+  if(!list.length && !shared.length && (dirs.length||corpHtml)){el.innerHTML=corpHtml+dirHtml;return;}
   if(!list.length && !shared.length){el.innerHTML=`<div class="dp-empty">${t('이 날짜에 등록된 일정이 없어요')}<br><small style="color:var(--text3)">${t('아래 추가 버튼으로 일정을 등록하세요')}</small></div>`;return;}
   const sharedHtml=shared.map(r=>{
     const rEnc=encodeURIComponent(JSON.stringify(r));
@@ -1655,7 +1685,7 @@ function renderDayPopupList(){
       </div>
     </div>`;
   }).join('') + sharedHtml;
-  if(dirHtml) el.innerHTML=dirHtml+el.innerHTML;
+  if(dirHtml||corpHtml) el.innerHTML=corpHtml+dirHtml+el.innerHTML;
 }
 function escapeHtml(s){
   const d=document.createElement('div');d.textContent=s;return d.innerHTML;
@@ -1875,7 +1905,7 @@ function switchTab(tab){
     if(addBtn) addBtn.style.display='';
   }
   if(tab==='diary') renderDiary();
-  else if(tab==='cal'){ renderCal(); loadSharedCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); loadDirectiveCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); }
+  else if(tab==='cal'){ renderCal(); loadSharedCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); loadDirectiveCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); loadCorpCalRecords().then(function(){ if(currentTab==='cal') renderCal(); }); }
   else if(tab==='list') renderList();
   else if(tab==='share') loadShareView();
   else if(tab==='wfsettings') initWfSettingsView();
@@ -2249,6 +2279,41 @@ async function loadSharedCalRecords(){
              ③ 내가 지시자인 지시(납기 추적용, 부서명을 앞에 붙임)
    이 블록은 실패해도 달력의 기존 기능에 영향을 주지 않도록 전부 try/catch 로 감싼다. */
 let directiveCalRecords=[];
+/* ═══ 법인 휴무·당직 (전법인 통합일정표 sme_calendar) — 달력에 읽기 전용으로 표시 ═══ */
+let corpCalRecords=[];
+const CORP_CAL={
+  HQ:{ko:'한국',color:'#B3261E',flag:'<rect width="36" height="24" fill="#fff"/><g transform="rotate(33.69 18 12)"><path d="M12 12a6 6 0 0 1 12 0z" fill="#CD2E3A"/><path d="M12 12a6 6 0 0 0 12 0z" fill="#0047A0"/><circle cx="15" cy="12" r="3" fill="#CD2E3A"/><circle cx="21" cy="12" r="3" fill="#0047A0"/></g>'},
+  SMECN:{ko:'중국',color:'#2E6B4F',flag:'<rect width="36" height="24" fill="#EE1C25"/><polygon fill="#FFFF00" transform="translate(7 7) scale(4)" points="0,-1 0.225,-0.309 0.951,-0.309 0.363,0.118 0.588,0.809 0,0.382 -0.588,0.809 -0.363,0.118 -0.951,-0.309 -0.225,-0.309"/>'},
+  SMEGLOBAL:{ko:'태국',color:'#1B3A6B',flag:'<rect width="36" height="24" fill="#A51931"/><rect y="4" width="36" height="16" fill="#F4F5F8"/><rect y="8" width="36" height="8" fill="#2D2A4A"/>'},
+  GSMEIN:{ko:'인도',color:'#C06414',flag:'<rect width="36" height="24" fill="#fff"/><rect width="36" height="8" fill="#FF9933"/><rect y="16" width="36" height="8" fill="#138808"/><circle cx="18" cy="12" r="3" fill="none" stroke="#000080" stroke-width=".8"/>'}
+};
+const CORP_DUTY_COLOR='#5B4B8A';
+function corpFlag(code,h){
+  const c=CORP_CAL[code]; if(!c) return '';
+  return `<svg width="${h*1.5}" height="${h}" viewBox="0 0 36 24" aria-hidden="true">${c.flag}</svg>`;
+}
+function corpLabel(r){
+  if(r.type==='당직') return r.duty==='당직생략' ? t('당직생략') : t('당직')+' '+(r.duty||'');
+  return r.title||t('휴무');
+}
+function corpColor(r){ return r.type==='당직' ? CORP_DUTY_COLOR : ((CORP_CAL[r.entity]||{}).color||'#565C64'); }
+function myCorpCode(){ return ({KOREA:'HQ',SMECN:'SMECN',SMEGLOBAL:'SMEGLOBAL',GSMEIN:'GSMEIN'})[wfSession.entity||'']||'HQ'; }
+async function loadCorpCalRecords(){
+  if(!SB) return;
+  try{
+    var res = await SB.from('sme_calendar').select('id,event_date,entity,type,title,duty,note')
+      .in('type',['휴무','당직']).order('event_date',{ascending:true}).order('id',{ascending:true}).limit(2000);
+    if(res.error){ console.warn('[CorpCal] load error:', res.error); return; }
+    var seen = {}, items = [];
+    (res.data||[]).forEach(function(r){
+      r._date = String(r.event_date).slice(0,10);
+      var key = [r._date, r.entity, r.type, r.title||'', r.duty||''].join('|');   // 같은 내용이 두 번 등록돼 있어도 한 번만 보인다
+      if(seen[key]) return; seen[key] = 1;
+      items.push(r);
+    });
+    corpCalRecords = items;
+  }catch(e){ console.warn('[CorpCal] error:', e); }
+}
 function directiveChipText(r){
   return (r._late?'D+'+r._lateDays+' ':'')+(r._mine?'':'['+(r.owner_dept||'')+'] ')+(r.title||'')+(r.status==='완료보고'?' (완료보고)':'');
 }
@@ -4316,6 +4381,7 @@ const I18N_T = {
 "일반기록":{zh:"一般记录",en:"General"},
 "전달사항":{zh:"传达事项",en:"Notice"},
 "지시사항":{zh:"指示事项",en:"Directive"},
+"당직":{zh:"值班",en:"Duty"},"법인 휴무":{zh:"法人休息日",en:"Company holiday"},"당직생략":{zh:"免值班",en:"No duty"},"휴무":{zh:"休息",en:"Holiday"},
 "(핵심 한 줄 요약)":{zh:"（一句话概要）",en:"(one-line summary)"},
 "후속조치":{zh:"后续措施",en:"Follow-up"},
 "(입력 시 할 일 자동 생성)":{zh:"（填写后自动生成待办）",en:"(auto-creates a to-do)"},
@@ -4480,6 +4546,7 @@ async function wfEnterMain() {
     await loadDiary();
     await loadSharedCalRecords();
     await loadDirectiveCalRecords();
+    await loadCorpCalRecords();
     await loadUserCategories();
     await loadHiddenDefaults();
     renderAll();
