@@ -1569,7 +1569,7 @@ function switchTab(t) {
   if(t==='trade')     loadTradeSummary();
   if(t==='stock')     loadStockSummary();
   if(t==='emp'       && _empData.length===0)        loadEmpData();
-  if(t==='log'       && allLogs.length===0)         loadLog();
+  if(t==='log'){ if(allLogs.length===0) loadLog(); else setTimeout(initLogColResize,50); }
   if(t==='ui') loadUITab();
 }
 
@@ -2785,31 +2785,56 @@ function setQ(type, el) {
   loadLog();
 }
 
+// ── access_log 전 건 조회 (Supabase 1,000행 제한 우회 페이지네이션) ──
+async function fetchAllAccessLog(cols, applyFilter) {
+  let page = 0, all = [];
+  while(true) {
+    let q = sb.from('access_log').select(cols)
+      .order('accessed_at', {ascending: false}).order('id', {ascending: false})
+      .range(page * 1000, (page + 1) * 1000 - 1);
+    if(applyFilter) q = applyFilter(q);
+    const {data, error} = await q;
+    if(error) throw error;
+    if(!data || data.length === 0) break;
+    all = all.concat(data);
+    if(data.length < 1000) break;
+    page++;
+  }
+  return all;
+}
+
+// ── 접속 이력 표 컬럼 너비 고정 — 탭이 보일 때만 실행 ──
+// (숨김 상태에서 실행하면 컬럼 너비가 0으로 측정되어 전 컬럼이 겹쳐 보임)
+function initLogColResize() {
+  const tab = document.getElementById('tab-log');
+  if(!tab || tab.style.display === 'none') return;
+  initColResize('log-table','al_log');
+}
+
 // ── 로그 조회 ──
 async function loadLog() {
   document.getElementById('logBody').innerHTML = '<tr><td colspan="7"><div class="loading"><div class="spinner"></div> 조회 중...</div></td></tr>';
 
   try {
-    let q = sb.from('access_log').select('*').order('accessed_at', {ascending: false}).limit(1000);
-    if(_from) q = q.gte('accessed_at', _from);
-    if(_to)   q = q.lte('accessed_at', _to);
-
     const name   = document.getElementById('f-name').value;
     const screen = document.getElementById('f-screen').value;
     const device = document.getElementById('f-device').value;
     const entity = document.getElementById('f-entity').value;
-    if(name)   q = q.eq('user_name', name);
-    if(screen) q = q.eq('screen', screen);
-    if(device) q = q.eq('device', device);
-    if(entity) q = q.eq('entity', entity);
 
-    const {data, error} = await q;
-    if(error) throw error;
-    allLogs = data || [];
+    // 1,000행 제한 우회 — 조건에 맞는 전 건을 1,000행씩 반복 조회
+    allLogs = await fetchAllAccessLog('*', q => {
+      if(_from)  q = q.gte('accessed_at', _from);
+      if(_to)    q = q.lte('accessed_at', _to);
+      if(name)   q = q.eq('user_name', name);
+      if(screen) q = q.eq('screen', screen);
+      if(device) q = q.eq('device', device);
+      if(entity) q = q.eq('entity', entity);
+      return q;
+    });
     renderLog(allLogs);
     updateKPI();
     loadRank();
-    setTimeout(()=>initColResize('log-table','al_log'),50);
+    setTimeout(initLogColResize,50);
   } catch(e) {
     document.getElementById('logBody').innerHTML = `<tr><td colspan="7"><div class="empty-state">조회 실패: ${e.message}</div></td></tr>`;
   }
@@ -2850,14 +2875,14 @@ async function updateKPI() {
     const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
     const monthStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
 
-    const [{data:d1},{data:d2},{data:d3}] = await Promise.all([
-      sb.from('access_log').select('id', {count:'exact'}).gte('accessed_at', todayStr+'T00:00:00'),
-      sb.from('access_log').select('id', {count:'exact'}).gte('accessed_at', monthStr+'T00:00:00'),
-      sb.from('access_log').select('id', {count:'exact'})
+    const [{count:c1},{count:c2},{count:c3}] = await Promise.all([
+      sb.from('access_log').select('id', {count:'exact', head:true}).gte('accessed_at', todayStr+'T00:00:00'),
+      sb.from('access_log').select('id', {count:'exact', head:true}).gte('accessed_at', monthStr+'T00:00:00'),
+      sb.from('access_log').select('id', {count:'exact', head:true})
     ]);
-    document.getElementById('kpi-today').textContent = (d1?.length||0).toLocaleString();
-    document.getElementById('kpi-month').textContent = (d2?.length||0).toLocaleString();
-    document.getElementById('kpi-total').textContent = (d3?.length||0).toLocaleString();
+    document.getElementById('kpi-today').textContent = (c1||0).toLocaleString();
+    document.getElementById('kpi-month').textContent = (c2||0).toLocaleString();
+    document.getElementById('kpi-total').textContent = (c3||0).toLocaleString();
   } catch(e) {}
 }
 
@@ -2867,8 +2892,7 @@ async function loadRank() {
     const now = new Date();
     const pad = n => String(n).padStart(2,'0');
     const monthStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
-    const {data} = await sb.from('access_log').select('user_name').gte('accessed_at', monthStr+'T00:00:00');
-    if(!data) return;
+    const data = await fetchAllAccessLog('user_name', q => q.gte('accessed_at', monthStr+'T00:00:00'));
 
     const cnt = {};
     data.forEach(r => { cnt[r.user_name] = (cnt[r.user_name]||0) + 1; });
@@ -2890,7 +2914,7 @@ async function loadRank() {
     }
 
     // 화면 드롭다운 (전체 로그 기준)
-    const {data: sd} = await sb.from('access_log').select('screen');
+    const sd = screenSel.options.length === 1 ? await fetchAllAccessLog('screen') : null;
     if(sd && screenSel.options.length === 1) {
       const screens = [...new Set(sd.map(r=>r.screen).filter(Boolean))].sort();
       screens.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; screenSel.appendChild(o); });
