@@ -337,6 +337,7 @@ tbody tr.row-late td{background:#fff7f7;}
 .mt-row{display:flex;gap:4px;margin-bottom:4px;}
 .mt-row select,.mt-row input[type=date]{height:28px;border:1px solid var(--line-dk);border-radius:2px;font-size:11.5px;font-family:'Noto Sans KR',sans-serif;background:#fff;padding:0 4px;color:#111827;}
 .mt-btn{height:26px;padding:0 9px;font-size:11.5px;margin:0 2px 3px 0;}
+#mtTable td.mt-ctl{white-space:nowrap;overflow-x:auto;} #mtTable td.mt-ctl .mt-btn{margin:0 2px 0 0;}
 /* 완료 확인 — 「완료」 배지와 같은 크기의 배지형 버튼, 진한 아이보리 */
 .st-btn{display:inline-block;padding:2px 7px;border-radius:2px;font-size:11px;font-weight:500;line-height:inherit;font-family:'Noto Sans KR',sans-serif;
   background:#E6DBBE;color:#4A3B12;border:1px solid #BFAE80;cursor:pointer;white-space:nowrap;vertical-align:baseline;margin:0;}
@@ -643,7 +644,7 @@ tbody tr.row-late td{background:#fff7f7;}
           <th class="sortable" onclick="mtSort('_done')">완료일<span class="sort-icon" id="msort-_done"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('status')">상태<span class="sort-icon" id="msort-status"></span><div class="col-resizer"></div></th>
           <th>활동내용<div class="col-resizer"></div></th>
-          <th>처리</th>
+          <th>처리<div class="col-resizer"></div></th>
         </tr></thead>
         <tbody id="mtTbody"></tbody>
       </table>
@@ -981,13 +982,14 @@ tbody tr.row-late td{background:#fff7f7;}
   <button class="btn btn-primary btn-sm" onclick="bulkClose('완료')">완료 처리</button>
   <button class="btn btn-outline btn-sm" onclick="bulkClose('불가')">불가 종결</button>
   <button class="btn btn-outline btn-sm" onclick="bulkResume()">계속 진행</button>
+  <button class="btn btn-red btn-sm" onclick="bulkDelete()">선택 삭제</button>
   <button class="btn btn-outline btn-sm" onclick="bulkClear()">선택 해제</button>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   directive.html v3.25 (2026-10-12) — 상태 필터: 지시사항에 미진행·진행중·완료요청, 주간업무·프로젝트에 상태(미완료·미결·진행중·기한 지남·완료), 금주계획에 미기록·기록됨 / v3.24 (2026-10-12) — 금주계획: 기간 다중 선택(월·주, 주간업무와 같은 방식), 일자 열, 계획 수정 / v3.23 (2026-10-12) — 입력·수정 창 통일: 신규개발(프로젝트 활동)도 「주간업무 수정」 창에서 입력, 활동에 목표일정·완료일정·완료유무·첨부 추가(dev_logs), 세부 진척현황 표에 목표·완료일정 열 / v3.22 (2026-10-10) — 업무일지 연동: 일지에서 온 활동 표시(일지)·수정, 주간업무 줄의 일자별 활동(rp_weekly_logs) / v3.21 (2026-10-07) — 주간업무 기간 다중 선택(월·주), 주차 선택 칸 삭제 / v3.20 — 주간업무 검색을 거래처·메이커·내용으로 분리(자동완성) / v3.19 — 프로젝트·마스터: 묶음 기준을 메이커(없으면 거래처)로, 거래처는 거래처 정보 기준 / v3.18 — 업체를 거래처·메이커 두 칸으로 분리(주간업무·프로젝트) / v3.17 — 지시 상세를 움직이는 팝업으로(위 지시 내용·아래 활동 내용) + 주간회의 처리 칸 수정 버튼 / v3.16 — 주간업무: 작성일자·목표일정·완료일정, 업체는 메이커관리·거래처 정보 기준 / v3.15 부서별보고 주간업무(rp_weekly) 탭 추가 / v3.14 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
+   directive.html v3.26 (2026-10-13) — 지시 삭제: 처리 칸 삭제 버튼·선택 삭제, 확인창 후 DB 영구 삭제(활동·담당자 포함) / 처리 칸 버튼 한 줄·처리 열 리사이저 / v3.25 (2026-10-12) — 상태 필터: 지시사항에 미진행·진행중·완료요청, 주간업무·프로젝트에 상태(미완료·미결·진행중·기한 지남·완료), 금주계획에 미기록·기록됨 / v3.24 (2026-10-12) — 금주계획: 기간 다중 선택(월·주, 주간업무와 같은 방식), 일자 열, 계획 수정 / v3.23 (2026-10-12) — 입력·수정 창 통일: 신규개발(프로젝트 활동)도 「주간업무 수정」 창에서 입력, 활동에 목표일정·완료일정·완료유무·첨부 추가(dev_logs), 세부 진척현황 표에 목표·완료일정 열 / v3.22 (2026-10-10) — 업무일지 연동: 일지에서 온 활동 표시(일지)·수정, 주간업무 줄의 일자별 활동(rp_weekly_logs) / v3.21 (2026-10-07) — 주간업무 기간 다중 선택(월·주), 주차 선택 칸 삭제 / v3.20 — 주간업무 검색을 거래처·메이커·내용으로 분리(자동완성) / v3.19 — 프로젝트·마스터: 묶음 기준을 메이커(없으면 거래처)로, 거래처는 거래처 정보 기준 / v3.18 — 업체를 거래처·메이커 두 칸으로 분리(주간업무·프로젝트) / v3.17 — 지시 상세를 움직이는 팝업으로(위 지시 내용·아래 활동 내용) + 주간회의 처리 칸 수정 버튼 / v3.16 — 주간업무: 작성일자·목표일정·완료일정, 업체는 메이커관리·거래처 정보 기준 / v3.15 부서별보고 주간업무(rp_weekly) 탭 추가 / v3.14 업무보고(개발기획팀) + 지시사항 / v3.1 틀고정·마스터 업체 묶음 — 지시사항 관리
    테이블: directives / directive_assignees / directive_updates
 
    v2.0 설계 기준 (엑셀 「업무진척현황」 89건을 내용으로 다시 읽고 정함):
@@ -1452,14 +1454,14 @@ function meetRow(d,L,mgr){
   }
   // 주간회의 표에서는 「미진행」을 지시 내용 앞에 이미 표시하므로 상태 칸에서는 생략한다(완료 확인만 보이게)
   const stHtml=(statusLabel(d)[0]==='미진행'?'':statusBadge(d))+(held&&cm?`<span class="st-date">${esc(md(tsDay(cm.created_at)))}</span>`:'')+stBtn;
-  if(mng) ctl+=`<button class="btn btn-outline mt-btn" onclick="openForm(${d.id})" title="지시 내용을 수정합니다">수정</button>`;
+  if(mng) ctl+=`<button class="btn btn-outline mt-btn" onclick="openForm(${d.id})" title="지시 내용을 수정합니다">수정</button><button class="btn btn-red mt-btn" onclick="delDirectives([${d.id}])" title="중복 등록 등 잘못 올린 지시를 DB에서 삭제합니다(복구 불가)">삭제</button>`;
   return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&d.kind==='지시'?'row-done':''}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
     <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}${asgNames(d)?`<div class="th-meta" title="담당자">${esc(asgNames(d))}</div>`:''}</td><td>${esc(d.issuer_name||'-')}</td>
     <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
     <td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${stHtml}</td>
     <td>${actHtml}</td>
-    <td>${ctl}</td></tr>`;
+    <td class="mt-ctl">${ctl}</td></tr>`;
 }
 /* ── 활동 입력 / 코멘트 창 ──
    표에는 입력칸을 늘어놓지 않고 버튼만 둔다. 버튼을 누르면 이 창이 열려 여기서 입력한다.
@@ -1547,6 +1549,24 @@ async function bulkClose(type){
     picked={}; showToast(ids.length+'건 처리되었습니다','ok'); await refresh();
   }catch(e){ showToast('오류: '+e.message,'err'); }
 }
+/* ── 지시 삭제 (v3.26) — 확인창 후 DB에서 영구 삭제. 딸린 활동(directive_updates)·담당자(directive_assignees)도 함께 지우고,
+   이 지시를 이어받은 후속 지시가 있으면 연결(parent_id)만 끊는다. 업무일지 원본(work_diary)은 건드리지 않는다. */
+async function delDirectives(ids){
+  ids=(ids||[]).map(Number).filter(id=>byId[id]&&canManage(byId[id])); if(!ids.length) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
+  const inList=ids.join(',');
+  try{
+    await sbDelete('directive_updates','directive_id=in.('+inList+')');
+    await sbDelete('directive_assignees','directive_id=in.('+inList+')');
+    const kids=Object.values(byId).filter(x=>x.parent_id&&ids.indexOf(Number(x.parent_id))>=0&&ids.indexOf(x.id)<0).map(x=>x.id);
+    if(kids.length) await sbPatchIn('directives',kids,{parent_id:null,updated_at:new Date().toISOString()});
+    await sbDelete('directives','id=in.('+inList+')');
+    ids.forEach(id=>delete picked[id]);
+    if(selectedId&&ids.indexOf(Number(selectedId))>=0) closePanel();
+    showToast(ids.length+'건 삭제되었습니다','ok'); await refresh();
+  }catch(e){ showToast('오류: '+e.message,'err'); }
+}
+function bulkDelete(){ if(!canDecide()) return; delDirectives(Object.keys(picked)); }
 async function bulkResume(){
   const ids=Object.keys(picked).map(Number).filter(id=>byId[id].status==='이관-확인필요'||byId[id].status==='지시됨');
   if(!ids.length){showToast('「계속 진행」은 미진행 상태 건에만 적용됩니다','err');return;}
@@ -1840,7 +1860,7 @@ function buildPanel(d){
         h+=`<button class="btn btn-outline btn-sm" onclick="undoDecide(${d.id})">완료 취소</button>`;
       }
     }
-    h+=`<button class="btn btn-outline btn-sm" onclick="openForm(${d.id})">수정</button><button class="btn btn-red btn-sm" onclick="act(${d.id},'delete')">삭제</button></div>`;
+    h+=`<button class="btn btn-outline btn-sm" onclick="openForm(${d.id})">수정</button><button class="btn btn-red btn-sm" onclick="delDirectives([${d.id}])">삭제</button></div>`;
     if(d.kind==='지시'&&d.status!=='완료'){
       h+=`<div class="sp-row" style="margin-top:6px;"><div class="sp-label">기한 변경 ${d.due_date_original?'(연장은 사유 필수 · 최초 기한은 평가용으로 보존)':'(기한 최초 지정)'}</div>
         <div style="display:flex;gap:6px;"><input type="date" class="sp-input" id="spNewDue" value="${esc(d.due_date||'')}" style="margin:0;width:170px;"><input class="sp-input" id="spNote" placeholder="기한 변경 사유" style="margin:0;flex:1;"><button class="btn btn-outline btn-sm" style="height:32px;" onclick="act(${d.id},'due')">기한 변경</button></div></div>`;
@@ -2082,7 +2102,7 @@ function applyResize(tableId,KEY,def){
   ths.forEach((th,i)=>{
     th.style.width=(saved?saved[i]:def[i])+'px'; th.style.position='sticky';
     let rz=th.querySelector('.col-resizer');
-    if(!rz&&i<ths.length-1){rz=document.createElement('div');rz.className='col-resizer';th.appendChild(rz);}
+    if(!rz){rz=document.createElement('div');rz.className='col-resizer';th.appendChild(rz);}
     if(!rz||rz.dataset.bound) return; rz.dataset.bound='1';
     rz.addEventListener('click',e=>e.stopPropagation());
     rz.addEventListener('mousedown',e=>{
@@ -2098,7 +2118,7 @@ function applyResize(tableId,KEY,def){
 }
 function initColResize(){
   applyResize('listTable','directive_col_v3',[44,92,76,78,72,104,110,340,150,66,104,300]);
-  applyResize('mtTable','directive_meet_col_v6',[32,70,112,72,420,132,70,150,470,170]);
+  applyResize('mtTable','directive_meet_col_v7',[32,70,112,72,400,132,70,150,440,250]);
 }
 
 let toastTimer;
