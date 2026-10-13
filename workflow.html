@@ -506,6 +506,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .ai-msg.user { background:#1a4fa0; color:#fff; align-self:flex-end; }
 .ai-msg.assistant { background:#fff; border:1px solid var(--border); color:var(--text1); align-self:flex-start; }
 .ai-msg.loading { background:#f0ede8; color:var(--text3); align-self:flex-start; font-style:italic; }
+/* 자동완성 목록 — 업무보고(directive.html)와 같은 형식 (2026-10-14) */
+#acDD{display:none;position:fixed;z-index:3000;background:#fff;border:1px solid #c7ccd4;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:264px;overflow:auto;font-size:12px;color:#111827;font-family:'Noto Sans KR',sans-serif;}
+#acDD div{padding:5px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5;}
+#acDD div.on,#acDD div:hover{background:#6b7280;color:#fff;}
+#acDD div small{color:#9aa1ab;margin-left:6px;font-size:11px;}
+#acDD div.on small,#acDD div:hover small{color:#e5e7eb;}
 </style>
 <link rel="stylesheet" href="smerp-mobile.css?v=1">
 <script src="smerp-mobile.js?v=1" defer></script>
@@ -1122,10 +1128,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       </div>
       <div id="dm-link-pj-row" style="display:none;margin-top:8px;">
         <div class="dm-row" style="margin-bottom:0;">
-          <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="거래처·메이커·프로젝트명" oninput="fillLinkTargets()"></div>
+          <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="거래처·메이커·프로젝트명" data-ac="dm-link-pjq-list" autocomplete="off" oninput="fillLinkTargets();hideLinkNewPartner()" onchange="fillLinkTargets();checkLinkPjQ()"></div>
           <div class="dm-field" style="flex:2;"><label class="dm-label">프로젝트</label><select id="dm-link-pj" class="dm-input"></select></div>
           <div class="dm-field" style="flex:1;"><label class="dm-label">단계</label><select id="dm-link-stage" class="dm-input"></select></div>
         </div>
+        <div id="dm-link-pj-new" style="display:none;margin-top:6px;padding:6px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.6;"></div>
+        <datalist id="dm-link-pjq-list"></datalist>
       </div>
       <div id="dm-link-wk-row" style="display:none;margin-top:8px;">
         <select id="dm-link-wk" class="dm-input" onchange="onLinkWeeklyChange()"></select>
@@ -1133,8 +1141,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <div class="dm-row" style="margin-bottom:0;">
             <div class="dm-field"><label class="dm-label">부서</label><select id="dm-link-wk-dept" class="dm-input"></select></div>
             <div class="dm-field"><label class="dm-label">대분류</label><select id="dm-link-wk-cat" class="dm-input"></select></div>
-            <div class="dm-field"><label class="dm-label">거래처</label><input type="text" id="dm-link-wk-vendor" class="dm-input" list="dm-link-vendor-list" placeholder="거래처 정보에서 선택"></div>
-            <div class="dm-field"><label class="dm-label">메이커</label><input type="text" id="dm-link-wk-maker" class="dm-input" list="dm-link-maker-list" placeholder="메이커관리에서 선택"></div>
+            <div class="dm-field"><label class="dm-label">거래처</label><input type="text" id="dm-link-wk-vendor" class="dm-input" data-ac="dm-link-vendor-list" autocomplete="off" placeholder="거래처 정보에서 선택"></div>
+            <div class="dm-field"><label class="dm-label">메이커</label><input type="text" id="dm-link-wk-maker" class="dm-input" data-ac="dm-link-maker-list" autocomplete="off" placeholder="메이커관리에서 선택"></div>
           </div>
           <datalist id="dm-link-vendor-list"></datalist><datalist id="dm-link-maker-list"></datalist>
         </div>
@@ -1321,6 +1329,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     </div>
   </div>
 </div>
+<div id="acDD"></div>
 
 <script>
 
@@ -3321,6 +3330,7 @@ async function loadLinkData(type){
     var asg={}; (aRes.data||[]).forEach(function(a){ (asg[a.directive_id]=asg[a.directive_id]||[]).push(a.employee_id); });
     linkData.dirs=dRes.data||[]; linkData.asg=asg;
   }else if(type==='project'){
+    await loadLinkNames();
     var iRes=await SB.from('dev_items').select('id,title,vendor,maker,owner_dept,kind').eq('is_deleted',false).order('id',{ascending:false}).limit(2000);
     if(iRes.error) throw iRes.error;
     linkData.items=iRes.data||[];
@@ -3330,17 +3340,55 @@ async function loadLinkData(type){
       .eq('is_deleted',false).gte('due_date',fmtYmd(from)).order('due_date',{ascending:false}).order('id',{ascending:false}).limit(1000);
     if(wRes.error) throw wRes.error;
     linkData.weekly=wRes.data||[];
-    if(!linkData.partners){
-      try{
-        var pRes=await SB.from('partners').select('name,alias1,alias2,is_active').order('name').limit(5000);
-        var mRes=await SB.from('makers').select('maker_name').order('maker_name').limit(5000);
-        linkData.partners=pRes.data||[]; linkData.makers=(mRes.data||[]).map(function(x){return x.maker_name;}).filter(Boolean);
-      }catch(e){ linkData.partners=linkData.partners||[]; linkData.makers=linkData.makers||[]; }
-      var opt=function(a){ return a.map(function(v){ return '<option value="'+escapeHtml(v)+'">'; }).join(''); };
-      document.getElementById('dm-link-vendor-list').innerHTML=opt(linkData.partners.filter(function(x){return x.name&&x.is_active!==false;}).map(function(x){return x.name;}));
-      document.getElementById('dm-link-maker-list').innerHTML=opt(linkData.makers);
-    }
+    await loadLinkNames();
   }
+}
+// 거래처 정보(partners)·메이커관리(makers) 이름 — 프로젝트 검색칸과 주간업무 새 건이 함께 쓴다
+async function loadLinkNames(force){
+  if(linkData.partners&&!force) return;
+  try{
+    var pRes=await SB.from('partners').select('name,alias1,alias2,is_active').order('name').limit(5000);
+    var mRes=await SB.from('makers').select('maker_name').order('maker_name').limit(5000);
+    linkData.partners=pRes.data||[]; linkData.makers=(mRes.data||[]).map(function(x){return x.maker_name;}).filter(Boolean);
+  }catch(e){ linkData.partners=linkData.partners||[]; linkData.makers=linkData.makers||[]; }
+  var opt=function(a,tag){ return a.map(function(v){ return '<option value="'+escapeHtml(v)+'"'+(tag?' data-tag="'+tag+'"':'')+'>'; }).join(''); };
+  var pNames=linkData.partners.filter(function(x){return x.name&&x.is_active!==false;}).map(function(x){return x.name;});
+  document.getElementById('dm-link-vendor-list').innerHTML=opt(pNames);
+  document.getElementById('dm-link-maker-list').innerHTML=opt(linkData.makers);
+  // 검색칸: 메이커 먼저, 이어서 거래처 (같은 이름은 한 번만)
+  var seen={}, mk=[], pt=[];
+  linkData.makers.forEach(function(n){ var k=linkKey(n); if(k&&!seen[k]){ seen[k]=1; mk.push(n); } });
+  pNames.forEach(function(n){ var k=linkKey(n); if(k&&!seen[k]){ seen[k]=1; pt.push(n); } });
+  document.getElementById('dm-link-pjq-list').innerHTML=opt(mk,'메이커')+opt(pt,'거래처');
+}
+// 검색칸에 적은 이름이 거래처 정보·메이커관리 어디에도 없으면 거래처 신규 등록을 안내한다
+function linkNameKnown(q){
+  var k=linkKey(q); if(!k) return true;
+  var hit=function(n){ var nk=linkKey(n); return nk&&(nk===k||nk.indexOf(k)>=0||(nk.length>=2&&k.indexOf(nk)>=0)); };
+  return (linkData.makers||[]).some(hit)||(linkData.partners||[]).some(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&hit(n); }); });
+}
+function hideLinkNewPartner(){ var el=document.getElementById('dm-link-pj-new'); if(el){ el.style.display='none'; el.innerHTML=''; } }
+function checkLinkPjQ(){
+  var q=document.getElementById('dm-link-pj-q').value.trim(), el=document.getElementById('dm-link-pj-new');
+  if(!q||!linkData.partners||linkNameKnown(q)){ hideLinkNewPartner(); return; }
+  // 프로젝트명으로만 찾은 경우(목록에 걸리는 프로젝트가 있으면) 안내하지 않는다
+  var qk=linkKey(q);
+  if((linkData.items||[]).some(function(i){ return linkKey(i.title).indexOf(qk)>=0; })){ hideLinkNewPartner(); return; }
+  el.innerHTML='「<b>'+escapeHtml(q)+'</b>」은(는) 거래처 정보·메이커관리에 없는 이름입니다. 거래처로 신규 등록하시겠습니까? '
+    +'<button type="button" onclick="linkRegisterPartner()" style="margin-left:6px;padding:2px 10px;font-size:11px;border:1px solid #ea580c;background:#fff;color:#c2410c;border-radius:4px;cursor:pointer;font-family:inherit;">거래처 신규 등록</button>'
+    +'<div style="color:#9aa1ab;">메이커라면 관리자설정 &gt; 메이커관리에 등록해 주세요.</div>';
+  el.style.display='';
+}
+async function linkRegisterPartner(){
+  var q=document.getElementById('dm-link-pj-q').value.trim(); if(!q||!SB) return;
+  if(!confirm('「'+q+'」을(를) 거래처 정보에 신규 등록할까요?')) return;
+  try{
+    var r=await SB.from('partners').insert({name:q,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'});
+    if(r.error) throw r.error;
+    await loadLinkNames(true);
+    hideLinkNewPartner();
+    alert('거래처 정보에 등록했습니다.\n이 거래처의 프로젝트가 없으면 업무보고 > 세부 진척현황에서 프로젝트를 먼저 등록해 주세요.');
+  }catch(e){ alert('거래처 등록에 실패했습니다: '+(e.message||e)); }
 }
 function linkOptHtml(v,label,sel){ return '<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+escapeHtml(label)+'</option>'; }
 function linkDirLabel(d){ return '['+String(d.owner_dept||'-').replace(/팀$/,'')+'] '+linkCut(d.title,46)+(d.due_date?' · 납기 '+linkMd(d.due_date):'')+(d.status==='완료'?' · 완료':''); }
@@ -3371,6 +3419,45 @@ function fillLinkTargets(){
     onLinkWeeklyChange();
   }
 }
+/* ── 자동완성 (2026-10-14) — data-ac="datalist id" 가 달린 입력칸만. 업무보고(directive.html)와 같은 형식 ── */
+var acInput=null, acIdx=-1, acItems=[];
+function acOpen(inp){ if(!inp.dataset.ac) return; acInput=inp; acRender(true); }
+function acRender(showAll){
+  var dd=document.getElementById('acDD'), dl=acInput&&document.getElementById(acInput.dataset.ac); if(!dd||!dl){ acClose(); return; }
+  var q=acInput.value.trim().toLowerCase();
+  var all=Array.prototype.slice.call(dl.querySelectorAll('option')).map(function(o){ return {v:o.value,tag:o.getAttribute('data-tag')||''}; }).filter(function(x){ return x.v; });
+  acItems=(q&&!showAll?all.filter(function(x){ return x.v.toLowerCase().indexOf(q)>=0; }):all).slice(0,300);
+  if(!acItems.length||(!showAll&&acItems.length===1&&acItems[0].v.toLowerCase()===q)){ dd.style.display='none'; dd.innerHTML=''; return; }
+  acIdx=-1;
+  dd.innerHTML=acItems.map(function(x,ix){ return '<div data-ix="'+ix+'">'+escapeHtml(x.v)+(x.tag?'<small>'+x.tag+'</small>':'')+'</div>'; }).join('');
+  var r=acInput.getBoundingClientRect(), below=window.innerHeight-r.bottom;
+  dd.style.display='block'; dd.style.left=r.left+'px'; dd.style.minWidth=r.width+'px'; dd.style.maxWidth=Math.max(r.width,360)+'px';
+  var h=Math.min(264,dd.scrollHeight);
+  dd.style.top=(below<h+8&&r.top>h+8?r.top-h-2:r.bottom+1)+'px';
+  dd.scrollTop=0;
+}
+function acClose(){ var dd=document.getElementById('acDD'); if(dd) dd.style.display='none'; acInput=null; acIdx=-1; }
+function acPick(ix){
+  var inp=acInput; if(!inp||!acItems[ix]) return;
+  inp.value=acItems[ix].v; acClose();
+  inp.dispatchEvent(new Event('input',{bubbles:true}));
+  inp.dispatchEvent(new Event('change',{bubbles:true}));
+}
+document.addEventListener('focusin',function(ev){ var el=ev.target; if(el&&el.tagName==='INPUT'&&el.dataset&&el.dataset.ac) acOpen(el); });
+document.addEventListener('click',function(ev){ var el=ev.target, dd=document.getElementById('acDD'); if(el&&el.tagName==='INPUT'&&el.dataset&&el.dataset.ac&&dd&&dd.style.display!=='block') acOpen(el); });
+document.addEventListener('input',function(ev){ if(ev.target===acInput) acRender(false); else if(ev.target&&ev.target.dataset&&ev.target.dataset.ac){ acInput=ev.target; acRender(false); } });
+document.addEventListener('focusout',function(ev){ if(ev.target===acInput) setTimeout(function(){ if(document.activeElement!==acInput) acClose(); },150); });
+document.addEventListener('mousedown',function(ev){ var dd=document.getElementById('acDD'); if(!dd||!dd.contains(ev.target)) return; ev.preventDefault(); var d=ev.target.closest('div[data-ix]'); if(d) acPick(+d.dataset.ix); });
+document.addEventListener('keydown',function(ev){
+  var dd=document.getElementById('acDD'); if(!acInput||ev.target!==acInput||!dd||dd.style.display!=='block') return;
+  if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){
+    ev.preventDefault(); acIdx=Math.max(0,Math.min(acItems.length-1,acIdx+(ev.key==='ArrowDown'?1:-1)));
+    Array.prototype.forEach.call(dd.children,function(c,ix){ c.classList.toggle('on',ix===acIdx); }); var cur=dd.children[acIdx]; if(cur) cur.scrollIntoView({block:'nearest'});
+  }else if(ev.key==='Enter'&&acIdx>=0){ ev.preventDefault(); ev.stopPropagation(); acPick(acIdx); }
+  else if(ev.key==='Escape'||ev.key==='Enter'){ dd.style.display='none'; }
+},true);
+window.addEventListener('resize',function(){ if(acInput) acClose(); });
+document.addEventListener('scroll',function(ev){ var dd=document.getElementById('acDD'); if(acInput&&dd&&ev.target!==dd) dd.style.display='none'; },true);
 // 이미 걸려 있는 연동 대상이 목록에 없으면(완료된 지시·오래된 주간업무 등) 그 한 건을 따로 읽어 넣는다
 async function ensureLinkPreset(type){
   var pre=(linkPreset&&linkPreset.type===type)?linkPreset:null; if(!pre||!pre.refId||!SB) return;
@@ -3418,7 +3505,8 @@ function updateLinkHint(){
   if(!type){ el.style.display='none'; return; }
   var where={directive:'선택한 지시사항의 활동내용',project:'선택한 프로젝트의 세부 진척현황',weekly:'선택한 주간업무 줄의 일자별 활동'}[type];
   var sched=document.getElementById('dm-status').value==='일정';
-  el.innerHTML=(sched&&type==='weekly'?'<b style="color:#1a4fa0;">상태가 「일정」이면 주간업무에 「계획」으로 올라갑니다</b> (「새 건 등록」을 고른 경우). 완료·진행중으로 바꿔 저장하면 「실적」으로 바뀌고 활동이 반영됩니다. 기존 건을 고르면 완료로 바꿀 때 그 줄에 활동이 반영됩니다.'
+  el.innerHTML=(sched&&type==='project'?'<b style="color:#1a4fa0;">상태가 「일정」이면 세부 진척현황에 바로 올라가고 목표일정에 이 날짜가 표시됩니다.</b> 완료로 바꿔 저장하면 완료일정이 채워집니다.'
+      :sched&&type==='weekly'?'<b style="color:#1a4fa0;">상태가 「일정」이면 주간업무에 「계획」으로 올라갑니다</b> (「새 건 등록」을 고른 경우). 완료·진행중으로 바꿔 저장하면 「실적」으로 바뀌고 활동이 반영됩니다. 기존 건을 고르면 완료로 바꿀 때 그 줄에 활동이 반영됩니다.'
       :sched?'<b style="color:#C8001E;">상태가 「일정」이라 지금은 반영되지 않습니다.</b> 완료·진행중 등으로 바꿔 저장할 때 '+where+'에 반영됩니다.'
       :'저장하면 일지의 제목·내용이 '+where+'에 반영됩니다.'+(type==='directive'?' 완료 확인은 업무보고 화면에서 사장님·상무님이 합니다.':''))
     +' 기간·반복 등록은 시작일 1건만 연동됩니다.';
@@ -3429,7 +3517,7 @@ function resetLinkUI(r){
   linkPreset=(r&&r.link_type&&r.link_ref_id)?{type:r.link_type,refId:r.link_ref_id,stage:r.link_stage||''}:null;
   linkData.dirs=linkData.items=linkData.weekly=null;
   ['dm-link-dir','dm-link-pj','dm-link-wk'].forEach(function(id){ document.getElementById(id).innerHTML=''; });
-  document.getElementById('dm-link-pj-q').value='';
+  document.getElementById('dm-link-pj-q').value=''; hideLinkNewPartner();
   document.getElementById('dm-link-wk-vendor').value=''; document.getElementById('dm-link-wk-maker').value='';
   document.getElementById('dm-link-all').checked=linkIsExec();
   document.getElementById('dm-link-type').value=linkPreset?linkPreset.type:'';
