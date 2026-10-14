@@ -1131,8 +1131,20 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       <div id="dm-link-pj-row" style="display:none;margin-top:8px;">
         <div class="dm-row" style="margin-bottom:0;">
           <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="거래처·메이커·프로젝트명" data-ac="dm-link-pjq-list" autocomplete="off" oninput="fillLinkTargets();hideLinkNewPartner()" onchange="fillLinkTargets();checkLinkPjQ()"></div>
-          <div class="dm-field" style="flex:2;"><label class="dm-label">프로젝트</label><select id="dm-link-pj" class="dm-input"></select></div>
+          <div class="dm-field" style="flex:2;"><label class="dm-label">프로젝트</label><select id="dm-link-pj" class="dm-input" onchange="onLinkPjChange()"></select></div>
           <div class="dm-field" style="flex:1;"><label class="dm-label">단계</label><select id="dm-link-stage" class="dm-input"></select></div>
+        </div>
+        <div id="dm-link-pj-newbox" style="display:none;margin-top:8px;padding:8px 10px;background:#fff;border:1px dashed rgba(26,79,160,.35);border-radius:6px;">
+          <div style="font-size:11px;font-weight:700;color:#1a4fa0;margin-bottom:6px;">＋ 새 프로젝트 — 저장하면 세부 진척현황에 만들고 이 일지를 그 활동으로 연동합니다</div>
+          <div class="dm-row" style="margin-bottom:6px;">
+            <div class="dm-field" style="flex:2;"><label class="dm-label">프로젝트명 *</label><input type="text" id="dm-link-pjn-title" class="dm-input" placeholder="예: PAS-7900(C)HH 신규개발"></div>
+            <div class="dm-field"><label class="dm-label">구분</label><select id="dm-link-pjn-kind" class="dm-input"><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select></div>
+          </div>
+          <div class="dm-row" style="margin-bottom:0;">
+            <div class="dm-field"><label class="dm-label">거래처</label><input type="text" id="dm-link-pjn-vendor" class="dm-input" data-ac="dm-link-vendor-list" autocomplete="off" placeholder="거래처 정보에서 선택"></div>
+            <div class="dm-field"><label class="dm-label">메이커</label><input type="text" id="dm-link-pjn-maker" class="dm-input" data-ac="dm-link-maker-list" autocomplete="off" placeholder="메이커관리에서 선택"></div>
+            <div class="dm-field"><label class="dm-label">담당부서</label><select id="dm-link-pjn-dept" class="dm-input"></select></div>
+          </div>
         </div>
         <div id="dm-link-pj-new" style="display:none;margin-top:6px;padding:6px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.6;"></div>
         <datalist id="dm-link-pjq-list"></datalist>
@@ -3407,12 +3419,20 @@ async function linkRegisterPartner(){
     if(r.error) throw r.error;
     await loadLinkNames(true);
     hideLinkNewPartner();
-    alert('거래처 정보에 등록했습니다.\n이 거래처의 프로젝트가 없으면 업무보고 > 세부 진척현황에서 프로젝트를 먼저 등록해 주세요.');
+    alert('거래처 정보에 등록했습니다.\n이 거래처의 프로젝트가 없으면 프로젝트 목록의 「＋ 새 프로젝트 만들기」로 만들어 주세요.');
   }catch(e){ alert('거래처 등록에 실패했습니다: '+(e.message||e)); }
 }
 function linkOptHtml(v,label,sel){ return '<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+escapeHtml(label)+'</option>'; }
 function linkDirLabel(d){ return '['+String(d.owner_dept||'-').replace(/팀$/,'')+'] '+linkCut(d.title,46)+(d.due_date?' · 납기 '+linkMd(d.due_date):'')+(d.status==='완료'?' · 완료':''); }
-function linkPjLabel(i){ return ((i.maker||i.vendor)?(i.maker||i.vendor)+' · ':'')+linkCut(i.title||'(이름 없음)',40)+(i.owner_dept&&i.owner_dept!=='개발기획팀'?' ['+i.owner_dept.replace(/팀$/,'')+']':''); }
+// 프로젝트 목록 표기 (2026-10-14): 프로젝트명만. 이름이 같은 건이 있을 때만 거래처·메이커, 그래도 같으면 부서를 붙여 구분
+function linkPjLabel(i,list){
+  var nm=function(x){ return String(x.title||'').trim(); }, base=linkCut(i.title||'(이름 없음)',48);
+  if(!list) return base;
+  var same=list.filter(function(x){ return nm(x)===nm(i); }); if(same.length<2) return base;
+  var vm=function(x){ return x.maker||x.vendor||''; }, lab=base+(vm(i)?' — '+vm(i):'');
+  if(same.filter(function(x){ return vm(x)===vm(i); }).length>1&&i.owner_dept) lab+=' ['+i.owner_dept.replace(/팀$/,'')+']';
+  return lab;
+}
 function linkWkLabel(r){ return r.rpt_month+'월 '+(r.week_no||'-')+'주 '+(r.kind==='계획'?'(계획) ':'')+'['+String(r.dept||'').replace(/팀$/,'')+(r.category?'·'+r.category:'')+'] '+((r.maker||r.vendor)?(r.maker||r.vendor)+' — ':'')+linkCut(r.content,34); }
 function fillLinkTargets(){
   var type=document.getElementById('dm-link-type').value;
@@ -3431,7 +3451,8 @@ function fillLinkTargets(){
       return all||(i.owner_dept||'개발기획팀')===myDept;
     });
     listP.sort(function(a,b){ return String(a.maker||a.vendor||'').localeCompare(String(b.maker||b.vendor||''),'ko')||b.id-a.id; });
-    selP.innerHTML='<option value="">'+(listP.length?'프로젝트를 선택하세요 ('+listP.length+'건)':'해당하는 프로젝트가 없습니다 — 검색하거나 「전체 부서 보기」를 눌러 보세요')+'</option>'+listP.map(function(i){ return linkOptHtml(i.id,linkPjLabel(i),curP); }).join('');
+    selP.innerHTML='<option value="">'+(listP.length?'프로젝트를 선택하세요 ('+listP.length+'건)':'해당하는 프로젝트가 없습니다 — 검색하거나 새 프로젝트를 만드세요')+'</option>'+linkOptHtml('new','＋ 새 프로젝트 만들기',curP)+listP.map(function(i){ return linkOptHtml(i.id,linkPjLabel(i,listP),curP); }).join('');
+    onLinkPjChange();
   }else if(type==='weekly'){
     var selW=document.getElementById('dm-link-wk'), curW=selW.value||(pre?pre.refId:'');
     var listW=(linkData.weekly||[]).filter(function(r){ return all||r.dept===wfSession.dept||String(r.id)===String(curW); });
@@ -3517,6 +3538,20 @@ async function onLinkTypeChange(){
   fillLinkTargets();
   await ensureLinkPreset(type);
 }
+function onLinkPjChange(){
+  var on=document.getElementById('dm-link-pj').value==='new', box=document.getElementById('dm-link-pj-newbox');
+  box.style.display=on?'':'none';
+  if(!on) return;
+  var dsel=document.getElementById('dm-link-pjn-dept');
+  if(!dsel.options.length){ var myD=LINK_DEPTS.indexOf(wfSession.dept)>=0?wfSession.dept:LINK_DEPTS[0]; dsel.innerHTML=LINK_DEPTS.map(function(d){ return linkOptHtml(d,d,myD); }).join(''); }
+  // 검색칸에 적은 이름이 메이커관리에 있으면 메이커, 거래처 정보에 있으면 거래처로 미리 채운다
+  var q=document.getElementById('dm-link-pj-q').value.trim(), v=document.getElementById('dm-link-pjn-vendor'), m=document.getElementById('dm-link-pjn-maker');
+  if(q&&!v.value&&!m.value){
+    var k=linkKey(q), mk=(linkData.makers||[]).find(function(n){ return linkKey(n)===k; });
+    var pt=(linkData.partners||[]).find(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&linkKey(n)===k; }); });
+    if(mk) m.value=mk; if(pt) v.value=pt.name;
+  }
+}
 function onLinkWeeklyChange(){
   document.getElementById('dm-link-wk-new').style.display=document.getElementById('dm-link-wk').value==='new'?'':'none';
 }
@@ -3545,6 +3580,7 @@ function resetLinkUI(r){
   ['dm-link-dir','dm-link-pj','dm-link-wk'].forEach(function(id){ document.getElementById(id).innerHTML=''; });
   document.getElementById('dm-link-pj-q').value=''; hideLinkNewPartner();
   document.getElementById('dm-link-wk-vendor').value=''; document.getElementById('dm-link-wk-maker').value='';
+  ['dm-link-pjn-title','dm-link-pjn-vendor','dm-link-pjn-maker'].forEach(function(id){ document.getElementById(id).value=''; }); document.getElementById('dm-link-pjn-dept').innerHTML=''; document.getElementById('dm-link-pj-newbox').style.display='none';
   document.getElementById('dm-link-all').checked=linkIsExec();
   var optRow=document.getElementById('dm-link-opt-row'); if(optRow) optRow.hidden=!(linkPreset&&linkPreset.type==='weekly_row');
   document.getElementById('dm-link-type').value=linkPreset?linkPreset.type:'';
@@ -3587,6 +3623,24 @@ function readLinkSel(obj){
   if(type==='project'){
     var pv=document.getElementById('dm-link-pj').value;
     if(!pv){ alert('연동할 프로젝트를 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
+    if(pv==='new'){
+      var pt=document.getElementById('dm-link-pjn-title').value.trim();
+      var pvn=document.getElementById('dm-link-pjn-vendor').value.trim(), pmk=document.getElementById('dm-link-pjn-maker').value.trim(), pAdd=false;
+      if(!pt){ alert('새 프로젝트 이름을 입력해주세요.'); return false; }
+      if(!pvn&&!pmk){ alert('새 프로젝트의 거래처와 메이커 중 하나는 입력해주세요.'); return false; }
+      if(pvn){
+        var pk=linkKey(pvn), pknown=(linkData.partners||[]).find(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&linkKey(n)===pk; }); });
+        if(pknown) pvn=pknown.name;
+        else{ if(!confirm('「'+pvn+'」은(는) 거래처 정보에 없는 업체입니다.\n\n거래처로 새로 등록하고 저장할까요?\n취소를 누르면 입력 화면으로 돌아갑니다.')) return false; pAdd=true; }
+      }
+      if(pmk){
+        var pmkk=linkKey(pmk), pstd=(linkData.makers||[]).find(function(n){ return linkKey(n)===pmkk; });
+        if(pstd) pmk=pstd;
+        else if(!confirm('「'+pmk+'」은(는) 메이커관리에 없는 메이커입니다.\n관리자설정 > 메이커관리에 신규로 등록해 주세요.\n\n확인 = 지금은 적은 이름 그대로 저장 / 취소 = 입력 화면으로 돌아가기')) return false;
+      }
+      return {type:type,refId:null,stage:+document.getElementById('dm-link-stage').value||null,
+        pjNew:{title:pt,kind:document.getElementById('dm-link-pjn-kind').value,vendor:pvn,maker:pmk,dept:document.getElementById('dm-link-pjn-dept').value,addPartner:pAdd}};
+    }
     return {type:type,refId:+pv,stage:+document.getElementById('dm-link-stage').value||null};
   }
   var wv=document.getElementById('dm-link-wk').value;
@@ -3625,6 +3679,16 @@ async function applyDiaryLink(id,sel){
         vendor:n.vendor||null,maker:n.maker||null,content:head,assignee:wfSession.name,employee_id:wfSession.empId,emp_name:wfSession.name,due_date:String(rec.date).slice(0,10),origin:'업무일지'}).select().single();
       if(ins.error) throw ins.error;
       refId=ins.data.id;
+    }
+    if(want.pjNew){
+      var pn=want.pjNew;
+      if(pn.addPartner){ try{ await SB.from('partners').insert({name:pn.vendor,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'}); linkData.partners=null; }catch(e){ console.warn(e); } }
+      var mx=await SB.from('dev_items').select('sort_no').order('sort_no',{ascending:false,nullsFirst:false}).limit(1);
+      var nextSort=((mx.data&&mx.data[0]&&mx.data[0].sort_no)||0)+1;
+      var pins=await SB.from('dev_items').insert({title:pn.title,kind:pn.kind||'업체개발',vendor:pn.vendor||null,maker:pn.maker||null,owner_dept:pn.dept||null,sort_no:nextSort,
+        reg_text:String(rec.date).slice(0,10),origin:'업무일지',created_by:wfSession.empId||null,created_name:wfSession.name}).select().single();
+      if(pins.error) throw pins.error;
+      refId=pins.data.id; linkData.items=null;
     }
     var stage=want.type==='project'?(want.stage||null):null;
     var same=(rec.link_type||null)===(want.type||null)&&String(rec.link_ref_id||'')===String(refId||'')&&String(rec.link_stage||'')===String(stage||'');
