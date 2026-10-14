@@ -3554,7 +3554,18 @@ function resetLinkUI(r){
   if(st){
     if(r&&r.link_type&&r.link_ref_id){
       var done=!!r.link_log_id;
-      st.textContent='🔗 연동됨 · '+(LINK_LABEL[r.link_type]||'')+' · '+(done?'반영 완료':'반영 전');
+      // 입력·연동 경로 (2026-10-14): 입력한 곳(굵게) → 연동된 곳 — 업무보고 화면과 같은 표기
+      var lkSet=function(first){
+        var tgt={directive:['지시사항'],project:['진척현황','주간업무'],weekly:['주간업무'],weekly_row:['주간업무']}[r.link_type]||[];
+        var path=r.origin==='업무보고'?[first,'일지'].concat(tgt.filter(function(x){return x!==first;})):['일지'].concat(tgt);
+        st.innerHTML='🔗 입력·연동: <b>'+path[0]+'</b> → '+path.slice(1).join(' → ')+' · '+(done?'반영 완료':'반영 전');
+      };
+      lkSet(r.link_type==='directive'?'지시사항':r.link_type==='project'?'진척현황':'주간업무');
+      if(SB&&r.origin==='업무보고'&&r.link_type==='project'&&r.link_log_id){   // 프로젝트 활동은 입력한 탭(주간업무·진척현황·마스터)을 dev_logs.origin 에서 읽는다
+        SB.from('dev_logs').select('origin').eq('id',r.link_log_id).single().then(function(q){
+          var o=q&&q.data&&q.data.origin; if(['주간업무','진척현황','마스터','금주계획'].indexOf(o)>=0) lkSet(o);
+        });
+      }
       st.style.background=done?'#e7f6ec':'#fff4e5'; st.style.color=done?'#15803d':'#b45309';
     }else if(r){ st.textContent='연동 안 됨'; st.style.background='#f1f3f6'; st.style.color='#6b7280'; }
     st.style.display=r?'':'none';
