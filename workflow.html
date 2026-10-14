@@ -1120,6 +1120,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <option value="directive">지시사항</option>
           <option value="project">프로젝트 (세부 진척현황)</option>
           <option value="weekly">주간업무</option>
+          <option value="weekly_row" id="dm-link-opt-row" hidden>주간업무 줄 (업무보고에서 등록)</option>
         </select>
         <label id="dm-link-all-wrap" style="display:none;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" id="dm-link-all" onchange="fillLinkTargets()"> 전체 부서 보기</label>
         <span id="dm-link-state" style="margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;display:none;"></span>
@@ -3300,7 +3301,7 @@ const LINK_NUM='①②③④⑤⑥⑦⑧';
 const LINK_DEPTS=['개발기획팀','자재구매팀','개발구매팀','출하팀','제조팀'];
 const LINK_CATS=['영업','구매','품질','재고','마감','사내','기타'];
 const LINK_CORP={'SME노이다':'GSMEIN','SME천진':'SMECN','SME태국':'SMEGLOBAL'};
-const LINK_LABEL={directive:'지시',project:'프로젝트',weekly:'주간업무'};
+const LINK_LABEL={directive:'지시',project:'프로젝트',weekly:'주간업무',weekly_row:'주간업무'};
 var linkData={};          // 종류별로 불러온 목록 (창을 열 때마다 새로 읽는다)
 var linkPreset=null;      // 수정 중인 일지에 이미 걸려 있는 연동 {type,refId,stage}
 var linkSeq=0;
@@ -3497,7 +3498,7 @@ async function onLinkTypeChange(){
   document.getElementById('dm-link-wk-row').style.display=type==='weekly'?'':'none';
   document.getElementById('dm-link-all-wrap').style.display=type?'flex':'none';
   updateLinkHint();
-  if(!type) return;
+  if(!type||type==='weekly_row') return;
   var busy={directive:'dm-link-dir',project:'dm-link-pj',weekly:'dm-link-wk'}[type];
   document.getElementById(busy).innerHTML='<option value="">불러오는 중…</option>';
   if(type==='project'){
@@ -3527,6 +3528,7 @@ function updateLinkHint(){
     else el.style.display='none';
     return;
   }
+  if(type==='weekly_row'){ el.innerHTML='업무보고 주간업무에서 등록한 줄과 1:1로 연결되어 있습니다. 저장하면 그 줄의 내용·작성일자도 함께 바뀝니다.'; el.style.display=''; return; }
   var where={directive:'선택한 지시사항의 활동내용',project:'선택한 프로젝트의 세부 진척현황',weekly:'선택한 주간업무 줄의 일자별 활동'}[type];
   var sched=document.getElementById('dm-status').value==='일정';
   el.innerHTML=(sched&&type==='project'?'<b style="color:#1a4fa0;">상태가 「일정」이면 세부 진척현황에 바로 올라가고 목표일정에 이 날짜가 표시됩니다.</b> 완료로 바꿔 저장하면 완료일정이 채워집니다.'
@@ -3544,6 +3546,7 @@ function resetLinkUI(r){
   document.getElementById('dm-link-pj-q').value=''; hideLinkNewPartner();
   document.getElementById('dm-link-wk-vendor').value=''; document.getElementById('dm-link-wk-maker').value='';
   document.getElementById('dm-link-all').checked=linkIsExec();
+  var optRow=document.getElementById('dm-link-opt-row'); if(optRow) optRow.hidden=!(linkPreset&&linkPreset.type==='weekly_row');
   document.getElementById('dm-link-type').value=linkPreset?linkPreset.type:'';
   document.getElementById('dm-status').onchange=updateLinkHint;
   // 저장된 연동 상태 표시 (2026-10-14) — 수정 창을 열자마자 연동 여부를 알 수 있게
@@ -3563,6 +3566,7 @@ function resetLinkUI(r){
 function readLinkSel(obj){
   var type=document.getElementById('dm-link-type').value; if(!type) return null;
   var isSched=obj.status==='일정';
+  if(type==='weekly_row') return (linkPreset&&linkPreset.type==='weekly_row')?{type:type,refId:linkPreset.refId,stage:null}:null;
   if(!isSched&&!obj.title&&!obj.content){ alert('업무보고에 반영할 제목이나 내용을 입력해주세요.'); return false; }
   if(type==='directive'){
     var dv=document.getElementById('dm-link-dir').value;

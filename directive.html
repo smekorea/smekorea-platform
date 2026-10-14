@@ -1133,9 +1133,10 @@ async function sbRpc(fn,body){
   const r=await fetch(`${SB_URL}/rest/v1/rpc/${fn}`,{method:'POST',headers:sbHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body||{})});
   if(!r.ok) await sbFail(r); return r.json();
 }
-/* 업무보고에서 직접 적은 활동 → 업무일지(달력)에도 기록 (2026-10-14). 체크 상태는 브라우저에 기억한다 */
-function djOn(){ try{ return localStorage.getItem('dj_auto')!=='0'; }catch(_){ return true; } }
-function djSet(v){ try{ localStorage.setItem('dj_auto',v?'1':'0'); }catch(_){} }
+/* 업무보고에서 직접 적은 기록 → 내 업무일지(달력)에도 기록 (2026-10-14).
+   기본은 항상 켜짐: 창을 열 때마다 체크된 상태로 시작하고, 끄면 그 한 건만 일지에 남기지 않는다 */
+function djOn(){ return true; }
+function djSet(v){}
 function djWant(id){ const el=document.getElementById(id); return !!(el&&el.offsetParent!==null&&el.checked); }
 async function djMake(type,logId){
   if(!logId) return;
@@ -3166,7 +3167,7 @@ function renderRpWeek(){
     h+=`<tr class="rp-row${dev?' rp-dev':''}"><td>${esc(r.dept.replace(/팀$/,''))}</td><td><span class="rp-k k-${r.kind==='계획'?'p':'r'}">${esc(r.kind)}</span></td>
       <td>${cat?`<span class="rp-c${dev?' dev':''}">${esc(cat)}</span>`:''}</td><td${dev?` class="dv-ti" onclick="dvOpenItem(${r.it.id})" title="프로젝트 상세"`:''}>${esc(r.sub_category||'')}</td>
       <td class="${dev?'dv-v':'rp-v'}"${dev?` onclick="dvOpenItem(${r.it.id})" title="프로젝트 상세"`:''}>${esc(r.vendor||'')}</td><td>${esc(r.maker||'')}</td>
-      <td class="dv-c"${ed?` onclick="${open}" title="눌러서 수정"`:''}>${dev&&r.log.diary_id?DJ_BADGE:''}${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td><td class="dv-d">${esc(rpDueText(r))}</td><td class="dv-d">${esc(rpMd(r.target_date))}</td>
+      <td class="dv-c"${ed?` onclick="${open}" title="눌러서 수정"`:''}>${(dev&&r.log.diary_id)||(!dev&&r.diary_id)?DJ_BADGE:''}${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td><td class="dv-d">${esc(rpDueText(r))}</td><td class="dv-d">${esc(rpMd(r.target_date))}</td>
       <td class="dv-d">${r.done_date?esc(rpMd(r.done_date)):(r.done_state?`<span class="dv-st s-${r.done_state==='완료'?'완료':'진행중'}">${esc(r.done_state)}</span>`:'')}</td><td>${att}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="${open}">수정</button>`:''}</td></tr>`;
   });
@@ -3252,7 +3253,7 @@ function renderCorp(){
     const ed=rpCanEdit(r.dept);
     return `<tr class="rp-row"><td class="dv-d">${esc(rpMd(r.due_date))||esc(r.rpt_month+'월 '+(r.week_no||'')+'주')}</td><td>${esc(r.sub_category||'')}</td><td>${esc((r.dept||'').replace(/팀$/,''))}</td>
       <td><span class="rp-k k-${r.kind==='계획'?'p':'r'}">${esc(r.kind||'')}</span></td>
-      <td class="dv-c"${ed?` onclick="rpOpen(${r.id})" title="눌러서 수정"`:''}>${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td>
+      <td class="dv-c"${ed?` onclick="rpOpen(${r.id})" title="눌러서 수정"`:''}>${r.diary_id?DJ_BADGE:''}${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td>
       <td class="dv-d">${esc(rpMd(r.target_date))}</td><td class="dv-d">${r.done_date?esc(rpMd(r.done_date)):(r.done_state?`<span class="dv-st s-${r.done_state==='완료'?'완료':'진행중'}">${esc(r.done_state)}</span>`:'')}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="rpOpen(${r.id})">수정</button>`:''}</td></tr>`;
   }).join('')||'<tr><td colspan="9" class="mt-pick">해당하는 주간업무가 없습니다. 「＋ 주간업무 입력」에서 대분류 「법인」으로 기록하면 여기에 모입니다.</td></tr>';
@@ -3413,7 +3414,7 @@ function rpOpen(id){
   rpEdit=id?rpById[id]:null; const r=rpEdit||{};
   if(rpEdit?!rpCanEdit(r.dept):!rpCanAdd()){ showToast('주간업무는 해당 부서 직원과 사장님·상무님만 입력할 수 있습니다','err'); return; }
   const g=k=>document.getElementById(k);
-  g('rpFmTitle').textContent=rpEdit?'주간업무 수정':'주간업무 입력';
+  g('rpFmTitle').textContent=rpEdit?(r.diary_id?'주간업무 수정 (업무일지 연동 — 고치면 일지도 함께 바뀝니다)':'주간업무 수정'):'주간업무 입력';
   const dept=rpEdit?r.dept:dvNewDept();
   g('rpFmDept').innerHTML=(canDecide()?DV_DEPTS:[dept]).map(d=>`<option${d===dept?' selected':''}>${d}</option>`).join('');
   g('rpFmKind').value=r.kind||'실적';
@@ -3491,7 +3492,7 @@ function rpDevApply(){
   g('rpFmDel').style.display=(lg||rpEdit)?'':'none';
   g('rpFmToProj').style.display=rpEdit&&!dev?'':'none';
   // 업무일지에도 기록: 새 신규개발 활동(주간업무에서 옮기는 경우 제외) 또는 주간업무 줄의 일자별 활동 추가 시
-  g('rpFmDjWrap').style.display=((dev&&!lg&&!rpPromote)||(!dev&&rpEdit))?'':'none';
+  g('rpFmDjWrap').style.display=((dev&&!lg&&!rpPromote)||!dev)?'':'none';
   g('rpFmSave').textContent='저장';
   rpVmSync();
 }
@@ -3546,7 +3547,9 @@ async function rpSave(){
     // 기간 글자는 엑셀에서 온 줄의 것을 그대로 두고, 주차를 바꿨거나 새로 쓰는 줄만 달력 기준으로 넣는다
     if(!rpEdit||rpEdit.rpt_year!==b.rpt_year||rpEdit.rpt_month!==b.rpt_month||rpEdit.week_no!==b.week_no) b.week_range=rpRangeOf(b.rpt_year,b.rpt_month,b.week_no);
     if(rpEdit){ await sbPatch('rp_weekly',rpEdit.id,b); await rpFmLogsSave(rpEdit.id); }
-    else await sbPost('rp_weekly',Object.assign(b,{origin:'수동등록'}));
+    else{ const res=await sbPost('rp_weekly',Object.assign(b,{origin:'수동등록'}));
+      // 새 줄도 내 업무일지에 남긴다 — 줄 본문과 1:1로 연결(고치면 서로 반영)
+      if(djWant('rpFmDj')&&res&&res[0]) await djMake('weekly_row',res[0].id); }
     showToast('저장되었습니다','ok');
     const ym=b.rpt_year+'-'+p2(b.rpt_month); rpClose(); await rpLoad(); rpFill();
     // 방금 저장한 줄이 고른 기간 밖이면 그 달을 함께 고른다
