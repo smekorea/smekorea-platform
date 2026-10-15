@@ -1762,6 +1762,7 @@ async function deleteFromPopup(id){
   }else if(!confirm(t('정말 삭제하시겠습니까?'))) return;   // 삭제 확인창 표준 (2026-10-13) — 기간 일정은 위 「이 날짜만/전체」 선택창이 확인을 대신함
   diaryRecords=diaryRecords.filter(r=>String(r.id)!==String(id));
   if(SB){try{await SB.from('work_diary').delete().eq('id',id).eq('employee_id',wfSession.empId);}catch(e){console.warn(e);}}
+  if(rec1&&rec1.group_id) await groupTidy(rec1.group_id);
   renderDayPopupList();renderAll();
 }
 
@@ -3993,6 +3994,14 @@ function setupPeriodForEdit(r){
   onScopeChange();                           // 기본 "이 날짜만" → 종료일 입력 비활성
 }
 
+// 기간 묶음에 1건만 남으면 묶음 표시(group_id)를 지워 일반 일지로 되돌린다 (2026-10-15)
+// — 남겨두면 다음에 종료일을 지정해도 새 기간이 만들어지지 않는 문제가 있었음
+async function groupTidy(gid){
+  if(!gid) return;
+  var rest=getGroupRecs(gid); if(rest.length!==1) return;
+  var r=rest[0]; r.group_id=null;
+  if(SB){ try{ var u=await SB.from('work_diary').update({group_id:null}).eq('id',r.id).eq('employee_id',wfSession.empId); if(u&&u.error) console.warn('groupTidy:',u.error); }catch(e){ console.warn(e); } }
+}
 // 기간 해제 (2026-10-15): 수정 중인 날짜 1건만 남기고 같은 기간의 다른 날짜는 삭제, 남은 1건은 일반 일지로
 async function periodClear(){
   if(!_periodGroup||!diaryEditId) return;
@@ -4087,14 +4096,15 @@ async function applyPeriodOnEdit(oldRec,obj,scopeAll,pEnd,pInc){
         var ids=del.map(function(m){return m.id;});
         var dr=await SB.from('work_diary').delete().in('id',ids).eq('employee_id',wfSession.empId);
         if(dr.error) alert('기간 단축 실패: '+dr.error.message);
-        else { diaryRecords=diaryRecords.filter(function(x){return ids.indexOf(x.id)<0;}); msg+=(msg?' / ':'')+'-'+del.length+'건 삭제'; }
+        else { diaryRecords=diaryRecords.filter(function(x){return ids.indexOf(x.id)<0;}); msg+=(msg?' / ':'')+'-'+del.length+'건 삭제'; await groupTidy(gid); }
       }
     }
     if(msg) alert('기간 일정 수정 완료: '+msg);
     return;
   }
   // 일반(단건) 일정을 수정하면서 종료일을 지정한 경우 → 이 날짜부터 종료일까지 복사 생성하고 하나의 기간 일정으로 묶음
-  if(!oldRec.group_id && pEnd){
+  // 묶음 표시가 남아 있어도 1건뿐이면 일반 일지로 본다 (예전에 기간을 줄여 1건만 남은 경우)
+  if((!oldRec.group_id || getGroupRecs(oldRec.group_id).length<2) && pEnd){
     var dates=periodDates(obj.date,pEnd,pInc,true);
     if(dates.length>1){
       var ngid=wfUuid();
@@ -4291,6 +4301,7 @@ async function deleteDiaryById(id){
       if(sc==='all'){ await deleteGroupAll(rec0.group_id); renderDiary(); renderAll(); return true; }
       diaryRecords=diaryRecords.filter(function(x){return String(x.id)!==String(id);});
       if(SB){try{await SB.from('work_diary').delete().eq('id',id).eq('employee_id',wfSession.empId);}catch(e){console.warn(e);}}
+      await groupTidy(rec0.group_id);
       renderDiary(); renderAll();
       return true;
     }
