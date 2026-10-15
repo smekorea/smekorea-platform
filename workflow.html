@@ -1285,6 +1285,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <div style="font-weight:700;margin-bottom:6px;" data-i18n="저장 범위">저장 범위</div>
         <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;"><input type="radio" name="dm-scope" value="one" checked onchange="onScopeChange()"> <span data-i18n="이 날짜만 수정">이 날짜만 수정</span></label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="dm-scope" value="all" onchange="onScopeChange()"> <span data-i18n="전체 기간에 반영 (개별 수정한 날짜의 같은 항목은 유지)">전체 기간에 반영 (개별 수정한 날짜의 같은 항목은 유지)</span></label>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #d9cfc3;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn-del" style="height:32px;padding:0 12px;font-size:12px;" onclick="periodClear()" data-i18n="기간 해제 (이 날짜만 남기기)">기간 해제 (이 날짜만 남기기)</button>
+          <span style="font-size:11px;color:var(--text3);" data-i18n="지금 연 날짜 1건만 남기고 나머지 날짜는 삭제합니다">지금 연 날짜 1건만 남기고 나머지 날짜는 삭제합니다</span>
+        </div>
       </div>
     </div>
 
@@ -3989,6 +3993,31 @@ function setupPeriodForEdit(r){
   onScopeChange();                           // 기본 "이 날짜만" → 종료일 입력 비활성
 }
 
+// 기간 해제 (2026-10-15): 수정 중인 날짜 1건만 남기고 같은 기간의 다른 날짜는 삭제, 남은 1건은 일반 일지로
+async function periodClear(){
+  if(!_periodGroup||!diaryEditId) return;
+  var gid=_periodGroup.gid;
+  var others=getGroupRecs(gid).filter(function(x){return String(x.id)!==String(diaryEditId);});
+  var msg=t('정말 삭제하시겠습니까?');
+  if(others.some(function(x){return x.link_type;})) msg+='\n('+t('업무보고에 연동된 날짜가 포함되어 있어 그 활동도 함께 삭제됩니다')+')';
+  if(!confirm(msg)) return;
+  var ids=others.map(function(x){return x.id;});
+  if(SB){
+    try{
+      if(ids.length){
+        var dr=await SB.from('work_diary').delete().in('id',ids).eq('employee_id',wfSession.empId);
+        if(dr&&dr.error){ alert(t('기간 해제 실패')+': '+dr.error.message); return; }
+      }
+      var ur=await SB.from('work_diary').update({group_id:null}).eq('id',diaryEditId).eq('employee_id',wfSession.empId);
+      if(ur&&ur.error){ alert(t('기간 해제 실패')+': '+ur.error.message); return; }
+    }catch(e){ alert(t('기간 해제 실패')+': '+e.message); return; }
+  }
+  diaryRecords=diaryRecords.filter(function(x){return ids.indexOf(x.id)<0;});
+  var me=diaryRecords.find(function(x){return String(x.id)===String(diaryEditId);}); if(me) me.group_id=null;
+  resetPeriodUI('new');          // 창은 그대로 두고 일반 일지 상태로 — 이어서 수정·저장 가능
+  try{ renderAll(); if(typeof renderDayPopupList==='function') renderDayPopupList(); }catch(e){ console.warn(e); }
+  alert(t('기간을 해제했습니다')+' ('+itemCountLabel(ids.length)+' '+t('삭제')+')');
+}
 // 이 날짜만 / 전체 기간 선택 모달 (삭제용). 취소하면 null
 function askGroupScope(count){
   return new Promise(function(resolve){
@@ -4384,6 +4413,11 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"기간 해제 (이 날짜만 남기기)":{zh:"取消期间（仅保留此日期）",en:"Clear period (keep this date only)"},
+"지금 연 날짜 1건만 남기고 나머지 날짜는 삭제합니다":{zh:"仅保留当前日期，删除其余日期",en:"Keeps only this date and deletes the other dates"},
+"업무보고에 연동된 날짜가 포함되어 있어 그 활동도 함께 삭제됩니다":{zh:"包含已关联工作报告的日期，相关活动也将一并删除",en:"Some dates are linked to work reports; those activities will also be deleted"},
+"기간 해제 실패":{zh:"取消期间失败",en:"Failed to clear period"},
+"기간을 해제했습니다":{zh:"已取消期间",en:"Period cleared"},
 "기간 설정 (여러 날 일정)":{zh:"期间设置（多日日程）",en:"Period (multi-day event)"},
 "주말 포함":{zh:"包含周末",en:"Include weekends"},
 "시작일(위 날짜)부터 종료일까지 같은 내용이 날짜별로 복사되어 달력에 표시됩니다":{zh:"从开始日期（上方日期）到结束日期，相同内容将按日期复制并显示在日历中",en:"The same entry is copied to each date from the start date (above) to the end date and shown on the calendar"},
