@@ -1450,7 +1450,7 @@ td.center .al-pline{justify-content:center;}
     </table>
   </div>
 
-  <div class="sec-sub" style="margin-top:26px;">🌏 해외법인 부서 <small>조직도에서 해외법인은 여기 등록한 부서 순서대로 세로 한 줄로 표시됩니다 (직원 관리의 부서명과 같은 이름으로 등록)</small>
+  <div class="sec-sub" style="margin-top:26px;">🌏 해외법인 부서 <small>조직도에서 해외법인은 법인장 → 총괄 → 여기 등록한 부서 순서대로 표시됩니다 (부서 = 직원 관리의 부서명, 표시명 = 조직도 박스 제목)</small>
     <button class="up-btn up-btn-primary" style="margin-left:auto;" onclick="openOrgDeptModal()">+ 부서 추가</button>
   </div>
   <div class="tbl-wrap">
@@ -1458,6 +1458,7 @@ td.center .al-pline{justify-content:center;}
       <thead><tr>
         <th class="sortable" style="width:130px;" onclick="sortOrgDept('entity')">법인<span class="sort-icon" id="odsi-entity"></span></th>
         <th class="sortable" style="width:140px;" onclick="sortOrgDept('dept')">부서<span class="sort-icon" id="odsi-dept"></span></th>
+        <th class="sortable" style="width:140px;" onclick="sortOrgDept('label')">조직도 표시명<span class="sort-icon" id="odsi-label"></span></th>
         <th class="sortable center" style="width:60px;" onclick="sortOrgDept('sort_no')">순서<span class="sort-icon" id="odsi-sort_no"></span></th>
         <th class="sortable center" style="width:70px;" onclick="sortOrgDept('emp_cnt')">직원수<span class="sort-icon" id="odsi-emp_cnt"></span></th>
         <th class="sortable" style="width:220px;" onclick="sortOrgDept('note')">비고<span class="sort-icon" id="odsi-note"></span></th>
@@ -1531,7 +1532,10 @@ td.center .al-pline{justify-content:center;}
         <div class="form-group"><label>부서 <span class="req">*</span></label><input id="od-in-dept" placeholder="예: 구매영업"></div>
         <div class="form-group"><label>순서</label><input type="number" id="od-in-sort" min="1"></div>
       </div>
-      <div class="form-group"><label>비고</label><input id="od-in-note"></div>
+      <div class="modal-row">
+        <div class="form-group"><label>조직도 표시명</label><input id="od-in-label" placeholder="예: 구매영업팀 / 회계/마감 (비우면 부서명)"></div>
+        <div class="form-group"><label>비고</label><input id="od-in-note"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeOrgDeptModal()">취소</button>
@@ -5554,7 +5558,7 @@ const OD_ENT_ORDER = {SMECN:1, SMEGLOBAL:2, GSMEIN:3};
 async function loadOrgDept(){
   const {data, error} = await sb.from('org_dept').select('*').eq('active', true);
   const tb = document.getElementById('od-tbody');
-  if(error){ tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
+  if(error){ tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
   _odData = data || [];
   if(_empData.length===0){ const r = await sb.from('employees').select('id,entity,dept,active'); _odEmps = r.data||[]; } else _odEmps = _empData;
   renderOrgDept();
@@ -5574,14 +5578,14 @@ function renderOrgDept(){
   document.querySelectorAll('[id^="odsi-"]').forEach(el=>el.textContent='');
   const si = document.getElementById('odsi-'+k); if(si) si.textContent = _odSortAsc ? '↑' : '↓';
   const tb = document.getElementById('od-tbody');
-  if(!rows.length){ tb.innerHTML = '<tr><td colspan="6"><div class="empty-state">등록된 부서가 없습니다.</div></td></tr>'; return; }
+  if(!rows.length){ tb.innerHTML = '<tr><td colspan="7"><div class="empty-state">등록된 부서가 없습니다.</div></td></tr>'; return; }
   tb.innerHTML = rows.map(r=>`<tr>
-    <td>${_ohEsc(r.entity)}</td><td style="font-weight:700;">${_ohEsc(r.dept)}</td>
+    <td>${_ohEsc(r.entity)}</td><td>${_ohEsc(r.dept)}</td><td style="font-weight:700;">${_ohEsc(r.label||r.dept)}</td>
     <td class="center">${_ohEsc(r.sort_no)}</td><td class="center">${r.emp_cnt}</td><td>${_ohEsc(r.note)}</td>
     <td class="center"><button class="row-btn row-btn-edit" onclick="openOrgDeptModal(${r.id})">수정</button>
       <button class="row-btn row-btn-del" onclick="deleteOrgDept(${r.id})">삭제</button></td>
   </tr>`).join('');
-  setTimeout(()=>initColResize('od-table','al_orgdept_v1'),50);
+  setTimeout(()=>initColResize('od-table','al_orgdept_v2'),50); // v2: 표시명 컬럼 추가
 }
 function openOrgDeptModal(id){
   _odEditId = id || null;
@@ -5590,6 +5594,7 @@ function openOrgDeptModal(id){
   document.getElementById('od-in-dept').value   = r?.dept || '';
   document.getElementById('od-in-sort').value   = r?.sort_no ?? '';
   document.getElementById('od-in-note').value   = r?.note || '';
+  document.getElementById('od-in-label').value  = r?.label || '';
   document.getElementById('odModal').classList.add('show');
 }
 function closeOrgDeptModal(){ document.getElementById('odModal').classList.remove('show'); _odEditId=null; }
@@ -5599,7 +5604,8 @@ async function saveOrgDept(){
   const entity = document.getElementById('od-in-entity').value;
   if(_odData.some(x=>x.entity===entity && x.dept===dept && x.id!==_odEditId)){ alert('같은 법인에 이미 등록된 부서입니다.'); return; }
   const sortV = document.getElementById('od-in-sort').value;
-  const payload = { entity, dept, sort_no: sortV!=='' ? Number(sortV) : null, note: document.getElementById('od-in-note').value.trim()||null };
+  const payload = { entity, dept, sort_no: sortV!=='' ? Number(sortV) : null,
+    label: document.getElementById('od-in-label').value.trim()||null, note: document.getElementById('od-in-note').value.trim()||null };
   let error;
   if(_odEditId) ({error} = await sb.from('org_dept').update(payload).eq('id', _odEditId));
   else ({error} = await sb.from('org_dept').insert(payload));

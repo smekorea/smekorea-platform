@@ -8,7 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.1 (2026-10-20) — 글로벌 조직도
+   org_chart.html v1.2 (2026-10-20) — 글로벌 조직도
+   ── v1.2: 해외법인 유형 박스(법인장/총괄/부서 표시명), 인원수는 빈칸, 엑셀 이름칸 왼쪽 테두리 수정
    ── v1.1: 해외법인 세로 1열·부서 묶음(천진 양식, org_dept), 엑셀 연결선, 이력은 탭/시트로 분리
    ── 엑셀 조직도(01. SMER글로벌조직도) 레이아웃을 그대로 화면에 옮김
    ── 데이터: employees(재직자, 조직도 컬럼만) + org_headcount + org_history
@@ -110,6 +111,15 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .members .box{margin-bottom:-1px;}
 .members .box.titled{margin-top:10px;}
 .members .gap{height:10px;}
+.ovbox{width:150px;border:1px solid #555;background:#fff;}
+.unit.ov-unit{width:166px;}
+.ovhd{background:var(--ov);color:var(--ov-text);font-size:12px;font-weight:700;text-align:center;padding:4px 0;}
+.ovbox.misc .ovhd{background:var(--bg-sub);color:var(--muted);}
+.ovrow{font-size:12.5px;color:#111;text-align:center;padding:4px 2px;min-height:26px;border-top:1px solid #777;}
+.unit .ent{font-size:12.5px;}
+.unit .ent small{display:inline;font-size:11px;font-weight:700;color:var(--text);}
+.ent-n{font-weight:700;margin-left:4px;}
+.unit .vline{height:22px;border-left:1px solid #555;}
 .sec-list{display:flex;flex-direction:column;align-items:center;}
 .sec-list .box{margin-bottom:-1px;}
 .unit-hd.misc{border-bottom-color:var(--line-dk);color:var(--muted);}
@@ -304,17 +314,27 @@ function buildOverseas(ent){
   const rest = people.filter(e=>e!==head);
   const execs = rest.filter(e=>EXEC_DEPTS.includes(e.dept) || e.title==='부총경리');
   const staff = rest.filter(e=>!execs.includes(e));
-  const regs = DEPTS.filter(d=>d.entity===ent).sort((a,b)=>(a.sort_no??99)-(b.sort_no??99)).map(d=>d.dept);
-  const sections = regs.map(d=>({ dept:d, members:[], hc:[] }));
-  const misc = { dept:'미분류', members:[], hc:[], misc:true };
-  staff.forEach(e=>{ const s = sections.find(x=>x.dept===e.dept); (s||misc).members.push(e); });
-  HC.filter(h=>h.entity===ent).sort(byHcSort).forEach(h=>{ const s = sections.find(x=>x.dept===(h.dept||'')); (s||misc).hc.push(h); });
-  // 부서 안 순서: 직책자(팀장·회계/마감 등) 먼저, 그다음 표시순서
-  sections.concat(misc).forEach(s=>s.members.sort((a,b)=>((a.title?0:1)-(b.title?0:1)) || cmpEmp(a,b)));
-  if(misc.members.length || misc.hc.length) sections.push(misc);
+  const regs = DEPTS.filter(d=>d.entity===ent).sort((a,b)=>(a.sort_no??99)-(b.sort_no??99));
+  // 유형 박스: rows = [{emp}|{blank,label}] — 인원수 표시(org_headcount)는 그 수만큼 빈칸
+  const cats = [
+    { label:'법인장', rows: head ? [{emp:head}] : [] },
+    { label:'총괄',   rows: execs.map(e=>({emp:e, withRank:true})) }
+  ];
+  const secs = regs.map(d=>({ dept:d.dept, label:d.label||d.dept, rows:[] }));
+  const misc = { dept:null, label:'미분류', rows:[], misc:true };
+  staff.sort((a,b)=>((a.title?0:1)-(b.title?0:1)) || cmpEmp(a,b))
+       .forEach(e=>{ const s = secs.find(x=>x.dept===e.dept); (s||misc).rows.push({emp:e}); });
+  HC.filter(h=>h.entity===ent).sort(byHcSort).forEach(h=>{
+    const s = secs.find(x=>x.dept===(h.dept||''));
+    for(let k=0;k<(h.cnt||0);k++) (s||misc).rows.push({blank:true, label:h.label});
+  });
+  cats.push(...secs);
+  if(misc.rows.length) cats.push(misc);
   const n = people.length + HC.filter(h=>h.entity===ent).reduce((s,h)=>s+(h.cnt||0),0);
-  return { ov:true, entity:ent, head, execs, sections, people, n, regCount:regs.length };
+  return { ov:true, entity:ent, head, cats, people, n };
 }
+// 해외법인 이름칸 표시: 총괄은 '이름 직급', 그 외 이름
+const ovRowText = r => r.blank ? '' : (dispName(r.emp) + (r.withRank && r.emp.rank ? ' '+r.emp.rank : '') + (r.emp.name_local ? ` (${r.emp.name_local})` : ''));
 
 function buildModel(){
   byId = {}; kids = {};
@@ -363,25 +383,16 @@ function boxHtml(e, badge, ov){
     ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${loc}</div>${sub}</div>`;
 }
 function unitHtml(u){
-  let h = `<div class="unit">`;
+  let h = `<div class="unit${u.ov?' ov-unit':''}">`;
   if(u.ov){
     const E = ENT[u.entity]||{code:u.entity,country:''};
-    h += `<div class="cnt">${u.n||''}</div><div class="cap ent">${esc(E.code)}<small>${esc(E.country)}</small></div>`;
-    h += u.head ? boxHtml(u.head, u.head.title||'법인장', true) : `<div class="empty-unit">법인장 미등록</div>`;
-    u.execs.forEach(x=>{ h += `<div class="vline"></div>` + boxHtml(x, x.title||x.rank, true); });
-    if(!u.sections.length){
-      h += `<div class="vline"></div><div class="empty-unit">부서 미등록</div>`;
-    }
-    u.sections.forEach(s=>{
-      const sn = s.members.length + hcSum(s.hc);
-      h += `<div class="vline"></div><div class="unit-hd${s.misc?' misc':''}">${esc(s.dept)} <span class="hd-n">(${sn})</span></div>`;
-      if(s.members.length){
-        h += `<div class="sec-list">`;
-        s.members.forEach((m,i)=>{ h += (m.title && i ? '<div class="gap"></div>' : '') + boxHtml(m, m.title||'', true); });
-        h += `</div>`;
-      }
-      s.hc.forEach(x=>{ h += `<div class="hc">${esc(x.label)} ${esc(x.cnt)}명</div>`; });
-      if(!s.members.length && !s.hc.length) h += `<div class="empty-unit">인원 미등록</div>`;
+    h += `<div class="cap ent">${esc(E.code)} <small>(${esc(E.country)})</small> <span class="ent-n">${u.n||''}</span></div>`;
+    u.cats.forEach((c,ci)=>{
+      if(ci) h += `<div class="vline"></div>`;
+      const rows = c.rows.length ? c.rows : [{blank:true}];
+      h += `<div class="ovbox${c.misc?' misc':''}"><div class="ovhd">${esc(c.label)}</div>` +
+        rows.map(r=>`<div class="ovrow${r.blank?' blank':''}"${r.blank&&r.label?` title="${esc(r.label)}"`:''}${r.emp?` title="${esc([r.emp.rank,r.emp.dept,r.emp.join_date?('입사 '+r.emp.join_date):''].filter(Boolean).join(' · '))}"`:''}>${esc(ovRowText(r))||'&nbsp;'}</div>`).join('') +
+        `</div>`;
     });
   } else {
     h += `<div class="cnt">${unitCount(u)}</div><div class="unit-hd">${esc(u.dept)}</div>`;
@@ -519,8 +530,9 @@ async function downloadExcel(){
     const x = opt.noMerge ? cell(r,L(i)) : mergeLR(r,i);
     x.value=v; x.font=font(opt.font||{}); x.alignment={horizontal:opt.align||'center',vertical:'middle',wrapText:true};
     if(opt.fill) x.fill={type:'pattern',pattern:'solid',fgColor:{argb:opt.fill}};
-    if(opt.box){ x.border={top:BX,left:BX,bottom:BX,right:BX}; cell(r,R(i)).border={top:BX,right:BX,bottom:BX}; }
-    if(opt.under){ x.border={bottom:{style:'medium',color:{argb:RED}}}; cell(r,R(i)).border={bottom:{style:'medium',color:{argb:RED}}}; }
+    // ExcelJS: 병합된 오른쪽 칸에 서식을 주면 병합 전체 서식을 덮어써 왼쪽 테두리가 사라짐 → 대표칸에만 4변 지정
+    if(opt.box) x.border={top:BX,left:BX,bottom:BX,right:BX};
+    if(opt.under) x.border={bottom:{style:'medium',color:{argb:RED}}};
     return x;
   };
   const badge=(r,i,txt,ov)=>put(r,i,txt,{fill:ov?OV:RED,box:true,font:{bold:true,size:9,color:{argb:ov?'FF5A2A00':'FFFFFFFF'}}});
@@ -562,15 +574,11 @@ async function downloadExcel(){
     if(u.ov){
       const E=ENT[u.entity]||{code:u.entity,country:''};
       put(r,i,`${E.code} (${E.country})  ${u.n||''}`,{font:{bold:true}}); r++;
-      if(u.head){ badge(r,i,u.head.title||'법인장',true); r++; nameBox(r,i,u.head); r++; }
-      else { put(r,i,'법인장 미등록',{box:true,font:{color:{argb:'FF98A0AB'}}}); r++; }
-      u.execs.forEach(x=>{ vline(r,i); r++; badge(r,i,x.title||x.rank,true); r++; nameBox(r,i,x); r++; });
-      if(!u.sections.length){ vline(r,i); r++; put(r,i,'부서 미등록',{box:true,font:{color:{argb:'FF98A0AB'}}}); r++; }
-      u.sections.forEach(s=>{
-        vline(r,i); r++;
-        put(r,i,`${s.dept} (${s.members.length+hcSum(s.hc)})`,{font:{bold:true},under:true}); r++;
-        s.members.forEach(m=>{ if(m.title){ badge(r,i,m.title,true); r++; } nameBox(r,i,m); r++; });
-        s.hc.forEach(x=>{ put(r,i,`${x.label} ${x.cnt}명`,{font:{bold:true,size:9},align:'left'}); r++; });
+      u.cats.forEach((c,ci)=>{
+        if(ci){ vline(r,i); r++; }
+        put(r,i,c.label,{fill:c.misc?'FFEEF0F3':OV,box:true,font:{bold:true,size:9,color:{argb:'FF5A2A00'}}}); r++;
+        const rows = c.rows.length ? c.rows : [{blank:true}];
+        rows.forEach(x=>{ put(r,i,ovRowText(x),{box:true}); r++; });
       });
     } else {
       put(r,i,`${u.dept}  ${unitCount(u)}`,{font:{bold:true},under:true}); r++;
