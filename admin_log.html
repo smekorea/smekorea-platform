@@ -1382,7 +1382,7 @@ td.center .al-pline{justify-content:center;}
       </div>
       <div class="modal-row">
         <div class="form-group"><label>현지어/영문명</label><input id="emp-in-namelocal" placeholder="예: OMPAL / Jutarat"></div>
-        <div class="form-group"></div>
+        <div class="form-group"><label>메일주소 <span style="font-size:10px;color:var(--muted);font-weight:400;">(비상연락망)</span></label><input id="emp-in-email" type="email" placeholder="name@smekorea.co.kr"></div>
       </div>
       <div class="modal-row">
         <div class="form-group"><label>입사일자 <span class="req">*</span></label><input type="date" id="emp-in-joindate"></div>
@@ -1447,6 +1447,19 @@ td.center .al-pline{justify-content:center;}
         <th class="center" style="width:110px;">관리</th>
       </tr></thead>
       <tbody id="oh-tbody"><tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="sec-sub" style="margin-top:26px;">✉️ 법인 대표메일 <small>조직도 하단 비상연락망의 「대표메일」 칸에 표시됩니다</small></div>
+  <div class="tbl-wrap">
+    <table id="oe-table">
+      <thead><tr>
+        <th class="sortable" style="width:110px;" onclick="sortOrgEnt('code')">법인코드<span class="sort-icon" id="oesi-code"></span></th>
+        <th class="sortable" style="width:130px;" onclick="sortOrgEnt('name')">법인<span class="sort-icon" id="oesi-name"></span></th>
+        <th class="sortable" style="width:300px;" onclick="sortOrgEnt('rep_email')">대표메일<span class="sort-icon" id="oesi-rep_email"></span></th>
+        <th class="center" style="width:90px;">관리</th>
+      </tr></thead>
+      <tbody id="oe-tbody"></tbody>
     </table>
   </div>
 
@@ -5242,6 +5255,7 @@ function openEmpModal(id) {
   document.getElementById('emp-in-title').value     = r?.title      || '';
   document.getElementById('emp-in-sort').value      = r?.sort_no    ?? '';
   document.getElementById('emp-in-namelocal').value = r?.name_local || '';
+  document.getElementById('emp-in-email').value     = r?.email      || '';
   const rsel = document.getElementById('emp-in-reports');
   const cand = _empData.filter(x=>x.active!==false && x.id!==(r?.id))
     .sort((a,b)=>(a.emp_no||0)-(b.emp_no||0));
@@ -5301,6 +5315,7 @@ async function saveEmp() {
     reports_to: document.getElementById('emp-in-reports').value ? Number(document.getElementById('emp-in-reports').value) : null,
     sort_no:    document.getElementById('emp-in-sort').value!=='' ? Number(document.getElementById('emp-in-sort').value) : null,
     name_local: document.getElementById('emp-in-namelocal').value.trim()||null,
+    email:      document.getElementById('emp-in-email').value.trim()||null,
     updated_at: new Date().toISOString(),
   };
   const wfpw = document.getElementById('emp-in-wfpw').value.trim();
@@ -5369,7 +5384,7 @@ function downloadEmpExcel() {
     '직급': r.rank||'', '부서': r.dept||'',
     '직책': r.title||'', '상위자': _empNameById(r.reports_to), '현지어/영문명': r.name_local||'',
     '성별': r.gender||'',
-    '휴대폰': r.phone||'', '입사일': r.join_date||'',
+    '휴대폰': r.phone||'', '메일주소': r.email||'', '입사일': r.join_date||'',
     '퇴직일': r.retire_date||'',
     '근속': r.active===false ? '' : calcTenure(r.join_date),
     '재직상태': r.active===false ? '퇴직' : '재직중'
@@ -5436,7 +5451,7 @@ async function logEmpHistory(oldR, newR){
 async function loadOrgTab(){
   const ks = document.getElementById('oh-f-kind');
   if(ks.options.length<=1) ks.innerHTML = '<option value="">전체 구분</option>'+ORG_KINDS.map(k=>`<option value="${k}">${k}</option>`).join('');
-  await Promise.all([loadOrgHist(), loadOrgHc(), loadOrgDept()]);
+  await Promise.all([loadOrgHist(), loadOrgHc(), loadOrgDept(), loadOrgEnt()]);
 }
 
 async function loadOrgHist(){
@@ -5550,6 +5565,36 @@ function downloadOrgHistExcel(){
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '조직이력');
   XLSX.writeFile(wb, 'SME_조직이력_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+// ── 법인 대표메일 (org_entity) — 비상연락망 대표메일 ──
+let _oeData = [], _oeSortKey = 'sort_no', _oeSortAsc = true;
+async function loadOrgEnt(){
+  const {data, error} = await sb.from('org_entity').select('*');
+  const tb = document.getElementById('oe-tbody');
+  if(error){ tb.innerHTML = `<tr><td colspan="4" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
+  _oeData = data || [];
+  renderOrgEnt();
+}
+function sortOrgEnt(k){ if(_oeSortKey===k) _oeSortAsc=!_oeSortAsc; else { _oeSortKey=k; _oeSortAsc=true; } renderOrgEnt(); }
+function renderOrgEnt(){
+  const k=_oeSortKey, d=_oeSortAsc?1:-1;
+  const rows=[..._oeData].sort((a,b)=> (k==='sort_no' ? (a.sort_no??9)-(b.sort_no??9) : String(a[k]??'').localeCompare(String(b[k]??''),'ko'))*d);
+  document.querySelectorAll('[id^="oesi-"]').forEach(el=>el.textContent='');
+  const si=document.getElementById('oesi-'+k); if(si) si.textContent=_oeSortAsc?'↑':'↓';
+  document.getElementById('oe-tbody').innerHTML = rows.map(r=>`<tr>
+    <td style="font-weight:700;">${_ohEsc(r.code)}</td><td>${_ohEsc(r.name)}</td>
+    <td><input id="oe-in-${_ohEsc(r.entity)}" type="email" value="${_ohEsc(r.rep_email||'')}" placeholder="대표메일 입력" style="width:100%;height:28px;border:1px solid var(--border);border-radius:2px;padding:0 8px;font-size:12px;font-family:'Noto Sans KR',sans-serif;"></td>
+    <td class="center"><button class="row-btn row-btn-edit" onclick="saveOrgEnt('${_ohEsc(r.entity)}')">저장</button></td>
+  </tr>`).join('');
+  setTimeout(()=>initColResize('oe-table','al_orgent_v1'),50);
+}
+async function saveOrgEnt(ent){
+  const v = document.getElementById('oe-in-'+ent).value.trim();
+  if(v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ alert('메일주소 형식이 올바르지 않습니다.'); return; }
+  const {error} = await sb.from('org_entity').update({rep_email: v||null, updated_at: new Date().toISOString()}).eq('entity', ent);
+  if(error){ alert('저장 실패: '+error.message); return; }
+  await loadOrgEnt();
 }
 
 // ── 해외법인 부서 (org_dept) — 조직도 해외법인 세로 1열 부서 묶음 ──

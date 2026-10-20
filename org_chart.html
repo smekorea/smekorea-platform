@@ -8,7 +8,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.2 (2026-10-20) — 글로벌 조직도
+   org_chart.html v1.4 (2026-10-20) — 글로벌 조직도
+   ── v1.3: 부서·이름 위 숫자 제거, 우측 상단 법인별 인원
+   ── v1.4: 좌측 세로줄·예정 알림 삭제, 하단 비상연락망(부서장 이상, 법인 대표메일 org_entity)
    ── v1.2: 해외법인 유형 박스(법인장/총괄/부서 표시명), 인원수는 빈칸, 엑셀 이름칸 왼쪽 테두리 수정
    ── v1.1: 해외법인 세로 1열·부서 묶음(천진 양식, org_dept), 엑셀 연결선, 이력은 탭/시트로 분리
    ── 엑셀 조직도(01. SMER글로벌조직도) 레이아웃을 그대로 화면에 옮김
@@ -68,7 +70,7 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 
 /* ── 조직도 캔버스 (엑셀 시트 느낌) ── */
 .sheet-scroll{overflow:auto;background:#fff;border:1px solid var(--border);}
-.sheet{min-width:max-content;padding:0 28px 28px;border-left:6px solid var(--hq);}
+.sheet{min-width:max-content;padding:0 28px 28px;}
 .sheet-title{background:var(--hq);color:#fff;text-align:center;font-size:22px;font-weight:900;letter-spacing:6px;
   padding:10px 0;margin:0 -28px 0 -28px;position:relative;}
 .sheet-title .asof{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:500;letter-spacing:0;text-align:right;line-height:1.4;}
@@ -130,6 +132,11 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .orphans{margin-top:22px;border-top:1px dashed var(--line-dk);padding-top:10px;font-size:12px;color:var(--muted);}
 .orphans b{color:var(--brand);}
 
+/* 비상연락망 */
+.ct-title{font-size:14px;font-weight:900;margin:30px 0 8px;}
+.ct-title span{font-size:11px;font-weight:500;color:var(--muted);margin-left:6px;}
+.ct-wrap{display:inline-block;max-width:100%;}
+#ct-table td.mail a{color:#111827;text-decoration:none;} #ct-table td.mail a:hover{color:var(--point);text-decoration:underline;}
 /* 조직 이력 탭 */
 .tbl-wrap{background:#fff;border:1px solid var(--border);overflow:auto;}
 table{border-collapse:collapse;table-layout:fixed;}
@@ -193,11 +200,21 @@ td.tw{white-space:normal;word-break:keep-all;}
         <button class="btn btn-green" onclick="downloadExcel()">⬇ 엑셀 다운로드</button>
       </div>
     </div>
-    <div id="warnBox"></div>
     <div class="sheet-scroll">
       <div class="sheet">
         <div class="sheet-title">SME KOREA 글로벌 조직도<div class="asof" id="asof"></div></div>
         <div id="chart"><div class="loading">조직도를 불러오는 중...</div></div>
+        <div class="ct-title">📞 비상연락망 <span>부서장 이상</span></div>
+        <div class="tbl-wrap ct-wrap">
+          <table id="ct-table"><thead><tr>
+            <th class="sortable" style="width:90px;" onclick="sortCt('ent')">법인<span class="sort-icon" id="ctsi-ent"></span></th>
+            <th class="sortable" style="width:150px;" onclick="sortCt('title')">직책<span class="sort-icon" id="ctsi-title"></span></th>
+            <th class="sortable" style="width:120px;" onclick="sortCt('name')">성명<span class="sort-icon" id="ctsi-name"></span></th>
+            <th class="sortable" style="width:140px;" onclick="sortCt('phone')">연락처<span class="sort-icon" id="ctsi-phone"></span></th>
+            <th class="sortable" style="width:220px;" onclick="sortCt('email')">메일주소<span class="sort-icon" id="ctsi-email"></span></th>
+            <th class="sortable" style="width:220px;" onclick="sortCt('rep')">대표메일<span class="sort-icon" id="ctsi-rep"></span></th>
+          </tr></thead><tbody id="ct-body"></tbody></table>
+        </div>
       </div>
     </div>
     <div class="note">💡 인원 추가·이동·조직도 연결(상위자/직책/표시순서)은 관리자 설정 › 직원 관리, 해외법인 부서·이름 없는 인원수·조직 이력은 관리자 설정 › 조직 이력에서 관리합니다. 해외법인은 등록된 부서 순서대로 세로 한 줄로 표시됩니다.</div>
@@ -243,9 +260,9 @@ const ENT = {
 };
 const OVERSEAS_ORDER = ['GSMEIN','SMECN','SMEGLOBAL'];           // 엑셀 좌→우 순서
 const DEPT_ORDER = ['개발기획팀','개발구매팀','자재구매팀','제조팀','출하팀','재경팀'];
-const EMP_COLS = 'id,emp_no,entity,name,name_local,rank,dept,title,reports_to,sort_no,join_date'; // 비밀번호·연락처 미조회
+const EMP_COLS = 'id,emp_no,entity,name,name_local,rank,dept,title,reports_to,sort_no,join_date,phone,email'; // 비밀번호 미조회 (연락처·메일은 비상연락망용)
 
-let EMPS = [], HC = [], HIST = [], DEPTS = [];
+let EMPS = [], HC = [], HIST = [], DEPTS = [], ENTS = [];
 let byId = {}, kids = {};
 let model = null;                       // 화면·엑셀 공용 구조
 let hSortKey = 'eff_date', hSortAsc = false;
@@ -276,17 +293,18 @@ function switchTab(k){
 
 async function loadAll(){
   try{
-    [EMPS, HC, HIST, DEPTS] = await Promise.all([
+    [EMPS, HC, HIST, DEPTS, ENTS] = await Promise.all([
       sbGet('employees', `select=${EMP_COLS}&active=eq.true&order=emp_no`),
       sbGet('org_headcount', 'select=*&active=eq.true&order=sort_no'),
       sbGet('org_history', 'select=*&is_deleted=eq.false'),
-      sbGet('org_dept', 'select=*&active=eq.true&order=sort_no')
+      sbGet('org_dept', 'select=*&active=eq.true&order=sort_no'),
+      sbGet('org_entity', 'select=entity,code,name,rep_email,sort_no&order=sort_no')
     ]);
   }catch(e){
     document.getElementById('chart').innerHTML = `<div class="loading" style="color:var(--brand);">불러오기 실패: ${esc(e.message)}</div>`;
     return;
   }
-  buildModel(); renderChart(); fillHistFilters();
+  buildModel(); renderChart(); renderContacts(); fillHistFilters();
   if(document.getElementById('tab-hist').style.display!=='none') renderHist();
 }
 
@@ -415,9 +433,6 @@ function renderChart(){
   document.getElementById('kpi').innerHTML =
     `<span>전체<b>${EMPS.length}</b></span><span>본사<b>${M.hqN}</b></span><span>해외법인<b>${M.ovN}</b></span>` +
     (M.hcN?`<span>인원수 표시<b>${M.hcN}</b></span>`:'');
-  const planned = HIST.filter(h=>h.status==='예정');
-  document.getElementById('warnBox').innerHTML = planned.length
-    ? `<div class="warn">⏳ 예정된 조직변경 ${planned.length}건: ${planned.map(p=>esc([p.kind, p.from_value&&p.to_value?`${p.from_value}→${p.to_value}`:(p.to_value||p.emp_name||''), p.eff_date?`(${p.eff_date})`:'(일자 미정)'].filter(Boolean).join(' '))).join(' / ')}</div>` : '';
   if(!M.root){ document.getElementById('chart').innerHTML = '<div class="loading">대표이사(직책)가 지정된 직원이 없습니다. 관리자 설정 › 직원 관리에서 직책을 지정해 주세요.</div>'; return; }
   let h = `<div class="tree"><ul><li><div class="node">${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
   if(M.groups.length){
@@ -441,6 +456,33 @@ function renderChart(){
     const x = rb.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft + rb.offsetWidth/2;
     sc.scrollLeft = Math.max(0, x - sc.clientWidth/2);
   }
+}
+
+/* ── 비상연락망 (부서장 이상: 직책 기준) ── */
+const CT_TITLES = ['대표이사','상무이사','CFO','법인장','부총경리','팀장','매니저'];
+const CT_ENT_ORDER = ['KOREA','SMECN','SMEGLOBAL','GSMEIN'];
+let ctSortKey = null, ctSortAsc = true;
+function contactRows(){
+  const rep = e => (ENTS.find(x=>x.entity===e)||{}).rep_email || '';
+  return EMPS.filter(e=>CT_TITLES.includes(e.title))
+    .sort((a,b)=>(CT_ENT_ORDER.indexOf(a.entity)-CT_ENT_ORDER.indexOf(b.entity)) ||
+      (CT_TITLES.indexOf(a.title)-CT_TITLES.indexOf(b.title)) || cmpEmp(a,b))
+    .map((e,i)=>({ seq:i, ent:entLabel(e.entity), title: e.title==='팀장' ? `${e.dept||''} 팀장` : e.title,
+      name:dispName(e), phone:e.phone||'', email:e.email||'', rep:rep(e.entity) }));
+}
+function sortCt(k){ if(ctSortKey===k) ctSortAsc=!ctSortAsc; else { ctSortKey=k; ctSortAsc=true; } renderContacts(); }
+function renderContacts(){
+  let rows = contactRows();
+  if(ctSortKey){ const d=ctSortAsc?1:-1; rows.sort((a,b)=>String(a[ctSortKey]).localeCompare(String(b[ctSortKey]),'ko')*d || a.seq-b.seq); }
+  document.querySelectorAll('[id^="ctsi-"]').forEach(el=>el.textContent='');
+  if(ctSortKey){ const si=document.getElementById('ctsi-'+ctSortKey); if(si) si.textContent = ctSortAsc?'↑':'↓'; }
+  const mail = v => v ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : '<span style="color:var(--line-dk);">미등록</span>';
+  document.getElementById('ct-body').innerHTML = rows.length ? rows.map(r=>`<tr>
+    <td>${esc(r.ent)}</td><td>${esc(r.title)}</td><td style="font-weight:700;">${esc(r.name)}</td>
+    <td>${r.phone?esc(r.phone):'<span style="color:var(--line-dk);">미등록</span>'}</td>
+    <td class="mail">${mail(r.email)}</td><td class="mail">${mail(r.rep)}</td></tr>`).join('')
+    : '<tr><td colspan="6"><div class="loading">대상자가 없습니다.</div></td></tr>';
+  setTimeout(()=>initColResize('ct-table','org_contact_v1'),50);
 }
 
 /* ── 이력 ── */
@@ -600,6 +642,23 @@ async function downloadExcel(){
     const r=maxRow+1; ws.mergeCells(r,2,r,lastCol);
     const o=cell(r,2); o.value='※ 조직도 미연결: '+model.orphans.map(e=>`[${entLabel(e.entity)}] ${dispName(e)}`).join(', ');
     o.font=font({size:9,color:{argb:'FFC8001E'}});
+    maxRow=r;
+  }
+  // 비상연락망 (조직도 하단) — 칸: 법인·직책·성명·연락처 각 1단위, 메일주소·대표메일 각 2단위
+  {
+    let r = maxRow+2;
+    const cols = [['법인',0,0,'ent'],['직책',1,1,'title'],['성명',2,2,'name'],['연락처',3,3,'phone'],['메일주소',4,5,'email'],['대표메일',6,7,'rep']]
+      .filter(c=>c[2] <= units.length-1 || c[1] <= units.length-1).map(c=>[c[0],c[1],Math.min(c[2],units.length-1),c[3]]);
+    ws.mergeCells(r,L(0),r,R(Math.min(3,units.length-1)));
+    const ttl=cell(r,L(0)); ttl.value='비상연락망 (부서장 이상)'; ttl.font=font({bold:true,size:11}); ttl.alignment={horizontal:'left',vertical:'middle'};
+    r++;
+    // 간격 칸까지 이어서 병합 → 표가 끊기지 않게 (마지막 칸은 R까지)
+    const endCol = (c,k) => k<cols.length-1 ? L(cols[k+1][1])-1 : R(c[2]);
+    const hdrCell=(rr,c,v,isHd)=>{ const k=cols.indexOf(c), ec=endCol(c,k); if(ec>L(c[1])) ws.mergeCells(rr,L(c[1]),rr,ec); const x=cell(rr,L(c[1])); x.value=v;
+      x.font=font(isHd?{bold:true,color:{argb:'FFFFFFFF'}}:{}); x.alignment={horizontal:'center',vertical:'middle'};
+      x.border={top:BX,left:BX,bottom:BX,right:BX}; if(isHd) x.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF5A5A5A'}}; };
+    cols.forEach(c=>hdrCell(r,c,c[0],true)); ws.getRow(r).height=18; r++;
+    contactRows().forEach(row=>{ cols.forEach(c=>hdrCell(r,c,row[c[3]]||'',false)); ws.getRow(r).height=17; r++; });
   }
 
   // 인원명단 시트
