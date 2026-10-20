@@ -349,7 +349,6 @@ td.center .al-pline{justify-content:center;}
   <button class="tab-btn" id="tab-trade-btn"            onclick="switchTab('trade')">📊 매입·매출</button>
   <button class="tab-btn" id="tab-stock-btn"            onclick="switchTab('stock')">🗃️ 재고조사</button>
   <button class="tab-btn" id="tab-emp-btn"              onclick="switchTab('emp')">👥 직원 관리</button>
-  <button class="tab-btn" id="tab-org-btn"              onclick="switchTab('org')">🏢 조직 이력</button>
   <button class="tab-btn" id="tab-log-btn"              onclick="switchTab('log')">🔍 접속 이력</button>
   <button class="tab-btn" id="tab-ui-btn"               onclick="switchTab('ui')">🎨 화면 꾸미기</button>
 </div>
@@ -1312,6 +1311,16 @@ td.center .al-pline{justify-content:center;}
     <div class="emp-kpi-card amber"><div class="emp-kpi-label">평균 근속</div><div class="emp-kpi-val" id="emp-kpi-tenure">-</div><div class="emp-kpi-sub">년</div></div>
     <div class="emp-kpi-card gray"><div class="emp-kpi-label">퇴직자</div><div class="emp-kpi-val" id="emp-kpi-inactive">-</div><div class="emp-kpi-sub">명 (비활성)</div></div>
   </div>
+  <!-- (2026-10-20) 법인 대표메일 — 조직도 비상연락망 「대표메일」 칸 -->
+  <div class="rep-bar">
+    <span class="rep-ttl">✉️ 법인 대표메일</span>
+    <label>SMEKR<input id="rep-KOREA" type="email" placeholder="본사 대표메일"></label>
+    <label>SMECN<input id="rep-SMECN" type="email" placeholder="중국 대표메일"></label>
+    <label>SMETH<input id="rep-SMEGLOBAL" type="email" placeholder="태국 대표메일"></label>
+    <label>SMEIN<input id="rep-GSMEIN" type="email" placeholder="인도 대표메일"></label>
+    <button class="up-btn up-btn-primary" onclick="saveRepEmails()">저장</button>
+    <span id="rep-msg" class="rep-msg"></span>
+  </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
     <select id="emp-f-entity" onchange="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 10px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;">
       <option value="">전체 법인</option><option value="KOREA">KOREA</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (태국)</option><option value="SMECN">SMECN (중국)</option>
@@ -1350,7 +1359,46 @@ td.center .al-pline{justify-content:center;}
       <tbody id="emp-tbody"><tr><td colspan="15"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
-  <div class="up-info" style="margin-top:8px;">💡 직원 등록/수정 시 employees 테이블에 저장됩니다.</div>
+  <div class="up-info" style="margin-top:8px;">💡 직원 등록/수정 시 employees 테이블에 저장됩니다. 입사·퇴사·이동·직급·직책 변경은 조직 이력에 자동 기록됩니다(조직 이력 조회·입력: 메인 › 커뮤니케이션 › 글로벌 조직도).</div>
+
+  <!-- (2026-10-20) 조직도 설정 — 부서 마스터 / 인원수 표시 -->
+  <details class="orgset" id="emp-orgset">
+    <summary>⚙️ 조직도 설정 <small>부서 마스터 · 인원수 표시</small></summary>
+    <div class="sec-sub">🏢 부서 마스터 <small>직원 등록의 부서 목록이 여기서 나옵니다. 해외법인은 「조직도 표시명」이 조직도 박스 제목이 됩니다(법인장·부총경리는 조직도에서 「법인장」「총괄」 칸으로 표시)</small>
+      <button class="up-btn up-btn-primary" style="margin-left:auto;" onclick="openOrgDeptModal()">+ 부서 추가</button>
+    </div>
+    <div class="tbl-wrap">
+      <table id="od-table">
+        <thead><tr>
+          <th class="sortable" style="width:130px;" onclick="sortOrgDept('entity')">법인<span class="sort-icon" id="odsi-entity"></span></th>
+          <th class="sortable" style="width:140px;" onclick="sortOrgDept('dept')">부서<span class="sort-icon" id="odsi-dept"></span></th>
+          <th class="sortable" style="width:140px;" onclick="sortOrgDept('label')">조직도 표시명<span class="sort-icon" id="odsi-label"></span></th>
+          <th class="sortable center" style="width:60px;" onclick="sortOrgDept('sort_no')">순서<span class="sort-icon" id="odsi-sort_no"></span></th>
+          <th class="sortable center" style="width:70px;" onclick="sortOrgDept('emp_cnt')">직원수<span class="sort-icon" id="odsi-emp_cnt"></span></th>
+          <th class="sortable" style="width:220px;" onclick="sortOrgDept('note')">비고<span class="sort-icon" id="odsi-note"></span></th>
+          <th class="center" style="width:110px;">관리</th>
+        </tr></thead>
+        <tbody id="od-tbody"></tbody>
+      </table>
+    </div>
+    <div class="sec-sub" style="margin-top:22px;">👥 인원수 표시 <small>이름 없이 인원수만 조직도에 표시할 인원 (예: 출하 3명 → 해외법인 출하팀 박스에 빈칸 3줄)</small>
+      <button class="up-btn up-btn-primary" style="margin-left:auto;" onclick="openOrgHcModal()">+ 항목 추가</button>
+    </div>
+    <div class="tbl-wrap">
+      <table id="ohc-table">
+        <thead><tr>
+          <th class="sortable" style="width:110px;" onclick="sortOrgHc('entity')">법인<span class="sort-icon" id="ohcsi-entity"></span></th>
+          <th class="sortable" style="width:110px;" onclick="sortOrgHc('dept')">부서<span class="sort-icon" id="ohcsi-dept"></span></th>
+          <th class="sortable" style="width:120px;" onclick="sortOrgHc('label')">구분<span class="sort-icon" id="ohcsi-label"></span></th>
+          <th class="sortable center" style="width:60px;" onclick="sortOrgHc('cnt')">인원<span class="sort-icon" id="ohcsi-cnt"></span></th>
+          <th class="sortable center" style="width:60px;" onclick="sortOrgHc('sort_no')">순서<span class="sort-icon" id="ohcsi-sort_no"></span></th>
+          <th class="sortable" style="width:220px;" onclick="sortOrgHc('note')">비고<span class="sort-icon" id="ohcsi-note"></span></th>
+          <th class="center" style="width:110px;">관리</th>
+        </tr></thead>
+        <tbody id="ohc-tbody"></tbody>
+      </table>
+    </div>
+  </details>
 </div>
 
 <!-- 직원 모달 -->
@@ -1363,7 +1411,7 @@ td.center .al-pline{justify-content:center;}
     <div class="modal-body">
       <div class="modal-row triple">
         <div class="form-group"><label>채용구분 <span class="req">*</span></label><select id="emp-in-type"><option value="정직">정직</option><option value="계약">계약</option><option value="파견">파견</option><option value="인턴">인턴</option></select></div>
-        <div class="form-group"><label>법인구분 <span class="req">*</span></label><select id="emp-in-entity"><option value="KOREA">KOREA (본사)</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (태국)</option><option value="SMECN">SMECN (중국)</option></select></div>
+        <div class="form-group"><label>법인구분 <span class="req">*</span></label><select id="emp-in-entity" onchange="fillEmpDeptOptions('')"><option value="KOREA">KOREA (본사)</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (태국)</option><option value="SMECN">SMECN (중국)</option></select></div>
         <div class="form-group"><label>성별</label><select id="emp-in-gender"><option value="남">남</option><option value="여">여</option></select></div>
       </div>
       <div class="modal-row">
@@ -1371,7 +1419,7 @@ td.center .al-pline{justify-content:center;}
         <div class="form-group"><label>직급 <span class="req">*</span></label><select id="emp-in-rank"><option value="대표이사">대표이사</option><option value="상무">상무</option><option value="이사">이사</option><option value="책임">책임</option><option value="선임">선임</option><option value="사원">사원</option><option value="인턴">인턴</option><option value="법인장">법인장</option><option value="부총경리">부총경리</option><option value="팀장">팀장</option><option value="과장">과장</option></select></div>
       </div>
       <div class="modal-row">
-        <div class="form-group"><label>부서 <span class="req">*</span></label><select id="emp-in-dept"><option value="대표이사">대표이사</option><option value="상무이사">상무이사</option><option value="재경팀">재경팀</option><option value="개발기획팀">개발기획팀</option><option value="자재구매팀">자재구매팀</option><option value="개발구매팀">개발구매팀</option><option value="출하팀">출하팀</option><option value="제조팀">제조팀</option><option value="법인장">법인장</option><option value="구매영업">구매영업</option><option value="재무">재무</option></select></div>
+        <div class="form-group"><label>부서 <span class="req">*</span></label><select id="emp-in-dept" onfocus="_empDeptPrev=this.value" onchange="empDeptChanged()"></select></div>
         <div class="form-group"><label>연락처</label><input id="emp-in-phone" placeholder="010-0000-0000"></div>
       </div>
       <!-- (2026-10-20) 글로벌 조직도용 항목 -->
@@ -1401,152 +1449,43 @@ td.center .al-pline{justify-content:center;}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════ -->
-<!-- 탭: 조직 이력 (org_history / org_headcount) — 2026-10-20 글로벌 조직도 -->
-<!-- ══════════════════════════════════════════════════ -->
+<!-- (2026-10-20) 직원관리 — 법인 대표메일 바 / 조직도 설정(부서 마스터·인원수 표시) -->
 <style>
-#tab-org .sec-sub{font-size:14px;font-weight:700;color:var(--text);margin:4px 0 10px;display:flex;align-items:center;gap:8px;}
-#tab-org .sec-sub small{font-size:12px;font-weight:400;color:var(--muted);}
-#tab-org select.of,#tab-org input.of{height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 10px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;font-family:'Noto Sans KR',sans-serif;}
-#tab-org th.sortable{cursor:pointer;}
-#tab-org th.sortable:hover{background:rgba(26,86,219,.06);}
-#tab-org .sort-icon{margin-left:3px;font-size:10px;color:var(--accent2);}
-#tab-org tbody td{color:#111827;border-right:1px solid #e8edf5;}
-#tab-org tbody td:last-child{border-right:none;}
-#tab-org td.wrap{white-space:normal;word-break:keep-all;}
-.oh-st{display:inline-flex;padding:2px 8px;font-size:11px;font-weight:700;border:1px solid;}
-.oh-st.plan{color:var(--amber);border-color:rgba(217,119,6,.35);background:rgba(217,119,6,.08);}
-.oh-st.done{color:#2E6B4F;border-color:rgba(46,107,79,.35);background:rgba(46,107,79,.08);}
+.rep-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-sub);}
+.rep-bar .rep-ttl{font-size:13px;font-weight:700;color:var(--text);margin-right:4px;}
+.rep-bar label{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--muted);}
+.rep-bar input{height:32px;width:190px;border:1.5px solid var(--border);border-radius:2px;padding:0 8px;font-size:12px;color:var(--text);background:#fff;font-family:'Noto Sans KR',sans-serif;}
+.rep-msg{font-size:12px;color:#2E6B4F;font-weight:700;}
+.orgset{margin-top:22px;border:1px solid var(--border);background:#fff;}
+.orgset > summary{cursor:pointer;padding:11px 14px;font-size:14px;font-weight:700;color:var(--text);background:var(--bg-sub);list-style-position:inside;}
+.orgset > summary small{font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;}
+.orgset[open] > summary{border-bottom:1px solid var(--border);}
+.orgset > .sec-sub,.orgset > .tbl-wrap{margin-left:14px;margin-right:14px;}
+.orgset > .tbl-wrap:last-child{margin-bottom:14px;}
+.orgset .sec-sub{font-size:13.5px;font-weight:700;color:var(--text);margin-top:14px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.orgset .sec-sub small{font-size:12px;font-weight:400;color:var(--muted);}
+.orgset th.sortable{cursor:pointer;}
+.orgset th.sortable:hover{background:rgba(26,86,219,.06);}
+.orgset .sort-icon{margin-left:3px;font-size:10px;color:var(--accent2);}
+.orgset tbody td{color:#111827;border-right:1px solid #e8edf5;}
+.orgset tbody td:last-child{border-right:none;}
 </style>
-<div id="tab-org" class="content" style="display:none;">
-  <div class="sec-sub">📜 조직 이력 <small>입사·퇴사·이동·직급변경은 직원 관리에서 저장할 때 자동 기록됩니다</small></div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
-    <select class="of" id="oh-f-entity" onchange="renderOrgHist()"><option value="">전체 법인</option><option value="KOREA">KOREA (본사)</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (SMETH·태국)</option><option value="SMECN">SMECN (중국)</option></select>
-    <select class="of" id="oh-f-kind" onchange="renderOrgHist()"><option value="">전체 구분</option></select>
-    <select class="of" id="oh-f-status" onchange="renderOrgHist()"><option value="">전체 상태</option><option value="예정">예정</option><option value="적용">적용</option></select>
-    <input class="of" type="text" id="oh-f-search" placeholder="이름·내용 검색..." oninput="renderOrgHist()" style="width:160px;">
-    <span id="oh-cnt" style="font-size:12px;color:var(--muted);"></span>
-    <div style="margin-left:auto;display:flex;gap:8px;">
-      <button class="up-btn up-btn-green" onclick="downloadOrgHistExcel()">⬇ 엑셀</button>
-      <button class="up-btn up-btn-primary" onclick="openOrgHistModal()">+ 이력 등록</button>
-    </div>
-  </div>
-  <div class="tbl-wrap">
-    <table id="oh-table">
-      <thead><tr>
-        <th class="sortable" style="width:100px;" onclick="sortOrgHist('eff_date')">일자<span class="sort-icon" id="ohsi-eff_date"></span></th>
-        <th class="sortable center" style="width:60px;" onclick="sortOrgHist('status')">상태<span class="sort-icon" id="ohsi-status"></span></th>
-        <th class="sortable" style="width:90px;" onclick="sortOrgHist('kind')">구분<span class="sort-icon" id="ohsi-kind"></span></th>
-        <th class="sortable" style="width:95px;" onclick="sortOrgHist('entity')">법인<span class="sort-icon" id="ohsi-entity"></span></th>
-        <th class="sortable" style="width:90px;" onclick="sortOrgHist('dept')">부서<span class="sort-icon" id="ohsi-dept"></span></th>
-        <th class="sortable" style="width:110px;" onclick="sortOrgHist('emp_name')">이름<span class="sort-icon" id="ohsi-emp_name"></span></th>
-        <th class="sortable" style="width:110px;" onclick="sortOrgHist('from_value')">변경전<span class="sort-icon" id="ohsi-from_value"></span></th>
-        <th class="sortable" style="width:110px;" onclick="sortOrgHist('to_value')">변경후<span class="sort-icon" id="ohsi-to_value"></span></th>
-        <th class="sortable" style="width:380px;" onclick="sortOrgHist('content')">내용<span class="sort-icon" id="ohsi-content"></span></th>
-        <th class="sortable" style="width:80px;" onclick="sortOrgHist('origin')">출처<span class="sort-icon" id="ohsi-origin"></span></th>
-        <th class="center" style="width:110px;">관리</th>
-      </tr></thead>
-      <tbody id="oh-tbody"><tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
-    </table>
-  </div>
-
-  <div class="sec-sub" style="margin-top:26px;">✉️ 법인 대표메일 <small>조직도 하단 비상연락망의 「대표메일」 칸에 표시됩니다</small></div>
-  <div class="tbl-wrap">
-    <table id="oe-table">
-      <thead><tr>
-        <th class="sortable" style="width:110px;" onclick="sortOrgEnt('code')">법인코드<span class="sort-icon" id="oesi-code"></span></th>
-        <th class="sortable" style="width:130px;" onclick="sortOrgEnt('name')">법인<span class="sort-icon" id="oesi-name"></span></th>
-        <th class="sortable" style="width:300px;" onclick="sortOrgEnt('rep_email')">대표메일<span class="sort-icon" id="oesi-rep_email"></span></th>
-        <th class="center" style="width:90px;">관리</th>
-      </tr></thead>
-      <tbody id="oe-tbody"></tbody>
-    </table>
-  </div>
-
-  <div class="sec-sub" style="margin-top:26px;">🌏 해외법인 부서 <small>조직도에서 해외법인은 법인장 → 총괄 → 여기 등록한 부서 순서대로 표시됩니다 (부서 = 직원 관리의 부서명, 표시명 = 조직도 박스 제목)</small>
-    <button class="up-btn up-btn-primary" style="margin-left:auto;" onclick="openOrgDeptModal()">+ 부서 추가</button>
-  </div>
-  <div class="tbl-wrap">
-    <table id="od-table">
-      <thead><tr>
-        <th class="sortable" style="width:130px;" onclick="sortOrgDept('entity')">법인<span class="sort-icon" id="odsi-entity"></span></th>
-        <th class="sortable" style="width:140px;" onclick="sortOrgDept('dept')">부서<span class="sort-icon" id="odsi-dept"></span></th>
-        <th class="sortable" style="width:140px;" onclick="sortOrgDept('label')">조직도 표시명<span class="sort-icon" id="odsi-label"></span></th>
-        <th class="sortable center" style="width:60px;" onclick="sortOrgDept('sort_no')">순서<span class="sort-icon" id="odsi-sort_no"></span></th>
-        <th class="sortable center" style="width:70px;" onclick="sortOrgDept('emp_cnt')">직원수<span class="sort-icon" id="odsi-emp_cnt"></span></th>
-        <th class="sortable" style="width:220px;" onclick="sortOrgDept('note')">비고<span class="sort-icon" id="odsi-note"></span></th>
-        <th class="center" style="width:110px;">관리</th>
-      </tr></thead>
-      <tbody id="od-tbody"></tbody>
-    </table>
-  </div>
-
-  <div class="sec-sub" style="margin-top:26px;">👥 조직도 인원수 표시 <small>이름 없이 인원수만 표시할 항목 (예: 출하 3명, 납품기사 2명)</small>
-    <button class="up-btn up-btn-primary" style="margin-left:auto;" onclick="openOrgHcModal()">+ 항목 추가</button>
-  </div>
-  <div class="tbl-wrap">
-    <table id="ohc-table">
-      <thead><tr>
-        <th class="sortable" style="width:110px;" onclick="sortOrgHc('entity')">법인<span class="sort-icon" id="ohcsi-entity"></span></th>
-        <th class="sortable" style="width:110px;" onclick="sortOrgHc('dept')">부서<span class="sort-icon" id="ohcsi-dept"></span></th>
-        <th class="sortable" style="width:120px;" onclick="sortOrgHc('label')">구분<span class="sort-icon" id="ohcsi-label"></span></th>
-        <th class="sortable center" style="width:60px;" onclick="sortOrgHc('cnt')">인원<span class="sort-icon" id="ohcsi-cnt"></span></th>
-        <th class="sortable center" style="width:60px;" onclick="sortOrgHc('sort_no')">순서<span class="sort-icon" id="ohcsi-sort_no"></span></th>
-        <th class="sortable" style="width:220px;" onclick="sortOrgHc('note')">비고<span class="sort-icon" id="ohcsi-note"></span></th>
-        <th class="center" style="width:110px;">관리</th>
-      </tr></thead>
-      <tbody id="ohc-tbody"></tbody>
-    </table>
-  </div>
-  <div class="up-info" style="margin-top:8px;">💡 조직도 화면: 메인 › 커뮤니케이션 › 글로벌 조직도. 조직도 연결(상위자·직책·표시순서)은 직원 관리에서 수정합니다.</div>
-</div>
-
-<!-- 조직 이력 모달 -->
-<div class="modal-overlay" id="ohModal">
-  <div class="modal-box">
-    <div class="modal-hdr">
-      <div class="modal-title" id="ohModalTitle">📜 조직 이력 등록</div>
-      <button class="modal-close" onclick="closeOrgHistModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-row triple">
-        <div class="form-group"><label>상태 <span class="req">*</span></label><select id="oh-in-status" onchange="ohStatusChanged()"><option value="적용">적용</option><option value="예정">예정</option></select></div>
-        <div class="form-group"><label>일자 <span id="oh-date-req" class="req">*</span></label><input type="date" id="oh-in-date"></div>
-        <div class="form-group"><label>구분 <span class="req">*</span></label><select id="oh-in-kind"></select></div>
-      </div>
-      <div class="modal-row triple">
-        <div class="form-group"><label>법인</label><select id="oh-in-entity"><option value="">—</option><option value="KOREA">KOREA (본사)</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (SMETH·태국)</option><option value="SMECN">SMECN (중국)</option></select></div>
-        <div class="form-group"><label>부서</label><input id="oh-in-dept" placeholder="예: 출하팀"></div>
-        <div class="form-group"><label>이름/대상</label><input id="oh-in-name" placeholder="예: 홍길동 / SMTEC인수"></div>
-      </div>
-      <div class="modal-row">
-        <div class="form-group"><label>변경전</label><input id="oh-in-from" placeholder="예: SMEGLOBAL"></div>
-        <div class="form-group"><label>변경후</label><input id="oh-in-to" placeholder="예: SMETH"></div>
-      </div>
-      <div class="form-group"><label>내용</label><textarea id="oh-in-content" rows="3" style="width:100%;border:1.5px solid var(--border);border-radius:2px;padding:8px 10px;font-size:13px;font-family:'Noto Sans KR',sans-serif;resize:vertical;"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="modal-btn modal-cancel" onclick="closeOrgHistModal()">취소</button>
-      <button class="modal-btn modal-save" id="ohSaveBtn" onclick="saveOrgHist()">등록</button>
-    </div>
-  </div>
-</div>
 
 <!-- 해외법인 부서 모달 -->
 <div class="modal-overlay" id="odModal">
   <div class="modal-box">
     <div class="modal-hdr">
-      <div class="modal-title" id="odModalTitle">🌏 해외법인 부서</div>
+      <div class="modal-title" id="odModalTitle">🏢 부서 등록</div>
       <button class="modal-close" onclick="closeOrgDeptModal()">✕</button>
     </div>
     <div class="modal-body">
       <div class="modal-row triple">
-        <div class="form-group"><label>법인 <span class="req">*</span></label><select id="od-in-entity"><option value="SMECN">SMECN (중국)</option><option value="SMEGLOBAL">SMEGLOBAL (SMETH·태국)</option><option value="GSMEIN">GSMEIN (인도)</option></select></div>
-        <div class="form-group"><label>부서 <span class="req">*</span></label><input id="od-in-dept" placeholder="예: 구매영업"></div>
-        <div class="form-group"><label>순서</label><input type="number" id="od-in-sort" min="1"></div>
+        <div class="form-group"><label>법인 <span class="req">*</span></label><select id="od-in-entity"><option value="KOREA">KOREA (본사)</option><option value="SMECN">SMECN (중국)</option><option value="SMEGLOBAL">SMEGLOBAL (SMETH·태국)</option><option value="GSMEIN">GSMEIN (인도)</option></select></div>
+        <div class="form-group"><label>부서 <span class="req">*</span></label><input id="od-in-dept" placeholder="예: 품질팀 / 구매영업"></div>
+        <div class="form-group"><label>순서</label><input type="number" id="od-in-sort"></div>
       </div>
       <div class="modal-row">
-        <div class="form-group"><label>조직도 표시명</label><input id="od-in-label" placeholder="예: 구매영업팀 / 회계/마감 (비우면 부서명)"></div>
+        <div class="form-group"><label>조직도 표시명</label><input id="od-in-label" placeholder="해외법인만 — 예: 구매영업팀 (비우면 부서명)"></div>
         <div class="form-group"><label>비고</label><input id="od-in-note"></div>
       </div>
     </div>
@@ -1566,8 +1505,8 @@ td.center .al-pline{justify-content:center;}
     </div>
     <div class="modal-body">
       <div class="modal-row triple">
-        <div class="form-group"><label>법인 <span class="req">*</span></label><select id="ohc-in-entity"><option value="KOREA">KOREA (본사)</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (SMETH·태국)</option><option value="SMECN">SMECN (중국)</option></select></div>
-        <div class="form-group"><label>부서</label><input id="ohc-in-dept" placeholder="본사는 팀명과 동일하게"></div>
+        <div class="form-group"><label>법인 <span class="req">*</span></label><select id="ohc-in-entity" onchange="fillHcDeptOptions()"><option value="KOREA">KOREA (본사)</option><option value="GSMEIN">GSMEIN (인도)</option><option value="SMEGLOBAL">SMEGLOBAL (SMETH·태국)</option><option value="SMECN">SMECN (중국)</option></select></div>
+        <div class="form-group"><label>부서</label><select id="ohc-in-dept"></select></div>
         <div class="form-group"><label>구분 <span class="req">*</span></label><input id="ohc-in-label" placeholder="예: 납품기사"></div>
       </div>
       <div class="modal-row triple">
@@ -1749,7 +1688,7 @@ const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString('ko-KR');
 
 // ── 탭 전환 ──
 function switchTab(t) {
-  ['items','lg','export','partners','master','alias','maker','logistics','trade','stock','emp','org','log','ui'].forEach(x => {
+  ['items','lg','export','partners','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
     document.getElementById('tab-'+x).style.display = x===t?'block':'none';
     document.getElementById('tab-'+x+'-btn').classList.toggle('active', x===t);
   });
@@ -1764,7 +1703,6 @@ function switchTab(t) {
   if(t==='trade')     loadTradeSummary();
   if(t==='stock')     loadStockSummary();
   if(t==='emp'       && _empData.length===0)        loadEmpData();
-  if(t==='org')       loadOrgTab();
   if(t==='log'){ if(allLogs.length===0) loadLog(); else setTimeout(initLogColResize,50); }
   if(t==='ui') loadUITab();
 }
@@ -5138,7 +5076,7 @@ async function loadEmpData() {
   _empData = data || [];
   updateEmpKpi();
   renderEmpTable();
-  await ensureEmpDeptOptions();
+  await loadOrgSettings(); // 대표메일·부서 마스터·인원수 표시 (2026-10-20 조직 이력 탭에서 이동)
 }
 
 function updateEmpKpi() {
@@ -5246,7 +5184,7 @@ function openEmpModal(id) {
   document.getElementById('emp-in-gender').value   = r?.gender     || '남';
   document.getElementById('emp-in-name').value     = r?.name       || '';
   document.getElementById('emp-in-rank').value      = r?.rank       || '사원';
-  document.getElementById('emp-in-dept').value     = r?.dept       || '자재구매팀';
+  fillEmpDeptOptions(r?.dept || '자재구매팀'); // 부서 마스터(org_dept) 기준, 법인별
   document.getElementById('emp-in-phone').value    = r?.phone      || '';
   document.getElementById('emp-in-joindate').value = r?.join_date  || '';
   document.getElementById('emp-in-loginid').value  = r?.login_id   || '';
@@ -5397,10 +5335,10 @@ function downloadEmpExcel() {
 }
 
 // ════════════════════════════════════════════════════
-// ── 조직 이력 (org_history / org_headcount) — 2026-10-20 ──
+// ── 조직 설정 (직원 관리 탭 안) — 2026-10-20 ──
+//   조직 이력 조회·입력은 org_chart.html 「조직 이력」 탭으로 일원화(관리자설정 조직 이력 탭 삭제)
+//   여기에는 이력 자동 기록 + 법인 대표메일 + 부서 마스터 + 인원수 표시
 // ════════════════════════════════════════════════════
-const ORG_KINDS = ['조직변경','입사','퇴사','이동','직급변경','직책변경','법인명변경','법인장변경','인원충원','기타'];
-let _ohData = [], _ohEditId = null, _ohSortKey = 'eff_date', _ohSortAsc = false;
 let _ohcData = [], _ohcEditId = null, _ohcSortKey = 'entity', _ohcSortAsc = true;
 const _ohEsc = v => String(v==null?'':v).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -5443,236 +5381,152 @@ async function logEmpHistory(oldR, newR){
   if(!rows.length) return;
   const {error} = await sb.from('org_history').insert(rows);
   if(error) alert('직원 정보는 저장됐지만 조직이력 자동 기록에 실패했습니다: '+error.message);
-  else _ohData = []; // 조직이력 탭 재진입 시 새로 읽기
 }
 
-async function loadOrgTab(){
-  const ks = document.getElementById('oh-f-kind');
-  if(ks.options.length<=1) ks.innerHTML = '<option value="">전체 구분</option>'+ORG_KINDS.map(k=>`<option value="${k}">${k}</option>`).join('');
-  await Promise.all([loadOrgHist(), loadOrgHc(), loadOrgDept(), loadOrgEnt()]);
-}
+async function loadOrgSettings(){ await Promise.all([loadOrgEnt(), loadOrgDept(), loadOrgHc()]); }
 
-async function loadOrgHist(){
-  const tb = document.getElementById('oh-tbody');
-  tb.innerHTML = '<tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
-  const {data, error} = await sb.from('org_history').select('*').eq('is_deleted', false).order('eff_date', {ascending:false, nullsFirst:true});
-  if(error){ tb.innerHTML = `<tr><td colspan="11" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
-  _ohData = data || [];
-  renderOrgHist();
-}
-
-function sortOrgHist(k){
-  if(_ohSortKey===k) _ohSortAsc=!_ohSortAsc; else { _ohSortKey=k; _ohSortAsc=true; }
-  renderOrgHist();
-}
-
-function renderOrgHist(){
-  const fe = document.getElementById('oh-f-entity').value;
-  const fk = document.getElementById('oh-f-kind').value;
-  const fs = document.getElementById('oh-f-status').value;
-  const q  = document.getElementById('oh-f-search').value.trim().toLowerCase();
-  let rows = _ohData.filter(r=>{
-    if(fe && r.entity!==fe) return false;
-    if(fk && r.kind!==fk) return false;
-    if(fs && r.status!==fs) return false;
-    if(q && !([r.emp_name,r.content,r.dept,r.from_value,r.to_value].join(' ').toLowerCase().includes(q))) return false;
-    return true;
-  });
-  const k = _ohSortKey, dir = _ohSortAsc ? 1 : -1;
-  rows.sort((a,b)=>{
-    let va=a[k], vb=b[k];
-    if(k==='eff_date'){ va = va || '9999-12-31'; vb = vb || '9999-12-31'; } // 일자 미정(예정)은 최신 쪽
-    return String(va??'').localeCompare(String(vb??''), 'ko') * dir || (b.id-a.id);
-  });
-  document.querySelectorAll('[id^="ohsi-"]').forEach(el=>el.textContent='');
-  const si = document.getElementById('ohsi-'+k); if(si) si.textContent = _ohSortAsc ? '↑' : '↓';
-  document.getElementById('oh-cnt').textContent = `${rows.length}건`;
-  const tb = document.getElementById('oh-tbody');
-  if(!rows.length){ tb.innerHTML = '<tr><td colspan="11"><div class="empty-state">조직 이력이 없습니다.</div></td></tr>'; return; }
-  tb.innerHTML = rows.map(r=>`<tr>
-    <td class="mono">${r.eff_date ? _ohEsc(r.eff_date) : '<span style="color:var(--amber);font-weight:700;">미정</span>'}</td>
-    <td class="center"><span class="oh-st ${r.status==='예정'?'plan':'done'}">${_ohEsc(r.status)}</span></td>
-    <td>${_ohEsc(r.kind)}</td>
-    <td>${_ohEsc(r.entity)}</td>
-    <td>${_ohEsc(r.dept)}</td>
-    <td style="font-weight:700;">${_ohEsc(r.emp_name)}</td>
-    <td>${_ohEsc(r.from_value)}</td>
-    <td>${_ohEsc(r.to_value)}</td>
-    <td class="wrap">${_ohEsc(r.content)}</td>
-    <td style="color:var(--muted);">${_ohEsc(r.origin)}</td>
-    <td class="center"><button class="row-btn row-btn-edit" onclick="openOrgHistModal(${r.id})">수정</button>
-      <button class="row-btn row-btn-del" onclick="deleteOrgHist(${r.id})">삭제</button></td>
-  </tr>`).join('');
-  setTimeout(()=>initColResize('oh-table','al_orghist_v1'),50);
-}
-
-function openOrgHistModal(id){
-  _ohEditId = id || null;
-  const r = id ? _ohData.find(x=>x.id===id) : null;
-  const kSel = document.getElementById('oh-in-kind');
-  kSel.innerHTML = ORG_KINDS.map(k=>`<option value="${k}">${k}</option>`).join('');
-  document.getElementById('ohModalTitle').textContent = r ? '📜 조직 이력 수정' : '📜 조직 이력 등록';
-  document.getElementById('ohSaveBtn').textContent = r ? '수정' : '등록';
-  document.getElementById('oh-in-status').value  = r?.status || '적용';
-  document.getElementById('oh-in-date').value    = r ? (r.eff_date||'') : new Date().toISOString().slice(0,10);
-  kSel.value = r?.kind || '조직변경';
-  document.getElementById('oh-in-entity').value  = r?.entity || '';
-  document.getElementById('oh-in-dept').value    = r?.dept || '';
-  document.getElementById('oh-in-name').value    = r?.emp_name || '';
-  document.getElementById('oh-in-from').value    = r?.from_value || '';
-  document.getElementById('oh-in-to').value      = r?.to_value || '';
-  document.getElementById('oh-in-content').value = r?.content || '';
-  ohStatusChanged();
-  document.getElementById('ohModal').classList.add('show');
-}
-function ohStatusChanged(){
-  // 예정은 일자 미정 허용, 적용은 일자 필수
-  document.getElementById('oh-date-req').style.display = document.getElementById('oh-in-status').value==='적용' ? '' : 'none';
-}
-function closeOrgHistModal(){ document.getElementById('ohModal').classList.remove('show'); _ohEditId=null; }
-
-async function saveOrgHist(){
-  const status = document.getElementById('oh-in-status').value;
-  const date = document.getElementById('oh-in-date').value;
-  if(status==='적용' && !date){ alert('적용 이력은 일자가 필요합니다.'); return; }
-  const v = id => document.getElementById(id).value.trim() || null;
-  const payload = { status, eff_date: date||null, kind: document.getElementById('oh-in-kind').value,
-    entity: v('oh-in-entity'), dept: v('oh-in-dept'), emp_name: v('oh-in-name'),
-    from_value: v('oh-in-from'), to_value: v('oh-in-to'), content: v('oh-in-content') };
-  const btn = document.getElementById('ohSaveBtn'); btn.disabled = true;
-  let error;
-  if(_ohEditId) ({error} = await sb.from('org_history').update(payload).eq('id', _ohEditId));
-  else ({error} = await sb.from('org_history').insert({...payload, origin:'직접입력', created_by: localStorage.getItem('sme_user')||''}));
-  btn.disabled = false;
-  if(error){ alert('저장 실패: '+error.message); return; }
-  closeOrgHistModal(); await loadOrgHist();
-}
-
-async function deleteOrgHist(id){
-  if(!confirm('정말 삭제하시겠습니까?')) return;
-  const {error} = await sb.from('org_history').update({is_deleted:true}).eq('id', id);
-  if(error){ alert('삭제 실패: '+error.message); return; }
-  await loadOrgHist();
-}
-
-function downloadOrgHistExcel(){
-  const rows = [..._ohData].sort((a,b)=>String(a.eff_date||'9999').localeCompare(String(b.eff_date||'9999'))).map(r=>({
-    '일자': r.eff_date||'미정', '상태': r.status||'', '구분': r.kind||'', '법인': r.entity||'', '부서': r.dept||'',
-    '이름': r.emp_name||'', '변경전': r.from_value||'', '변경후': r.to_value||'', '내용': r.content||'', '출처': r.origin||''
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '조직이력');
-  XLSX.writeFile(wb, 'SME_조직이력_'+new Date().toISOString().slice(0,10)+'.xlsx');
-}
-
-// ── 법인 대표메일 (org_entity) — 비상연락망 대표메일 ──
-let _oeData = [], _oeSortKey = 'sort_no', _oeSortAsc = true;
+// ── 법인 대표메일 (org_entity) ──
+const REP_ENTS = ['KOREA','SMECN','SMEGLOBAL','GSMEIN'];
+let _oeData = [];
 async function loadOrgEnt(){
   const {data, error} = await sb.from('org_entity').select('*');
-  const tb = document.getElementById('oe-tbody');
-  if(error){ tb.innerHTML = `<tr><td colspan="4" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
+  if(error){ document.getElementById('rep-msg').textContent = '대표메일 불러오기 실패: '+error.message; return; }
   _oeData = data || [];
-  renderOrgEnt();
+  REP_ENTS.forEach(e=>{ const r=_oeData.find(x=>x.entity===e); const el=document.getElementById('rep-'+e); if(el) el.value = r?.rep_email || ''; });
 }
-function sortOrgEnt(k){ if(_oeSortKey===k) _oeSortAsc=!_oeSortAsc; else { _oeSortKey=k; _oeSortAsc=true; } renderOrgEnt(); }
-function renderOrgEnt(){
-  const k=_oeSortKey, d=_oeSortAsc?1:-1;
-  const rows=[..._oeData].sort((a,b)=> (k==='sort_no' ? (a.sort_no??9)-(b.sort_no??9) : String(a[k]??'').localeCompare(String(b[k]??''),'ko'))*d);
-  document.querySelectorAll('[id^="oesi-"]').forEach(el=>el.textContent='');
-  const si=document.getElementById('oesi-'+k); if(si) si.textContent=_oeSortAsc?'↑':'↓';
-  document.getElementById('oe-tbody').innerHTML = rows.map(r=>`<tr>
-    <td style="font-weight:700;">${_ohEsc(r.code)}</td><td>${_ohEsc(r.name)}</td>
-    <td><input id="oe-in-${_ohEsc(r.entity)}" type="email" value="${_ohEsc(r.rep_email||'')}" placeholder="대표메일 입력" style="width:100%;height:28px;border:1px solid var(--border);border-radius:2px;padding:0 8px;font-size:12px;font-family:'Noto Sans KR',sans-serif;"></td>
-    <td class="center"><button class="row-btn row-btn-edit" onclick="saveOrgEnt('${_ohEsc(r.entity)}')">저장</button></td>
-  </tr>`).join('');
-  setTimeout(()=>initColResize('oe-table','al_orgent_v1'),50);
-}
-async function saveOrgEnt(ent){
-  const v = document.getElementById('oe-in-'+ent).value.trim();
-  if(v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ alert('메일주소 형식이 올바르지 않습니다.'); return; }
-  const {error} = await sb.from('org_entity').update({rep_email: v||null, updated_at: new Date().toISOString()}).eq('entity', ent);
-  if(error){ alert('저장 실패: '+error.message); return; }
-  await loadOrgEnt();
+async function saveRepEmails(){
+  const msg = document.getElementById('rep-msg'); msg.textContent='';
+  const re = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const changes = [];
+  for(const e of REP_ENTS){
+    const v = document.getElementById('rep-'+e).value.trim();
+    if(v && !re.test(v)){ alert('메일주소 형식이 올바르지 않습니다: '+v); return; }
+    const cur = (_oeData.find(x=>x.entity===e)||{}).rep_email || '';
+    if(v !== cur) changes.push({e, v});
+  }
+  if(!changes.length){ msg.textContent = '변경된 내용이 없습니다'; return; }
+  for(const c of changes){
+    const {error} = await sb.from('org_entity').update({rep_email: c.v||null, updated_at: new Date().toISOString()}).eq('entity', c.e);
+    if(error){ alert('저장 실패: '+error.message); return; }
+  }
+  await loadOrgEnt(); msg.textContent = '✔ 저장되었습니다';
 }
 
-// ── 해외법인 부서 (org_dept) — 조직도 해외법인 세로 1열 부서 묶음 ──
-let _odData = [], _odEditId = null, _odSortKey = 'entity', _odSortAsc = true;
-const OD_ENT_ORDER = {SMECN:1, SMEGLOBAL:2, GSMEIN:3};
+// ── 부서 마스터 (org_dept) — 전 법인 / 직원 등록 부서 목록의 기준 ──
+let _odData = [], _odEditId = null, _odSortKey = 'entity', _odSortAsc = true, _odFromEmp = false, _empDeptPrev = '';
+const OD_ENT_ORDER = {KOREA:0, SMECN:1, SMEGLOBAL:2, GSMEIN:3};
+const _odSorted = list => [...list].sort((a,b)=>(OD_ENT_ORDER[a.entity]??9)-(OD_ENT_ORDER[b.entity]??9) || (a.sort_no??99)-(b.sort_no??99) || String(a.dept).localeCompare(String(b.dept),'ko'));
 async function loadOrgDept(){
   const {data, error} = await sb.from('org_dept').select('*').eq('active', true);
   const tb = document.getElementById('od-tbody');
   if(error){ tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
   _odData = data || [];
-  if(_empData.length===0){ const r = await sb.from('employees').select('id,entity,dept,active'); _odEmps = r.data||[]; } else _odEmps = _empData;
-  renderOrgDept();
+  renderOrgDept(); fillEmpDeptFilter();
 }
-let _odEmps = [];
 function sortOrgDept(k){ if(_odSortKey===k) _odSortAsc=!_odSortAsc; else { _odSortKey=k; _odSortAsc=true; } renderOrgDept(); }
+function _deptEmpCnt(entity, dept){ return _empData.filter(e=>e.active!==false && e.entity===entity && e.dept===dept).length; }
 function renderOrgDept(){
-  const cnt = r => _odEmps.filter(e=>e.active!==false && e.entity===r.entity && e.dept===r.dept).length;
   const k = _odSortKey, dir = _odSortAsc ? 1 : -1;
-  const rows = _odData.map(r=>({...r, emp_cnt:cnt(r)})).sort((a,b)=>{
+  const rows = _odData.map(r=>({...r, emp_cnt:_deptEmpCnt(r.entity, r.dept)})).sort((a,b)=>{
     let v;
-    if(k==='entity') v = (OD_ENT_ORDER[a.entity]||9)-(OD_ENT_ORDER[b.entity]||9);
+    if(k==='entity') v = (OD_ENT_ORDER[a.entity]??9)-(OD_ENT_ORDER[b.entity]??9);
     else if(k==='sort_no' || k==='emp_cnt') v = (a[k]??99)-(b[k]??99);
     else v = String(a[k]??'').localeCompare(String(b[k]??''),'ko');
-    return v*dir || (OD_ENT_ORDER[a.entity]||9)-(OD_ENT_ORDER[b.entity]||9) || (a.sort_no??99)-(b.sort_no??99);
+    return v*dir || (OD_ENT_ORDER[a.entity]??9)-(OD_ENT_ORDER[b.entity]??9) || (a.sort_no??99)-(b.sort_no??99);
   });
   document.querySelectorAll('[id^="odsi-"]').forEach(el=>el.textContent='');
   const si = document.getElementById('odsi-'+k); if(si) si.textContent = _odSortAsc ? '↑' : '↓';
   const tb = document.getElementById('od-tbody');
   if(!rows.length){ tb.innerHTML = '<tr><td colspan="7"><div class="empty-state">등록된 부서가 없습니다.</div></td></tr>'; return; }
   tb.innerHTML = rows.map(r=>`<tr>
-    <td>${_ohEsc(r.entity)}</td><td>${_ohEsc(r.dept)}</td><td style="font-weight:700;">${_ohEsc(r.label||r.dept)}</td>
+    <td>${_ohEsc(r.entity)}</td><td style="font-weight:700;">${_ohEsc(r.dept)}</td><td>${r.entity==='KOREA'?'<span style="color:var(--muted);">—</span>':_ohEsc(r.label||r.dept)}</td>
     <td class="center">${_ohEsc(r.sort_no)}</td><td class="center">${r.emp_cnt}</td><td>${_ohEsc(r.note)}</td>
     <td class="center"><button class="row-btn row-btn-edit" onclick="openOrgDeptModal(${r.id})">수정</button>
       <button class="row-btn row-btn-del" onclick="deleteOrgDept(${r.id})">삭제</button></td>
   </tr>`).join('');
-  setTimeout(()=>initColResize('od-table','al_orgdept_v2'),50); // v2: 표시명 컬럼 추가
+  const det = document.getElementById('emp-orgset');
+  if(det && det.open) setTimeout(()=>initColResize('od-table','al_orgdept_v3'),50);
 }
-function openOrgDeptModal(id){
+function openOrgDeptModal(id, presetEntity){
   _odEditId = id || null;
   const r = id ? _odData.find(x=>x.id===id) : null;
-  document.getElementById('od-in-entity').value = r?.entity || 'SMECN';
+  document.getElementById('odModalTitle').textContent = r ? '🏢 부서 수정' : '🏢 부서 등록';
+  document.getElementById('od-in-entity').value = r?.entity || presetEntity || 'KOREA';
   document.getElementById('od-in-dept').value   = r?.dept || '';
   document.getElementById('od-in-sort').value   = r?.sort_no ?? '';
   document.getElementById('od-in-note').value   = r?.note || '';
   document.getElementById('od-in-label').value  = r?.label || '';
   document.getElementById('odModal').classList.add('show');
+  setTimeout(()=>document.getElementById('od-in-dept').focus(),50);
 }
-function closeOrgDeptModal(){ document.getElementById('odModal').classList.remove('show'); _odEditId=null; }
+function closeOrgDeptModal(){ document.getElementById('odModal').classList.remove('show'); _odEditId=null; _odFromEmp=false; }
 async function saveOrgDept(){
   const dept = document.getElementById('od-in-dept').value.trim();
   if(!dept){ alert('부서는 필수입니다.'); return; }
   const entity = document.getElementById('od-in-entity').value;
   if(_odData.some(x=>x.entity===entity && x.dept===dept && x.id!==_odEditId)){ alert('같은 법인에 이미 등록된 부서입니다.'); return; }
+  const old = _odEditId ? _odData.find(x=>x.id===_odEditId) : null;
+  if(old && (old.dept!==dept || old.entity!==entity) && _deptEmpCnt(old.entity, old.dept) > 0){
+    alert('직원이 소속된 부서는 이름·법인을 바꿀 수 없습니다. 직원 부서를 먼저 옮겨 주세요.'); return;
+  }
   const sortV = document.getElementById('od-in-sort').value;
-  const payload = { entity, dept, sort_no: sortV!=='' ? Number(sortV) : null,
+  let sortNo = sortV!=='' ? Number(sortV) : null;
+  if(sortNo===null && !_odEditId){ sortNo = Math.max(0, ..._odData.filter(x=>x.entity===entity).map(x=>x.sort_no||0)) + 1; } // 순서 비우면 맨 뒤
+  const payload = { entity, dept, sort_no: sortNo,
     label: document.getElementById('od-in-label').value.trim()||null, note: document.getElementById('od-in-note').value.trim()||null };
   let error;
   if(_odEditId) ({error} = await sb.from('org_dept').update(payload).eq('id', _odEditId));
   else ({error} = await sb.from('org_dept').insert(payload));
   if(error){ alert('저장 실패: '+error.message); return; }
-  _empDeptOpts = null; closeOrgDeptModal(); await loadOrgDept();
+  const fromEmp = _odFromEmp;
+  closeOrgDeptModal(); await loadOrgDept();
+  if(fromEmp && document.getElementById('emp-in-entity').value===entity) fillEmpDeptOptions(dept); // 직원 등록 창에서 추가한 부서를 바로 선택
+  else fillEmpDeptOptions();
 }
 async function deleteOrgDept(id){
+  const r = _odData.find(x=>x.id===id); if(!r) return;
+  const n = _deptEmpCnt(r.entity, r.dept);
+  if(n>0){ alert(`직원 ${n}명이 소속된 부서는 삭제할 수 없습니다. 직원 부서를 먼저 옮겨 주세요.`); return; }
   if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error} = await sb.from('org_dept').update({active:false}).eq('id', id);
   if(error){ alert('삭제 실패: '+error.message); return; }
-  _empDeptOpts = null; await loadOrgDept();
+  await loadOrgDept(); fillEmpDeptOptions();
 }
-// 직원 등록/수정 부서 목록에 해외법인 등록 부서를 추가 (기존 옵션은 그대로, 없는 이름만 뒤에 추가)
-let _empDeptOpts = null;
-async function ensureEmpDeptOptions(){
-  if(!_empDeptOpts){
-    const {data} = await sb.from('org_dept').select('dept').eq('active', true);
-    _empDeptOpts = [...new Set((data||[]).map(d=>d.dept).filter(Boolean))];
-  }
-  ['emp-in-dept','emp-f-dept'].forEach(id=>{
-    const sel = document.getElementById(id); if(!sel) return;
-    const have = new Set([...sel.options].map(o=>o.value));
-    _empDeptOpts.forEach(d=>{ if(!have.has(d)){ const o=document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o); } });
-  });
+// 직원 등록 창 부서 목록 — 선택한 법인의 부서 마스터 + 맨 아래 「＋ 새 부서 추가」
+function fillEmpDeptOptions(keep){
+  const sel = document.getElementById('emp-in-dept'); if(!sel) return;
+  const ent = document.getElementById('emp-in-entity').value;
+  const cur = keep!==undefined ? keep : sel.value;
+  const list = _odSorted(_odData.filter(d=>d.entity===ent)).map(d=>d.dept);
+  if(cur && cur!=='__new__' && !list.includes(cur)) list.push(cur); // 마스터에 없는 기존 값도 보존
+  sel.innerHTML = list.map(d=>`<option value="${_ohEsc(d)}">${_ohEsc(d)}</option>`).join('') + '<option value="__new__">＋ 새 부서 추가</option>';
+  sel.value = list.includes(cur) ? cur : (list[0] || '');
+  _empDeptPrev = sel.value;
+}
+function empDeptChanged(){
+  const sel = document.getElementById('emp-in-dept');
+  if(sel.value !== '__new__'){ _empDeptPrev = sel.value; return; }
+  sel.value = _empDeptPrev;
+  _odFromEmp = true; openOrgDeptModal(null, document.getElementById('emp-in-entity').value);
+  _odFromEmp = true;
+}
+// 직원 목록 부서 필터 — 부서 마스터 + 실제 사용 중인 부서
+function fillEmpDeptFilter(){
+  const sel = document.getElementById('emp-f-dept'); if(!sel) return;
+  const cur = sel.value;
+  const list = [...new Set(_odSorted(_odData).map(d=>d.dept).concat(_empData.map(e=>e.dept).filter(Boolean)))];
+  sel.innerHTML = '<option value="">전체 부서</option>' + list.map(d=>`<option value="${_ohEsc(d)}">${_ohEsc(d)}</option>`).join('');
+  sel.value = list.includes(cur) ? cur : '';
+}
+// 인원수 표시 창 부서 목록 — 선택한 법인의 부서 마스터
+function fillHcDeptOptions(keep){
+  const sel = document.getElementById('ohc-in-dept'); if(!sel) return;
+  const ent = document.getElementById('ohc-in-entity').value;
+  const cur = keep!==undefined ? keep : sel.value;
+  const list = _odSorted(_odData.filter(d=>d.entity===ent && !['법인장','부총경리','대표이사','상무이사'].includes(d.dept))).map(d=>d.dept);
+  if(cur && !list.includes(cur)) list.push(cur);
+  sel.innerHTML = '<option value="">— 부서 없음 —</option>' + list.map(d=>`<option value="${_ohEsc(d)}">${_ohEsc(d)}</option>`).join('');
+  sel.value = cur || '';
 }
 
 // ── 조직도 인원수 표시 (org_headcount) ──
@@ -5701,13 +5555,14 @@ function renderOrgHc(){
     <td class="center"><button class="row-btn row-btn-edit" onclick="openOrgHcModal(${r.id})">수정</button>
       <button class="row-btn row-btn-del" onclick="deleteOrgHc(${r.id})">삭제</button></td>
   </tr>`).join('');
-  setTimeout(()=>initColResize('ohc-table','al_orghc_v1'),50);
+  const det2 = document.getElementById('emp-orgset');
+  if(det2 && det2.open) setTimeout(()=>initColResize('ohc-table','al_orghc_v2'),50);
 }
 function openOrgHcModal(id){
   _ohcEditId = id || null;
   const r = id ? _ohcData.find(x=>x.id===id) : null;
   document.getElementById('ohc-in-entity').value = r?.entity || 'KOREA';
-  document.getElementById('ohc-in-dept').value   = r?.dept || '';
+  fillHcDeptOptions(r?.dept || '');
   document.getElementById('ohc-in-label').value  = r?.label || '';
   document.getElementById('ohc-in-cnt').value    = r?.cnt ?? '';
   document.getElementById('ohc-in-sort').value   = r?.sort_no ?? '';
@@ -5721,7 +5576,7 @@ async function saveOrgHc(){
   if(!label || !cnt){ alert('구분과 인원은 필수입니다.'); return; }
   const sortV = document.getElementById('ohc-in-sort').value;
   const payload = { entity: document.getElementById('ohc-in-entity').value,
-    dept: document.getElementById('ohc-in-dept').value.trim()||null, label, cnt,
+    dept: document.getElementById('ohc-in-dept').value||null, label, cnt,
     sort_no: sortV!=='' ? Number(sortV) : null, note: document.getElementById('ohc-in-note').value.trim()||null };
   let error;
   if(_ohcEditId) ({error} = await sb.from('org_headcount').update(payload).eq('id', _ohcEditId));
@@ -5735,6 +5590,9 @@ async function deleteOrgHc(id){
   if(error){ alert('삭제 실패: '+error.message); return; }
   await loadOrgHc();
 }
+
+// 조직도 설정은 접힌 상태로 시작 — 펼칠 때 표를 다시 그려 컬럼 폭을 잡는다(숨긴 표는 폭 0으로 측정됨)
+(function(){ const d=document.getElementById('emp-orgset'); if(d) d.addEventListener('toggle',()=>{ if(d.open){ renderOrgDept(); renderOrgHc(); } }); })();
 
 // ── 초기화 ──
 setQ('today', document.getElementById('q-today'));
