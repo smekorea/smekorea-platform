@@ -372,6 +372,12 @@ function buildModel(){
   const hcN = hcSum(HC);
   model = { root, groups, orphans, hqN, ovN: EMPS.length-hqN, hcN };
 }
+// 법인별 인원 (재직자 + 인원수 표시) — 우측 상단 표기용: SMEKR → SMECN → SMETH → SMEIN
+function entCounts(){
+  return ['KOREA','SMECN','SMEGLOBAL','GSMEIN'].map(e=>({ code:entLabel(e),
+    n: EMPS.filter(x=>x.entity===e).length + HC.filter(h=>h.entity===e).reduce((s,h)=>s+(h.cnt||0),0) }));
+}
+const entCountText = sep => { const c = entCounts(); return c.map(x=>`${x.code}: ${x.n}명`).join(sep) + `${sep}합계: ${c.reduce((s,x)=>s+x.n,0)}명`; };
 const unitCount = u => u.ov ? u.n : (1 + u.members.length + hcSum(u.hc));
 
 /* ── 화면 그리기 ── */
@@ -386,7 +392,7 @@ function unitHtml(u){
   let h = `<div class="unit${u.ov?' ov-unit':''}">`;
   if(u.ov){
     const E = ENT[u.entity]||{code:u.entity,country:''};
-    h += `<div class="cap ent">${esc(E.code)} <small>(${esc(E.country)})</small> <span class="ent-n">${u.n||''}</span></div>`;
+    h += `<div class="cap ent">${esc(E.code)} <small>(${esc(E.country)})</small></div>`;
     u.cats.forEach((c,ci)=>{
       if(ci) h += `<div class="vline"></div>`;
       const rows = c.rows.length ? c.rows : [{blank:true}];
@@ -395,7 +401,7 @@ function unitHtml(u){
         `</div>`;
     });
   } else {
-    h += `<div class="cnt">${unitCount(u)}</div><div class="unit-hd">${esc(u.dept)}</div>`;
+    h += `<div class="unit-hd">${esc(u.dept)}</div>`;
     h += boxHtml(u.head, u.head.rank||u.head.title, false);
     if(u.members.length){ h += `<div class="members">${u.members.map(m=>boxHtml(m,'',false)).join('')}</div>`; }
     u.hc.forEach(x=>{ h += `<div class="hc">${esc(x.label)} ${esc(x.cnt)}명</div>`; });
@@ -405,7 +411,7 @@ function unitHtml(u){
 function renderChart(){
   const M = model;
   const today = new Date().toISOString().slice(0,10);
-  document.getElementById('asof').innerHTML = `기준일 ${today}<br>재직 ${EMPS.length}명`;
+  document.getElementById('asof').innerHTML = `기준일 ${today}<br>${esc(entCountText(' · '))}`;
   document.getElementById('kpi').innerHTML =
     `<span>전체<b>${EMPS.length}</b></span><span>본사<b>${M.hqN}</b></span><span>해외법인<b>${M.ovN}</b></span>` +
     (M.hcN?`<span>인원수 표시<b>${M.hcN}</b></span>`:'');
@@ -413,13 +419,12 @@ function renderChart(){
   document.getElementById('warnBox').innerHTML = planned.length
     ? `<div class="warn">⏳ 예정된 조직변경 ${planned.length}건: ${planned.map(p=>esc([p.kind, p.from_value&&p.to_value?`${p.from_value}→${p.to_value}`:(p.to_value||p.emp_name||''), p.eff_date?`(${p.eff_date})`:'(일자 미정)'].filter(Boolean).join(' '))).join(' / ')}</div>` : '';
   if(!M.root){ document.getElementById('chart').innerHTML = '<div class="loading">대표이사(직책)가 지정된 직원이 없습니다. 관리자 설정 › 직원 관리에서 직책을 지정해 주세요.</div>'; return; }
-  let h = `<div class="tree"><ul><li><div class="node"><div class="cnt">${EMPS.length}</div>${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
+  let h = `<div class="tree"><ul><li><div class="node">${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
   if(M.groups.length){
     h += `<ul>`;
     M.groups.forEach(g=>{
-      const gN = 1 + g.units.reduce((s,u)=>s+(u.ov ? u.people.length : 1+u.members.length),0);
       const cap = g.person.title==='상무이사' ? 'KOREA H.Q' : (g.person.title||'');
-      h += `<li><div class="node"><div class="cnt">${gN}</div><div class="cap">${esc(cap)}</div>${boxHtml(g.person, g.person.title==='CFO' ? (g.person.rank||'') : (g.person.title||g.person.rank), false)}</div>`;
+      h += `<li><div class="node"><div class="cap">${esc(cap)}</div>${boxHtml(g.person, g.person.title==='CFO' ? (g.person.rank||'') : (g.person.title||g.person.rank), false)}</div>`;
       if(g.units.length){ h += `<ul>${g.units.map(u=>`<li><div class="node">${unitHtml(u)}</div></li>`).join('')}</ul>`; }
       h += `</li>`;
     });
@@ -551,7 +556,7 @@ async function downloadExcel(){
   const t=cell(1,1); t.value='SME KOREA 글로벌 조직도'; t.font=font({bold:true,size:18,color:{argb:'FFFFFFFF'}});
   t.alignment={horizontal:'center',vertical:'middle'}; t.fill={type:'pattern',pattern:'solid',fgColor:{argb:RED}}; ws.getRow(1).height=34;
   ws.mergeCells(2,2,2,lastCol);
-  const a=cell(2,2); a.value=`기준일 ${today}  ·  재직 ${EMPS.length}명 (본사 ${model.hqN} / 해외 ${model.ovN})`;
+  const a=cell(2,2); a.value=`기준일 ${today}   |   ${entCountText('  ·  ')}`;
   a.font=font({size:9,color:{argb:'FF565C64'}}); a.alignment={horizontal:'right',vertical:'middle'};
 
   // 대표 → 2단계(상무/CFO) → 단위
@@ -573,7 +578,7 @@ async function downloadExcel(){
     let r=12;
     if(u.ov){
       const E=ENT[u.entity]||{code:u.entity,country:''};
-      put(r,i,`${E.code} (${E.country})  ${u.n||''}`,{font:{bold:true}}); r++;
+      put(r,i,`${E.code} (${E.country})`,{font:{bold:true}}); r++;
       u.cats.forEach((c,ci)=>{
         if(ci){ vline(r,i); r++; }
         put(r,i,c.label,{fill:c.misc?'FFEEF0F3':OV,box:true,font:{bold:true,size:9,color:{argb:'FF5A2A00'}}}); r++;
@@ -581,7 +586,7 @@ async function downloadExcel(){
         rows.forEach(x=>{ put(r,i,ovRowText(x),{box:true}); r++; });
       });
     } else {
-      put(r,i,`${u.dept}  ${unitCount(u)}`,{font:{bold:true},under:true}); r++;
+      put(r,i,u.dept,{font:{bold:true},under:true}); r++;
       vline(r,i); r++;
       badge(r,i,u.head.rank||u.head.title,false); r++; nameBox(r,i,u.head); r++;
       if(u.members.length){ vline(r,i); r++; u.members.forEach(m=>{ nameBox(r,i,m); r++; }); }
