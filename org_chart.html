@@ -526,12 +526,13 @@ const CT_TITLES = ['대표이사','상무이사','CFO','법인장','부총경리
 const CT_ENT_ORDER = ['KOREA','SMECN','SMEGLOBAL','GSMEIN'];
 let ctSortKey = null, ctSortAsc = true;
 function contactRows(){
-  const rep = e => (ENTS.find(x=>x.entity===e)||{}).rep_email || '';
+  // 대표메일: 부서 대표메일(org_dept.rep_email, 예: 본사 재경팀) → 없으면 법인 대표메일(org_entity)
+  const rep = (ent, dept) => (DEPTS.find(x=>x.entity===ent && x.dept===dept)||{}).rep_email || (ENTS.find(x=>x.entity===ent)||{}).rep_email || '';
   return EMPS.filter(e=>CT_TITLES.includes(e.title))
     .sort((a,b)=>(CT_ENT_ORDER.indexOf(a.entity)-CT_ENT_ORDER.indexOf(b.entity)) ||
       (CT_TITLES.indexOf(a.title)-CT_TITLES.indexOf(b.title)) || cmpEmp(a,b))
     .map((e,i)=>({ seq:i, ent:entLabel(e.entity), title: e.title==='팀장' ? `${e.dept||''} 팀장` : e.title,
-      name:dispName(e), phone:e.phone||'', rep:rep(e.entity) }));
+      name:dispName(e), phone:e.phone||'', rep:rep(e.entity, e.dept) }));
 }
 function sortCt(k){ if(ctSortKey===k) ctSortAsc=!ctSortAsc; else { ctSortKey=k; ctSortAsc=true; } renderContacts(); }
 function renderContacts(){

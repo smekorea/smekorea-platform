@@ -1313,7 +1313,7 @@ td.center .al-pline{justify-content:center;}
   </div>
   <!-- (2026-10-20) 법인 대표메일 — 조직도 비상연락망 「대표메일」 칸 -->
   <div class="rep-bar">
-    <span class="rep-ttl">✉️ 법인 대표메일</span>
+    <span class="rep-ttl">✉️ 법인 대표메일</span><span style="font-size:11px;color:var(--muted);">(부서별 대표메일은 조직도 설정 › 부서 마스터)</span>
     <label>SMEKR<input id="rep-KOREA" type="email" placeholder="본사 대표메일"></label>
     <label>SMECN<input id="rep-SMECN" type="email" placeholder="중국 대표메일"></label>
     <label>SMETH<input id="rep-SMEGLOBAL" type="email" placeholder="태국 대표메일"></label>
@@ -1375,7 +1375,8 @@ td.center .al-pline{justify-content:center;}
           <th class="sortable" style="width:140px;" onclick="sortOrgDept('label')">조직도 표시명<span class="sort-icon" id="odsi-label"></span></th>
           <th class="sortable center" style="width:60px;" onclick="sortOrgDept('sort_no')">순서<span class="sort-icon" id="odsi-sort_no"></span></th>
           <th class="sortable center" style="width:70px;" onclick="sortOrgDept('emp_cnt')">직원수<span class="sort-icon" id="odsi-emp_cnt"></span></th>
-          <th class="sortable" style="width:220px;" onclick="sortOrgDept('note')">비고<span class="sort-icon" id="odsi-note"></span></th>
+          <th class="sortable" style="width:200px;" onclick="sortOrgDept('rep_email')">대표메일<span class="sort-icon" id="odsi-rep_email"></span></th>
+          <th class="sortable" style="width:200px;" onclick="sortOrgDept('note')">비고<span class="sort-icon" id="odsi-note"></span></th>
           <th class="center" style="width:110px;">관리</th>
         </tr></thead>
         <tbody id="od-tbody"></tbody>
@@ -1488,6 +1489,7 @@ td.center .al-pline{justify-content:center;}
         <div class="form-group"><label>조직도 표시명</label><input id="od-in-label" placeholder="해외법인만 — 예: 구매영업팀 (비우면 부서명)"></div>
         <div class="form-group"><label>비고</label><input id="od-in-note"></div>
       </div>
+      <div class="form-group"><label>부서 대표메일 <span style="font-size:10px;color:var(--muted);font-weight:400;">(비상연락망 — 비우면 법인 대표메일)</span></label><input id="od-in-rep" type="email" placeholder="예: smek@smekorea.co.kr"></div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeOrgDeptModal()">취소</button>
@@ -5419,7 +5421,7 @@ const _odSorted = list => [...list].sort((a,b)=>(OD_ENT_ORDER[a.entity]??9)-(OD_
 async function loadOrgDept(){
   const {data, error} = await sb.from('org_dept').select('*').eq('active', true);
   const tb = document.getElementById('od-tbody');
-  if(error){ tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
+  if(error){ tb.innerHTML = `<tr><td colspan="8" style="text-align:center;color:red;padding:20px;">${_ohEsc(error.message)}</td></tr>`; return; }
   _odData = data || [];
   renderOrgDept(); fillEmpDeptFilter();
 }
@@ -5437,15 +5439,15 @@ function renderOrgDept(){
   document.querySelectorAll('[id^="odsi-"]').forEach(el=>el.textContent='');
   const si = document.getElementById('odsi-'+k); if(si) si.textContent = _odSortAsc ? '↑' : '↓';
   const tb = document.getElementById('od-tbody');
-  if(!rows.length){ tb.innerHTML = '<tr><td colspan="7"><div class="empty-state">등록된 부서가 없습니다.</div></td></tr>'; return; }
+  if(!rows.length){ tb.innerHTML = '<tr><td colspan="8"><div class="empty-state">등록된 부서가 없습니다.</div></td></tr>'; return; }
   tb.innerHTML = rows.map(r=>`<tr>
     <td>${_ohEsc(r.entity)}</td><td style="font-weight:700;">${_ohEsc(r.dept)}</td><td>${r.entity==='KOREA'?'<span style="color:var(--muted);">—</span>':_ohEsc(r.label||r.dept)}</td>
-    <td class="center">${_ohEsc(r.sort_no)}</td><td class="center">${r.emp_cnt}</td><td>${_ohEsc(r.note)}</td>
+    <td class="center">${_ohEsc(r.sort_no)}</td><td class="center">${r.emp_cnt}</td><td>${r.rep_email?_ohEsc(r.rep_email):'<span style="color:var(--muted);">법인 대표메일</span>'}</td><td>${_ohEsc(r.note)}</td>
     <td class="center"><button class="row-btn row-btn-edit" onclick="openOrgDeptModal(${r.id})">수정</button>
       <button class="row-btn row-btn-del" onclick="deleteOrgDept(${r.id})">삭제</button></td>
   </tr>`).join('');
   const det = document.getElementById('emp-orgset');
-  if(det && det.open) setTimeout(()=>initColResize('od-table','al_orgdept_v3'),50);
+  if(det && det.open) setTimeout(()=>initColResize('od-table','al_orgdept_v4'),50);
 }
 function openOrgDeptModal(id, presetEntity){
   _odEditId = id || null;
@@ -5456,6 +5458,7 @@ function openOrgDeptModal(id, presetEntity){
   document.getElementById('od-in-sort').value   = r?.sort_no ?? '';
   document.getElementById('od-in-note').value   = r?.note || '';
   document.getElementById('od-in-label').value  = r?.label || '';
+  document.getElementById('od-in-rep').value    = r?.rep_email || '';
   document.getElementById('odModal').classList.add('show');
   setTimeout(()=>document.getElementById('od-in-dept').focus(),50);
 }
@@ -5469,11 +5472,14 @@ async function saveOrgDept(){
   if(old && (old.dept!==dept || old.entity!==entity) && _deptEmpCnt(old.entity, old.dept) > 0){
     alert('직원이 소속된 부서는 이름·법인을 바꿀 수 없습니다. 직원 부서를 먼저 옮겨 주세요.'); return;
   }
+  const repV = document.getElementById('od-in-rep').value.trim();
+  if(repV && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(repV)){ alert('메일주소 형식이 올바르지 않습니다.'); return; }
   const sortV = document.getElementById('od-in-sort').value;
   let sortNo = sortV!=='' ? Number(sortV) : null;
   if(sortNo===null && !_odEditId){ sortNo = Math.max(0, ..._odData.filter(x=>x.entity===entity).map(x=>x.sort_no||0)) + 1; } // 순서 비우면 맨 뒤
   const payload = { entity, dept, sort_no: sortNo,
-    label: document.getElementById('od-in-label').value.trim()||null, note: document.getElementById('od-in-note').value.trim()||null };
+    label: document.getElementById('od-in-label').value.trim()||null, note: document.getElementById('od-in-note').value.trim()||null,
+    rep_email: repV||null };
   let error;
   if(_odEditId) ({error} = await sb.from('org_dept').update(payload).eq('id', _odEditId));
   else ({error} = await sb.from('org_dept').insert(payload));
