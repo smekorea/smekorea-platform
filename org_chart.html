@@ -8,7 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.4 (2026-10-20) — 글로벌 조직도
+   org_chart.html v1.5 (2026-10-20) — 글로벌 조직도
+   ── v1.5: 비상연락망 개인 메일 삭제(대표메일만), 조직 이력 탭에 등록·수정·삭제(경영 전용 인증)
    ── v1.3: 부서·이름 위 숫자 제거, 우측 상단 법인별 인원
    ── v1.4: 좌측 세로줄·예정 알림 삭제, 하단 비상연락망(부서장 이상, 법인 대표메일 org_entity)
    ── v1.2: 해외법인 유형 박스(법인장/총괄/부서 표시명), 인원수는 빈칸, 엑셀 이름칸 왼쪽 테두리 수정
@@ -154,6 +155,26 @@ td.tw{white-space:normal;word-break:keep-all;}
 .st{display:inline-flex;padding:1px 7px;font-size:11px;font-weight:700;border:1px solid;}
 .st.plan{color:var(--amber);border-color:rgba(217,119,6,.35);background:rgba(217,119,6,.08);}
 .st.done{color:var(--accent3);border-color:rgba(46,107,79,.35);background:rgba(46,107,79,.08);}
+.btn-primary{background:var(--point);border-color:var(--point);color:#fff;}
+.btn-primary:hover{filter:brightness(1.1);color:#fff;}
+.rbtn{height:24px;padding:0 9px;border:1px solid var(--border);background:#fff;border-radius:2px;font-size:11px;font-weight:700;cursor:pointer;color:var(--point);font-family:'Noto Sans KR',sans-serif;}
+.rbtn.del{color:var(--brand);border-color:rgba(200,0,30,.4);}
+.rbtn.del:hover{background:var(--brand);color:#fff;}
+/* 입력 창 */
+.mov{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:500;padding:16px;}
+.mov.show{display:flex;}
+.ov-box{background:#fff;width:640px;max-width:100%;max-height:90vh;overflow:auto;border-top:3px solid var(--point);}
+.ov-hd{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-size:15px;font-weight:700;border-bottom:1px solid var(--border);}
+.ov-x{border:none;background:none;font-size:16px;cursor:pointer;color:var(--muted);}
+.ov-bd{padding:16px 18px;display:flex;flex-direction:column;gap:10px;}
+.ov-bd label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);min-width:0;}
+.ov-bd label b{color:var(--brand);}
+.ov-bd input,.ov-bd select,.ov-bd textarea{height:34px;border:1.5px solid var(--border);border-radius:2px;padding:0 9px;font-size:13px;color:var(--text);font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);min-width:0;}
+.ov-bd textarea{height:auto;padding:8px 9px;resize:vertical;}
+.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ov-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);}
+@media (max-width:640px){ .fr3,.fr2{grid-template-columns:1fr;} }
 .filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
 .filter select,.filter input{height:32px;border:1px solid var(--line-dk);border-radius:2px;padding:0 9px;font-size:12px;background:#fff;font-family:'Noto Sans KR',sans-serif;}
 .loading{padding:40px;text-align:center;color:var(--muted);font-size:13px;}
@@ -211,7 +232,6 @@ td.tw{white-space:normal;word-break:keep-all;}
             <th class="sortable" style="width:150px;" onclick="sortCt('title')">직책<span class="sort-icon" id="ctsi-title"></span></th>
             <th class="sortable" style="width:120px;" onclick="sortCt('name')">성명<span class="sort-icon" id="ctsi-name"></span></th>
             <th class="sortable" style="width:140px;" onclick="sortCt('phone')">연락처<span class="sort-icon" id="ctsi-phone"></span></th>
-            <th class="sortable" style="width:220px;" onclick="sortCt('email')">메일주소<span class="sort-icon" id="ctsi-email"></span></th>
             <th class="sortable" style="width:220px;" onclick="sortCt('rep')">대표메일<span class="sort-icon" id="ctsi-rep"></span></th>
           </tr></thead><tbody id="ct-body"></tbody></table>
         </div>
@@ -228,7 +248,8 @@ td.tw{white-space:normal;word-break:keep-all;}
       <select id="hf-status" onchange="renderHist()"><option value="">전체 상태</option><option value="예정">예정</option><option value="적용">적용</option></select>
       <input id="hf-q" placeholder="이름·내용 검색..." oninput="renderHist()" style="width:160px;">
       <span id="hcnt" style="font-size:12px;color:var(--muted);"></span>
-      <div class="tb-right"><button class="btn btn-green" onclick="downloadExcel()">⬇ 엑셀 다운로드</button></div>
+      <div class="tb-right"><button class="btn btn-green" onclick="downloadExcel()">⬇ 엑셀 다운로드</button>
+        <button class="btn btn-primary" onclick="openHistForm()">+ 이력 등록</button></div>
     </div>
     <div class="tbl-wrap">
       <table id="hist-table"><thead><tr>
@@ -241,8 +262,46 @@ td.tw{white-space:normal;word-break:keep-all;}
         <th class="sortable" style="width:110px;" onclick="sortHist('from_value')">변경전<span class="sort-icon" id="hsi-from_value"></span></th>
         <th class="sortable" style="width:110px;" onclick="sortHist('to_value')">변경후<span class="sort-icon" id="hsi-to_value"></span></th>
         <th class="sortable" style="width:420px;" onclick="sortHist('content')">내용<span class="sort-icon" id="hsi-content"></span></th>
-      </tr></thead><tbody id="hist-body"><tr><td colspan="9"><div class="loading">불러오는 중...</div></td></tr></tbody></table>
+        <th style="width:110px;">관리</th>
+      </tr></thead><tbody id="hist-body"><tr><td colspan="10"><div class="loading">불러오는 중...</div></td></tr></tbody></table>
     </div>
+  </div>
+</div>
+
+<!-- 조직 이력 입력 창 -->
+<div class="mov" id="histOv">
+  <div class="ov-box">
+    <div class="ov-hd"><span id="histOvTitle">📜 조직 이력 등록</span><button class="ov-x" onclick="closeHistForm()">✕</button></div>
+    <div class="ov-bd">
+      <div class="fr3">
+        <label><span>상태 <b>*</b></span><select id="hi-status" onchange="histStatusChanged()"><option value="적용">적용</option><option value="예정">예정</option></select></label>
+        <label><span>일자 <b id="hi-date-req">*</b></span><input type="date" id="hi-date"></label>
+        <label><span>구분 <b>*</b></span><select id="hi-kind"></select></label>
+      </div>
+      <div class="fr3">
+        <label>법인<select id="hi-entity"><option value="">—</option><option value="KOREA">SMEKR (본사)</option><option value="SMECN">SMECN (중국)</option><option value="SMEGLOBAL">SMETH (태국)</option><option value="GSMEIN">SMEIN (인도)</option></select></label>
+        <label>부서<input id="hi-dept" placeholder="예: 출하팀"></label>
+        <label>이름/대상<input id="hi-name" placeholder="예: 홍길동"></label>
+      </div>
+      <div class="fr2">
+        <label>변경전<input id="hi-from"></label>
+        <label>변경후<input id="hi-to"></label>
+      </div>
+      <label class="full">내용<textarea id="hi-content" rows="3"></textarea></label>
+    </div>
+    <div class="ov-ft"><button class="btn" onclick="closeHistForm()">취소</button><button class="btn btn-primary" id="histSaveBtn" onclick="saveHist()">등록</button></div>
+  </div>
+</div>
+<!-- 경영 전용 인증 창 (이력 입력 권한) -->
+<div class="mov" id="pwOv">
+  <div class="ov-box" style="width:340px;">
+    <div class="ov-hd"><span>🔒 경영 전용 인증</span><button class="ov-x" onclick="closePw()">✕</button></div>
+    <div class="ov-bd">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">조직 이력 입력은 경영 전용 비밀번호가 필요합니다.</div>
+      <input type="password" id="pwIn" style="width:100%;" onkeydown="if(event.key==='Enter')checkPw()">
+      <div id="pwErr" style="font-size:12px;color:var(--brand);margin-top:6px;min-height:16px;"></div>
+    </div>
+    <div class="ov-ft"><button class="btn" onclick="closePw()">취소</button><button class="btn btn-primary" onclick="checkPw()">확인</button></div>
   </div>
 </div>
 
@@ -260,7 +319,7 @@ const ENT = {
 };
 const OVERSEAS_ORDER = ['GSMEIN','SMECN','SMEGLOBAL'];           // 엑셀 좌→우 순서
 const DEPT_ORDER = ['개발기획팀','개발구매팀','자재구매팀','제조팀','출하팀','재경팀'];
-const EMP_COLS = 'id,emp_no,entity,name,name_local,rank,dept,title,reports_to,sort_no,join_date,phone,email'; // 비밀번호 미조회 (연락처·메일은 비상연락망용)
+const EMP_COLS = 'id,emp_no,entity,name,name_local,rank,dept,title,reports_to,sort_no,join_date,phone'; // 비밀번호 미조회 (연락처는 비상연락망용)
 
 let EMPS = [], HC = [], HIST = [], DEPTS = [], ENTS = [];
 let byId = {}, kids = {};
@@ -468,7 +527,7 @@ function contactRows(){
     .sort((a,b)=>(CT_ENT_ORDER.indexOf(a.entity)-CT_ENT_ORDER.indexOf(b.entity)) ||
       (CT_TITLES.indexOf(a.title)-CT_TITLES.indexOf(b.title)) || cmpEmp(a,b))
     .map((e,i)=>({ seq:i, ent:entLabel(e.entity), title: e.title==='팀장' ? `${e.dept||''} 팀장` : e.title,
-      name:dispName(e), phone:e.phone||'', email:e.email||'', rep:rep(e.entity) }));
+      name:dispName(e), phone:e.phone||'', rep:rep(e.entity) }));
 }
 function sortCt(k){ if(ctSortKey===k) ctSortAsc=!ctSortAsc; else { ctSortKey=k; ctSortAsc=true; } renderContacts(); }
 function renderContacts(){
@@ -480,9 +539,9 @@ function renderContacts(){
   document.getElementById('ct-body').innerHTML = rows.length ? rows.map(r=>`<tr>
     <td>${esc(r.ent)}</td><td>${esc(r.title)}</td><td style="font-weight:700;">${esc(r.name)}</td>
     <td>${r.phone?esc(r.phone):'<span style="color:var(--line-dk);">미등록</span>'}</td>
-    <td class="mail">${mail(r.email)}</td><td class="mail">${mail(r.rep)}</td></tr>`).join('')
-    : '<tr><td colspan="6"><div class="loading">대상자가 없습니다.</div></td></tr>';
-  setTimeout(()=>initColResize('ct-table','org_contact_v1'),50);
+    <td class="mail">${mail(r.rep)}</td></tr>`).join('')
+    : '<tr><td colspan="5"><div class="loading">대상자가 없습니다.</div></td></tr>';
+  setTimeout(()=>initColResize('ct-table','org_contact_v2'),50); // v2: 메일주소 칸 삭제
 }
 
 /* ── 이력 ── */
@@ -517,9 +576,71 @@ function renderHist(){
     <td class="c"><span class="st ${r.status==='예정'?'plan':'done'}">${esc(r.status)}</span></td>
     <td>${esc(r.kind)}</td><td>${esc(entLabel(r.entity))}</td><td>${esc(r.dept)}</td>
     <td style="font-weight:700;">${esc(r.emp_name)}</td><td>${esc(r.from_value)}</td><td>${esc(r.to_value)}</td>
-    <td class="tw">${esc(r.content)}</td></tr>`).join('')
-    : '<tr><td colspan="9"><div class="loading">조직 이력이 없습니다.</div></td></tr>';
-  setTimeout(()=>initColResize('hist-table','org_hist_v1'),50);
+    <td class="tw">${esc(r.content)}</td>
+    <td class="c"><button class="rbtn" onclick="openHistForm(${r.id})">수정</button> <button class="rbtn del" onclick="deleteHist(${r.id})">삭제</button></td></tr>`).join('')
+    : '<tr><td colspan="10"><div class="loading">조직 이력이 없습니다.</div></td></tr>';
+  setTimeout(()=>initColResize('hist-table','org_hist_v2'),50); // v2: 관리 칸 추가
+}
+
+/* ── 조직 이력 입력 (경영 전용 인증 필요 — index.html 과 같은 sme_hq_auth) ── */
+const ORG_KINDS = ['조직변경','입사','퇴사','이동','직급변경','직책변경','법인명변경','법인장변경','인원충원','기타'];
+const PW_HQ = '9901';
+let histEditId = null, pwNext = null;
+const hasHq = () => { try{ return localStorage.getItem('sme_hq_auth')==='1' || sessionStorage.getItem('hq_auth')==='1'; }catch(e){ return false; } };
+function needHq(fn){ if(hasHq()) return fn(); pwNext = fn; document.getElementById('pwIn').value=''; document.getElementById('pwErr').textContent='';
+  document.getElementById('pwOv').classList.add('show'); setTimeout(()=>document.getElementById('pwIn').focus(),50); }
+function closePw(){ document.getElementById('pwOv').classList.remove('show'); pwNext=null; }
+function checkPw(){
+  if(document.getElementById('pwIn').value!==PW_HQ){ document.getElementById('pwErr').textContent='⚠ 비밀번호가 올바르지 않습니다'; document.getElementById('pwIn').value=''; return; }
+  try{ localStorage.setItem('sme_hq_auth','1'); sessionStorage.setItem('hq_auth','1'); }catch(e){}
+  const fn = pwNext; closePw(); if(fn) fn();
+}
+async function sbSend(method, table, query, body){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${query?('?'+query):''}`,{ method,
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(body) });
+  if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.message||('HTTP '+r.status)); }
+}
+function openHistForm(id){ needHq(()=>{
+  histEditId = id || null;
+  const r = id ? HIST.find(x=>x.id===id) : null;
+  document.getElementById('hi-kind').innerHTML = ORG_KINDS.map(k=>`<option value="${k}">${k}</option>`).join('');
+  document.getElementById('histOvTitle').textContent = r ? '📜 조직 이력 수정' : '📜 조직 이력 등록';
+  document.getElementById('histSaveBtn').textContent = r ? '수정' : '등록';
+  document.getElementById('hi-status').value  = r?.status || '적용';
+  document.getElementById('hi-date').value    = r ? (r.eff_date||'') : new Date().toISOString().slice(0,10);
+  document.getElementById('hi-kind').value    = r?.kind || '조직변경';
+  document.getElementById('hi-entity').value  = r?.entity || '';
+  document.getElementById('hi-dept').value    = r?.dept || '';
+  document.getElementById('hi-name').value    = r?.emp_name || '';
+  document.getElementById('hi-from').value    = r?.from_value || '';
+  document.getElementById('hi-to').value      = r?.to_value || '';
+  document.getElementById('hi-content').value = r?.content || '';
+  histStatusChanged();
+  document.getElementById('histOv').classList.add('show');
+}); }
+function histStatusChanged(){ document.getElementById('hi-date-req').style.display = document.getElementById('hi-status').value==='적용' ? '' : 'none'; }
+function closeHistForm(){ document.getElementById('histOv').classList.remove('show'); histEditId=null; }
+async function saveHist(){
+  const status = document.getElementById('hi-status').value, date = document.getElementById('hi-date').value;
+  if(status==='적용' && !date){ alert('적용 이력은 일자가 필요합니다.'); return; }
+  const v = id => document.getElementById(id).value.trim() || null;
+  const payload = { status, eff_date: date||null, kind: document.getElementById('hi-kind').value,
+    entity: v('hi-entity'), dept: v('hi-dept'), emp_name: v('hi-name'), from_value: v('hi-from'), to_value: v('hi-to'), content: v('hi-content') };
+  const btn = document.getElementById('histSaveBtn'); btn.disabled = true;
+  try{
+    if(histEditId) await sbSend('PATCH','org_history','id=eq.'+histEditId, payload);
+    else await sbSend('POST','org_history','', {...payload, origin:'직접입력', created_by: curUser});
+  }catch(e){ btn.disabled=false; alert('저장 실패: '+e.message); return; }
+  btn.disabled = false; closeHistForm(); await reloadHist();
+}
+function deleteHist(id){ needHq(async ()=>{
+  if(!confirm('정말 삭제하시겠습니까?')) return;
+  try{ await sbSend('PATCH','org_history','id=eq.'+id,{is_deleted:true}); }catch(e){ alert('삭제 실패: '+e.message); return; }
+  await reloadHist();
+}); }
+async function reloadHist(){
+  try{ HIST = await sbGet('org_history','select=*&is_deleted=eq.false'); }catch(e){ alert('이력 다시 읽기 실패: '+e.message); return; }
+  fillHistFilters(); renderHist();
 }
 
 /* ── 독립 컬럼 리사이즈 (SMERP 4원칙) ── */
@@ -647,7 +768,7 @@ async function downloadExcel(){
   // 비상연락망 (조직도 하단) — 칸: 법인·직책·성명·연락처 각 1단위, 메일주소·대표메일 각 2단위
   {
     let r = maxRow+2;
-    const cols = [['법인',0,0,'ent'],['직책',1,1,'title'],['성명',2,2,'name'],['연락처',3,3,'phone'],['메일주소',4,5,'email'],['대표메일',6,7,'rep']]
+    const cols = [['법인',0,0,'ent'],['직책',1,1,'title'],['성명',2,2,'name'],['연락처',3,3,'phone'],['대표메일',4,5,'rep']]
       .filter(c=>c[2] <= units.length-1 || c[1] <= units.length-1).map(c=>[c[0],c[1],Math.min(c[2],units.length-1),c[3]]);
     ws.mergeCells(r,L(0),r,R(Math.min(3,units.length-1)));
     const ttl=cell(r,L(0)); ttl.value='비상연락망 (부서장 이상)'; ttl.font=font({bold:true,size:11}); ttl.alignment={horizontal:'left',vertical:'middle'};
