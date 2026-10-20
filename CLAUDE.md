@@ -79,13 +79,23 @@ th { position: relative; user-select: none; }
 .col-resizer { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; }
 ```
 
-### 화면이동 네비게이션 표준 (2026-08-21 확정)
+### 화면이동 네비게이션 표준 (2026-08-21 확정 / 2026-10-20 새창열기 동작 변경)
 
-상단바 우측에 2버튼 고정 (순서 불변):
+상단바 우측에 버튼 고정 (순서 불변): `[⧉ 새창열기] [← 뒤로] [⌂ 홈]`
 ```html
+<button class="nav-btn nav-new" onclick="openNewWindow()" title="SMERP 메인을 새 탭으로 엽니다 (현재 화면 유지)">⧉ 새창열기</button>
 <button onclick="history.back()">← 뒤로</button>
 <button onclick="location.href='index.html'">⌂ 홈</button>
 ```
+- **새창열기 = 현재 화면은 그대로 두고 SMERP 메인(`index.html`)을 새 탭으로 연다** (2026-10-20 확정, 전 화면 통일)
+  ```javascript
+  function openNewWindow(){
+    const w = window.open('index.html', '_blank');
+    if(!w) alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.');
+  }
+  ```
+  - 예전 방식(같은 화면을 새 탭에 복제 / 현재 화면을 새 탭으로 빼고 원래 탭은 홈) 폐지. `openInNewWindow()`도 같은 동작
+  - 예외 아님: `po_master`의 패널 내부 「새 탭에서 열기」(`openPanelNewWindow`)는 선택 PO를 여는 별도 기능으로 유지
 - 다국어 파일: `← 返回` / `← Back`, `⌂ 首页` / `⌂ Home`
 - 기존 `← 홈으로` / `← 메인으로` / `← MAIN` 등 혼재 형태는 수정 시 통일
 
