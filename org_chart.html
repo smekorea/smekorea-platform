@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>글로벌 조직도 · SME Korea</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   org_chart.html v1.0 (2026-10-20) — 글로벌 조직도
+   ── 엑셀 조직도(01. SMER글로벌조직도) 레이아웃을 그대로 화면에 옮김
+   ── 데이터: employees(재직자, 조직도 컬럼만) + org_headcount + org_history
+   ── 연결선은 employees.reports_to, 박스 순서는 sort_no → 부서 기본순서
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --point:#1B3A6B; --point-dk:#142C52; --point-bg:#EDF1F7;
+  --brand:#C8001E; --muted:#565C64; --text:#1E2225;
+  --border:#C7CCD4; --line-lt:#DFE3E8; --line-dk:#98A0AB;
+  --bg-sub:#EEF0F3; --surface:#FFFFFF; --accent3:#2E6B4F; --amber:#8A6116;
+  --hq:#E60012; --ov:#F4B183; --ov-text:#5A2A00; --line:#3a3a3a;
+  --hdr-h:52px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:var(--text);}
+
+/* ── 상단바 ── */
+.topbar{position:sticky;top:0;z-index:200;background:#fff;border-bottom:2px solid var(--point);
+  display:flex;align-items:center;height:var(--hdr-h);padding:0 20px;gap:12px;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-tag{display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:46px;padding:0 9px;
+  background:var(--brand);color:#fff;font-size:14px;font-weight:700;border-radius:2px;letter-spacing:.5px;}
+.brand-id{display:flex;flex-direction:column;line-height:1.25;}
+.brand-co{font-size:13px;font-weight:700;letter-spacing:.3px;}
+.brand-file{font-size:10.5px;color:var(--muted);letter-spacing:.3px;}
+.brand-name{font-size:14px;font-weight:500;padding-left:10px;border-left:1px solid var(--border);}
+.tb-spacer{flex:1;}
+.tb-user{color:var(--muted);font-size:12px;}
+.nav-group{display:flex;align-items:center;gap:6px;}
+.nav-btn{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 14px;border-radius:2px;
+  font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;}
+.nav-back{background:#fff;border:1.5px solid var(--border);color:var(--text);}
+.nav-back:hover{border-color:var(--point);color:var(--point);}
+.nav-home{background:var(--point);border:1.5px solid var(--point);color:#fff;}
+
+/* ── 탭 ── */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:#fff;padding:0 20px;overflow-x:auto;}
+.tab-btn{padding:11px 17px;font-size:14px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text);
+  border-bottom:2px solid transparent;margin-bottom:-1px;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
+.tab-btn:hover:not(.active){background:var(--bg-sub);color:var(--point);}
+.tab-btn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:var(--point-bg);}
+
+.wrap{padding:16px 20px 40px;}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.kpi{display:flex;gap:6px;flex-wrap:wrap;}
+.kpi span{background:#fff;border:1px solid var(--border);padding:5px 12px;font-size:12px;color:var(--muted);}
+.kpi b{color:var(--text);font-size:14px;margin-left:4px;}
+.btn{height:32px;padding:0 14px;border-radius:2px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:700;
+  font-family:'Noto Sans KR',sans-serif;cursor:pointer;color:var(--text);}
+.btn:hover{border-color:var(--point);color:var(--point);}
+.btn-green{background:var(--accent3);border-color:var(--accent3);color:#fff;}
+.btn-green:hover{filter:brightness(1.08);color:#fff;}
+.tb-right{margin-left:auto;display:flex;gap:8px;}
+.note{font-size:12px;color:var(--muted);margin:8px 0 0;}
+.warn{background:#FFF7E6;border:1px solid #F0C36D;color:#6B4A00;font-size:12px;padding:8px 12px;margin-bottom:10px;}
+
+/* ── 조직도 캔버스 (엑셀 시트 느낌) ── */
+.sheet-scroll{overflow:auto;background:#fff;border:1px solid var(--border);}
+.sheet{min-width:max-content;padding:0 28px 28px;border-left:6px solid var(--hq);}
+.sheet-title{background:var(--hq);color:#fff;text-align:center;font-size:22px;font-weight:900;letter-spacing:6px;
+  padding:10px 0;margin:0 -28px 0 -28px;position:relative;}
+.sheet-title .asof{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:500;letter-spacing:0;text-align:right;line-height:1.4;}
+
+/* 트리 연결선 */
+.tree{display:flex;justify-content:center;padding-top:24px;}
+.tree ul{display:flex;justify-content:center;position:relative;padding-top:22px;}
+.tree > ul{padding-top:0;}
+.tree li{list-style:none;position:relative;padding:22px 8px 0;display:flex;flex-direction:column;align-items:center;}
+.tree > ul > li{padding-top:0;}
+.tree li::before,.tree li::after{content:'';position:absolute;top:0;right:50%;width:50%;height:22px;border-top:1.5px solid var(--line);}
+.tree li::after{right:auto;left:50%;border-left:1.5px solid var(--line);}
+.tree li:only-child::before,.tree li:only-child::after{display:none;}
+.tree li:only-child{padding-top:22px;}
+.tree li:only-child > .node::before{content:'';position:absolute;top:-22px;left:50%;height:22px;border-left:1.5px solid var(--line);}
+.tree li:first-child::before,.tree li:last-child::after{border:0 none;}
+.tree li:last-child::before{border-right:1.5px solid var(--line);}
+.tree ul ul::before{content:'';position:absolute;top:0;left:50%;height:22px;border-left:1.5px solid var(--line);}
+.tree > ul > li::before,.tree > ul > li::after{display:none;}
+.tree > ul > li > .node::before{display:none;}
+.node{position:relative;display:flex;flex-direction:column;align-items:center;}
+.cnt{font-size:10px;color:#111;align-self:flex-start;margin:0 0 1px 2px;min-height:12px;}
+.cap{font-size:11px;font-weight:700;margin-bottom:2px;letter-spacing:.3px;}
+
+/* 박스 */
+.box{width:116px;border:1px solid #777;background:#fff;text-align:center;}
+.box .bd{font-size:11px;font-weight:700;padding:3px 0;background:var(--hq);color:#fff;}
+.box.ov .bd{background:var(--ov);color:var(--ov-text);}
+.box .nm{font-size:12px;padding:4px 2px;color:#111;}
+.box .nm small{display:block;font-size:10px;color:var(--muted);}
+.box .sub{font-size:10px;color:var(--muted);padding-bottom:3px;margin-top:-3px;}
+
+/* 부서 컬럼 */
+.unit{width:132px;display:flex;flex-direction:column;align-items:center;}
+.unit-hd{width:116px;text-align:center;font-size:12.5px;font-weight:700;padding-bottom:3px;border-bottom:2px solid var(--hq);margin:6px 0 4px;}
+.unit .ent{font-size:12px;font-weight:900;letter-spacing:.5px;}
+.unit .ent small{display:block;font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;}
+.members{display:flex;flex-direction:column;align-items:center;position:relative;padding-top:10px;gap:0;}
+.members::before{content:'';position:absolute;top:0;left:50%;height:10px;border-left:1px solid #999;}
+.members .box{margin-bottom:-1px;}
+.members .box.titled{margin-top:10px;}
+.members .gap{height:10px;}
+.hc{font-size:11.5px;font-weight:700;align-self:flex-start;margin:4px 0 0 8px;}
+.vline{width:0;height:12px;border-left:1px solid #999;}
+.empty-unit{font-size:11px;color:var(--muted);border:1px dashed var(--line-dk);padding:8px 6px;width:116px;text-align:center;}
+.orphans{margin-top:22px;border-top:1px dashed var(--line-dk);padding-top:10px;font-size:12px;color:var(--muted);}
+.orphans b{color:var(--brand);}
+
+/* 하단 이력 (엑셀 HISTORY 영역) */
+.hist-title{font-size:13px;font-weight:900;margin:26px 0 6px;}
+.tbl-wrap{background:#fff;border:1px solid var(--border);overflow:auto;}
+table{border-collapse:collapse;table-layout:fixed;}
+thead th{background:#5A5A5A;color:#fff;font-size:11.5px;font-weight:700;padding:6px 8px;text-align:center;white-space:nowrap;
+  position:relative;user-select:none;border-right:1px solid #777;overflow:hidden;}
+thead th.sortable{cursor:pointer;}
+thead th.sortable:hover{background:#444;}
+.sort-icon{margin-left:3px;font-size:10px;color:#FFD5D5;}
+tbody td{padding:5px 8px;font-size:12px;color:#111827;border-bottom:1px solid var(--line-lt);border-right:1px solid #e8edf5;
+  vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+tbody td:last-child{border-right:none;}
+td.c{text-align:center;}
+td.tw{white-space:normal;word-break:keep-all;}
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+.st{display:inline-flex;padding:1px 7px;font-size:11px;font-weight:700;border:1px solid;}
+.st.plan{color:var(--amber);border-color:rgba(217,119,6,.35);background:rgba(217,119,6,.08);}
+.st.done{color:var(--accent3);border-color:rgba(46,107,79,.35);background:rgba(46,107,79,.08);}
+.filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.filter select,.filter input{height:32px;border:1px solid var(--line-dk);border-radius:2px;padding:0 9px;font-size:12px;background:#fff;font-family:'Noto Sans KR',sans-serif;}
+.loading{padding:40px;text-align:center;color:var(--muted);font-size:13px;}
+
+@media (max-width:640px){
+  .topbar{padding:0 12px;} .brand-name,.brand-id{display:none;}
+  .wrap{padding:12px 16px 32px;}
+}
+@media print{
+  .topbar,.tab-bar,.toolbar,.note{display:none!important;}
+  .sheet-scroll{border:none;overflow:visible;}
+  body{background:#fff;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="brand-tag">SME</span>
+    <div class="brand-id"><div class="brand-co">SMEKOREA</div><div class="brand-file">org_chart</div></div>
+    <span class="brand-name">글로벌 조직도</span>
+  </div>
+  <div class="tb-spacer"></div>
+  <span class="tb-user" id="tbUser"></span>
+  <div class="nav-group">
+    <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
+    <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tabbtn-chart" onclick="switchTab('chart')">🏢 조직도</button>
+  <button class="tab-btn" id="tabbtn-hist" onclick="switchTab('hist')">📜 조직 이력</button>
+</div>
+
+<div class="wrap">
+  <!-- 조직도 -->
+  <div id="tab-chart">
+    <div class="toolbar">
+      <div class="kpi" id="kpi"></div>
+      <div class="tb-right">
+        <button class="btn" onclick="loadAll()">🔄 새로고침</button>
+        <button class="btn btn-green" onclick="downloadExcel()">⬇ 엑셀 다운로드</button>
+      </div>
+    </div>
+    <div id="warnBox"></div>
+    <div class="sheet-scroll">
+      <div class="sheet">
+        <div class="sheet-title">SME KOREA 글로벌 조직도<div class="asof" id="asof"></div></div>
+        <div id="chart"><div class="loading">조직도를 불러오는 중...</div></div>
+        <div class="hist-title">HISTORY <span style="font-size:11px;font-weight:400;color:var(--muted);">최근 10건 · 전체는 「조직 이력」 탭</span></div>
+        <div class="tbl-wrap" style="display:inline-block;max-width:100%;">
+          <table id="mini-hist"><thead><tr>
+            <th style="width:90px;">일 자</th><th style="width:80px;">구 분</th><th style="width:120px;">이 름</th><th style="width:560px;">내 용</th>
+          </tr></thead><tbody id="mini-hist-body"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="note">💡 인원 추가·이동·조직도 연결(상위자/직책/표시순서)은 관리자 설정 › 직원 관리, 이름 없는 인원수와 조직 이력은 관리자 설정 › 조직 이력에서 관리합니다.</div>
+  </div>
+
+  <!-- 조직 이력 -->
+  <div id="tab-hist" style="display:none;">
+    <div class="filter">
+      <select id="hf-entity" onchange="renderHist()"><option value="">전체 법인</option></select>
+      <select id="hf-kind" onchange="renderHist()"><option value="">전체 구분</option></select>
+      <select id="hf-status" onchange="renderHist()"><option value="">전체 상태</option><option value="예정">예정</option><option value="적용">적용</option></select>
+      <input id="hf-q" placeholder="이름·내용 검색..." oninput="renderHist()" style="width:160px;">
+      <span id="hcnt" style="font-size:12px;color:var(--muted);"></span>
+      <div class="tb-right"><button class="btn btn-green" onclick="downloadExcel()">⬇ 엑셀 다운로드</button></div>
+    </div>
+    <div class="tbl-wrap">
+      <table id="hist-table"><thead><tr>
+        <th class="sortable" style="width:100px;" onclick="sortHist('eff_date')">일자<span class="sort-icon" id="hsi-eff_date"></span></th>
+        <th class="sortable" style="width:60px;" onclick="sortHist('status')">상태<span class="sort-icon" id="hsi-status"></span></th>
+        <th class="sortable" style="width:90px;" onclick="sortHist('kind')">구분<span class="sort-icon" id="hsi-kind"></span></th>
+        <th class="sortable" style="width:90px;" onclick="sortHist('entity')">법인<span class="sort-icon" id="hsi-entity"></span></th>
+        <th class="sortable" style="width:90px;" onclick="sortHist('dept')">부서<span class="sort-icon" id="hsi-dept"></span></th>
+        <th class="sortable" style="width:110px;" onclick="sortHist('emp_name')">이름<span class="sort-icon" id="hsi-emp_name"></span></th>
+        <th class="sortable" style="width:110px;" onclick="sortHist('from_value')">변경전<span class="sort-icon" id="hsi-from_value"></span></th>
+        <th class="sortable" style="width:110px;" onclick="sortHist('to_value')">변경후<span class="sort-icon" id="hsi-to_value"></span></th>
+        <th class="sortable" style="width:420px;" onclick="sortHist('content')">내용<span class="sort-icon" id="hsi-content"></span></th>
+      </tr></thead><tbody id="hist-body"><tr><td colspan="9"><div class="loading">불러오는 중...</div></td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const curUser = localStorage.getItem('sme_user') || '';
+
+// DB entity(유지) → 화면 표시 (v15.24 A안: DB값은 그대로, 라벨만 매핑)
+const ENT = {
+  KOREA:    {code:'SMEKR', country:'KOREA', label:'본사'},
+  GSMEIN:   {code:'SMEIN', country:'INDIA', label:'인도'},
+  SMECN:    {code:'SMECN', country:'CHINA', label:'중국'},
+  SMEGLOBAL:{code:'SMETH', country:'THAI',  label:'태국'}
+};
+const OVERSEAS_ORDER = ['GSMEIN','SMECN','SMEGLOBAL'];           // 엑셀 좌→우 순서
+const DEPT_ORDER = ['개발기획팀','개발구매팀','자재구매팀','제조팀','출하팀','재경팀'];
+const OVERSEAS_TEAM = '구매영업팀';                               // 엑셀 표기
+const EMP_COLS = 'id,emp_no,entity,name,name_local,rank,dept,title,reports_to,sort_no,join_date'; // 비밀번호·연락처 미조회
+
+let EMPS = [], HC = [], HIST = [];
+let byId = {}, kids = {};
+let model = null;                       // 화면·엑셀 공용 구조
+let hSortKey = 'eff_date', hSortAsc = false;
+
+const esc = v => String(v==null?'':v).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const entLabel = e => ENT[e] ? `${ENT[e].code}` : (e||'');
+// DB 이름이 '사장님(곽선효)' 형태면 괄호 안 이름만 표시
+const dispName = r => { const m = String(r.name||'').match(/\(([^)]+)\)\s*$/); return m ? m[1] : (r.name||''); };
+
+async function sbGet(table, params){
+  const out=[]; const size=1000; let from=0;
+  while(true){
+    const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Range-Unit':'items','Range':from+'-'+(from+size-1)}});
+    if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.message||('HTTP '+r.status)); }
+    const d = await r.json(); out.push(...d);
+    if(d.length<size) break; from+=size;
+  }
+  return out;
+}
+
+function switchTab(k){
+  ['chart','hist'].forEach(x=>{
+    document.getElementById('tab-'+x).style.display = x===k ? '' : 'none';
+    document.getElementById('tabbtn-'+x).classList.toggle('active', x===k);
+  });
+  if(k==='hist') renderHist();
+}
+
+async function loadAll(){
+  try{
+    [EMPS, HC, HIST] = await Promise.all([
+      sbGet('employees', `select=${EMP_COLS}&active=eq.true&order=emp_no`),
+      sbGet('org_headcount', 'select=*&active=eq.true&order=sort_no'),
+      sbGet('org_history', 'select=*&is_deleted=eq.false')
+    ]);
+  }catch(e){
+    document.getElementById('chart').innerHTML = `<div class="loading" style="color:var(--brand);">불러오기 실패: ${esc(e.message)}</div>`;
+    return;
+  }
+  buildModel(); renderChart(); renderMiniHist(); fillHistFilters();
+  if(document.getElementById('tab-hist').style.display!=='none') renderHist();
+}
+
+/* ── 구조 만들기 ── */
+function cmpEmp(a,b){
+  return ((a.sort_no??99)-(b.sort_no??99)) ||
+    ((DEPT_ORDER.indexOf(a.dept)+1||99)-(DEPT_ORDER.indexOf(b.dept)+1||99)) ||
+    ((a.emp_no||0)-(b.emp_no||0));
+}
+function descendants(id){
+  const out=[]; const st=[...(kids[id]||[])];
+  const seen = new Set([id]);
+  // 직속 → 그 아래 순서로 펼침(DFS, 각 단계 sort_no 순)
+  (function walk(list){
+    list.sort(cmpEmp).forEach(c=>{ if(seen.has(c.id)) return; seen.add(c.id); out.push(c); walk([...(kids[c.id]||[])]); });
+  })(st);
+  return out;
+}
+function hcFor(entity, dept){
+  return HC.filter(h=>h.entity===entity && (dept==null || (h.dept||'')===dept || (entity!=='KOREA')))
+           .sort((a,b)=>(a.sort_no??99)-(b.sort_no??99));
+}
+
+function buildModel(){
+  byId = {}; kids = {};
+  EMPS.forEach(e=>{ byId[e.id]=e; });
+  EMPS.forEach(e=>{ if(e.reports_to && byId[e.reports_to]) (kids[e.reports_to]=kids[e.reports_to]||[]).push(e); });
+  const root = EMPS.find(e=>e.title==='대표이사') || EMPS.find(e=>!e.reports_to && e.entity==='KOREA');
+  const placed = new Set();
+  const groups = [];
+  if(root){
+    placed.add(root.id);
+    const lv2 = [...(kids[root.id]||[])].sort(cmpEmp);
+    lv2.forEach(p=>{
+      placed.add(p.id);
+      const units = [];
+      (kids[p.id]||[]).forEach(h=>{
+        const members = descendants(h.id);
+        placed.add(h.id); members.forEach(m=>placed.add(m.id));
+        const ov = h.entity!=='KOREA';
+        units.push({ ov, entity:h.entity, dept: ov ? OVERSEAS_TEAM : h.dept, head:h, members,
+          hc: ov ? hcFor(h.entity) : hcFor('KOREA', h.dept) });
+      });
+      groups.push({ person:p, units });
+    });
+    // 직원이 없는 해외법인도 컬럼을 보여 준다 (예: 인도 미등록) — 해외법인장이 붙는 그룹에 추가
+    const ovGroup = groups.find(g=>g.units.some(u=>u.ov)) || groups.find(g=>g.person.title==='상무이사') || groups[0];
+    if(ovGroup){
+      OVERSEAS_ORDER.forEach(ent=>{
+        if(!ovGroup.units.some(u=>u.ov && u.entity===ent))
+          ovGroup.units.push({ ov:true, entity:ent, dept:OVERSEAS_TEAM, head:null, members:[], hc:hcFor(ent) });
+      });
+    }
+    groups.forEach(g=>g.units.sort((a,b)=>{
+      if(a.ov!==b.ov) return a.ov ? -1 : 1;
+      if(a.ov) return OVERSEAS_ORDER.indexOf(a.entity)-OVERSEAS_ORDER.indexOf(b.entity);
+      return cmpEmp(a.head,b.head);
+    }));
+  }
+  const orphans = EMPS.filter(e=>!placed.has(e.id));
+  const hqN = EMPS.filter(e=>e.entity==='KOREA').length;
+  const hcN = HC.reduce((s,h)=>s+(h.cnt||0),0);
+  model = { root, groups, orphans, hqN, ovN: EMPS.length-hqN, hcN };
+}
+
+/* ── 화면 그리기 ── */
+function boxHtml(e, badge, ov){
+  if(!e) return '';
+  const sub = (e.title==='CFO' && e.rank) ? `<div class="sub">${esc(e.rank)}</div>` : '';
+  const loc = e.name_local ? `<small>${esc(e.name_local)}</small>` : '';
+  return `<div class="box${ov?' ov':''}" title="${esc([e.rank,e.dept,e.join_date?('입사 '+e.join_date):''].filter(Boolean).join(' · '))}">
+    ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${loc}</div>${sub}</div>`;
+}
+function unitHtml(u){
+  const n = (u.head?1:0) + u.members.length + u.hc.reduce((s,h)=>s+(h.cnt||0),0);
+  let h = `<div class="unit">`;
+  if(u.ov){
+    const E = ENT[u.entity]||{code:u.entity,country:''};
+    h += `<div class="cap ent">${esc(E.code)}<small>${esc(E.country)}</small></div>`;
+    h += u.head ? boxHtml(u.head, u.head.title||'법인장', true) : `<div class="empty-unit">법인장 미등록</div>`;
+    const cntIn = u.members.length + u.hc.reduce((s,x)=>s+(x.cnt||0),0);
+    h += `<div class="vline"></div><div class="cnt">${cntIn||''}</div><div class="unit-hd">${esc(u.dept)}</div>`;
+    if(u.members.length || u.hc.length){
+      h += `<div class="members">`;
+      u.members.forEach((m,i)=>{
+        if(m.title){ h += (i?'<div class="gap"></div>':'') + boxHtml(m, m.title, true); }
+        else h += boxHtml(m, '', true);
+      });
+      h += `</div>`;
+      u.hc.forEach(x=>{ h += `<div class="hc">${esc(x.label)} ${esc(x.cnt)}명</div>`; });
+    } else h += `<div class="empty-unit">인원 미등록</div>`;
+  } else {
+    h += `<div class="cnt">${n}</div><div class="unit-hd">${esc(u.dept)}</div>`;
+    h += boxHtml(u.head, u.head.rank||u.head.title, false);
+    if(u.members.length){ h += `<div class="members">${u.members.map(m=>boxHtml(m,'',false)).join('')}</div>`; }
+    u.hc.forEach(x=>{ h += `<div class="hc">${esc(x.label)} ${esc(x.cnt)}명</div>`; });
+  }
+  return h + `</div>`;
+}
+function renderChart(){
+  const M = model;
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('asof').innerHTML = `기준일 ${today}<br>재직 ${EMPS.length}명`;
+  document.getElementById('kpi').innerHTML =
+    `<span>전체<b>${EMPS.length}</b></span><span>본사<b>${M.hqN}</b></span><span>해외법인<b>${M.ovN}</b></span>` +
+    (M.hcN?`<span>인원수 표시<b>${M.hcN}</b></span>`:'');
+  const planned = HIST.filter(h=>h.status==='예정');
+  document.getElementById('warnBox').innerHTML = planned.length
+    ? `<div class="warn">⏳ 예정된 조직변경 ${planned.length}건: ${planned.map(p=>esc([p.kind, p.from_value&&p.to_value?`${p.from_value}→${p.to_value}`:(p.to_value||p.emp_name||''), p.eff_date?`(${p.eff_date})`:'(일자 미정)'].filter(Boolean).join(' '))).join(' / ')}</div>` : '';
+  if(!M.root){ document.getElementById('chart').innerHTML = '<div class="loading">대표이사(직책)가 지정된 직원이 없습니다. 관리자 설정 › 직원 관리에서 직책을 지정해 주세요.</div>'; return; }
+  const totalN = EMPS.length;
+  let h = `<div class="tree"><ul><li><div class="node"><div class="cnt">${totalN}</div>${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
+  if(M.groups.length){
+    h += `<ul>`;
+    M.groups.forEach(g=>{
+      const gN = 1 + g.units.reduce((s,u)=>s+(u.head?1:0)+u.members.length,0);
+      const cap = g.person.title==='상무이사' ? 'KOREA H.Q' : (g.person.title||'');
+      h += `<li><div class="node"><div class="cnt">${gN}</div><div class="cap">${esc(cap)}</div>${boxHtml(g.person, g.person.title==='CFO' ? (g.person.rank||'') : (g.person.title||g.person.rank), false)}</div>`;
+      if(g.units.length){ h += `<ul>${g.units.map(u=>`<li><div class="node">${unitHtml(u)}</div></li>`).join('')}</ul>`; }
+      h += `</li>`;
+    });
+    h += `</ul>`;
+  }
+  h += `</li></ul></div>`;
+  if(M.orphans.length){
+    h += `<div class="orphans">⚠ 조직도에 연결되지 않은 재직자 <b>${M.orphans.length}명</b>: ${M.orphans.map(e=>esc(`[${entLabel(e.entity)}] ${dispName(e)}`)).join(', ')} — 관리자 설정 › 직원 관리에서 「상위자」를 지정해 주세요.</div>`;
+  }
+  document.getElementById('chart').innerHTML = h;
+  // 좁은 화면: 가로 스크롤을 대표이사 박스 중앙에 맞춤
+  const sc = document.querySelector('.sheet-scroll'), rb = document.querySelector('.tree > ul > li > .node');
+  if(sc && rb && sc.scrollWidth > sc.clientWidth){
+    const x = rb.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft + rb.offsetWidth/2;
+    sc.scrollLeft = Math.max(0, x - sc.clientWidth/2);
+  }
+}
+
+/* ── 이력 ── */
+function histSorted(list, key, asc){
+  const dir = asc?1:-1;
+  return [...list].sort((a,b)=>{
+    let va=a[key], vb=b[key];
+    if(key==='eff_date'){ va=va||'9999-12-31'; vb=vb||'9999-12-31'; }
+    return String(va??'').localeCompare(String(vb??''),'ko')*dir || (b.id-a.id);
+  });
+}
+function renderMiniHist(){
+  const rows = histSorted(HIST,'eff_date',false).slice(0,10);
+  document.getElementById('mini-hist-body').innerHTML = rows.length ? rows.map(r=>`<tr>
+    <td class="c">${r.eff_date?esc(r.eff_date):'<span class="st plan">예정</span>'}</td><td class="c">${esc(r.kind)}</td>
+    <td class="c">${esc(r.emp_name||'')}</td><td class="tw">${esc(r.content||'')}${r.from_value&&r.to_value?` <span style="color:var(--muted);">(${esc(r.from_value)} → ${esc(r.to_value)})</span>`:''}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="c" style="color:var(--muted);">이력이 없습니다.</td></tr>';
+}
+function fillHistFilters(){
+  const es = document.getElementById('hf-entity'), ks = document.getElementById('hf-kind');
+  const ev = es.value, kv = ks.value;
+  const ents = [...new Set(HIST.map(h=>h.entity).filter(Boolean))];
+  es.innerHTML = '<option value="">전체 법인</option>' + ents.map(e=>`<option value="${esc(e)}">${esc(entLabel(e))}</option>`).join('');
+  const kinds = [...new Set(HIST.map(h=>h.kind).filter(Boolean))];
+  ks.innerHTML = '<option value="">전체 구분</option>' + kinds.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('');
+  es.value = ev; ks.value = kv;
+}
+function sortHist(k){ if(hSortKey===k) hSortAsc=!hSortAsc; else { hSortKey=k; hSortAsc=true; } renderHist(); }
+function renderHist(){
+  const fe=document.getElementById('hf-entity').value, fk=document.getElementById('hf-kind').value,
+        fs=document.getElementById('hf-status').value, q=document.getElementById('hf-q').value.trim().toLowerCase();
+  const rows = histSorted(HIST.filter(r=>(!fe||r.entity===fe)&&(!fk||r.kind===fk)&&(!fs||r.status===fs)&&
+    (!q||[r.emp_name,r.content,r.dept,r.from_value,r.to_value].join(' ').toLowerCase().includes(q))), hSortKey, hSortAsc);
+  document.querySelectorAll('[id^="hsi-"]').forEach(el=>el.textContent='');
+  const si=document.getElementById('hsi-'+hSortKey); if(si) si.textContent = hSortAsc?'↑':'↓';
+  document.getElementById('hcnt').textContent = `${rows.length}건`;
+  document.getElementById('hist-body').innerHTML = rows.length ? rows.map(r=>`<tr>
+    <td>${r.eff_date?esc(r.eff_date):'<span style="color:var(--amber);font-weight:700;">미정</span>'}</td>
+    <td class="c"><span class="st ${r.status==='예정'?'plan':'done'}">${esc(r.status)}</span></td>
+    <td>${esc(r.kind)}</td><td>${esc(entLabel(r.entity))}</td><td>${esc(r.dept)}</td>
+    <td style="font-weight:700;">${esc(r.emp_name)}</td><td>${esc(r.from_value)}</td><td>${esc(r.to_value)}</td>
+    <td class="tw">${esc(r.content)}</td></tr>`).join('')
+    : '<tr><td colspan="9"><div class="loading">조직 이력이 없습니다.</div></td></tr>';
+  setTimeout(()=>initColResize('hist-table','org_hist_v1'),50);
+}
+
+/* ── 독립 컬럼 리사이즈 (SMERP 4원칙) ── */
+function initColResize(tableId, storageKey){
+  const table=document.getElementById(tableId); if(!table) return;
+  const verKey=storageKey+':v1';
+  const ths=table.querySelectorAll(':scope > thead > tr > th');
+  let colgroup=table.querySelector('colgroup');
+  if(!colgroup){ colgroup=document.createElement('colgroup'); table.insertBefore(colgroup, table.firstChild); }
+  while(colgroup.children.length<ths.length) colgroup.appendChild(document.createElement('col'));
+  const cols=colgroup.querySelectorAll('col');
+  let saved={}; try{ saved=JSON.parse(localStorage.getItem(verKey)||'{}'); }catch(e){}
+  const widths=[]; ths.forEach((th,i)=>{ widths[i]=Math.round(saved[i]||th.getBoundingClientRect().width); });
+  table.style.tableLayout='fixed';
+  const apply=()=>{ let t=0; widths.forEach((w,i)=>{ cols[i].style.width=w+'px'; t+=w; }); table.style.width=t+'px'; };
+  apply();
+  ths.forEach((th,i)=>{
+    if(th.querySelector('.col-resizer')) return;
+    const r=document.createElement('div'); r.className='col-resizer'; th.appendChild(r);
+    r.addEventListener('mousedown',e=>{
+      const sx=e.clientX, sw=widths[i];
+      const mv=ev=>{ widths[i]=Math.max(50, sw+ev.clientX-sx); apply(); };
+      const up=()=>{ const ws={}; widths.forEach((w,j)=>ws[j]=w); try{ localStorage.setItem(verKey,JSON.stringify(ws)); }catch(err){} document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+      e.preventDefault(); e.stopPropagation();
+    });
+  });
+}
+
+/* ── 엑셀 다운로드 (엑셀 조직도 형태 + 인원명단 + HISTORY) ── */
+async function downloadExcel(){
+  if(!model || !model.root){ alert('조직도 데이터가 없습니다.'); return; }
+  if(typeof ExcelJS==='undefined'){ alert('엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.'); return; }
+  const wb = new ExcelJS.Workbook(); wb.creator = 'SMERP';
+  const ws = wb.addWorksheet('조직도', {pageSetup:{orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9}, views:[{showGridLines:false}]});
+  const RED='FFE60012', OV='FFF4B183';
+  const thin={style:'thin',color:{argb:'FF777777'}};
+  const box={top:thin,left:thin,bottom:thin,right:thin};
+  const font=(o={})=>({name:'Noto Sans KR', size:10, ...o});
+
+  // 컬럼 배치: 단위(부서/법인)마다 1칸 + 사이 1칸
+  const units=[]; const groupSpan=[];
+  model.groups.forEach(g=>{ const s=units.length; g.units.forEach(u=>units.push(u)); groupSpan.push({g, s, e:Math.max(s, units.length-1), empty:!g.units.length}); if(!g.units.length) units.push(null); });
+  const colOf = i => 2 + i*2;                       // B, D, F ...
+  const lastCol = colOf(Math.max(units.length-1,0));
+  ws.getColumn(1).width = 2;
+  for(let c=2;c<=lastCol+1;c++) ws.getColumn(c).width = (c%2===0) ? 17 : 2.5;
+
+  const put=(r,c,v,opt={})=>{ const cell=ws.getCell(r,c); cell.value=v; cell.font=font(opt.font||{}); cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    if(opt.fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:opt.fill}}; if(opt.border) cell.border=opt.border; return cell; };
+  const badge=(r,c,txt,ov)=>put(r,c,txt,{fill:ov?OV:RED,font:{bold:true,color:{argb:ov?'FF5A2A00':'FFFFFFFF'}},border:box});
+  const nameCell=(r,c,e)=>put(r,c,dispName(e)+(e.name_local?`\n${e.name_local}`:''),{border:box});
+
+  // 제목
+  ws.mergeCells(1,1,1,lastCol+1);
+  put(1,1,'SME KOREA 글로벌 조직도',{fill:RED,font:{bold:true,size:18,color:{argb:'FFFFFFFF'}}}); ws.getRow(1).height=34;
+  ws.mergeCells(2,2,2,lastCol);
+  const today=new Date().toISOString().slice(0,10);
+  put(2,2,`기준일 ${today}  ·  재직 ${EMPS.length}명 (본사 ${model.hqN} / 해외 ${model.ovN})`,{font:{size:9,color:{argb:'FF565C64'}}});
+  ws.getCell(2,2).alignment={horizontal:'right',vertical:'middle'};
+
+  // 대표
+  const midCol = colOf(Math.floor((units.length-1)/2));
+  badge(4,midCol,model.root.title||model.root.rank,false); nameCell(5,midCol,model.root);
+  // 2단계
+  groupSpan.forEach(gs=>{
+    const c = colOf(Math.floor((gs.s+gs.e)/2)); const p=gs.g.person;
+    const cap = p.title==='상무이사' ? 'KOREA H.Q' : (p.title||'');
+    put(7,c,cap,{font:{bold:true,size:9}});
+    badge(8,c,p.title==='CFO'?(p.rank||'CFO'):(p.title||p.rank),false); nameCell(9,c,p);
+  });
+  // 단위 컬럼
+  let maxRow = 11;
+  units.forEach((u,i)=>{
+    if(!u) return;
+    const c=colOf(i); let r=11;
+    if(u.ov){
+      const E=ENT[u.entity]||{code:u.entity,country:''};
+      put(r,c,`${E.code} (${E.country})`,{font:{bold:true}}); r++;
+      if(u.head){ badge(r,c,u.head.title||'법인장',true); r++; nameCell(r,c,u.head); r++; }
+      else { put(r,c,'법인장 미등록',{font:{color:{argb:'FF98A0AB'}},border:box}); r++; }
+      r++;
+      put(r,c,u.dept,{font:{bold:true},border:{bottom:{style:'medium',color:{argb:RED}}}}); r++;
+      u.members.forEach(m=>{ if(m.title){ badge(r,c,m.title,true); r++; } nameCell(r,c,m); r++; });
+    } else {
+      put(r,c,u.dept,{font:{bold:true},border:{bottom:{style:'medium',color:{argb:RED}}}}); r+=1;
+      r++;
+      badge(r,c,u.head.rank||u.head.title,false); r++; nameCell(r,c,u.head); r++;
+      r++;
+      u.members.forEach(m=>{ nameCell(r,c,m); r++; });
+    }
+    u.hc.forEach(x=>{ put(r,c,`${x.label} ${x.cnt}명`,{font:{bold:true,size:9}}); ws.getCell(r,c).alignment={horizontal:'left',vertical:'middle'}; r++; });
+    maxRow=Math.max(maxRow,r);
+  });
+  // 미연결 인원
+  if(model.orphans.length){
+    maxRow+=1; ws.mergeCells(maxRow,2,maxRow,lastCol);
+    put(maxRow,2,'※ 조직도 미연결: '+model.orphans.map(e=>`[${entLabel(e.entity)}] ${dispName(e)}`).join(', '),{font:{size:9,color:{argb:'FFC8001E'}}});
+    ws.getCell(maxRow,2).alignment={horizontal:'left',vertical:'middle'}; maxRow++;
+  }
+  // HISTORY (엑셀 원본처럼 조직도 아래)
+  let hr = maxRow+2;
+  put(hr,2,'HISTORY',{font:{bold:true}}); ws.getCell(hr,2).alignment={horizontal:'left'}; hr++;
+  const hEnd = Math.max(lastCol, 8);
+  const hdrs=[['일 자',2,3],['구 분',4,5],['이 름',6,7],['내 용',8,hEnd]];
+  hdrs.forEach(([t,a,b])=>{ if(b>a) ws.mergeCells(hr,a,hr,b); put(hr,a,t,{fill:'FF5A5A5A',font:{bold:true,color:{argb:'FFFFFFFF'}},border:box}); });
+  hr++;
+  histSorted(HIST,'eff_date',true).forEach(h=>{
+    if(hEnd>8) ws.mergeCells(hr,8,hr,hEnd);
+    [2,4,6].forEach(c=>ws.mergeCells(hr,c,hr,c+1));
+    put(hr,2,h.eff_date||'예정(미정)',{border:box}); put(hr,4,h.kind,{border:box}); put(hr,6,h.emp_name||'',{border:box});
+    const txt=(h.content||'')+((h.from_value&&h.to_value)?` (${h.from_value} → ${h.to_value})`:'');
+    const cc=put(hr,8,txt,{border:box}); cc.alignment={horizontal:'left',vertical:'middle',wrapText:true};
+    ws.getRow(hr).height = Math.max(16, Math.ceil(txt.length/90)*15);
+    hr++;
+  });
+
+  // 인원명단 시트
+  const ws2 = wb.addWorksheet('인원명단');
+  ws2.columns=[{header:'법인',key:'ent',width:10},{header:'법인코드',key:'code',width:10},{header:'부서',key:'dept',width:14},{header:'직책',key:'title',width:12},
+    {header:'직급',key:'rank',width:10},{header:'성명',key:'name',width:14},{header:'현지어/영문명',key:'loc',width:18},{header:'상위자',key:'boss',width:14},{header:'입사일',key:'join',width:12}];
+  [...EMPS].sort((a,b)=>(a.emp_no||0)-(b.emp_no||0)).forEach(e=>ws2.addRow({ent:e.entity,code:entLabel(e.entity),dept:e.dept||'',title:e.title||'',rank:e.rank||'',
+    name:dispName(e),loc:e.name_local||'',boss:e.reports_to&&byId[e.reports_to]?dispName(byId[e.reports_to]):'',join:e.join_date||''}));
+  HC.forEach(h=>ws2.addRow({ent:h.entity,code:entLabel(h.entity),dept:h.dept||'',title:'',rank:'',name:`${h.label} ${h.cnt}명`,loc:'(인원수 표시)',boss:'',join:''}));
+  ws2.getRow(1).font=font({bold:true,color:{argb:'FFFFFFFF'}});
+  ws2.getRow(1).eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};});
+  ws2.eachRow((row,i)=>{ if(i>1) row.font=font(); row.eachCell(c=>c.border=box); });
+
+  // HISTORY 시트 (전체)
+  const ws3 = wb.addWorksheet('HISTORY');
+  ws3.columns=[{header:'일자',key:'d',width:12},{header:'상태',key:'s',width:8},{header:'구분',key:'k',width:12},{header:'법인',key:'e',width:10},{header:'부서',key:'dp',width:12},
+    {header:'이름',key:'n',width:16},{header:'변경전',key:'f',width:14},{header:'변경후',key:'t',width:14},{header:'내용',key:'c',width:70}];
+  histSorted(HIST,'eff_date',true).forEach(h=>ws3.addRow({d:h.eff_date||'미정',s:h.status,k:h.kind,e:entLabel(h.entity),dp:h.dept||'',n:h.emp_name||'',f:h.from_value||'',t:h.to_value||'',c:h.content||''}));
+  ws3.getRow(1).font=font({bold:true,color:{argb:'FFFFFFFF'}});
+  ws3.getRow(1).eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF5A5A5A'}};});
+  ws3.eachRow((row,i)=>{ if(i>1) row.font=font(); row.eachCell(c=>{c.border=box; c.alignment={vertical:'middle',wrapText:true};}); });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `SME_글로벌조직도_${today}.xlsx`; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+/* ── 초기화 ── */
+(function init(){
+  if(!curUser){ alert('로그인이 필요합니다. 메인 화면에서 접근해주세요.'); location.href='index.html'; return; }
+  document.getElementById('tbUser').textContent = curUser + ' 님';
+  loadAll();
+})();
+</script>
+</body>
+</html>
