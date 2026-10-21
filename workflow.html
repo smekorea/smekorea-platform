@@ -1094,8 +1094,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     </div>
     <div class="dm-row">
       <div class="dm-field">
-        <label class="dm-label" data-i18n="거래처/관련처">거래처/관련처</label>
-        <input type="text" id="dm-partner" class="dm-input" data-i18n-ph="예: LG전자, MSE" placeholder="예: LG전자, MSE" data-ac="dm-link-pjq-list" autocomplete="off" onchange="onDiaryPartnerChange()">
+        <label class="dm-label" data-i18n="거래처">거래처</label>
+        <input type="text" id="dm-partner" class="dm-input" placeholder="거래처 정보에서 선택" data-ac="dm-link-vendor-list" autocomplete="off" oninput="hideDiaryVmHint()" onchange="onDiaryPartnerChange()">
+      </div>
+      <div class="dm-field">
+        <label class="dm-label" data-i18n="메이커">메이커</label>
+        <input type="text" id="dm-maker" class="dm-input" placeholder="메이커관리에서 선택" data-ac="dm-link-maker-list" autocomplete="off" oninput="hideDiaryVmHint()" onchange="onDiaryMakerChange()">
       </div>
       <div class="dm-field">
         <label class="dm-label" data-i18n="담당부서/담당자">담당부서/담당자</label>
@@ -1111,28 +1115,31 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         </select>
       </div>
     </div>
-    <!-- 업무보고 연동 (지시사항·프로젝트·주간업무) — 2026-10-10 -->
+    <div id="dm-vm-hint" style="display:none;margin:-4px 0 10px;padding:6px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.6;"></div>
+    <datalist id="dm-link-vendor-list"></datalist><datalist id="dm-link-maker-list"></datalist>
+    <!-- 업무보고 연동 (지시사항·주간업무·신규개발) — 2026-10-10 / 2026-10-21 선택 단순화·마스터 -->
     <div id="dm-link-box" style="margin-bottom:10px;padding:10px 12px;background:#f5f8ff;border:1px solid rgba(26,79,160,.2);border-radius:8px;">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-size:11px;font-weight:700;color:#1a4fa0;">업무보고 연동</span>
         <select id="dm-link-type" class="dm-input" style="width:auto;min-width:190px;" onchange="onLinkTypeChange()">
           <option value="">연동 안 함</option>
           <option value="directive">지시사항</option>
-          <option value="project">프로젝트 (세부 진척현황)</option>
           <option value="weekly">주간업무</option>
-          <option value="weekly_row" id="dm-link-opt-row" hidden>주간업무 줄 (업무보고에서 등록)</option>
+          <option value="weekly_row" id="dm-link-opt-row" hidden>주간업무 (업무보고에서 등록한 줄)</option>
+          <option value="project">신규개발 (세부진척현황·마스터)</option>
         </select>
         <label id="dm-link-all-wrap" style="display:none;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" id="dm-link-all" onchange="fillLinkTargets()"> 전체 부서 보기</label>
         <span id="dm-link-state" style="margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;display:none;"></span>
       </div>
+      <div id="dm-link-path" style="display:none;margin-top:6px;font-size:11px;color:#1a4fa0;"></div>
       <div id="dm-link-dir-row" style="display:none;margin-top:8px;">
         <select id="dm-link-dir" class="dm-input"></select>
       </div>
       <div id="dm-link-pj-row" style="display:none;margin-top:8px;">
         <div class="dm-row" style="margin-bottom:0;">
-          <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="거래처·메이커·프로젝트명" data-ac="dm-link-pjq-list" autocomplete="off" oninput="fillLinkTargets();hideLinkNewPartner()" onchange="fillLinkTargets();checkLinkPjQ()"></div>
+          <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="위 거래처·메이커로 자동 — 프로젝트명도 검색" data-ac="dm-link-pjq-list" autocomplete="off" oninput="fillLinkTargets();hideLinkNewPartner()" onchange="fillLinkTargets();checkLinkPjQ()"></div>
           <div class="dm-field" style="flex:2;"><label class="dm-label">프로젝트</label><select id="dm-link-pj" class="dm-input" onchange="onLinkPjChange()"></select></div>
-          <div class="dm-field" style="flex:1;"><label class="dm-label">단계</label><select id="dm-link-stage" class="dm-input"></select></div>
+          <div class="dm-field" style="flex:1;"><label class="dm-label">단계</label><select id="dm-link-stage" class="dm-input" onchange="onLinkMsChange()"></select></div>
         </div>
         <div id="dm-link-pj-newbox" style="display:none;margin-top:8px;padding:8px 10px;background:#fff;border:1px dashed rgba(26,79,160,.35);border-radius:6px;">
           <div style="font-size:11px;font-weight:700;color:#1a4fa0;margin-bottom:6px;">＋ 새 프로젝트 — 저장하면 세부 진척현황에 만들고 이 일지를 그 활동으로 연동합니다</div>
@@ -1141,10 +1148,16 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
             <div class="dm-field"><label class="dm-label">구분</label><select id="dm-link-pjn-kind" class="dm-input"><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select></div>
           </div>
           <div class="dm-row" style="margin-bottom:0;">
-            <div class="dm-field"><label class="dm-label">거래처</label><input type="text" id="dm-link-pjn-vendor" class="dm-input" data-ac="dm-link-vendor-list" autocomplete="off" placeholder="거래처 정보에서 선택"></div>
-            <div class="dm-field"><label class="dm-label">메이커</label><input type="text" id="dm-link-pjn-maker" class="dm-input" data-ac="dm-link-maker-list" autocomplete="off" placeholder="메이커관리에서 선택"></div>
             <div class="dm-field"><label class="dm-label">담당부서</label><select id="dm-link-pjn-dept" class="dm-input"></select></div>
+            <div class="dm-field" style="flex:2;align-self:flex-end;font-size:11px;color:#6b7280;padding-bottom:8px;">거래처·메이커는 위 일지의 거래처·메이커 칸 값으로 등록됩니다.</div>
           </div>
+        </div>
+        <div id="dm-link-ms-box" style="display:none;margin-top:8px;padding:8px 10px;background:#fff;border:1px solid rgba(26,79,160,.2);border-radius:6px;">
+          <div class="dm-row" style="margin-bottom:0;align-items:flex-end;">
+            <div class="dm-field" style="flex:2;"><label class="dm-label">신규개발 마스터</label><select id="dm-link-ms" class="dm-input" onchange="onLinkMsChange()"></select></div>
+            <div class="dm-field" id="dm-link-ms-st-wrap"><label class="dm-label" style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="dm-link-ms-on" onchange="onLinkMsChange()"> 마스터 단계 상태도 반영</label><select id="dm-link-ms-st" class="dm-input" disabled><option value="진행중">진행중</option><option value="완료">완료 (이 일자로 기록)</option><option value="Drop">Drop</option></select></div>
+          </div>
+          <div id="dm-link-ms-note" style="font-size:11px;color:#6b7280;margin-top:4px;"></div>
         </div>
         <div id="dm-link-pj-new" style="display:none;margin-top:6px;padding:6px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.6;"></div>
         <datalist id="dm-link-pjq-list"></datalist>
@@ -1155,10 +1168,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
           <div class="dm-row" style="margin-bottom:0;">
             <div class="dm-field"><label class="dm-label">부서</label><select id="dm-link-wk-dept" class="dm-input"></select></div>
             <div class="dm-field"><label class="dm-label">대분류</label><select id="dm-link-wk-cat" class="dm-input"></select></div>
-            <div class="dm-field"><label class="dm-label">거래처</label><input type="text" id="dm-link-wk-vendor" class="dm-input" data-ac="dm-link-vendor-list" autocomplete="off" placeholder="거래처 정보에서 선택"></div>
-            <div class="dm-field"><label class="dm-label">메이커</label><input type="text" id="dm-link-wk-maker" class="dm-input" data-ac="dm-link-maker-list" autocomplete="off" placeholder="메이커관리에서 선택"></div>
+            <div class="dm-field" style="flex:2;align-self:flex-end;font-size:11px;color:#6b7280;padding-bottom:8px;">거래처·메이커는 위 일지 칸 값으로 등록됩니다.</div>
           </div>
-          <datalist id="dm-link-vendor-list"></datalist><datalist id="dm-link-maker-list"></datalist>
         </div>
       </div>
       <div id="dm-link-hint" style="display:none;font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;"></div>
@@ -1735,6 +1746,7 @@ function convertToWorkDiary(id){
   document.getElementById('dm-cat').value=r.category||'사내행정';
   document.getElementById('dm-action').value=r.action_type||'미팅/회의';
   document.getElementById('dm-partner').value=r.partner||'';
+  document.getElementById('dm-maker').value=r.maker||'';
   document.getElementById('dm-dept').value=r.dept_contact||'';
   document.getElementById('dm-content-type').value=r.content_type||'일반기록';
   onContentTypeChange();
@@ -1778,7 +1790,7 @@ function renderList(){
       if(listCatF && String(r.cat||r.category_num||'')!==listCatF) return false;
       if(listMonthF && (r.date||'').slice(5,7)!==listMonthF) return false;
       if(listKwF){
-        var hay=((r.title||'')+' '+(r.content||'')+' '+(r.partner||'')).toLowerCase();
+        var hay=((r.title||'')+' '+(r.content||'')+' '+(r.partner||'')+' '+(r.maker||'')).toLowerCase();
         if(!hay.includes(listKwF)) return false;
       }
       // 컬럼 필터 적용
@@ -1799,7 +1811,7 @@ function renderList(){
       <td class="dt-date${d.getDay()===0?' dt-date-sun':d.getDay()===6?' dt-date-sat':''}">${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} (${t(DAYS[d.getDay()])})${isToday?` <span style="color:#E2772E;font-size:10px;font-weight:700;">▶ ${t('오늘')}</span>`:''}</td>
       <td class="dt-cat">${r.category==='일정'?'—':t(r.category||'')}</td>
       <td class="dt-action">${t(r.action_type||'')}</td>
-      <td class="dt-partner">${escapeHtml(r.partner||'—')}</td>
+      <td class="dt-partner">${vmCell(r)}</td>
       <td class="dt-title-cell">${escapeHtml(r.title||'')}</td>
       <td><div class="dt-content">${escapeHtml(r.content||'')}</div></td>
       <td class="dt-status"><span class="status-badge sb-일정">${t(r.status||'일정')}</span></td>
@@ -2446,7 +2458,7 @@ function getDiaryFiltered(){
     // 컬럼 필터 적용
     for(var k in cf){ if(cf[k] && (r[k]||'').trim()!==cf[k]) return false; }
     if(keywords.length>0){
-      const hay=((r.partner||'')+' '+(r.title||'')+' '+(r.content||'')+' '+(r.dept_contact||'')+' '+(r.origin||'')+' '+(r.target_dept||'')).toLowerCase();
+      const hay=((r.partner||'')+' '+(r.maker||'')+' '+(r.title||'')+' '+(r.content||'')+' '+(r.dept_contact||'')+' '+(r.origin||'')+' '+(r.target_dept||'')).toLowerCase();
       if(!keywords.some(kw=>hay.includes(kw))) return false;
     }
     return true;
@@ -2583,9 +2595,9 @@ function debouncedSearch(){
 function downloadDiary(){
   const filtered=getDiaryFiltered();
   if(!filtered.length){alert('다운로드할 데이터가 없어요.');return;}
-  const cols=['날짜','업무유형','활동','거래처','담당부서','제목','내용','중요도','상태','후속조치','원본분류'];
+  const cols=['날짜','업무유형','활동','거래처','메이커','담당부서','제목','내용','중요도','상태','후속조치','원본분류'];
   const rows=filtered.map(r=>[
-    r.date, r.category, r.action_type, r.partner, r.dept_contact,
+    r.date, r.category, r.action_type, r.partner, r.maker, r.dept_contact,
     r.title, r.content, r.importance, r.status, r.follow_up, r.origin
   ].map(v=>'"'+(String(v||'').replace(/"/g,'""'))+'"').join(','));
   const csv='\uFEFF'+cols.join(',')+'\n'+rows.join('\n');
@@ -2679,6 +2691,7 @@ function parseDiaryUploadRows(json){
       category:String(row['업무유형']||'').trim(),
       action_type:String(row['활동유형']||'').trim(),
       partner:String(row['거래처']||'').trim(),
+      maker:String(row['메이커']||'').trim()||null,
       dept_contact:String(row['담당부서']||'').trim(),
       content_type:contentType,
       title:String(row['제목']||'').trim(),
@@ -2934,7 +2947,7 @@ function renderDiary(){
         <td class="dt-date${d.getDay()===0?' dt-date-sun':d.getDay()===6?' dt-date-sat':''}">${dayStr}</td>
         <td class="dt-cat">${t(r.category||'')}</td>
         <td class="dt-action">${t(r.action_type||'')}</td>
-        <td class="dt-partner">${escapeHtml(r.partner||'—')}</td>
+        <td class="dt-partner">${vmCell(r)}</td>
         <td class="dt-dept-cell">${escapeHtml(r.target_dept||'')}</td>
         <td class="dt-title-cell">${escapeHtml(r.title||'')}${taskBadgeHtml(r)}${linkBadgeHtml(r)}</td>
         <td>
@@ -3306,6 +3319,11 @@ function onContentTypeChange(){
   if(taskRow) taskRow.style.display=needTask?'':'none';
 }
 
+/* ═══ 2026-10-21 업무일지 연동 정리 ═══
+   · 일지 본문 거래처/메이커 두 칸(work_diary.maker) — 거래처 정보·메이커관리 자동완성, 없는 이름은 안내
+   · 연동 선택: 연동 안 함 / 지시사항 / 주간업무 / 신규개발(세부진척현황·마스터). 주간업무 새 건·새 프로젝트의 거래처·메이커는 일지 칸 값
+   · 신규개발: 마스터 연결(dev_items.project_id) + 「마스터 단계 상태도 반영」 체크 시 dev_projects.stages 갱신
+   · 거래처·메이커 양방향 반영은 DB(wd_link_sync·wd_vm_back·rp_make_diary) */
 /* ═══ 업무보고 연동 (2026-10-10) ═══
    업무일지를 쓸 때 지시사항·프로젝트·주간업무 중 하나를 고르면, 저장할 때 그쪽 활동으로 반영된다.
    · 반영 자체는 DB(work_diary 트리거 wd_link_sync)가 한다 — 이 화면은 link_type / link_ref_id / link_stage 만 저장한다
@@ -3350,9 +3368,11 @@ async function loadLinkData(type){
     linkData.dirs=dRes.data||[]; linkData.asg=asg;
   }else if(type==='project'){
     await loadLinkNames();
-    var iRes=await SB.from('dev_items').select('id,title,vendor,maker,owner_dept,kind').eq('is_deleted',false).order('id',{ascending:false}).limit(2000);
+    var iRes=await SB.from('dev_items').select('id,title,vendor,maker,owner_dept,kind,project_id').eq('is_deleted',false).order('id',{ascending:false}).limit(2000);
     if(iRes.error) throw iRes.error;
     linkData.items=iRes.data||[];
+    var mRes=await SB.from('dev_projects').select('id,grp,vendor,maker,product,stages').eq('is_deleted',false).order('id').limit(2000);
+    linkData.masters=mRes.error?[]:(mRes.data||[]);
   }else if(type==='weekly'){
     var from=new Date(); from.setDate(from.getDate()-35);
     var wRes=await SB.from('rp_weekly').select('id,dept,rpt_year,rpt_month,week_no,kind,category,vendor,maker,content,due_date')
@@ -3386,20 +3406,56 @@ function linkNameKnown(q){
   var hit=function(n){ var nk=linkKey(n); return nk&&(nk===k||nk.indexOf(k)>=0||(nk.length>=2&&k.indexOf(nk)>=0)); };
   return (linkData.makers||[]).some(hit)||(linkData.partners||[]).some(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&hit(n); }); });
 }
-// 위 「거래처/관련처」 값을 연동 검색칸·주간업무 거래처/메이커에 채운다 (비어 있을 때만, force=true면 덮어씀)
+/* ── 일지 거래처·메이커 (2026-10-21) ──
+   일지 본문에 거래처·메이커 두 칸. 주간업무 새 건·새 프로젝트는 이 값으로 등록하고, 프로젝트 검색칸도 이 값으로 채운다.
+   반영은 DB 트리거(wd_link_sync·wd_vm_back): 주간업무 줄(1:1)은 서로 그대로, 공유되는 줄·프로젝트는 빈 칸만 채움 */
+function vmCell(r){
+  var a=r.partner||'', b=r.maker||'';
+  if(!a&&!b) return '—';
+  return escapeHtml(a)+(b&&b!==a?(a?'<br>':'')+'<span style="color:#6b7280;font-size:11px;">'+escapeHtml(b)+'</span>':'');
+}
+function vmPartnerStd(v){
+  var k=linkKey(v); if(!k) return null;
+  return (linkData.partners||[]).find(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&linkKey(n)===k; }); })||null;
+}
+function vmMakerStd(v){ var k=linkKey(v); return k?((linkData.makers||[]).find(function(n){ return linkKey(n)===k; })||null):null; }
+function hideDiaryVmHint(){ var el=document.getElementById('dm-vm-hint'); if(el){ el.style.display='none'; el.innerHTML=''; } }
+function diaryVmCheck(){
+  var el=document.getElementById('dm-vm-hint'); if(!el||!linkData.partners) return;
+  var pv=document.getElementById('dm-partner').value.trim(), mv=document.getElementById('dm-maker').value.trim(), msg=[];
+  if(pv&&!vmPartnerStd(pv)&&pv.indexOf(',')<0)
+    msg.push('「<b>'+escapeHtml(pv)+'</b>」은(는) 거래처 정보에 없는 이름입니다. <button type="button" onclick="diaryRegisterPartner()" style="margin-left:4px;padding:1px 8px;font-size:11px;border:1px solid #ea580c;background:#fff;color:#c2410c;border-radius:4px;cursor:pointer;font-family:inherit;">거래처 신규 등록</button>');
+  if(mv&&!vmMakerStd(mv)) msg.push('「<b>'+escapeHtml(mv)+'</b>」은(는) 메이커관리에 없는 메이커입니다. 관리자설정 &gt; 메이커관리에 등록해 주세요.');
+  if(msg.length){ el.innerHTML=msg.join('<br>'); el.style.display=''; } else hideDiaryVmHint();
+}
+async function diaryRegisterPartner(){
+  var pv=document.getElementById('dm-partner').value.trim(); if(!pv||!SB) return;
+  if(!confirm('「'+pv+'」을(를) 거래처 정보에 신규 등록할까요?')) return;
+  try{
+    var r=await SB.from('partners').insert({name:pv,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'});
+    if(r.error) throw r.error;
+    await loadLinkNames(true); diaryVmCheck();
+  }catch(e){ alert('거래처 등록에 실패했습니다: '+(e.message||e)); }
+}
+// 위 거래처·메이커 → 프로젝트 검색칸 (비어 있을 때만, force=true면 덮어씀)
 function linkFillFromPartner(force){
-  var pv=document.getElementById('dm-partner').value.trim(); if(!pv) return;
-  var type=document.getElementById('dm-link-type').value;
-  if(type==='project'){
-    var q=document.getElementById('dm-link-pj-q');
-    if(force||!q.value.trim()){ q.value=pv; if(!(linkPreset&&linkPreset.type==='project')) checkLinkPjQ(); }
-  }else if(type==='weekly'){
-    var k=linkKey(pv), isMk=(linkData.makers||[]).some(function(n){ return linkKey(n)===k; });
-    var el=document.getElementById(isMk?'dm-link-wk-maker':'dm-link-wk-vendor');
-    if(force||!el.value.trim()) el.value=pv;
-  }
+  var type=document.getElementById('dm-link-type').value; if(type!=='project') return;
+  var v=document.getElementById('dm-maker').value.trim()||document.getElementById('dm-partner').value.trim(); if(!v) return;
+  var q=document.getElementById('dm-link-pj-q');
+  if(force||!q.value.trim()){ q.value=v; if(!(linkPreset&&linkPreset.type==='project')) checkLinkPjQ(); }
 }
 function onDiaryPartnerChange(){
+  var pe=document.getElementById('dm-partner'), me=document.getElementById('dm-maker'), pv=pe.value.trim();
+  // 메이커 이름을 거래처 칸에 적었으면 메이커 칸으로 옮긴다(거래처 정보에 없는 이름일 때만)
+  if(pv&&!vmPartnerStd(pv)&&vmMakerStd(pv)&&!me.value.trim()){ me.value=vmMakerStd(pv); pe.value=''; }
+  else if(pv&&vmPartnerStd(pv)) pe.value=vmPartnerStd(pv).name;
+  diaryVmCheck(); onDiaryVmChanged();
+}
+function onDiaryMakerChange(){
+  var me=document.getElementById('dm-maker'), std=vmMakerStd(me.value.trim()); if(std) me.value=std;
+  diaryVmCheck(); onDiaryVmChanged();
+}
+function onDiaryVmChanged(){
   var type=document.getElementById('dm-link-type').value; if(!type) return;
   linkFillFromPartner(true);
   if(type==='project'&&!(linkPreset&&linkPreset.type==='project')) fillLinkTargets();
@@ -3542,25 +3598,67 @@ async function onLinkTypeChange(){
   linkFillFromPartner(false);
   fillLinkTargets();
   await ensureLinkPreset(type);
+  if(type==='project'&&seq===linkSeq) fillLinkMaster();
 }
 function onLinkPjChange(){
   var on=document.getElementById('dm-link-pj').value==='new', box=document.getElementById('dm-link-pj-newbox');
   box.style.display=on?'':'none';
+  fillLinkMaster();
   if(!on) return;
   var dsel=document.getElementById('dm-link-pjn-dept');
   if(!dsel.options.length){ var myD=LINK_DEPTS.indexOf(wfSession.dept)>=0?wfSession.dept:LINK_DEPTS[0]; dsel.innerHTML=LINK_DEPTS.map(function(d){ return linkOptHtml(d,d,myD); }).join(''); }
-  // 검색칸에 적은 이름이 메이커관리에 있으면 메이커, 거래처 정보에 있으면 거래처로 미리 채운다
-  var q=document.getElementById('dm-link-pj-q').value.trim(), v=document.getElementById('dm-link-pjn-vendor'), m=document.getElementById('dm-link-pjn-maker');
-  if(q&&!v.value&&!m.value){
-    var k=linkKey(q), mk=(linkData.makers||[]).find(function(n){ return linkKey(n)===k; });
-    var pt=(linkData.partners||[]).find(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&linkKey(n)===k; }); });
-    if(mk) m.value=mk; if(pt) v.value=pt.name;
+}
+/* ── 신규개발 마스터 (2026-10-21) ──
+   프로젝트가 마스터에 연결돼 있으면 그 마스터를 보여주고, 단계를 고르고 「마스터 단계 상태도 반영」을 켜면 저장 때 마스터 단계 상태를 바꾼다.
+   연결이 없으면 같은 거래처·메이커의 마스터 목록에서 골라 연결할 수 있다(dev_items.project_id) */
+function linkMsLabel(m){ return [m.maker||m.vendor||'',m.product||''].filter(Boolean).join(' — ')||('#'+m.id); }
+function linkMsStateNow(m,stage){ var s=m&&m.stages&&m.stages[stage]; return s&&s.state?s.state+(s.date?' '+linkMd(s.date):''):'없음'; }
+function fillLinkMaster(){
+  var box=document.getElementById('dm-link-ms-box'), pv=document.getElementById('dm-link-pj').value;
+  if(!pv||!linkData.items){ box.style.display='none'; return; }
+  var it=pv==='new'?null:(linkData.items||[]).find(function(i){ return String(i.id)===String(pv); });
+  var sel=document.getElementById('dm-link-ms'), ms=linkData.masters||[], cur=it&&it.project_id;
+  if(cur){
+    var m=ms.find(function(x){ return x.id===cur; });
+    sel.innerHTML='<option value="'+cur+'">'+escapeHtml(m?linkMsLabel(m):'마스터 #'+cur)+'</option>'; sel.disabled=true;
+  }else{
+    var keys=[document.getElementById('dm-maker').value,document.getElementById('dm-partner').value].concat(it?[it.maker,it.vendor]:[]).map(linkKey).filter(Boolean);
+    var hit=ms.filter(function(x){ var k=[linkKey(x.maker),linkKey(x.vendor)]; return keys.some(function(q){ return k.indexOf(q)>=0; }); });
+    var rest=ms.filter(function(x){ return hit.indexOf(x)<0; });
+    sel.innerHTML='<option value="">마스터에 연결 안 함</option>'
+      +(hit.length?'<optgroup label="같은 거래처·메이커">'+hit.map(function(x){ return linkOptHtml(x.id,linkMsLabel(x),''); }).join('')+'</optgroup>':'')
+      +'<optgroup label="전체">'+rest.map(function(x){ return linkOptHtml(x.id,linkMsLabel(x),''); }).join('')+'</optgroup>';
+    sel.disabled=false;
   }
+  box.style.display='';
+  onLinkMsChange();
+}
+function onLinkMsChange(){
+  var msId=+document.getElementById('dm-link-ms').value||null, stage=+document.getElementById('dm-link-stage').value||null;
+  var on=document.getElementById('dm-link-ms-on'), st=document.getElementById('dm-link-ms-st'), note=document.getElementById('dm-link-ms-note');
+  var can=!!(msId&&stage);
+  on.disabled=!can; if(!can) on.checked=false; st.disabled=!on.checked;
+  var m=msId&&(linkData.masters||[]).find(function(x){ return x.id===msId; });
+  var linked=document.getElementById('dm-link-ms').disabled;
+  note.innerHTML=!msId?'마스터에 연결되지 않은 프로젝트입니다. 위 목록에서 고르면 저장할 때 연결됩니다.'
+    :!stage?(linked?'':'저장하면 이 프로젝트를 선택한 마스터에 연결합니다. ')+'단계를 고르면 마스터 단계 상태도 함께 바꿀 수 있습니다.'
+    :(linked?'':'저장하면 선택한 마스터에 연결합니다. ')+LINK_NUM[stage-1]+LINK_STAGES[stage-1]+' 현재 상태: <b>'+escapeHtml(linkMsStateNow(m,stage))+'</b>';
+  updateLinkHint();
+}
+function updateLinkPath(){
+  var el=document.getElementById('dm-link-path'); if(!el) return;
+  var type=document.getElementById('dm-link-type').value;
+  var msOn=type==='project'&&!!document.getElementById('dm-link-ms').value;
+  var tgt={directive:['지시사항'],weekly:['주간업무'],weekly_row:['주간업무'],project:['세부진척현황','주간업무(신규개발)'].concat(msOn?[document.getElementById('dm-link-ms-on').checked?'마스터 단계':'마스터 연결']:[])}[type];
+  if(!tgt){ el.style.display='none'; return; }
+  el.innerHTML='반영: <b>일지</b> → '+tgt.join(' · ');
+  el.style.display='';
 }
 function onLinkWeeklyChange(){
   document.getElementById('dm-link-wk-new').style.display=document.getElementById('dm-link-wk').value==='new'?'':'none';
 }
 function updateLinkHint(){
+  updateLinkPath();
   var el=document.getElementById('dm-link-hint'); if(!el) return;
   var type=document.getElementById('dm-link-type').value;
   if(!type){
@@ -3569,7 +3667,7 @@ function updateLinkHint(){
     return;
   }
   if(type==='weekly_row'){ el.innerHTML='업무보고 주간업무에서 등록한 줄과 1:1로 연결되어 있습니다. 저장하면 그 줄의 내용·작성일자도 함께 바뀝니다.'; el.style.display=''; return; }
-  var where={directive:'선택한 지시사항의 활동내용',project:'선택한 프로젝트의 세부 진척현황',weekly:'선택한 주간업무 줄의 일자별 활동'}[type];
+  var where={directive:'선택한 지시사항의 활동내용',project:'선택한 프로젝트의 세부 진척현황(주간업무에는 신규개발 줄로 표시)',weekly:'선택한 주간업무 줄의 일자별 활동'}[type];
   var sched=document.getElementById('dm-status').value==='일정';
   el.innerHTML=(sched&&type==='project'?'<b style="color:#1a4fa0;">상태가 「일정」이면 세부 진척현황에 바로 올라가고 목표일정에 이 날짜가 표시됩니다.</b> 완료로 바꿔 저장하면 완료일정이 채워집니다.'
       :sched&&type==='weekly'?'<b style="color:#1a4fa0;">상태가 「일정」이면 주간업무에 「계획」으로 올라갑니다</b> (「새 건 등록」을 고른 경우). 완료·진행중으로 바꿔 저장하면 「실적」으로 바뀌고 활동이 반영됩니다. 기존 건을 고르면 완료로 바꿀 때 그 줄에 활동이 반영됩니다.'
@@ -3581,11 +3679,12 @@ function updateLinkHint(){
 // 창을 열 때: 연동 칸을 비우거나(신규) 그 일지에 걸려 있는 연동을 다시 보여준다
 function resetLinkUI(r){
   linkPreset=(r&&r.link_type&&r.link_ref_id)?{type:r.link_type,refId:r.link_ref_id,stage:r.link_stage||''}:null;
+  var mkEl=document.getElementById('dm-maker'); if(mkEl&&!r) mkEl.value='';
   linkData.dirs=linkData.items=linkData.weekly=null;
   ['dm-link-dir','dm-link-pj','dm-link-wk'].forEach(function(id){ document.getElementById(id).innerHTML=''; });
   document.getElementById('dm-link-pj-q').value=''; hideLinkNewPartner();
-  document.getElementById('dm-link-wk-vendor').value=''; document.getElementById('dm-link-wk-maker').value='';
-  ['dm-link-pjn-title','dm-link-pjn-vendor','dm-link-pjn-maker'].forEach(function(id){ document.getElementById(id).value=''; }); document.getElementById('dm-link-pjn-dept').innerHTML=''; document.getElementById('dm-link-pj-newbox').style.display='none';
+  document.getElementById('dm-link-pjn-title').value=''; document.getElementById('dm-link-pjn-dept').innerHTML=''; document.getElementById('dm-link-pj-newbox').style.display='none';
+  linkData.masters=null; document.getElementById('dm-link-ms-box').style.display='none'; document.getElementById('dm-link-ms-on').checked=false; hideDiaryVmHint();
   document.getElementById('dm-link-all').checked=linkIsExec();
   var optRow=document.getElementById('dm-link-opt-row'); if(optRow) optRow.hidden=!(linkPreset&&linkPreset.type==='weekly_row');
   document.getElementById('dm-link-type').value=linkPreset?linkPreset.type:'';
@@ -3597,7 +3696,7 @@ function resetLinkUI(r){
       var done=!!r.link_log_id;
       // 입력·연동 경로 (2026-10-14): 입력한 곳(굵게) → 연동된 곳 — 업무보고 화면과 같은 표기
       var lkSet=function(first){
-        var tgt={directive:['지시사항'],project:['진척현황','주간업무'],weekly:['주간업무'],weekly_row:['주간업무']}[r.link_type]||[];
+        var tgt={directive:['지시사항'],project:['진척현황','주간업무'],weekly:['주간업무'],weekly_row:['주간업무']}[r.link_type]||[];   // 저장된 연동 표시
         var path=r.origin==='업무보고'?[first,'일지'].concat(tgt.filter(function(x){return x!==first;})):['일지'].concat(tgt);
         st.innerHTML='🔗 입력·연동: <b>'+path[0]+'</b> → '+path.slice(1).join(' → ')+' · '+(done?'반영 완료':'반영 전');
       };
@@ -3628,11 +3727,13 @@ function readLinkSel(obj){
   if(type==='project'){
     var pv=document.getElementById('dm-link-pj').value;
     if(!pv){ alert('연동할 프로젝트를 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
+    var msSel=+document.getElementById('dm-link-ms').value||null, msLinked=document.getElementById('dm-link-ms').disabled;
+    var msInfo={masterId:msSel,connect:!!(msSel&&!msLinked),state:document.getElementById('dm-link-ms-on').checked?document.getElementById('dm-link-ms-st').value:null};
     if(pv==='new'){
       var pt=document.getElementById('dm-link-pjn-title').value.trim();
-      var pvn=document.getElementById('dm-link-pjn-vendor').value.trim(), pmk=document.getElementById('dm-link-pjn-maker').value.trim(), pAdd=false;
+      var pvn=document.getElementById('dm-partner').value.trim(), pmk=document.getElementById('dm-maker').value.trim(), pAdd=false;
       if(!pt){ alert('새 프로젝트 이름을 입력해주세요.'); return false; }
-      if(!pvn&&!pmk){ alert('새 프로젝트의 거래처와 메이커 중 하나는 입력해주세요.'); return false; }
+      if(!pvn&&!pmk){ alert('새 프로젝트의 거래처와 메이커 중 하나는 일지의 거래처·메이커 칸에 입력해주세요.'); return false; }
       if(pvn){
         var pk=linkKey(pvn), pknown=(linkData.partners||[]).find(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&linkKey(n)===pk; }); });
         if(pknown) pvn=pknown.name;
@@ -3643,16 +3744,17 @@ function readLinkSel(obj){
         if(pstd) pmk=pstd;
         else if(!confirm('「'+pmk+'」은(는) 메이커관리에 없는 메이커입니다.\n관리자설정 > 메이커관리에 신규로 등록해 주세요.\n\n확인 = 지금은 적은 이름 그대로 저장 / 취소 = 입력 화면으로 돌아가기')) return false;
       }
-      return {type:type,refId:null,stage:+document.getElementById('dm-link-stage').value||null,
+      obj.partner=pvn; obj.maker=pmk||null;
+      return {type:type,refId:null,stage:+document.getElementById('dm-link-stage').value||null,ms:msInfo,
         pjNew:{title:pt,kind:document.getElementById('dm-link-pjn-kind').value,vendor:pvn,maker:pmk,dept:document.getElementById('dm-link-pjn-dept').value,addPartner:pAdd}};
     }
-    return {type:type,refId:+pv,stage:+document.getElementById('dm-link-stage').value||null};
+    return {type:type,refId:+pv,stage:+document.getElementById('dm-link-stage').value||null,ms:msInfo};
   }
   var wv=document.getElementById('dm-link-wk').value;
   if(!wv){ alert('연동할 주간업무 건을 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
   if(wv!=='new') return {type:type,refId:+wv,stage:null};
   if(!obj.title&&!obj.content){ alert('주간업무 새 건의 내용이 될 제목이나 내용을 입력해주세요.'); return false; }
-  var vendor=document.getElementById('dm-link-wk-vendor').value.trim(), maker=document.getElementById('dm-link-wk-maker').value.trim(), addPartner=false;
+  var vendor=document.getElementById('dm-partner').value.trim(), maker=document.getElementById('dm-maker').value.trim(), addPartner=false;
   if(vendor){
     var vk=linkKey(vendor), known=(linkData.partners||[]).find(function(p){ return [p.name,p.alias1,p.alias2].some(function(n){ return n&&linkKey(n)===vk; }); });
     if(known) vendor=known.name;      // 별칭으로 적어도 거래처 정보의 이름으로 통일
@@ -3666,6 +3768,7 @@ function readLinkSel(obj){
     if(std) maker=std;
     else if(!confirm('「'+maker+'」은(는) 메이커관리에 없는 메이커입니다.\n관리자설정 > 메이커관리에 신규로 등록해 주세요.\n\n확인 = 지금은 적은 이름 그대로 저장 / 취소 = 입력 화면으로 돌아가기')) return false;
   }
+  obj.partner=vendor; obj.maker=maker||null;
   return {type:type,refId:null,stage:null,wkNew:{kind:isSched?'계획':'실적',dept:document.getElementById('dm-link-wk-dept').value,category:document.getElementById('dm-link-wk-cat').value,vendor:vendor,maker:maker,addPartner:addPartner}};
 }
 // 일지 저장이 끝난 뒤 연동 정보를 그 일지 1건에 저장한다(실제 반영은 DB 트리거)
@@ -3690,7 +3793,7 @@ async function applyDiaryLink(id,sel){
       if(pn.addPartner){ try{ await SB.from('partners').insert({name:pn.vendor,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'}); linkData.partners=null; }catch(e){ console.warn(e); } }
       var mx=await SB.from('dev_items').select('sort_no').order('sort_no',{ascending:false,nullsFirst:false}).limit(1);
       var nextSort=((mx.data&&mx.data[0]&&mx.data[0].sort_no)||0)+1;
-      var pins=await SB.from('dev_items').insert({title:pn.title,kind:pn.kind||'업체개발',vendor:pn.vendor||null,maker:pn.maker||null,owner_dept:pn.dept||null,sort_no:nextSort,
+      var pins=await SB.from('dev_items').insert({title:pn.title,kind:pn.kind||'업체개발',vendor:pn.vendor||null,maker:pn.maker||null,owner_dept:pn.dept||null,sort_no:nextSort,project_id:(want.ms&&want.ms.masterId)||null,
         reg_text:String(rec.date).slice(0,10),origin:'업무일지',created_by:wfSession.empId||null,created_name:wfSession.name}).select().single();
       if(pins.error) throw pins.error;
       refId=pins.data.id; linkData.items=null;
@@ -3701,12 +3804,24 @@ async function applyDiaryLink(id,sel){
                 : await SB.from('work_diary').update({link_type:want.type||null,link_ref_id:refId||null,link_stage:stage}).eq('id',id).select().single();
     if(res.error) throw res.error;
     Object.assign(rec,res.data);
+    if(want.type==='project'&&want.ms&&refId) await applyLinkMaster(refId,want.ms,stage,rec.date,!!want.pjNew);
     if(want.type&&rec.status!=='일정'&&(rec.title||rec.content)&&!rec.link_log_id)
       alert('업무일지는 저장됐지만 업무보고 반영이 확인되지 않습니다.\n업무보고 화면에서 확인해 주세요.');
   }catch(e){
     console.warn('[Link] save error:',e);
     alert('업무일지는 저장됐지만 업무보고 연동 저장에 실패했습니다: '+(e.message||e));
   }
+}
+// 신규개발 마스터: 연결(dev_items.project_id) + 단계 상태(dev_projects.stages) — 업무보고 화면과 같은 저장 방식
+async function applyLinkMaster(itemId,ms,stage,date,isNew){
+  try{
+    if(ms.connect&&!isNew){ var u=await SB.from('dev_items').update({project_id:ms.masterId,updated_at:new Date().toISOString()}).eq('id',itemId).is('project_id',null); if(u.error) throw u.error; }
+    if(!ms.state||!stage||!ms.masterId) return;
+    var g=await SB.from('dev_projects').select('id,stages').eq('id',ms.masterId).single(); if(g.error) throw g.error;
+    var st=Object.assign({},g.data.stages||{}); st[stage]=Object.assign({},st[stage]||{},{state:ms.state});
+    if(ms.state==='완료') st[stage].date=String(date).slice(0,10); else delete st[stage].date;
+    var p=await SB.from('dev_projects').update({stages:st,updated_at:new Date().toISOString()}).eq('id',ms.masterId); if(p.error) throw p.error;
+  }catch(e){ console.warn('[Link] master:',e); alert('업무일지·진척현황은 저장됐지만 신규개발 마스터 반영에 실패했습니다: '+(e.message||e)); }
 }
 function linkBadgeHtml(r){
   if(!r||!r.link_type) return '';
@@ -3731,6 +3846,7 @@ function openDiaryModal(date){
   document.getElementById('dm-cat').value='영업/거래처관리';
   document.getElementById('dm-action').value='방문/정기방문';
   document.getElementById('dm-partner').value='';
+  document.getElementById('dm-maker').value='';
   document.getElementById('dm-dept').value='';
   document.getElementById('dm-content-type').value='일반기록';
   document.getElementById('dm-task-start').value='';
@@ -3797,6 +3913,7 @@ function editDiary(id){
   document.getElementById('dm-cat').value=r.category||'기타';
   document.getElementById('dm-action').value=r.action_type||'기타';
   document.getElementById('dm-partner').value=r.partner||'';
+  document.getElementById('dm-maker').value=r.maker||'';
   document.getElementById('dm-dept').value=r.dept_contact||'';
   document.getElementById('dm-content-type').value=r.content_type||'일반기록';
   document.getElementById('dm-task-start').value=r.task_start_date||'';
@@ -3882,7 +3999,7 @@ function closeDiaryModal(){
 /* ═══ 기간 일정 (출장 등 여러 날 — 날짜별 복사 등록, group_id로 묶음) ═══ */
 var _periodGroup=null;   // 수정 중인 레코드가 기간 일정일 때 {gid,first,last,total,pos}
 var _scopeResolve=null;
-var GROUP_FIELDS=['category','action_type','partner','dept_contact','content_type','title','content','follow_up','importance','status','task_start_date','task_end_date','task_stage','is_shared','share_target','share_type'];
+var GROUP_FIELDS=['category','action_type','partner','maker','dept_contact','content_type','title','content','follow_up','importance','status','task_start_date','task_end_date','task_stage','is_shared','share_target','share_type'];
 
 function wfUuid(){
   try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
@@ -4130,6 +4247,7 @@ async function saveDiary(){
     category: document.getElementById('dm-cat').value,
     action_type: document.getElementById('dm-action').value,
     partner: document.getElementById('dm-partner').value.trim(),
+    maker: document.getElementById('dm-maker').value.trim()||null,
     dept_contact: document.getElementById('dm-dept').value.trim(),
     content_type: ctVal,
     title: document.getElementById('dm-title').value.trim(),
@@ -4351,6 +4469,7 @@ async function confirmMoveCopy(){
     category: document.getElementById('dm-cat').value,
     action_type: document.getElementById('dm-action').value,
     partner: document.getElementById('dm-partner').value.trim(),
+    maker: document.getElementById('dm-maker').value.trim()||null,
     dept_contact: document.getElementById('dm-dept').value.trim(),
     content_type: document.getElementById('dm-content-type').value,
     title: document.getElementById('dm-title').value.trim(),
@@ -5159,6 +5278,7 @@ function copySharedToMyDiary(){
   document.getElementById('dm-cat').value = r.category || '매출처';
   document.getElementById('dm-action').value = r.action_type || '방문';
   document.getElementById('dm-partner').value = r.partner || '';
+  document.getElementById('dm-maker').value = r.maker || '';
   document.getElementById('dm-dept').value = r.dept_contact || '';
   document.getElementById('dm-content-type').value = r.content_type || '일반기록';
   document.getElementById('dm-task-start').value = r.task_start_date || '';

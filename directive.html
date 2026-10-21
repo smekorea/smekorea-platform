@@ -1072,6 +1072,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.44 (2026-10-21) — 업무일지 메이커 칸(work_diary.maker): 일지 보기 창에 메이커 표시, 거래처·메이커별 검색에서 연동 안 된 일지를 거래처·메이커 둘 다로 찾기 (일지 자동 기록 시 거래처·메이커는 DB rp_make_diary 가 나눠 채움)
    directive.html v3.43 (2026-10-14) — 수정 창 프로젝트 선택을 프로젝트명만 표시(같은 이름일 때만 메이커·부서로 구분)
    directive.html v3.42 (2026-10-14) — 수정 창에 「📒 업무일지로 복사」(일지 미연동 신규개발 활동·주간업무 줄 → 담당자 업무일지 기록·연동, 담당 비면 본인), 연동된 기록은 「업무일지 연동됨」 표시
    directive.html v3.41 (2026-10-14) — 「일지」 배지 → 입력·연동 열(입력한 곳 굵게 → 연동된 곳, 이름 클릭으로 열기: 주간업무·세부 진척현황·법인별·거래처·메이커별, 지시·프로젝트 타임라인·일자별 활동은 작은 경로) / 업무일지 보기 창 / 프로젝트 활동 입력 탭을 dev_logs.origin 에 기록
@@ -3389,8 +3390,9 @@ async function renderVm(auto){
   if(me){
     try{
       const raw=q.replace(/[(),*%]/g,' ').trim();
-      const wd=await sbGetAll('work_diary','select=id,date,partner,title,content,status,emp_name,employee_id,is_shared&link_type=is.null&partner=ilike.*'+encodeURIComponent(raw)+'*&order=date.desc');
-      wd.filter(w=>w.employee_id===me.id||w.is_shared).forEach(w=>rows.push({k:'dj',date:w.date||'',vendor:w.partner||'',maker:'',ref:'업무일지',
+      const pat=encodeURIComponent('*'+raw+'*');
+      const wd=await sbGetAll('work_diary','select=id,date,partner,maker,title,content,status,emp_name,employee_id,is_shared&link_type=is.null&or=(partner.ilike.'+pat+',maker.ilike.'+pat+')&order=date.desc');
+      wd.filter(w=>w.employee_id===me.id||w.is_shared).forEach(w=>rows.push({k:'dj',date:w.date||'',vendor:w.partner||'',maker:w.maker||'',ref:'업무일지',
         text:[w.title,w.content].filter(Boolean).join('\n'),who:w.emp_name||'',st:w.status||'',lk:lkHtml(['일지'],{'일지':`lkDj(${w.id})`})}));
     }catch(e){ console.warn('[vm] diary',e); }
   }
@@ -3739,10 +3741,10 @@ async function lkDj(id){
   const ov=document.getElementById('lkDjOv'), bd=document.getElementById('lkDjBody');
   bd.innerHTML='<div class="form-hint">불러오는 중…</div>'; ov.classList.add('open');
   try{
-    const r=(await sbGetAll('work_diary','select=id,date,status,title,content,emp_name,partner,origin,link_type&id=eq.'+(+id)))[0];
+    const r=(await sbGetAll('work_diary','select=id,date,status,title,content,emp_name,partner,maker,origin,link_type&id=eq.'+(+id)))[0];
     if(!r){ bd.innerHTML='<div class="form-hint">업무일지를 찾을 수 없습니다 (삭제되었을 수 있습니다).</div>'; return; }
     const row=(k,v)=>`<div class="sp-row"><div class="sp-label">${k}</div><div class="sp-value" style="white-space:pre-wrap;">${v}</div></div>`;
-    bd.innerHTML=row('작성자 · 일자',esc(r.emp_name||'')+' · '+esc(r.date||''))+row('상태',esc(r.status||''))+(r.partner?row('거래처',esc(r.partner)):'')
+    bd.innerHTML=row('작성자 · 일자',esc(r.emp_name||'')+' · '+esc(r.date||''))+row('상태',esc(r.status||''))+(r.partner?row('거래처',esc(r.partner)):'')+(r.maker?row('메이커',esc(r.maker)):'')
       +row('제목',esc(r.title||''))+(r.content?row('내용',esc(r.content)):'')
       +row('입력한 곳',r.origin==='업무보고'?'업무보고 화면 (업무일지는 자동 기록)':'업무일지')
       +'<div class="form-hint">업무일지 수정은 워크플로우 화면에서 합니다. 업무보고 쪽 활동을 고치면 일지도 함께 바뀝니다.</div>';
