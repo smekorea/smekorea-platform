@@ -783,6 +783,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
               <th class="resizable" style="min-width:160px" data-col="6" data-i18n="내용">내용</th>
               <th class="resizable" style="width:55px" data-col="6" data-i18n="중요도">중요도</th>
               <th class="resizable" style="width:65px;cursor:pointer" data-col="7" onclick="openColFilter(event,'diary','status')" data-i18n="상태">상태<span class="col-filter-icon" id="dfi-diary-status">▾</span></th>
+              <th class="resizable" style="width:150px">연동</th>
               <th style="width:60px" data-i18n="관리">관리</th>
             </tr>
           </thead>
@@ -1820,6 +1821,7 @@ function renderList(){
       <td class="dt-title-cell">${escapeHtml(r.title||'')}</td>
       <td><div class="dt-content">${escapeHtml(r.content||'')}</div></td>
       <td class="dt-status"><span class="status-badge sb-일정">${t(r.status||'일정')}</span></td>
+      <td class="dt-link">${linkCellHtml(r)}</td>
       <td class="dt-actions">
         <button class="dt-btn" style="color:#185FA5;border-color:#378ADD;" onclick="event.stopPropagation();convertToWorkDiary('${r.id}')" title="${t('업무일지로 전환')}"><i class="ti ti-transfer"></i></button>
         <button class="dt-btn" onclick="event.stopPropagation();editDiary('${r.id}')"><i class="ti ti-pencil"></i></button>
@@ -1838,6 +1840,7 @@ function renderList(){
           <th class="resizable" style="width:140px;cursor:pointer" onclick="openColFilter(event,'list','title')" data-i18n="제목">제목<span class="col-filter-icon" id="dfi-list-title">▾</span></th>
           <th class="resizable" data-i18n="내용">내용</th>
           <th class="resizable" style="width:65px;cursor:pointer" onclick="openColFilter(event,'list','status')" data-i18n="상태">상태<span class="col-filter-icon" id="dfi-list-status">▾</span></th>
+          <th class="resizable" style="width:150px">연동</th>
           <th style="width:80px" data-i18n="관리">관리</th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -2597,29 +2600,42 @@ function debouncedSearch(){
 }
 
 /* ─── 다운로드 (CSV) ─── */
-function downloadDiary(){
+async function downloadDiary(){
   const filtered=getDiaryFiltered();
   if(!filtered.length){alert('다운로드할 데이터가 없어요.');return;}
-  const cols=['날짜','업무유형','활동','거래처','메이커','담당부서','제목','내용','중요도','상태','후속조치','원본분류'];
-  const rows=filtered.map(r=>[
-    r.date, r.category, r.action_type, r.partner, r.maker, r.dept_contact,
-    r.title, r.content, r.importance, r.status, r.follow_up, r.origin
-  ].map(v=>'"'+(String(v||'').replace(/"/g,'""'))+'"').join(','));
-  const csv='\uFEFF'+cols.join(',')+'\n'+rows.join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`PJY업무일지_${new Date().toISOString().slice(0,10)}.csv`;
-  document.body.appendChild(a);a.click();
-  document.body.removeChild(a);URL.revokeObjectURL(url);
+  try{ await loadXlsxSDK(); }catch(e){ alert('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'); return; }
+  // 연동 대상 이름 (2026-10-22)
+  const ids={directive:[],project:[],weekly:[]}, names={directive:{},project:{},weekly:{}};
+  filtered.forEach(r=>{ if(r.link_type&&r.link_ref_id){ const k=r.link_type==='weekly_row'?'weekly':r.link_type; if(ids[k]&&ids[k].indexOf(r.link_ref_id)<0) ids[k].push(r.link_ref_id); } });
+  const q={directive:['directives','id,title',x=>x.title],project:['dev_items','id,title,maker,vendor',x=>((x.maker||x.vendor)?(x.maker||x.vendor)+' · ':'')+(x.title||'')],weekly:['rp_weekly','id,content,category',x=>(x.category?'['+x.category+'] ':'')+String(x.content||'').split('\n')[0]]};
+  if(SB){ for(const k of Object.keys(ids)){ for(let i=0;i<ids[k].length;i+=200){
+    try{ const res=await SB.from(q[k][0]).select(q[k][1]).in('id',ids[k].slice(i,i+200)); (res.data||[]).forEach(x=>{ names[k][x.id]=q[k][2](x); }); }catch(e){ console.warn(e); } } } }
+  const shareLabel=r=>{ if(!r.is_shared) return ['공유안함','']; if(r.share_target==='전체') return ['전체공유',''];
+    let tg=[]; try{ tg=JSON.parse(r.share_target||'[]'); }catch(e){ tg=[String(r.share_target||'')]; }
+    return [r.share_type==='person'?'개인공유':r.share_type==='corp'?'법인공유':'부서공유',(Array.isArray(tg)?tg:[tg]).join(',')]; };
+  const LBL={directive:'지시사항',project:'신규개발',weekly:'주간업무',weekly_row:'주간업무'};
+  const head=DIARY_UPLOAD_HEADERS.concat(['연동','연동대상','반영상태','원본분류']);
+  const aoa=[head].concat(filtered.map(r=>{ const sh=shareLabel(r), k=r.link_type==='weekly_row'?'weekly':r.link_type;
+    return [r.date,r.category,r.action_type,r.partner,r.maker,r.dept_contact,r.content_type,r.title,r.content,r.follow_up,r.importance,r.status,
+      r.task_start_date,r.task_end_date,r.task_stage,sh[0],sh[1],
+      LBL[r.link_type]||'',(k&&names[k]&&names[k][r.link_ref_id])||'',r.link_type?(r.link_log_id?'반영 완료':'반영 전'):'',r.origin]
+      .map(v=>v==null?'':v); }));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=head.map((h,i)=>({wch:[7,8,9].indexOf(i)>=0?40:i>=17?22:14}));
+  const ws2=XLSX.utils.aoa_to_sheet([['안내'],['「업무일지」 시트는 업로드 양식과 같은 칸 구성입니다 (뒤의 연동·연동대상·반영상태·원본분류는 확인용).'],
+    ['이 파일을 그대로 다시 업로드하면 같은 일지가 중복으로 등록됩니다 — 업로드 미리보기에서 같은 날짜·제목 일지는 자동으로 제외됩니다.']]);
+  ws2['!cols']=[{wch:110}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'업무일지');
+  XLSX.utils.book_append_sheet(wb,ws2,'안내');
+  XLSX.writeFile(wb,`업무일지_${wfSession.name||''}_${todayStr}.xlsx`);
 }
 
 /* ─── 양식 다운로드 (엑셀) ─── */
-const DIARY_UPLOAD_HEADERS=['날짜','업무유형','활동유형','거래처','담당부서','기록유형','제목','내용','후속조치','중요도','상태','시작일','종료일','진행단계','공유','공유대상'];
+const DIARY_UPLOAD_HEADERS=['날짜','업무유형','활동유형','거래처','메이커','담당부서','기록유형','제목','내용','후속조치','중요도','상태','시작일','종료일','진행단계','공유','공유대상'];
 async function downloadDiaryTemplate(){
   try{ await loadXlsxSDK(); }catch(e){ alert('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'); return; }
-  const sample=['2026-08-01','매출처','방문','LG전자','회로구매팀','일반기록','LG전자 정기방문','방문 내용 예시...','','중','완료','','','','공유안함',''];
+  const sample=['2026-08-01','매출처','방문','LG전자 주식회사','','회로구매팀','일반기록','LG전자 정기방문','방문 내용 예시...','','중','완료','','','','공유안함',''];
   const ws=XLSX.utils.aoa_to_sheet([DIARY_UPLOAD_HEADERS,sample]);
   ws['!cols']=DIARY_UPLOAD_HEADERS.map(()=>({wch:16}));
   const guideRows=[
@@ -2627,7 +2643,9 @@ async function downloadDiaryTemplate(){
     ['날짜','필수. YYYY-MM-DD (예: 2026-08-01)'],
     ['업무유형','매출처, 매입처, 개발, 품질, 사내관리, 인사, 조직, 출장, 개인업무 (또는 화면에서 추가 등록한 값)'],
     ['활동유형','방문, 미팅, 회의, 식사, 접대, 라운딩, 계약, 협의, 점검, 정비, 교육, 심사, 행사, 행정처리'],
-    ['거래처 / 담당부서','자유 입력'],
+    ['거래처','거래처 정보의 업체명 (조금 달라도 업로드 미리보기에서 등록된 이름으로 고를 수 있습니다)'],
+    ['메이커','메이커관리의 메이커명 (조금 달라도 업로드 미리보기에서 고를 수 있습니다)'],
+    ['담당부서','자유 입력'],
     ['기록유형','일반기록, 전달사항, 지시사항, 과제, 부서업무보고 (또는 화면에서 추가 등록한 값)'],
     ['제목 / 내용 / 후속조치','자유 입력. 후속조치를 입력하면 자동으로 할 일이 생성됩니다.'],
     ['중요도','상, 중, 하'],
@@ -2636,6 +2654,9 @@ async function downloadDiaryTemplate(){
     ['진행단계','착수, 진행중, 지연, 완료 — 기록유형이 "과제" 또는 "부서업무보고"일 때만 사용'],
     ['공유','공유안함, 부서공유, 개인공유, 법인공유, 전체공유'],
     ['공유대상','부서공유 / 개인공유 / 법인공유 선택 시, 대상을 콤마(,)로 구분해 입력 (예: 재경팀,제조팀 / 홍길동,김철수)'],
+    ['',''],
+    ['업무보고 연동','엑셀에는 적지 않습니다. 업로드하면 미리보기에서 줄마다 지시사항 / 주간업무 / 신규개발(세부진척현황·마스터)을 골라 연동합니다.'],
+    ['미리보기 점검','거래처·메이커 이름 맞추기, 업무유형·상태 등 값 확인, 이미 있는 일지(같은 날짜·제목) 중복 제외를 미리보기에서 합니다.'],
   ];
   const ws2=XLSX.utils.aoa_to_sheet(guideRows);
   ws2['!cols']=[{wch:14},{wch:64}];
@@ -2715,65 +2736,255 @@ function parseDiaryUploadRows(json){
     diaryUploadRows.push(obj);
   });
 }
-function openDiaryUploadPreview(){
-  const old=document.getElementById('diaryUploadOverlay');
-  if(old) old.remove();
+/* ═══ 엑셀 업로드 미리보기 v2 (2026-10-22) ═══
+   엑셀은 메이커만 추가(연동 칸 없음). 미리보기에서 줄마다 점검하고 고른다.
+   · 거래처: 거래처 정보(별칭 포함, 띄어쓰기·괄호·기호 무시)와 같으면 등록 이름으로, 비슷한 후보가 있으면 고르기, 없으면 적은 그대로(사람·행사 메모)
+   · 메이커: 메이커관리 기준, 거래처 칸에 메이커 이름이 있으면 메이커 칸으로 옮기기 제안
+   · 값 점검: 날짜 형식, 업무유형·활동유형·기록유형·상태·중요도, 중복(같은 날짜·제목 일지가 이미 있으면 기본 제외), 빈 줄, 1년 이상 떨어진 날짜
+   · 연동: 지시사항 / 주간업무(새 줄) / 신규개발 / 지시사항+신규개발 — 등록 후 applyDiaryLink 로 화면 입력과 같은 경로 반영 */
+var upRows=[], upOnlyWarn=false, upCtx=null;
+function upPartnerCands(v){
+  var k=linkKey(v); if(!k||k.length<2) return [];
+  var out=[];
+  (linkData.partners||[]).forEach(function(p){
+    if(p.is_active===false||!p.name) return;
+    var hit=[p.name,p.alias1,p.alias2].some(function(n){ var nk=linkKey(n); return nk&&(nk.indexOf(k)>=0||(nk.length>=2&&k.indexOf(nk)>=0)); });
+    if(hit&&out.indexOf(p.name)<0) out.push(p.name);
+  });
+  return out.slice(0,10);
+}
+function upMakerCands(v){
+  var k=linkKey(v); if(!k||k.length<2) return [];
+  return (linkData.makers||[]).filter(function(n){ var nk=linkKey(n); return nk&&(nk.indexOf(k)>=0||(nk.length>=2&&k.indexOf(nk)>=0)); }).slice(0,10);
+}
+function upAllowed(type){ return (CAT_DEFAULT_OPTS[type]||[]).filter(function(v){ return ((hiddenDefaults||{})[type]||[]).indexOf(v)<0; }).concat(userCategories[type]||[]); }
+var UP_STATUS=['일정','완료','진행중','보류','후속필요','지시'], UP_IMP=['상','중','하'];
+var UP_FIELDS={category:['업무유형',function(){return upAllowed('category');}],action_type:['활동유형',function(){return upAllowed('action_type');}],
+  content_type:['기록유형',function(){return upAllowed('content_type').concat(['과제','부서업무보고']).filter(function(v,i,a){return a.indexOf(v)===i;});}],
+  status:['상태',function(){return UP_STATUS;}],importance:['중요도',function(){return UP_IMP;}]};
+function upInitRow(obj,i){
+  var r={i:i,obj:obj,inc:true,vIn:obj.partner||'',mIn:obj.maker||'',vSel:'',mSel:'',vCands:[],mCands:[],bad:{},dup:false,
+    lk:{type:'',dir:'',pj:'',stage:'',ms:'',wkDept:LINK_DEPTS.indexOf(wfSession.dept)>=0?wfSession.dept:LINK_DEPTS[0],wkCat:'영업'}};
+  // 메이커 먼저(거래처 칸의 메이커 이름을 옮길 수 있게)
+  if(r.mIn){ var ms=vmMakerStd(r.mIn); if(ms){ r.mSel='c:'+ms; } else { r.mCands=upMakerCands(r.mIn); r.mSel='raw'; } }
+  if(r.vIn){
+    var ps=vmPartnerStd(r.vIn);
+    if(ps) r.vSel='c:'+ps.name;
+    else{
+      r.vCands=upPartnerCands(r.vIn);
+      var mk=vmMakerStd(r.vIn);
+      if(mk&&!r.mIn){ r.vSel='tomaker'; r.mIn=mk; r.mSel='c:'+mk; r.vMaker=mk; }
+      else r.vSel='raw';
+    }
+  }
+  Object.keys(UP_FIELDS).forEach(function(f){ var v=obj[f]; if(v&&UP_FIELDS[f][1]().indexOf(v)<0) r.bad[f]=v; });
+  if(!obj.status) obj.status='완료';
+  upCheckDate(r);
+  return r;
+}
+function upCheckDate(r){
+  var d=String(r.obj.date||'').trim(); r.dateBad=!/^\d{4}-\d{2}-\d{2}$/.test(d)||isNaN(parseYmd(d));
+  r.dateFar=!r.dateBad&&Math.abs(parseYmd(d)-parseYmd(todayStr))/86400000>366;
+  var ti=String(r.obj.title||'').trim();
+  r.dup=!r.dateBad&&!!ti&&diaryRecords.some(function(x){ return String(x.date).slice(0,10)===d&&String(x.title||'').trim()===ti; });
+}
+function upVM(r){
+  var v=r.vIn, m=r.mIn;
+  if(r.vSel.indexOf('c:')===0) v=r.vSel.slice(2); else if(r.vSel==='blank'||r.vSel==='tomaker') v='';
+  if(r.mSel.indexOf('c:')===0) m=r.mSel.slice(2); else if(r.mSel==='blank') m='';
+  return {v:v,m:m};
+}
+function upIssues(r){
+  var w=[];
+  if(r.dateBad) w.push(['err','날짜 형식 오류']);
+  if(r.dup) w.push(['warn','이미 있는 일지(같은 날짜·제목)']);
+  if(r.dateFar) w.push(['warn','오늘과 1년 이상 떨어진 날짜']);
+  if(!String(r.obj.title||'').trim()&&!String(r.obj.content||'').trim()) w.push(['warn','제목·내용 없음']);
+  Object.keys(r.bad).forEach(function(f){ if(r.obj[f]===r.bad[f]) w.push(['warn',UP_FIELDS[f][0]+' 「'+r.bad[f]+'」 확인']); });
+  if(r.vSel==='raw'&&r.vCands.length) w.push(['warn','거래처 확인 — 비슷한 등록 업체 있음']);
+  else if(r.vSel==='raw') w.push(['info','거래처 정보에 없는 이름(메모로 저장)']);
+  if(r.vSel==='tomaker') w.push(['info','거래처 칸의 메이커 이름을 메이커로 옮김']);
+  if(r.mSel==='raw') w.push(['warn','메이커관리에 없는 메이커'+(r.mCands.length?' — 후보 있음':'')]);
+  var t2=r.lk.type;
+  if((t2==='directive'||t2==='dirpj')&&!r.lk.dir) w.push(['warn','연동할 지시사항 선택']);
+  if((t2==='project'||t2==='dirpj')&&!r.lk.pj) w.push(['warn','연동할 프로젝트 선택']);
+  if((t2==='directive'||t2==='dirpj')&&r.obj.status==='일정') w.push(['warn','「일정」 상태는 지시사항에 반영되지 않음']);
+  return w;
+}
+function upNeeds(r){ return r.inc&&upIssues(r).some(function(x){ return x[0]!=='info'; }); }
+async function openDiaryUploadPreview(){
+  var old=document.getElementById('diaryUploadOverlay'); if(old) old.remove();
   if(!diaryUploadRows.length){
     alert('등록할 유효한 행이 없습니다. (날짜가 비어있는 행은 제외됩니다)'+(diaryUploadSkipped?'\n건너뛴 행: '+diaryUploadSkipped+'건':''));
     return;
   }
-  const overlay=document.createElement('div');
-  overlay.className='confirm-popup-overlay';
-  overlay.id='diaryUploadOverlay';
-  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
-
-  const previewRows=diaryUploadRows.slice(0,30).map(r=>
-    '<tr style="border-bottom:1px solid #f0ede8;">'+
-    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+escapeHtml(r.date)+'</td>'+
-    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+escapeHtml(r.content_type)+'</td>'+
-    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+escapeHtml(r.category)+'</td>'+
-    '<td style="padding:6px 8px;font-size:12px;">'+escapeHtml(r.title)+'</td>'+
-    '<td style="padding:6px 8px;font-size:12px;white-space:nowrap;">'+(r.is_shared?'✓':'')+'</td>'+
-    '</tr>'
-  ).join('');
-
-  overlay.innerHTML='<div class="confirm-popup-box" style="width:min(720px,94vw);">'+
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'+
-    '<div style="font-size:16px;font-weight:700;color:#1a1612;">업로드 미리보기 — 총 '+diaryUploadRows.length+'건'+(diaryUploadSkipped?' (건너뜀 '+diaryUploadSkipped+'건: 날짜 없음)':'')+'</div>'+
-    '<button onclick="document.getElementById(\'diaryUploadOverlay\').remove()" style="background:none;border:none;font-size:20px;color:#b0a090;cursor:pointer;padding:0 4px;">✕</button>'+
-    '</div>'+
-    '<div style="max-height:50vh;overflow:auto;border:1px solid #f0ede8;border-radius:8px;margin-bottom:14px;">'+
-    '<table style="width:100%;border-collapse:collapse;">'+
-    '<thead><tr style="background:#f7f5f2;">'+
-    '<th style="padding:6px 8px;font-size:11px;text-align:left;">날짜</th>'+
-    '<th style="padding:6px 8px;font-size:11px;text-align:left;">기록유형</th>'+
-    '<th style="padding:6px 8px;font-size:11px;text-align:left;">업무유형</th>'+
-    '<th style="padding:6px 8px;font-size:11px;text-align:left;">제목</th>'+
-    '<th style="padding:6px 8px;font-size:11px;text-align:left;">공유</th>'+
-    '</tr></thead><tbody>'+previewRows+'</tbody></table></div>'+
-    (diaryUploadRows.length>30?'<div style="font-size:11px;color:#9a8e82;margin-bottom:10px;">상위 30건만 미리보기로 표시됩니다.</div>':'')+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid #f0ede8;">'+
-    '<button id="diaryUploadConfirmBtn" onclick="confirmDiaryUpload()" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">일괄 등록</button>'+
-    '<button onclick="document.getElementById(\'diaryUploadOverlay\').remove()" style="height:42px;padding:0 20px;border:1.5px solid #e5ddd4;border-radius:8px;background:#fff;color:#5a5048;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>'+
-    '</div></div>';
-  document.body.appendChild(overlay);
+  var ov=document.createElement('div'); ov.className='confirm-popup-overlay'; ov.id='diaryUploadOverlay';
+  ov.innerHTML='<div class="confirm-popup-box" style="width:min(1280px,97vw);max-height:92vh;display:flex;flex-direction:column;"><div style="padding:30px;text-align:center;font-size:13px;color:#6b7280;">거래처·메이커·업무보고 목록을 불러오는 중…</div></div>';
+  document.body.appendChild(ov);
+  try{ await loadLinkNames(true); await loadLinkData('directive'); await loadLinkData('project'); }catch(e){ console.warn('[Upload] load:',e); }
+  upCtx={dirs:(linkData.dirs||[]).filter(function(d){ return linkIsExec()||linkDirMine(d); }),items:linkData.items||[],masters:linkData.masters||[]};
+  upRows=diaryUploadRows.map(upInitRow);
+  // 파일 안에서 같은 날짜·제목이 겹치면 두 번째부터 중복
+  var seen={}; upRows.forEach(function(r){ var k=r.obj.date+'|'+String(r.obj.title||'').trim(); if(r.obj.title&&seen[k]) r.dup=true; seen[k]=1; });
+  upRows.forEach(function(r){ if(r.dup||r.dateBad) r.inc=false; });
+  upOnlyWarn=false; upRender();
+}
+function upOpt(v,label,sel){ return '<option value="'+escapeHtml(v)+'"'+(String(v)===String(sel)?' selected':'')+'>'+escapeHtml(label)+'</option>'; }
+function upSel(i,f,html,w){ return '<select class="up-sel" style="'+(w?'width:'+w+'px;':'')+'" onchange="upSet('+i+',\''+f+'\',this.value)">'+html+'</select>'; }
+function upVendorCell(r){
+  if(!r.vIn) return '<span class="up-mut">—</span>';
+  if(r.vSel.indexOf('c:')===0&&!r.vCands.length&&r.vSel!=='raw'&&vmPartnerStd(r.vIn)) return '<span class="up-ok">✓</span> '+escapeHtml(r.vSel.slice(2))+(linkKey(r.vIn)!==linkKey(r.vSel.slice(2))?'<div class="up-mut">← '+escapeHtml(r.vIn)+'</div>':'');
+  var h='';
+  r.vCands.forEach(function(n){ h+=upOpt('c:'+n,n,r.vSel); });
+  if(r.vMaker) h+=upOpt('tomaker','메이커로 옮기기 ('+r.vMaker+')',r.vSel);
+  h+=upOpt('raw','적은 그대로: '+r.vIn,r.vSel)+upOpt('new','거래처 신규 등록: '+r.vIn,r.vSel)+upOpt('blank','비우기',r.vSel);
+  return upSel(r.i,'vSel',h,170);
+}
+function upMakerCell(r){
+  if(!r.mIn) return '<span class="up-mut">—</span>';
+  if(r.mSel.indexOf('c:')===0&&!r.mCands.length) return '<span class="up-ok">✓</span> '+escapeHtml(r.mSel.slice(2))+(linkKey(r.mIn)!==linkKey(r.mSel.slice(2))?'<div class="up-mut">← '+escapeHtml(r.mIn)+'</div>':'');
+  var h='';
+  r.mCands.forEach(function(n){ h+=upOpt('c:'+n,n,r.mSel); });
+  h+=upOpt('raw','적은 그대로: '+r.mIn,r.mSel)+upOpt('blank','비우기',r.mSel);
+  return upSel(r.i,'mSel',h,140);
+}
+function upPjOptions(r){
+  var vm=upVM(r), keys=[vm.v,vm.m].map(linkKey).filter(Boolean);
+  var its=upCtx.items||[], hit=its.filter(function(i){ var k=[linkKey(i.vendor),linkKey(i.maker)]; return keys.some(function(q){ return k.indexOf(q)>=0; }); });
+  var rest=its.filter(function(i){ return hit.indexOf(i)<0; });
+  var lab=function(i){ return ((i.maker||i.vendor)?(i.maker||i.vendor)+' · ':'')+linkCut(i.title||'(이름 없음)',40); };
+  return '<option value="">프로젝트 선택 ('+(hit.length?'같은 거래처·메이커 '+hit.length+'건':'전체')+')</option>'
+    +(hit.length?'<optgroup label="같은 거래처·메이커">'+hit.map(function(i){ return upOpt(i.id,lab(i),r.lk.pj); }).join('')+'</optgroup>':'')
+    +'<optgroup label="전체">'+rest.map(function(i){ return upOpt(i.id,lab(i),r.lk.pj); }).join('')+'</optgroup>';
+}
+function upLinkCell(r){
+  var t2=r.lk.type, i=r.i;
+  var h=upSel(i,'lk.type',upOpt('','연동 안 함',t2)+upOpt('directive','지시사항',t2)+upOpt('weekly','주간업무 (새 줄)',t2)+upOpt('project','신규개발',t2)+upOpt('dirpj','지시사항 + 신규개발',t2),130);
+  var sub='';
+  if(t2==='directive'||t2==='dirpj')
+    sub+=upSel(i,'lk.dir','<option value="">지시사항 선택 ('+upCtx.dirs.length+'건)</option>'+upCtx.dirs.map(function(d){ return upOpt(d.id,linkDirLabel(d),r.lk.dir); }).join(''),260);
+  if(t2==='weekly')
+    sub+=upSel(i,'lk.wkDept',LINK_DEPTS.map(function(d){ return upOpt(d,d,r.lk.wkDept); }).join(''),100)
+      +upSel(i,'lk.wkCat',LINK_CATS.map(function(c){ return upOpt(c,c,r.lk.wkCat); }).join(''),80);
+  if(t2==='project'||t2==='dirpj'){
+    sub+=upSel(i,'lk.pj',upPjOptions(r),260)
+      +upSel(i,'lk.stage','<option value="">단계 선택 안 함</option>'+LINK_STAGES.map(function(n,ix){ return upOpt(ix+1,LINK_NUM[ix]+n,r.lk.stage); }).join(''),130);
+    var it=r.lk.pj&&(upCtx.items||[]).find(function(x){ return String(x.id)===String(r.lk.pj); });
+    if(it&&it.project_id&&r.lk.stage)
+      sub+=upSel(i,'lk.ms',upOpt('','마스터 단계 변경 안 함',r.lk.ms)+upOpt('진행중','마스터: 진행중',r.lk.ms)+upOpt('완료','마스터: 완료',r.lk.ms)+upOpt('Drop','마스터: Drop',r.lk.ms),140);
+  }
+  return h+(sub?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'+sub+'</div>':'');
+}
+function upFieldFix(r){
+  var h='';
+  Object.keys(r.bad).forEach(function(f){
+    var opts=UP_FIELDS[f][1]();
+    h+='<div style="margin-top:3px;">'+UP_FIELDS[f][0]+' '+upSel(r.i,'f.'+f,upOpt(r.bad[f],'「'+r.bad[f]+'」 그대로',r.obj[f])+opts.map(function(v){ return upOpt(v,v,r.obj[f]); }).join(''),110)+'</div>';
+  });
+  if(r.dateBad) h+='<div style="margin-top:3px;">날짜 <input type="date" class="up-sel" value="" onchange="upSet('+r.i+',\'date\',this.value)"> <span class="up-mut">('+escapeHtml(String(r.obj.date))+')</span></div>';
+  return h;
+}
+function upRender(){
+  var ov=document.getElementById('diaryUploadOverlay'); if(!ov) return;
+  var inc=upRows.filter(function(r){ return r.inc; }), need=upRows.filter(upNeeds), lk=inc.filter(function(r){ return r.lk.type; });
+  var dup=upRows.filter(function(r){ return r.dup; }).length;
+  var list=upOnlyWarn?upRows.filter(function(r){ return upIssues(r).some(function(x){ return x[0]!=='info'; }); }):upRows;
+  var body=list.map(function(r){
+    var o=r.obj, iss=upIssues(r);
+    var issH=iss.map(function(x){ return '<div class="up-'+x[0]+'">'+(x[0]==='err'?'⛔ ':x[0]==='warn'?'⚠ ':'· ')+escapeHtml(x[1])+'</div>'; }).join('')||'<span class="up-ok">✓ 이상 없음</span>';
+    return '<tr class="'+(r.inc?'':'up-off')+'">'
+      +'<td style="text-align:center;"><input type="checkbox"'+(r.inc?' checked':'')+(r.dateBad?' disabled':'')+' onchange="upSet('+r.i+',\'inc\',this.checked)"></td>'
+      +'<td style="white-space:nowrap;">'+escapeHtml(String(o.date))+'<div class="up-mut">'+escapeHtml(o.status||'')+'</div></td>'
+      +'<td><b>'+escapeHtml(o.title||'')+'</b><div class="up-mut">'+escapeHtml(linkCut(o.content,60))+'</div></td>'
+      +'<td>'+upVendorCell(r)+'</td><td>'+upMakerCell(r)+'</td>'
+      +'<td>'+upLinkCell(r)+'</td>'
+      +'<td style="font-size:11px;">'+issH+upFieldFix(r)+'</td></tr>';
+  }).join('');
+  ov.innerHTML='<div class="confirm-popup-box" style="width:min(1280px,97vw);max-height:92vh;display:flex;flex-direction:column;">'
+    +'<style>.up-tbl{width:100%;border-collapse:collapse;font-size:12px;}.up-tbl th{position:sticky;top:0;background:#1B3A6B;color:#fff;font-size:11px;padding:6px 8px;text-align:left;z-index:1;}'
+    +'.up-tbl td{padding:6px 8px;border-bottom:1px solid #eef0f4;border-right:1px solid #e8edf5;vertical-align:top;color:#111827;}.up-tbl td:last-child{border-right:none;}'
+    +'.up-off td{background:#f6f6f6;color:#9aa1ab;}.up-sel{font-size:11.5px;padding:3px 4px;border:1px solid #cfd6e2;border-radius:4px;font-family:inherit;max-width:100%;}'
+    +'.up-mut{color:#9aa1ab;font-size:11px;}.up-ok{color:#15803d;font-weight:700;}.up-warn{color:#b45309;}.up-err{color:#C8001E;font-weight:700;}.up-info{color:#6b7280;}</style>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">'
+    +'<div style="font-size:16px;font-weight:700;color:#1a1612;">업로드 미리보기 — 총 '+upRows.length+'건'+(diaryUploadSkipped?' <span class="up-mut">(날짜 없음 건너뜀 '+diaryUploadSkipped+'건)</span>':'')+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;font-size:12px;flex-wrap:wrap;">'
+    +'<span>등록 <b>'+inc.length+'</b></span><span style="color:#b45309;">확인 필요 <b>'+need.length+'</b></span><span>연동 <b>'+lk.length+'</b></span>'+(dup?'<span class="up-mut">중복 '+dup+'</span>':'')
+    +'<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;margin-left:6px;"><input type="checkbox"'+(upOnlyWarn?' checked':'')+' onchange="upOnlyWarn=this.checked;upRender()"> ⚠ 확인 필요만 보기</label>'
+    +'<button onclick="document.getElementById(\'diaryUploadOverlay\').remove()" style="background:none;border:none;font-size:20px;color:#b0a090;cursor:pointer;padding:0 4px;">✕</button></div></div>'
+    +'<div style="font-size:11px;color:#6b7280;margin-bottom:8px;">거래처·메이커는 등록된 이름으로 맞추고, 줄마다 업무보고 연동을 고르세요. 이미 있는 일지(같은 날짜·제목)와 날짜 오류 줄은 처음부터 제외되어 있습니다.</div>'
+    +'<div style="flex:1;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;">'
+    +'<table class="up-tbl"><thead><tr><th style="width:40px;">등록</th><th style="width:90px;">날짜·상태</th><th style="width:220px;">제목·내용</th><th style="width:180px;">거래처</th><th style="width:150px;">메이커</th><th style="width:300px;">업무보고 연동</th><th>점검</th></tr></thead>'
+    +'<tbody>'+(body||'<tr><td colspan="7" style="text-align:center;padding:20px;color:#9aa1ab;">확인이 필요한 줄이 없습니다</td></tr>')+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:12px;margin-top:10px;border-top:1px solid #f0ede8;">'
+    +'<button id="diaryUploadConfirmBtn" onclick="confirmDiaryUpload()" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">'+inc.length+'건 등록</button>'
+    +'<button onclick="document.getElementById(\'diaryUploadOverlay\').remove()" style="height:42px;padding:0 20px;border:1.5px solid #e5ddd4;border-radius:8px;background:#fff;color:#5a5048;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>'
+    +'</div></div>';
+}
+function upSet(i,f,v){
+  var r=upRows[i]; if(!r) return;
+  if(f==='inc') r.inc=!!v;
+  else if(f==='vSel'){ r.vSel=v; if(v==='tomaker'&&r.vMaker){ r.mIn=r.vMaker; r.mSel='c:'+r.vMaker; } }
+  else if(f==='mSel') r.mSel=v;
+  else if(f==='date'){ if(v){ r.obj.date=v; upCheckDate(r); if(!r.dateBad&&!r.dup) r.inc=true; } }
+  else if(f.indexOf('f.')===0) r.obj[f.slice(2)]=v;
+  else if(f.indexOf('lk.')===0){
+    var k=f.slice(3); r.lk[k]=v;
+    if(k==='type'){ r.lk.dir=''; r.lk.pj=''; r.lk.stage=''; r.lk.ms='';
+      if(v==='project'||v==='dirpj'){ var vm=upVM(r), keys=[vm.v,vm.m].map(linkKey).filter(Boolean);   // 같은 거래처·메이커 프로젝트가 1건이면 미리 고른다
+        var hit=(upCtx.items||[]).filter(function(x){ var kk=[linkKey(x.vendor),linkKey(x.maker)]; return keys.some(function(q){ return kk.indexOf(q)>=0; }); });
+        if(hit.length===1) r.lk.pj=String(hit[0].id); } }
+    if(k==='pj'||k==='stage') r.lk.ms='';
+  }
+  upRender();
+}
+function upLinkSel(r,vm){
+  var t2=r.lk.type, it=r.lk.pj&&(upCtx.items||[]).find(function(x){ return String(x.id)===String(r.lk.pj); });
+  var pj=it?{refId:it.id,stage:+r.lk.stage||null,ms:{masterId:it.project_id||null,connect:false,state:(it.project_id&&r.lk.stage&&r.lk.ms)||null}}:null;
+  if(t2==='directive'&&r.lk.dir) return {type:'directive',refId:+r.lk.dir,stage:null};
+  if(t2==='dirpj'&&r.lk.dir) return {type:'directive',refId:+r.lk.dir,stage:null,dualPj:pj};
+  if(t2==='project'&&pj) return Object.assign({type:'project'},pj);
+  if(t2==='weekly') return {type:'weekly',refId:null,stage:null,wkNew:{kind:r.obj.status==='일정'?'계획':'실적',dept:r.lk.wkDept,category:r.lk.wkCat,vendor:vm.v,maker:vm.m,addPartner:false}};
+  return null;
 }
 async function confirmDiaryUpload(){
-  const btn=document.getElementById('diaryUploadConfirmBtn');
-  if(btn){ btn.disabled=true; btn.textContent='등록 중...'; }
-  const toInsert=diaryUploadRows.map(r=>Object.assign({},r,{employee_id:wfSession.empId, emp_name:wfSession.name}));
-  if(!SB){ alert('서버 연결이 없어 업로드할 수 없습니다.'); if(btn){btn.disabled=false;btn.textContent='일괄 등록';} return; }
+  var rows=upRows.filter(function(r){ return r.inc; });
+  if(!rows.length){ alert('등록할 줄이 없습니다.'); return; }
+  if(rows.some(function(r){ return r.dateBad; })){ alert('날짜 형식이 잘못된 줄이 있습니다. 날짜를 고치거나 등록에서 빼주세요.'); return; }
+  var noTarget=rows.filter(function(r){ return r.lk.type&&!upLinkSel(r,upVM(r)); }).length;
+  if(noTarget&&!confirm('연동 대상을 고르지 않은 '+noTarget+'건은 연동 없이 등록됩니다. 계속할까요?')) return;
+  if(!SB){ alert('서버 연결이 없어 업로드할 수 없습니다.'); return; }
+  var btn=document.getElementById('diaryUploadConfirmBtn'); if(btn){ btn.disabled=true; btn.textContent='등록 중...'; }
   try{
-    const {data,error}=await SB.from('work_diary').insert(toInsert).select();
-    if(error) throw error;
-    (data||[]).forEach(d=>diaryRecords.unshift(d));
+    // 거래처 신규 등록
+    var newP=[]; rows.forEach(function(r){ if(r.vSel==='new'&&r.vIn&&newP.indexOf(r.vIn)<0) newP.push(r.vIn); });
+    for(var a=0;a<newP.length;a++){ try{ await SB.from('partners').insert({name:newP[a],note:'업무일지 엑셀 업로드에서 등록('+todayStr+' '+wfSession.name+')'}); }catch(e){ console.warn(e); } }
+    var objs=rows.map(function(r){ var vm=upVM(r); return Object.assign({},r.obj,{partner:vm.v||'',maker:vm.m||null,employee_id:wfSession.empId,emp_name:wfSession.name}); });
+    var saved=[];
+    for(var c=0;c<objs.length;c+=200){
+      var res=await SB.from('work_diary').insert(objs.slice(c,c+200)).select();
+      if(res.error) throw res.error;
+      saved=saved.concat(res.data||[]);
+    }
+    saved.forEach(function(d){ diaryRecords.unshift(d); });
+    // 연동 — 넣은 순서대로 돌아온 행과 짝지음(날짜·제목 확인)
+    var nLink=0, nOk=0; linkQuiet=[];
+    for(var k=0;k<rows.length;k++){
+      var r=rows[k], d=saved[k], sel=upLinkSel(r,upVM(r));
+      if(!sel||!d) continue;
+      if(String(d.date).slice(0,10)!==String(r.obj.date)||String(d.title||'')!==String(r.obj.title||'')){ linkQuiet.push('「'+(r.obj.title||'')+'」 연동 대상 짝이 맞지 않아 연동하지 않았습니다.'); continue; }
+      nLink++; await applyDiaryLink(d.id,sel);
+      var rec=diaryRecords.find(function(x){ return String(x.id)===String(d.id); });
+      if(rec&&rec.link_type) nOk++;
+    }
+    var msgs=linkQuiet; linkQuiet=null;
     document.getElementById('diaryUploadOverlay')?.remove();
-    diaryUploadRows=[]; diaryUploadSkipped=0;
+    diaryUploadRows=[]; diaryUploadSkipped=0; upRows=[];
     renderDiary(); renderAll();
-    alert('✅ '+(data?data.length:toInsert.length)+'건이 업무일지에 등록되었습니다.');
+    alert('✅ 업무일지 '+saved.length+'건 등록'+(nLink?'\n업무보고 연동 '+nOk+'/'+nLink+'건':'')+(newP.length?'\n거래처 신규 등록 '+newP.length+'건':'')+(msgs.length?'\n\n확인 필요:\n· '+msgs.slice(0,10).join('\n· ')+(msgs.length>10?'\n… 외 '+(msgs.length-10)+'건':''):''));
   }catch(e){
+    linkQuiet=null;
     alert('업로드 실패: '+(e.message||e));
-    if(btn){ btn.disabled=false; btn.textContent='일괄 등록'; }
+    if(btn){ btn.disabled=false; btn.textContent='다시 등록'; }
   }
 }
 
@@ -2815,8 +3026,8 @@ function applyResizable(ths){
 function initDiaryResizable(){
   // 독립 컬럼 리사이즈 표준 — 공유함(initShareResizable)과 완전히 동일한 방식
   var tables = [
-    { id: 'diary-table', verKey: 'diary_col_ver', widKey: 'diary_col_widths', COL_VER: 'v1', defaults: [80,100,85,90,80,140,300,55,65,60] },
-    { id: 'list-table',  verKey: 'list_col_ver',  widKey: 'list_col_widths',  COL_VER: 'v1', defaults: [100,100,85,90,140,300,65,80] }
+    { id: 'diary-table', verKey: 'diary_col_ver', widKey: 'diary_col_widths', COL_VER: 'v2', defaults: [80,100,85,90,80,140,300,55,65,150,60] },
+    { id: 'list-table',  verKey: 'list_col_ver',  widKey: 'list_col_widths',  COL_VER: 'v2', defaults: [100,100,85,90,140,300,65,150,80] }
   ];
   tables.forEach(function(cfg){
     var tbl = document.getElementById(cfg.id);
@@ -2939,7 +3150,7 @@ function renderDiary(){
   const tbody=document.getElementById('diary-tbody');
   if(!tbody) return;
   if(!slice.length){
-    tbody.innerHTML=`<tr><td colspan="7" class="diary-empty">${t('검색 결과가 없어요')}</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="11" class="diary-empty">${t('검색 결과가 없어요')}</td></tr>`;
   } else {
     tbody.innerHTML=slice.map(r=>{
       const d=new Date(r.date+'T00:00:00');
@@ -2954,13 +3165,14 @@ function renderDiary(){
         <td class="dt-action">${t(r.action_type||'')}</td>
         <td class="dt-partner">${vmCell(r)}</td>
         <td class="dt-dept-cell">${escapeHtml(r.target_dept||'')}</td>
-        <td class="dt-title-cell">${escapeHtml(r.title||'')}${taskBadgeHtml(r)}${linkBadgeHtml(r)}</td>
+        <td class="dt-title-cell">${escapeHtml(r.title||'')}${taskBadgeHtml(r)}</td>
         <td>
           <div class="dt-content">${escapeHtml(r.content||'')}</div>
           ${r.follow_up?`<div class="dt-followup">→ ${escapeHtml(r.follow_up)}</div>`:''}
         </td>
         <td class="dt-imp"><span class="imp-badge ${impCls}">${t(r.importance||'중')}</span></td>
         <td class="dt-status"><span class="status-badge ${sbCls}">${t(status)}</span></td>
+        <td class="dt-link">${linkCellHtml(r)}</td>
         <td class="dt-actions">
           <button class="dt-btn" onclick="editDiary('${r.id}')"><i class="ti ti-pencil"></i></button>
           <button class="dt-btn del" onclick="deleteDiaryById('${r.id}')"><i class="ti ti-trash"></i></button>
@@ -3324,6 +3536,10 @@ function onContentTypeChange(){
   if(taskRow) taskRow.style.display=needTask?'':'none';
 }
 
+/* ═══ 2026-10-22 엑셀 업로드·목록 연동 표시 ═══
+   · 업로드 양식에 메이커 칸 추가, 업로드 미리보기 v2(거래처·메이커 후보 선택, 값·중복 점검, 줄별 업무보고 연동 선택) — upRows/upRender/confirmDiaryUpload
+   · 업무일지·일정 목록 「연동」 열(linkCellHtml), 업무일지 다운로드를 업로드 양식 + 연동 정보 엑셀로
+   · 연동 알림 linkWarn — 엑셀 일괄 등록 때는 모아서 한 번에 */
 /* ═══ 2026-10-21 업무일지 연동 정리 ═══
    · 일지 본문 거래처/메이커 두 칸(work_diary.maker) — 거래처 정보·메이커관리 자동완성, 없는 이름은 안내
    · 연동 선택: 연동 안 함 / 지시사항 / 주간업무 / 신규개발(세부진척현황·마스터). 주간업무 새 건·새 프로젝트의 거래처·메이커는 일지 칸 값
@@ -3344,6 +3560,8 @@ const LINK_CORP={'SMEIN(N)':'GSMEIN','SMECN':'SMECN','SMETH':'SMEGLOBAL'};
 const LINK_LABEL={directive:'지시',project:'프로젝트',weekly:'주간업무',weekly_row:'주간업무'};
 var linkData={};          // 종류별로 불러온 목록 (창을 열 때마다 새로 읽는다)
 var linkPreset=null;      // 수정 중인 일지에 이미 걸려 있는 연동 {type,refId,stage}
+var linkQuiet=null;       // 배열이면 연동 알림을 모아 둔다(엑셀 업로드 일괄 등록)
+function linkWarn(msg){ if(linkQuiet) linkQuiet.push(msg); else alert(msg); }
 /* ── 연동 체크 방식 (2026-10-21) ──
    ☐ 지시사항 ☐ 주간업무 ☐ 신규개발 — 신규개발을 고르면 주간업무에 「신규개발」 줄로 자동으로 들어가므로 주간업무가 함께 체크·잠김.
    지시사항 + 신규개발은 동시에 고를 수 있다(linkDual): 일지는 지시에 연동되고, 반영된 지시 활동을 DB rp_dir_to_project 가 진척현황에도 기록.
@@ -3848,21 +4066,21 @@ async function applyDiaryLink(id,sel){
     if(want.type==='directive'&&want.dualPj){   // 지시 + 신규개발: 반영된 지시 활동을 진척현황에도 (DB rp_dir_to_project)
       var dp=want.dualPj;
       if(!rec.link_log_id){
-        if(rec.status!=='일정') alert('지시사항 활동 반영이 확인되지 않아 세부진척현황에는 기록하지 못했습니다.');
+        if(rec.status!=='일정') linkWarn('지시사항 활동 반영이 확인되지 않아 세부진척현황에는 기록하지 못했습니다.');
       }else{
         try{
           var pjId=dp.refId||await createLinkPjNew(dp.pjNew,rec,dp.ms);
           var rr=await SB.rpc('rp_dir_to_project',{p_update:rec.link_log_id,p_item:pjId,p_stage:dp.stage||null});
           if(rr.error) throw rr.error;
           if(dp.ms) await applyLinkMaster(pjId,dp.ms,dp.stage,rec.date,!!dp.pjNew);
-        }catch(e2){ console.warn('[Link] dual:',e2); alert('업무일지·지시사항은 저장됐지만 세부진척현황 기록에 실패했습니다: '+(e2.message||e2)); }
+        }catch(e2){ console.warn('[Link] dual:',e2); linkWarn('업무일지·지시사항은 저장됐지만 세부진척현황 기록에 실패했습니다: '+(e2.message||e2)); }
       }
     }
     if(want.type&&rec.status!=='일정'&&(rec.title||rec.content)&&!rec.link_log_id)
-      alert('업무일지는 저장됐지만 업무보고 반영이 확인되지 않습니다.\n업무보고 화면에서 확인해 주세요.');
+      linkWarn('업무일지는 저장됐지만 업무보고 반영이 확인되지 않습니다.\n업무보고 화면에서 확인해 주세요.');
   }catch(e){
     console.warn('[Link] save error:',e);
-    alert('업무일지는 저장됐지만 업무보고 연동 저장에 실패했습니다: '+(e.message||e));
+    linkWarn('업무일지는 저장됐지만 업무보고 연동 저장에 실패했습니다: '+(e.message||e));
   }
 }
 // 새 프로젝트(dev_items) 만들기 — 신규개발 단독·지시+신규개발 공용
@@ -3885,7 +4103,17 @@ async function applyLinkMaster(itemId,ms,stage,date,isNew){
     var st=Object.assign({},g.data.stages||{}); st[stage]=Object.assign({},st[stage]||{},{state:ms.state});
     if(ms.state==='완료') st[stage].date=String(date).slice(0,10); else delete st[stage].date;
     var p=await SB.from('dev_projects').update({stages:st,updated_at:new Date().toISOString()}).eq('id',ms.masterId); if(p.error) throw p.error;
-  }catch(e){ console.warn('[Link] master:',e); alert('업무일지·진척현황은 저장됐지만 신규개발 마스터 반영에 실패했습니다: '+(e.message||e)); }
+  }catch(e){ console.warn('[Link] master:',e); linkWarn('업무일지·진척현황은 저장됐지만 신규개발 마스터 반영에 실패했습니다: '+(e.message||e)); }
+}
+// 목록 「연동」 열 (2026-10-22): 입력한 곳(굵게) → 연동된 곳, 반영 완료 초록 / 반영 전 주황. 누르면 수정 창
+function linkCellHtml(r){
+  if(!r||!r.link_type) return '';
+  var done=!!r.link_log_id;
+  var first={directive:'지시사항',project:'진척현황',weekly:'주간업무',weekly_row:'주간업무'}[r.link_type]||'';
+  var tgt={directive:['지시사항'],project:['진척현황','주간업무'],weekly:['주간업무'],weekly_row:['주간업무']}[r.link_type]||[];
+  var path=r.origin==='업무보고'?[first,'일지'].concat(tgt.filter(function(x){ return x!==first; })):['일지'].concat(tgt);
+  return '<span onclick="event.stopPropagation();editDiary(\''+r.id+'\')" title="'+(done?'반영 완료':'반영 전 (일정 등)')+' — 눌러서 연동 확인" style="cursor:pointer;display:inline-block;font-size:11px;line-height:1.4;padding:2px 6px;border-radius:8px;'
+    +(done?'background:#e7f6ec;color:#15803d;':'background:#fff4e5;color:#b45309;')+'"><b>'+path[0]+'</b> → '+path.slice(1).join(' · ')+'</span>';
 }
 function linkBadgeHtml(r){
   if(!r||!r.link_type) return '';
