@@ -1117,27 +1117,32 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     </div>
     <div id="dm-vm-hint" style="display:none;margin:-4px 0 10px;padding:6px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.6;"></div>
     <datalist id="dm-link-vendor-list"></datalist><datalist id="dm-link-maker-list"></datalist>
-    <!-- 업무보고 연동 (지시사항·주간업무·신규개발) — 2026-10-10 / 2026-10-21 선택 단순화·마스터 -->
+    <!-- 업무보고 연동 (지시사항·주간업무·신규개발) — 2026-10-10 / 2026-10-21 선택 단순화·마스터 / 2026-10-21 체크 방식·지시+신규개발 동시 -->
+    <style>.lk-chk{display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;color:#111827;white-space:nowrap}.lk-chk input:disabled+span{color:#1a4fa0}</style>
     <div id="dm-link-box" style="margin-bottom:10px;padding:10px 12px;background:#f5f8ff;border:1px solid rgba(26,79,160,.2);border-radius:8px;">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-size:11px;font-weight:700;color:#1a4fa0;">업무보고 연동</span>
-        <select id="dm-link-type" class="dm-input" style="width:auto;min-width:190px;" onchange="onLinkTypeChange()">
+        <label class="lk-chk"><input type="checkbox" id="dm-lk-dir" onchange="onLinkChk('dir')"> 지시사항</label>
+        <label class="lk-chk"><input type="checkbox" id="dm-lk-wk" onchange="onLinkChk('wk')"> <span id="dm-lk-wk-lab">주간업무</span></label>
+        <label class="lk-chk"><input type="checkbox" id="dm-lk-pj" onchange="onLinkChk('pj')"> 신규개발 (세부진척현황·마스터)</label>
+        <select id="dm-link-type" class="dm-input" style="display:none;" onchange="onLinkTypeChange()">
           <option value="">연동 안 함</option>
           <option value="directive">지시사항</option>
           <option value="weekly">주간업무</option>
           <option value="weekly_row" id="dm-link-opt-row" hidden>주간업무 (업무보고에서 등록한 줄)</option>
           <option value="project">신규개발 (세부진척현황·마스터)</option>
         </select>
-        <label id="dm-link-all-wrap" style="display:none;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" id="dm-link-all" onchange="fillLinkTargets()"> 전체 부서 보기</label>
+        <label id="dm-link-all-wrap" style="display:none;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" id="dm-link-all" onchange="fillLinkTargets();if(linkDual)fillLinkTargets('project')"> 전체 부서 보기</label>
         <span id="dm-link-state" style="margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;display:none;"></span>
       </div>
       <div id="dm-link-path" style="display:none;margin-top:6px;font-size:11px;color:#1a4fa0;"></div>
+      <div id="dm-link-note" style="display:none;margin-top:4px;font-size:11px;color:#b45309;"></div>
       <div id="dm-link-dir-row" style="display:none;margin-top:8px;">
         <select id="dm-link-dir" class="dm-input"></select>
       </div>
       <div id="dm-link-pj-row" style="display:none;margin-top:8px;">
         <div class="dm-row" style="margin-bottom:0;">
-          <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="위 거래처·메이커로 자동 — 프로젝트명도 검색" data-ac="dm-link-pjq-list" autocomplete="off" oninput="fillLinkTargets();hideLinkNewPartner()" onchange="fillLinkTargets();checkLinkPjQ()"></div>
+          <div class="dm-field" style="flex:1;"><label class="dm-label">검색</label><input type="text" id="dm-link-pj-q" class="dm-input" placeholder="위 거래처·메이커로 자동 — 프로젝트명도 검색" data-ac="dm-link-pjq-list" autocomplete="off" oninput="fillLinkTargets('project');hideLinkNewPartner()" onchange="fillLinkTargets('project');checkLinkPjQ()"></div>
           <div class="dm-field" style="flex:2;"><label class="dm-label">프로젝트</label><select id="dm-link-pj" class="dm-input" onchange="onLinkPjChange()"></select></div>
           <div class="dm-field" style="flex:1;"><label class="dm-label">단계</label><select id="dm-link-stage" class="dm-input" onchange="onLinkMsChange()"></select></div>
         </div>
@@ -2381,8 +2386,8 @@ async function loadDirectiveCalRecords(){
     (dRes.data||[]).forEach(function(r){
       var asg = asgBy[r.id]||[];
       // 담당부서 「전체」 지시는 같은 법인 전 직원에게 보인다(야유회 등 행사·일정)
-      // 법인회의 지시: 담당부서 자리에 법인 이름이 들어간다(SME노이다/SME천진/SME태국/법인전체)
-      var corpOf = {'GSMEIN':'SME노이다','SMECN':'SME천진','SMEGLOBAL':'SME태국'}[myEntity];
+      // 법인회의 지시: 담당부서 자리에 법인 이름이 들어간다(SMEIN(N)/SMECN/SMETH/법인전체 — 2026-10-21 변경)
+      var corpOf = {'GSMEIN':'SMEIN(N)','SMECN':'SMECN','SMEGLOBAL':'SMETH'}[myEntity];
       var corpMine = (!!corpOf && r.owner_dept===corpOf) || (r.owner_dept==='법인전체' && myEntity!=='KOREA' && !!myEntity);
       var mine = asg.length ? asg.indexOf(myId)>=0 : (corpMine || ((r.entity||'')===myEntity && ((!!myDept && r.owner_dept===myDept) || r.owner_dept==='전체')));
       var issued = (r.issuer_id===myId);
@@ -3335,10 +3340,34 @@ const LINK_STAGES=['공급논의','견적제출','전산등록(HSMS)','단가합
 const LINK_NUM='①②③④⑤⑥⑦⑧';
 const LINK_DEPTS=['개발기획팀','자재구매팀','개발구매팀','출하팀','제조팀'];
 const LINK_CATS=['영업','구매','품질','재고','마감','사내','기타'];
-const LINK_CORP={'SME노이다':'GSMEIN','SME천진':'SMECN','SME태국':'SMEGLOBAL'};
+const LINK_CORP={'SMEIN(N)':'GSMEIN','SMECN':'SMECN','SMETH':'SMEGLOBAL'};
 const LINK_LABEL={directive:'지시',project:'프로젝트',weekly:'주간업무',weekly_row:'주간업무'};
 var linkData={};          // 종류별로 불러온 목록 (창을 열 때마다 새로 읽는다)
 var linkPreset=null;      // 수정 중인 일지에 이미 걸려 있는 연동 {type,refId,stage}
+/* ── 연동 체크 방식 (2026-10-21) ──
+   ☐ 지시사항 ☐ 주간업무 ☐ 신규개발 — 신규개발을 고르면 주간업무에 「신규개발」 줄로 자동으로 들어가므로 주간업무가 함께 체크·잠김.
+   지시사항 + 신규개발은 동시에 고를 수 있다(linkDual): 일지는 지시에 연동되고, 반영된 지시 활동을 DB rp_dir_to_project 가 진척현황에도 기록.
+   지시사항 + 주간업무 일반 줄은 함께 고를 수 없다(일지 1건 = 연동 1개). 실제 연동 종류는 숨긴 #dm-link-type 값으로 관리 */
+var linkDual=false, linkPresetPj=null;   // 지시+신규개발 동시 여부 / 수정 중인 일지의 지시 활동에 이미 걸린 진척현황 {type:'project',refId,stage}
+function linkPjOn(){ return document.getElementById('dm-link-type').value==='project'||linkDual; }
+function setLinkChecks(type,dual){
+  var d=document.getElementById('dm-lk-dir'), w=document.getElementById('dm-lk-wk'), p=document.getElementById('dm-lk-pj'); if(!d) return;
+  linkDual=!!dual&&type==='directive';
+  d.checked=type==='directive'; p.checked=type==='project'||linkDual; w.checked=p.checked||type==='weekly'||type==='weekly_row';
+  w.disabled=p.checked;
+  document.getElementById('dm-lk-wk-lab').textContent=p.checked?'주간업무 (신규개발 줄로 자동)':type==='weekly_row'?'주간업무 (업무보고에서 등록한 줄)':'주간업무';
+}
+function onLinkChk(which){
+  var d=document.getElementById('dm-lk-dir'), w=document.getElementById('dm-lk-wk'), p=document.getElementById('dm-lk-pj'), note=document.getElementById('dm-link-note'), msg='';
+  if(which==='wk'&&w.checked&&d.checked){ d.checked=false; msg='지시사항과 주간업무 일반 줄은 함께 연동할 수 없어 지시사항 선택을 해제했습니다. (지시사항은 신규개발과 함께 고를 수 있습니다)'; }
+  if(which==='dir'&&d.checked&&w.checked&&!p.checked){ w.checked=false; msg='지시사항과 주간업무 일반 줄은 함께 연동할 수 없어 주간업무 선택을 해제했습니다. (지시사항은 신규개발과 함께 고를 수 있습니다)'; }
+  var row=!!(linkPreset&&linkPreset.type==='weekly_row');
+  var type=d.checked?'directive':p.checked?'project':w.checked?(row?'weekly_row':'weekly'):'';
+  document.getElementById('dm-link-type').value=type;
+  setLinkChecks(type,d.checked&&p.checked);
+  if(note){ note.textContent=msg; note.style.display=msg?'':'none'; }
+  onLinkTypeChange();
+}
 var linkSeq=0;
 function linkIsExec(){ return wfSession.empId===2||wfSession.dept==='대표이사'||wfSession.dept==='상무이사'||wfSession.rank==='대표이사'; }
 function linkKey(v){ return String(v||'').toUpperCase().replace(/\(.*?\)/g,'').replace(/[^A-Z0-9가-힣]/g,''); }
@@ -3439,10 +3468,10 @@ async function diaryRegisterPartner(){
 }
 // 위 거래처·메이커 → 프로젝트 검색칸 (비어 있을 때만, force=true면 덮어씀)
 function linkFillFromPartner(force){
-  var type=document.getElementById('dm-link-type').value; if(type!=='project') return;
+  if(!linkPjOn()) return;
   var v=document.getElementById('dm-maker').value.trim()||document.getElementById('dm-partner').value.trim(); if(!v) return;
   var q=document.getElementById('dm-link-pj-q');
-  if(force||!q.value.trim()){ q.value=v; if(!(linkPreset&&linkPreset.type==='project')) checkLinkPjQ(); }
+  if(force||!q.value.trim()){ q.value=v; if(!(linkPreset&&linkPreset.type==='project')&&!linkPresetPj) checkLinkPjQ(); }
 }
 function onDiaryPartnerChange(){
   var pe=document.getElementById('dm-partner'), me=document.getElementById('dm-maker'), pv=pe.value.trim();
@@ -3458,7 +3487,7 @@ function onDiaryMakerChange(){
 function onDiaryVmChanged(){
   var type=document.getElementById('dm-link-type').value; if(!type) return;
   linkFillFromPartner(true);
-  if(type==='project'&&!(linkPreset&&linkPreset.type==='project')) fillLinkTargets();
+  if(linkPjOn()&&!(linkPreset&&linkPreset.type==='project')&&!linkPresetPj) fillLinkTargets('project');
 }
 function hideLinkNewPartner(){ var el=document.getElementById('dm-link-pj-new'); if(el){ el.style.display='none'; el.innerHTML=''; } }
 function checkLinkPjQ(){
@@ -3496,8 +3525,8 @@ function linkPjLabel(i,list){
 }
 function linkWkLabel(r){ return r.rpt_month+'월 '+(r.week_no||'-')+'주 '+(r.kind==='계획'?'(계획) ':'')+'['+String(r.dept||'').replace(/팀$/,'')+(r.category?'·'+r.category:'')+'] '+((r.maker||r.vendor)?(r.maker||r.vendor)+' — ':'')+linkCut(r.content,34); }
 function fillLinkTargets(){
-  var type=document.getElementById('dm-link-type').value;
-  var all=document.getElementById('dm-link-all').checked, pre=(linkPreset&&linkPreset.type===type)?linkPreset:null;
+  var type=(typeof arguments[0]==='string'&&arguments[0])||document.getElementById('dm-link-type').value;
+  var all=document.getElementById('dm-link-all').checked, pre=(linkPreset&&linkPreset.type===type)?linkPreset:(type==='project'&&linkPresetPj)?linkPresetPj:null;
   if(type==='directive'){
     var selD=document.getElementById('dm-link-dir'), curD=selD.value||(pre?pre.refId:'');
     var listD=(linkData.dirs||[]).filter(function(d){ return all||linkDirMine(d)||String(d.id)===String(curD); });
@@ -3562,7 +3591,7 @@ window.addEventListener('resize',function(){ if(acInput) acClose(); });
 document.addEventListener('scroll',function(ev){ var dd=document.getElementById('acDD'); if(acInput&&dd&&ev.target!==dd) dd.style.display='none'; },true);
 // 이미 걸려 있는 연동 대상이 목록에 없으면(완료된 지시·오래된 주간업무 등) 그 한 건을 따로 읽어 넣는다
 async function ensureLinkPreset(type){
-  var pre=(linkPreset&&linkPreset.type===type)?linkPreset:null; if(!pre||!pre.refId||!SB) return;
+  var pre=(linkPreset&&linkPreset.type===type)?linkPreset:(type==='project'&&linkPresetPj)?linkPresetPj:null; if(!pre||!pre.refId||!SB) return;
   var cfg={directive:['dm-link-dir','directives','id,title,owner_dept,status,due_date',linkDirLabel],
            project:['dm-link-pj','dev_items','id,title,vendor,maker,owner_dept',linkPjLabel],
            weekly:['dm-link-wk','rp_weekly','id,dept,rpt_year,rpt_month,week_no,category,vendor,maker,content',linkWkLabel]}[type];
@@ -3576,15 +3605,15 @@ async function ensureLinkPreset(type){
 async function onLinkTypeChange(){
   var type=document.getElementById('dm-link-type').value, seq=++linkSeq;
   document.getElementById('dm-link-dir-row').style.display=type==='directive'?'':'none';
-  document.getElementById('dm-link-pj-row').style.display=type==='project'?'':'none';
+  document.getElementById('dm-link-pj-row').style.display=(type==='project'||linkDual)?'':'none';
   document.getElementById('dm-link-wk-row').style.display=type==='weekly'?'':'none';
   document.getElementById('dm-link-all-wrap').style.display=type?'flex':'none';
   updateLinkHint();
   if(!type||type==='weekly_row') return;
   var busy={directive:'dm-link-dir',project:'dm-link-pj',weekly:'dm-link-wk'}[type];
   document.getElementById(busy).innerHTML='<option value="">불러오는 중…</option>';
-  if(type==='project'){
-    var pre=(linkPreset&&linkPreset.type==='project')?linkPreset:null;
+  if(type==='project'||linkDual){
+    var pre=(linkPreset&&linkPreset.type==='project')?linkPreset:linkPresetPj;
     document.getElementById('dm-link-stage').innerHTML='<option value="">선택 안 함</option>'+LINK_STAGES.map(function(n,ix){ return linkOptHtml(ix+1,LINK_NUM[ix]+n,pre?pre.stage:''); }).join('');
   }
   if(type==='weekly'){
@@ -3599,6 +3628,13 @@ async function onLinkTypeChange(){
   fillLinkTargets();
   await ensureLinkPreset(type);
   if(type==='project'&&seq===linkSeq) fillLinkMaster();
+  if(linkDual&&type==='directive'&&seq===linkSeq){   // 지시 + 신규개발: 프로젝트 목록도 읽는다
+    document.getElementById('dm-link-pj').innerHTML='<option value="">불러오는 중…</option>';
+    try{ await loadLinkData('project'); }catch(e){ console.warn('[Link] load error:',e); document.getElementById('dm-link-pj').innerHTML='<option value="">목록을 불러오지 못했습니다</option>'; return; }
+    if(seq!==linkSeq) return;
+    linkFillFromPartner(false); fillLinkTargets('project'); await ensureLinkPreset('project');
+    if(seq===linkSeq) fillLinkMaster();
+  }
 }
 function onLinkPjChange(){
   var on=document.getElementById('dm-link-pj').value==='new', box=document.getElementById('dm-link-pj-newbox');
@@ -3648,8 +3684,9 @@ function onLinkMsChange(){
 function updateLinkPath(){
   var el=document.getElementById('dm-link-path'); if(!el) return;
   var type=document.getElementById('dm-link-type').value;
-  var msOn=type==='project'&&!!document.getElementById('dm-link-ms').value;
-  var tgt={directive:['지시사항'],weekly:['주간업무'],weekly_row:['주간업무'],project:['세부진척현황','주간업무(신규개발)'].concat(msOn?[document.getElementById('dm-link-ms-on').checked?'마스터 단계':'마스터 연결']:[])}[type];
+  var msOn=linkPjOn()&&!!document.getElementById('dm-link-ms').value;
+  var pjT=['세부진척현황','주간업무(신규개발)'].concat(msOn?[document.getElementById('dm-link-ms-on').checked?'마스터 단계':'마스터 연결']:[]);
+  var tgt={directive:['지시사항'].concat(linkDual?pjT:[]),weekly:['주간업무'],weekly_row:['주간업무'],project:pjT}[type];
   if(!tgt){ el.style.display='none'; return; }
   el.innerHTML='반영: <b>일지</b> → '+tgt.join(' · ');
   el.style.display='';
@@ -3667,7 +3704,8 @@ function updateLinkHint(){
     return;
   }
   if(type==='weekly_row'){ el.innerHTML='업무보고 주간업무에서 등록한 줄과 1:1로 연결되어 있습니다. 저장하면 그 줄의 내용·작성일자도 함께 바뀝니다.'; el.style.display=''; return; }
-  var where={directive:'선택한 지시사항의 활동내용',project:'선택한 프로젝트의 세부 진척현황(주간업무에는 신규개발 줄로 표시)',weekly:'선택한 주간업무 줄의 일자별 활동'}[type];
+  if(linkDual&&document.getElementById('dm-status').value==='일정'){ el.innerHTML='<b style="color:#C8001E;">상태가 「일정」이라 지금은 지시사항·세부진척현황 모두 반영되지 않습니다.</b> 완료·진행중으로 바꿔 저장할 때 반영되니, 그때 신규개발 체크와 프로젝트를 다시 확인해 주세요.'; el.style.display=''; return; }
+  var where={directive:linkDual?'선택한 지시사항의 활동내용과 선택한 프로젝트의 세부진척현황(주간업무에는 신규개발 줄)':'선택한 지시사항의 활동내용',project:'선택한 프로젝트의 세부 진척현황(주간업무에는 신규개발 줄로 표시)',weekly:'선택한 주간업무 줄의 일자별 활동'}[type];
   var sched=document.getElementById('dm-status').value==='일정';
   el.innerHTML=(sched&&type==='project'?'<b style="color:#1a4fa0;">상태가 「일정」이면 세부 진척현황에 바로 올라가고 목표일정에 이 날짜가 표시됩니다.</b> 완료로 바꿔 저장하면 완료일정이 채워집니다.'
       :sched&&type==='weekly'?'<b style="color:#1a4fa0;">상태가 「일정」이면 주간업무에 「계획」으로 올라갑니다</b> (「새 건 등록」을 고른 경우). 완료·진행중으로 바꿔 저장하면 「실적」으로 바뀌고 활동이 반영됩니다. 기존 건을 고르면 완료로 바꿀 때 그 줄에 활동이 반영됩니다.'
@@ -3688,6 +3726,16 @@ function resetLinkUI(r){
   document.getElementById('dm-link-all').checked=linkIsExec();
   var optRow=document.getElementById('dm-link-opt-row'); if(optRow) optRow.hidden=!(linkPreset&&linkPreset.type==='weekly_row');
   document.getElementById('dm-link-type').value=linkPreset?linkPreset.type:'';
+  linkPresetPj=null; setLinkChecks(document.getElementById('dm-link-type').value,false);
+  var lkNote=document.getElementById('dm-link-note'); if(lkNote){ lkNote.style.display='none'; lkNote.textContent=''; }
+  if(SB&&r&&r.link_type==='directive'&&r.link_log_id){   // 이 일지의 지시 활동이 진척현황에도 기록돼 있으면 「신규개발」도 체크
+    var rid=r.id;
+    SB.from('dev_logs').select('item_id,stage').eq('dir_update_id',r.link_log_id).eq('is_deleted',false).limit(1).then(function(q){
+      var x=q&&q.data&&q.data[0]; if(!x||String(diaryEditId)!==String(rid)) return;
+      linkPresetPj={type:'project',refId:x.item_id,stage:x.stage||''};
+      setLinkChecks('directive',true); onLinkTypeChange();
+    });
+  }
   document.getElementById('dm-status').onchange=updateLinkHint;
   // 저장된 연동 상태 표시 (2026-10-14) — 수정 창을 열자마자 연동 여부를 알 수 있게
   var st=document.getElementById('dm-link-state');
@@ -3719,12 +3767,8 @@ function readLinkSel(obj){
   var isSched=obj.status==='일정';
   if(type==='weekly_row') return (linkPreset&&linkPreset.type==='weekly_row')?{type:type,refId:linkPreset.refId,stage:null}:null;
   if(!isSched&&!obj.title&&!obj.content){ alert('업무보고에 반영할 제목이나 내용을 입력해주세요.'); return false; }
-  if(type==='directive'){
-    var dv=document.getElementById('dm-link-dir').value;
-    if(!dv){ alert('연동할 지시사항을 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
-    return {type:type,refId:+dv,stage:null};
-  }
-  if(type==='project'){
+  var pjSel=null;
+  if(type==='project'||(type==='directive'&&linkDual)){
     var pv=document.getElementById('dm-link-pj').value;
     if(!pv){ alert('연동할 프로젝트를 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
     var msSel=+document.getElementById('dm-link-ms').value||null, msLinked=document.getElementById('dm-link-ms').disabled;
@@ -3745,10 +3789,15 @@ function readLinkSel(obj){
         else if(!confirm('「'+pmk+'」은(는) 메이커관리에 없는 메이커입니다.\n관리자설정 > 메이커관리에 신규로 등록해 주세요.\n\n확인 = 지금은 적은 이름 그대로 저장 / 취소 = 입력 화면으로 돌아가기')) return false;
       }
       obj.partner=pvn; obj.maker=pmk||null;
-      return {type:type,refId:null,stage:+document.getElementById('dm-link-stage').value||null,ms:msInfo,
+      pjSel={refId:null,stage:+document.getElementById('dm-link-stage').value||null,ms:msInfo,
         pjNew:{title:pt,kind:document.getElementById('dm-link-pjn-kind').value,vendor:pvn,maker:pmk,dept:document.getElementById('dm-link-pjn-dept').value,addPartner:pAdd}};
-    }
-    return {type:type,refId:+pv,stage:+document.getElementById('dm-link-stage').value||null,ms:msInfo};
+    }else pjSel={refId:+pv,stage:+document.getElementById('dm-link-stage').value||null,ms:msInfo};
+    if(type==='project') return Object.assign({type:type},pjSel);
+  }
+  if(type==='directive'){
+    var dv=document.getElementById('dm-link-dir').value;
+    if(!dv){ alert('연동할 지시사항을 선택해주세요.\n(연동하지 않으려면 체크를 해제하세요)'); return false; }
+    return {type:type,refId:+dv,stage:null,dualPj:pjSel};
   }
   var wv=document.getElementById('dm-link-wk').value;
   if(!wv){ alert('연동할 주간업무 건을 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
@@ -3788,16 +3837,7 @@ async function applyDiaryLink(id,sel){
       if(ins.error) throw ins.error;
       refId=ins.data.id;
     }
-    if(want.pjNew){
-      var pn=want.pjNew;
-      if(pn.addPartner){ try{ await SB.from('partners').insert({name:pn.vendor,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'}); linkData.partners=null; }catch(e){ console.warn(e); } }
-      var mx=await SB.from('dev_items').select('sort_no').order('sort_no',{ascending:false,nullsFirst:false}).limit(1);
-      var nextSort=((mx.data&&mx.data[0]&&mx.data[0].sort_no)||0)+1;
-      var pins=await SB.from('dev_items').insert({title:pn.title,kind:pn.kind||'업체개발',vendor:pn.vendor||null,maker:pn.maker||null,owner_dept:pn.dept||null,sort_no:nextSort,project_id:(want.ms&&want.ms.masterId)||null,
-        reg_text:String(rec.date).slice(0,10),origin:'업무일지',created_by:wfSession.empId||null,created_name:wfSession.name}).select().single();
-      if(pins.error) throw pins.error;
-      refId=pins.data.id; linkData.items=null;
-    }
+    if(want.pjNew) refId=await createLinkPjNew(want.pjNew,rec,want.ms);
     var stage=want.type==='project'?(want.stage||null):null;
     var same=(rec.link_type||null)===(want.type||null)&&String(rec.link_ref_id||'')===String(refId||'')&&String(rec.link_stage||'')===String(stage||'');
     var res=same? await SB.from('work_diary').select('*').eq('id',id).single()
@@ -3805,12 +3845,36 @@ async function applyDiaryLink(id,sel){
     if(res.error) throw res.error;
     Object.assign(rec,res.data);
     if(want.type==='project'&&want.ms&&refId) await applyLinkMaster(refId,want.ms,stage,rec.date,!!want.pjNew);
+    if(want.type==='directive'&&want.dualPj){   // 지시 + 신규개발: 반영된 지시 활동을 진척현황에도 (DB rp_dir_to_project)
+      var dp=want.dualPj;
+      if(!rec.link_log_id){
+        if(rec.status!=='일정') alert('지시사항 활동 반영이 확인되지 않아 세부진척현황에는 기록하지 못했습니다.');
+      }else{
+        try{
+          var pjId=dp.refId||await createLinkPjNew(dp.pjNew,rec,dp.ms);
+          var rr=await SB.rpc('rp_dir_to_project',{p_update:rec.link_log_id,p_item:pjId,p_stage:dp.stage||null});
+          if(rr.error) throw rr.error;
+          if(dp.ms) await applyLinkMaster(pjId,dp.ms,dp.stage,rec.date,!!dp.pjNew);
+        }catch(e2){ console.warn('[Link] dual:',e2); alert('업무일지·지시사항은 저장됐지만 세부진척현황 기록에 실패했습니다: '+(e2.message||e2)); }
+      }
+    }
     if(want.type&&rec.status!=='일정'&&(rec.title||rec.content)&&!rec.link_log_id)
       alert('업무일지는 저장됐지만 업무보고 반영이 확인되지 않습니다.\n업무보고 화면에서 확인해 주세요.');
   }catch(e){
     console.warn('[Link] save error:',e);
     alert('업무일지는 저장됐지만 업무보고 연동 저장에 실패했습니다: '+(e.message||e));
   }
+}
+// 새 프로젝트(dev_items) 만들기 — 신규개발 단독·지시+신규개발 공용
+async function createLinkPjNew(pn,rec,ms){
+  if(pn.addPartner){ try{ await SB.from('partners').insert({name:pn.vendor,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'}); linkData.partners=null; }catch(e){ console.warn(e); } }
+  var mx=await SB.from('dev_items').select('sort_no').order('sort_no',{ascending:false,nullsFirst:false}).limit(1);
+  var nextSort=((mx.data&&mx.data[0]&&mx.data[0].sort_no)||0)+1;
+  var pins=await SB.from('dev_items').insert({title:pn.title,kind:pn.kind||'업체개발',vendor:pn.vendor||null,maker:pn.maker||null,owner_dept:pn.dept||null,sort_no:nextSort,project_id:(ms&&ms.masterId)||null,
+    reg_text:String(rec.date).slice(0,10),origin:'업무일지',created_by:wfSession.empId||null,created_name:wfSession.name}).select().single();
+  if(pins.error) throw pins.error;
+  linkData.items=null;
+  return pins.data.id;
 }
 // 신규개발 마스터: 연결(dev_items.project_id) + 단계 상태(dev_projects.stages) — 업무보고 화면과 같은 저장 방식
 async function applyLinkMaster(itemId,ms,stage,date,isNew){
@@ -3832,7 +3896,7 @@ function openDiaryForDirective(id){
   closeDayPopup();
   openDiaryModal(todayStr);
   linkPreset={type:'directive',refId:Number(id),stage:''};
-  document.getElementById('dm-link-type').value='directive';
+  document.getElementById('dm-link-type').value='directive'; setLinkChecks('directive',false);
   document.getElementById('dm-cat').value='사내관리';
   document.getElementById('dm-action').value='행정처리';
   onLinkTypeChange();
