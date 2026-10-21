@@ -1054,9 +1054,11 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <div class="form-row" id="actPjRow">
         <label class="dj-chk" title="같은 활동을 선택한 프로젝트의 세부진척현황에도 기록합니다 (주간업무에는 신규개발 줄로 보입니다). 지시 활동을 고치면 함께 바뀝니다"><input type="checkbox" id="actPj" onchange="actPjToggle()"> 📁 세부진척현황에도 기록</label>
         <div class="form-row-2" id="actPjBox" style="display:none;margin-top:6px;">
-          <div class="form-row"><label class="form-label">프로젝트<span>*</span></label><input type="text" class="form-input" id="actPjItem" list="actPjList" placeholder="메이커·프로젝트명으로 찾기"><datalist id="actPjList"></datalist></div>
-          <div class="form-row"><label class="form-label">단계</label><select class="form-select" id="actPjStage"></select></div>
+          <div class="form-row"><label class="form-label">프로젝트<span>*</span></label><input type="text" class="form-input" id="actPjItem" list="actPjList" placeholder="메이커·프로젝트명으로 찾기" onchange="actPjMsSync()"><datalist id="actPjList"></datalist></div>
+          <div class="form-row"><label class="form-label">단계</label><select class="form-select" id="actPjStage" onchange="actPjMsSync()"></select></div>
         </div>
+        <div class="form-row" id="actPjMsRow" style="display:none;margin-top:4px;"><label class="form-label">신규개발 마스터 단계 상태 <span style="color:var(--muted);font-weight:400;" id="actPjMsName"></span></label>
+          <select class="form-select" id="actPjMs"><option value="">변경 안 함</option><option value="진행중">진행중</option><option value="완료">완료 (오늘 일자로 기록)</option><option value="Drop">Drop</option></select></div>
       </div>
     </div>
     <div class="modal-ft">
@@ -1079,6 +1081,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.46 (2026-10-21) — 지시 활동 「세부진척현황에도 기록」에 신규개발 마스터 단계 상태(마스터 연결 프로젝트 + 단계 선택 시, 진척현황 입력 창과 같은 저장 방식)
    directive.html v3.45 (2026-10-21) — 법인 이름 SMEIN(N)·SMECN·SMETH(+거래처 정식명 매핑 CORP_PARTNER), 법인별 탭에 거래처가 법인 정식명인 주간업무·프로젝트 포함 / 지시 활동 입력 창 「📁 세부진척현황에도 기록」(프로젝트·단계, DB rp_dir_to_project + 수정·삭제 동기화 du_pj_sync)
    directive.html v3.44 (2026-10-21) — 업무일지 메이커 칸(work_diary.maker): 일지 보기 창에 메이커 표시, 거래처·메이커별 검색에서 연동 안 된 일지를 거래처·메이커 둘 다로 찾기 (일지 자동 기록 시 거래처·메이커는 DB rp_make_diary 가 나눠 채움)
    directive.html v3.43 (2026-10-14) — 수정 창 프로젝트 선택을 프로젝트명만 표시(같은 이름일 때만 메이커·부서로 구분)
@@ -1633,6 +1636,7 @@ function openAct(id,mode){
   document.getElementById('actPj').checked=false; document.getElementById('actPjBox').style.display='none';
   document.getElementById('actPjStage').innerHTML='<option value="">선택 안 함</option>'+DV_STAGES.map((n,ix)=>`<option value="${ix+1}">${DV_NUM[ix]+n}</option>`).join('');
   document.getElementById('actPjItem').value=''; actPjDef=d.dev_item_id||null;
+  document.getElementById('actPjMs').value=''; document.getElementById('actPjMsRow').style.display='none';
   actStateChange();
   document.getElementById('actOv').classList.add('open');
   setTimeout(()=>document.getElementById('actText').focus(),50);
@@ -1647,6 +1651,16 @@ async function actPjToggle(){
   const el=document.getElementById('actPjItem');
   if(!el.value&&actPjDef){ const cur=(fmProjItems||[]).find(i=>i.id===actPjDef); el.value=cur?fmProjLabel(cur):'#'+actPjDef; }
   if(!el.value) el.focus();
+  actPjMsSync();
+}
+// v3.46: 마스터에 연결된 프로젝트이고 단계를 골랐을 때만 마스터 단계 상태를 함께 바꿀 수 있다(진척현황 입력 창과 같은 방식)
+function actPjItemOf(){ const m=document.getElementById('actPjItem').value.trim().match(/#(\d+)$/); return m?(fmProjItems||[]).find(i=>i.id===+m[1])||null:null; }
+function actPjMsSync(){
+  const it=actPjItemOf(), stg=+document.getElementById('actPjStage').value||null, row=document.getElementById('actPjMsRow');
+  const on=!!(it&&it.project_id&&stg&&document.getElementById('actPj').checked);
+  row.style.display=on?'':'none'; if(!on) document.getElementById('actPjMs').value='';
+  const pj=on&&typeof dvPById!=='undefined'?dvPById[it.project_id]:null;
+  document.getElementById('actPjMsName').textContent=on?'— '+(pj?(dvG(pj)+' '+(pj.product||'')).trim():'마스터 #'+it.project_id):'';
 }
 function actStateChange(){
   const st=document.getElementById('actState').value, isC=actMode==='comment';
@@ -1673,7 +1687,8 @@ async function saveAct(){
     if(document.getElementById('actPj').checked&&document.getElementById('actPjRow').style.display!=='none'){
       const m=document.getElementById('actPjItem').value.trim().match(/#(\d+)$/);
       if(!m){ showToast('세부진척현황에 기록할 프로젝트를 목록에서 골라주세요','err'); btn.disabled=false; return; }
-      actPjReq={item:+m[1],stage:+document.getElementById('actPjStage').value||null};
+      const pIt=(fmProjItems||[]).find(i=>i.id===+m[1]);
+      actPjReq={item:+m[1],stage:+document.getElementById('actPjStage').value||null,master:pIt&&pIt.project_id||null,ms:document.getElementById('actPjMsRow').style.display==='none'?'':document.getElementById('actPjMs').value};
     }
     recDj=djWant('actDj');
     ok=await record(id,document.getElementById('actState').value,text,document.getElementById('actNext').value);
@@ -1796,7 +1811,15 @@ async function record(id,state,text,nextDate){
     patch.updated_at=now; await sbPatch('directives',id,patch); const ures=await sbPost('directive_updates',upd);
     if(recDj&&ures&&ures[0]) await djMake('directive',ures[0].id);
     if(actPjReq&&ures&&ures[0]){   // v3.45: 같은 활동을 세부진척현황에도 (DB rp_dir_to_project — 지시에 프로젝트가 없으면 연결)
-      try{ await sbRpc('rp_dir_to_project',{p_update:ures[0].id,p_item:actPjReq.item,p_stage:actPjReq.stage}); dvLoaded=false; }
+      try{
+        await sbRpc('rp_dir_to_project',{p_update:ures[0].id,p_item:actPjReq.item,p_stage:actPjReq.stage}); dvLoaded=false;
+        if(actPjReq.ms&&actPjReq.stage&&actPjReq.master){   // v3.46: 마스터 단계 상태 반영 — dvSaveLog 와 같은 형식
+          const pj=(await sbGetAll('dev_projects','select=id,stages&id=eq.'+actPjReq.master))[0];
+          if(pj){ const st=Object.assign({},pj.stages||{}); st[actPjReq.stage]=Object.assign({},st[actPjReq.stage]||{},{state:actPjReq.ms});
+            if(actPjReq.ms==='완료') st[actPjReq.stage].date=todayStr(); else delete st[actPjReq.stage].date;
+            await sbPatch('dev_projects',pj.id,{stages:st,updated_at:now}); }
+        }
+      }
       catch(e){ showToast('지시 활동은 저장됐지만 세부진척현황 기록에 실패했습니다: '+e.message,'err'); }
     }
     showToast('저장되었습니다','ok'); await refresh(); return true;
@@ -2094,7 +2117,7 @@ async function fmProjFill(curId){
   const el=document.getElementById('fmProj'); el.value='';
   if(dvAllI&&dvAllI.length) fmProjItems=dvAllI;
   else if(!fmProjItems){
-    try{ fmProjItems=await sbGetAll('dev_items','select=id,vendor,maker,title,owner_dept&is_deleted=is.false&order=id.desc'); }
+    try{ fmProjItems=await sbGetAll('dev_items','select=id,vendor,maker,title,owner_dept,project_id&is_deleted=is.false&order=id.desc'); }
     catch(e){ fmProjItems=[]; }
   }
   document.getElementById('fmProjList').innerHTML=fmProjItems.map(i=>`<option value="${esc(fmProjLabel(i))}">`).join('');
