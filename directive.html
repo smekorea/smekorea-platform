@@ -893,10 +893,11 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <span class="fb-label" style="margin-left:6px;">상태</span><select id="dvSt" title="미완료 = 완료유무가 진행중·미결인 줄 + 목표일정이 있는데 완료일정이 없는 줄 / 기한 지남 = 목표일정이 지났는데 완료되지 않은 줄"><option value="">전체</option><option value="open">미완료</option><option value="미결">　└ 미결</option><option value="진행중">　└ 진행중</option><option value="late">　└ 기한 지남</option><option value="done">완료</option></select>
       <span class="fb-label" style="margin-left:6px;">구분</span><select id="dvKind"><option value="">전체</option><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select>
       <span class="fb-label" style="margin-left:6px;">법인</span><select id="dvCorp" onchange="dvFillProg()"><option value="">전체</option><option value="-">본사(법인 없음)</option></select><select id="dvProg" title="대과제"><option value="">전체 대과제</option></select>
-      <span class="fb-label" style="margin-left:6px;">업체</span><input type="text" id="dvVendor" list="dvVendorList" placeholder="업체명 (전체)" style="width:170px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()"><datalist id="dvVendorList"></datalist><datalist id="dvItemList"></datalist>
+      <span class="fb-label" style="margin-left:6px;">거래처</span><input type="text" id="dvVendor" list="dvVOnlyList" placeholder="거래처 (전체)" style="width:160px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
+      <span class="fb-label" style="margin-left:6px;">메이커</span><input type="text" id="dvMaker" list="dvMOnlyList" placeholder="메이커 (전체)" style="width:140px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()"><datalist id="dvVendorList"></datalist><datalist id="dvVOnlyList"></datalist><datalist id="dvMOnlyList"></datalist><datalist id="dvItemList"></datalist>
       <span class="fb-label" style="margin-left:6px;">프로젝트</span><input type="text" id="dvKw" list="dvItemList" placeholder="프로젝트명·내용 (전체)" style="width:200px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
       <button class="btn btn-primary" onclick="renderDvLog()">🔍 조회</button>
-      <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvKw').value='';document.getElementById('dvKind').value='';document.getElementById('dvSt').value='';document.getElementById('dvCorp').value='';dvFillProg();dvAllRange();renderDvLog()">초기화</button>
+      <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvMaker').value='';document.getElementById('dvKw').value='';document.getElementById('dvKind').value='';document.getElementById('dvSt').value='';document.getElementById('dvCorp').value='';dvFillProg();dvAllRange();renderDvLog()">초기화</button>
       <button class="btn btn-primary dv-edit" onclick="dvOpenLog()">＋ 활동 입력</button>
       <button class="btn btn-outline" onclick="dvPrint('log')">인쇄</button>
       <button class="btn btn-outline" onclick="dvExcel('log')">엑셀 내보내기</button>
@@ -1081,6 +1082,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.48 (2026-10-22) — 세부 진척현황 검색 「업체」 → 「거래처」(거래처 칸만) + 「메이커」(메이커 칸만) 분리, 묶음 이름으로 이동 시 메이커/거래처 칸 자동 구분
    directive.html v3.47 (2026-10-22) — 지시 활동에서 만든 주간업무 줄(origin='지시사항', DB rp_dir_to_weekly)의 입력·연동 경로 「지시사항 → 주간업무」
    directive.html v3.46 (2026-10-21) — 지시 활동 「세부진척현황에도 기록」에 신규개발 마스터 단계 상태(마스터 연결 프로젝트 + 단계 선택 시, 진척현황 입력 창과 같은 저장 방식)
    directive.html v3.45 (2026-10-21) — 법인 이름 SMEIN(N)·SMECN·SMETH(+거래처 정식명 매핑 CORP_PARTNER), 법인별 탭에 거래처가 법인 정식명인 주간업무·프로젝트 포함 / 지시 활동 입력 창 「📁 세부진척현황에도 기록」(프로젝트·단계, DB rp_dir_to_project + 수정·삭제 동기화 du_pj_sync)
@@ -2526,6 +2528,11 @@ function dvVendors(){const used=dvUsedVendors(), keys={};used.forEach(v=>{dvKeys
 function dvKnownVendor(v){return dvVendors().some(x=>dvSame(x,v));}
 function dvFillFilters(){
   document.getElementById('dvVendorList').innerHTML=dvVendors().map(v=>`<option value="${esc(v)}">`).join('');
+  // v3.48: 세부 진척현황 검색 — 거래처·메이커 따로 (프로젝트에 쓴 이름이 먼저, 이어서 거래처 정보 / 메이커관리)
+  { const uniq=a=>{const seen={},o=[];a.forEach(n=>{n=(n||'').trim();const k=n&&dvKeys(n)[0];if(n&&!seen[k]){seen[k]=1;o.push(n);}});return o;};
+    const uv=uniq(dvI.map(i=>i.vendor)).sort((a,b)=>a.localeCompare(b,'ko')), um=uniq(dvI.map(i=>i.maker)).sort((a,b)=>a.localeCompare(b,'ko'));
+    document.getElementById('dvVOnlyList').innerHTML=uniq(uv.concat(dvPartners)).map(v=>`<option value="${esc(v)}">`).join('');
+    document.getElementById('dvMOnlyList').innerHTML=uniq(um.concat(dvMakers)).map(v=>`<option value="${esc(v)}">`).join(''); }
   { const seen={}, names=[]; dvI.forEach(i=>{const n=(i.title||'').trim(); if(n&&!seen[n]){seen[n]=1;names.push(n);}}); names.sort((x,y)=>x.localeCompare(y,'ko')); document.getElementById('dvItemList').innerHTML=names.map(n=>`<option value="${esc(n)}">`).join(''); }
   const kinds=[];dvPlans.forEach(p=>{if(p.kind&&kinds.indexOf(p.kind)<0)kinds.push(p.kind);});
   ['신규개발','신규거래','견적제출','단가협의','납기협의','업체내방','회의참석','4M','HSMS'].forEach(k=>{if(kinds.indexOf(k)<0)kinds.push(k);});
@@ -2571,14 +2578,15 @@ function dvLogRange(){
 function dvRangeText(){const f=document.getElementById('dvFrom').value, e=document.getElementById('dvTo').value;return !f&&!e?'전체 기간':(f||'처음')+' ~ '+(e||'오늘');}
 // 지금 조건에 맞는 [건, 그 건의 활동들] 목록
 function dvLogGroups(){
-  const rg=dvLogRange(), vq=document.getElementById('dvVendor').value.trim(), kw=document.getElementById('dvKw').value.trim().toLowerCase();
+  const rg=dvLogRange(), vq=document.getElementById('dvVendor').value.trim(), mq=document.getElementById('dvMaker').value.trim(), kw=document.getElementById('dvKw').value.trim().toLowerCase();
   const out=[], kq=document.getElementById('dvKind').value, st=document.getElementById('dvSt').value;
   const cq=document.getElementById('dvCorp').value, pq=document.getElementById('dvProg').value;
   dvI.forEach(it=>{
     if(kq&&(it.kind||'업체개발')!==kq) return;
     if(cq&&(cq==='-'?!!it.corp:it.corp!==cq)) return;
     if(pq&&it.program!==pq) return;
-    if(vq&&!dvSame(it.maker,vq)&&!dvSame(it.vendor,vq)&&((it.maker||'')+' '+(it.vendor||'')).toLowerCase().indexOf(vq.toLowerCase())<0) return;
+    if(vq&&!dvSame(it.vendor,vq)&&(it.vendor||'').toLowerCase().indexOf(vq.toLowerCase())<0) return;   // v3.48: 거래처는 거래처 칸만
+    if(mq&&!dvSame(it.maker,mq)&&(it.maker||'').toLowerCase().indexOf(mq.toLowerCase())<0) return;     //        메이커는 메이커 칸만
     let logs=dvLogsBy[it.id]||[];
     // 업체를 골랐거나 전체 기간이면 날짜 없는 기록까지 전부, 아니면 기간 안의 것만
     if(rg) logs=logs.filter(l=>l.log_date&&l.log_date>=rg[0]&&l.log_date<=rg[1]);
@@ -2588,11 +2596,11 @@ function dvLogGroups(){
       if(!hitItem) logs=logs.filter(l=>kwHit(l.content,kw));
     }
     if(!logs.length&&!(rg===null&&!kw)) return;
-    if(!logs.length&&!vq) return;
+    if(!logs.length&&!vq&&!mq) return;
     out.push({it:it,logs:logs,last:logs.length?(logs[logs.length-1].log_date||''):''});
   });
   // 업체를 골랐으면 건이 만들어진 순서, 아니면 최근 활동이 있는 건부터
-  if(vq) out.sort((a,b)=>(a.it.sort_no||1e9)-(b.it.sort_no||1e9)||a.it.id-b.it.id);
+  if(vq||mq) out.sort((a,b)=>(a.it.sort_no||1e9)-(b.it.sort_no||1e9)||a.it.id-b.it.id);
   else out.sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:a.it.id-b.it.id);
   return out;
 }
@@ -2651,9 +2659,11 @@ function dvVendorInput(){clearTimeout(dvVTimer);dvVTimer=setTimeout(renderDvLog,
 function dvAllRange(){document.getElementById('dvFrom').value='';document.getElementById('dvTo').value='';}
 function dvPickVendor(itemId){
   const it=dvIById[itemId]; if(!it) return;
-  document.getElementById('dvVendor').value=dvG(it); dvAllRange(); renderDvLog();
+  dvSetVM(it.maker?'':it.vendor,it.maker||''); dvAllRange(); renderDvLog();
 }
-function dvGoVendor(v){ switchTab('dvlog'); document.getElementById('dvVendor').value=v; document.getElementById('dvKw').value=''; dvAllRange(); renderDvLog(); }
+// 묶음 이름(메이커, 없으면 거래처)으로 이동 — 그 이름이 프로젝트의 메이커로 쓰였으면 메이커 칸, 아니면 거래처 칸에 넣는다
+function dvSetVM(v,m){ document.getElementById('dvVendor').value=v||''; document.getElementById('dvMaker').value=m||''; }
+function dvGoVendor(v){ switchTab('dvlog'); const isM=dvAllI.some(i=>i.maker&&dvSame(i.maker,v)); dvSetVM(isM?'':v,isM?v:''); document.getElementById('dvKw').value=''; dvAllRange(); renderDvLog(); }
 function dvGoDir(id){ switchMode('dir'); openPanel(id); }
 function dvDirective(itemId){
   const it=dvIById[itemId]; if(!it) return;
@@ -3080,7 +3090,7 @@ function dvRows(kind,itemId){
   }
   const gs=kind==='item'?[{it:dvIById[itemId],logs:dvLogsBy[itemId]||[]}]:dvLogGroups();
   const rows=[]; gs.forEach(g=>{ (g.logs.length?g.logs:[null]).forEach((l,ix)=>{ rows.push([ix===0?g.it.vendor:'',ix===0?(g.it.maker||''):'',ix===0?(g.it.title||''):'',ix===0?(g.it.supply_type||''):'',l?(l.log_date||l.date_text||''):'',l&&l.stage?dvStageName(l.stage):'',l?(l.content||''):'',l?(l.target_date||''):'',l?(l.done_date||l.done_state||''):'']); }); });
-  const vq=kind==='log'?document.getElementById('dvVendor').value.trim():'';
+  const vq=kind==='log'?[document.getElementById('dvVendor').value.trim(),document.getElementById('dvMaker').value.trim()].filter(Boolean).join(' / '):'';
   const pTxt=kind==='log'?dvRangeText():'';
   return {title:'세부 진척현황'+(kind==='item'?' — '+dvG(gs[0].it):(vq?' — '+vq:'')),sub:pTxt,head:['거래처','메이커','프로젝트','공급구분','일자','단계','활동내용','목표일정','완료일정'],rows:rows,full:kind==='log'?gs:null};
 }
