@@ -368,14 +368,14 @@ td.center .al-pline{justify-content:center;}
       <button class="up-btn up-btn-green" onclick="downloadItemsData()">⬇ 현재 데이터 다운로드</button>
       <button class="up-btn up-btn-secondary" onclick="downloadItemsTemplate()">📄 양식 다운로드</button>
     </div>
-    <div class="up-info">💡 한 줄이 <b>메이커품번 1건</b>입니다. LG품번·ERP품목코드는 여러 개 등록할 수 있습니다. 출하LOT관리 › 메이커별 품목체계표와 <b>동일한 데이터</b>이며 양쪽 어디서 수정해도 함께 반영됩니다.</div>
+    <div class="up-info">💡 한 줄이 <b>메이커품번 1건</b>입니다. LG품번·ERP품목코드는 여러 개 등록할 수 있습니다. <b>보조메이커품번</b>은 생산지 변경 등으로 같은 부품의 메이커품번이 하나 더 있을 때 입력합니다(예: 스마트전자 대만 RC-80TRJ10K0 ↔ 포산 RCF80TRJ10K0). 출하LOT관리 › 메이커별 품목체계표와 <b>동일한 데이터</b>이며 양쪽 어디서 수정해도 함께 반영됩니다.</div>
   </div>
 
   <!-- 프리뷰 -->
   <div class="up-section" id="itemsPreviewSection" style="display:none;">
     <div class="up-section-title">📊 업로드 미리보기</div>
     <div class="up-stat" id="itemsPreviewStat"></div>
-    <div class="up-preview"><table class="up-table"><thead><tr><th>브랜드명</th><th>메이커품번</th><th>품명및규격</th><th>LG품번</th><th>ERP품목코드</th><th>MOQ</th><th>리드타임</th><th>적정재고기준</th></tr></thead><tbody id="itemsPreviewBody"></tbody></table></div>
+    <div class="up-preview"><table class="up-table"><thead><tr><th>브랜드명</th><th>메이커품번</th><th>보조메이커품번</th><th>품명및규격</th><th>LG품번</th><th>ERP품목코드</th><th>MOQ</th><th>리드타임</th><th>적정재고기준</th></tr></thead><tbody id="itemsPreviewBody"></tbody></table></div>
     <div style="margin-top:12px;display:flex;gap:8px;">
       <button class="up-btn up-btn-primary" onclick="submitItemsData()" id="itemsSubmitBtn">✓ 등록 확인</button>
       <button class="up-btn up-btn-secondary" onclick="clearItemsPreview()">✕ 취소</button>
@@ -384,7 +384,7 @@ td.center .al-pline{justify-content:center;}
 
   <!-- 검색 -->
   <div class="search-bar">
-    <input type="text" id="items-search" placeholder="브랜드명 / 메이커품번 / 품명 / LG품번 / ERP품목코드 검색..." oninput="filterItems()">
+    <input type="text" id="items-search" placeholder="브랜드명 / 메이커품번 / 보조메이커품번 / 품명 / LG품번 / ERP품목코드 검색..." oninput="filterItems()">
     <select id="items-maker-filter" onchange="filterItems()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 10px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;min-width:150px;">
       <option value="">전체 브랜드</option>
     </select>
@@ -412,6 +412,7 @@ td.center .al-pline{justify-content:center;}
         <div class="form-group"><label>브랜드명 <span class="req">*</span></label><input id="im-brand" placeholder="예) SMART"></div>
         <div class="form-group"><label>메이커품번 <span class="req">*</span></label><input id="im-mkpn" placeholder="예) RC-98TRJ1K20"></div>
       </div>
+      <div class="form-group full"><label>보조메이커품번 <span style="font-weight:400;color:var(--muted);">(같은 부품의 다른 메이커품번 · 예: 포산 생산품)</span></label><input id="im-subpn" placeholder="예) RCF98TRJ1K20"></div>
       <div class="form-group full"><label>품명및규격</label><input id="im-desc" placeholder="예) RC- 1/8W 2012 5% 1.2K Ω"></div>
 
       <div class="form-group full">
@@ -1773,11 +1774,26 @@ function resetUISetting() {
 // ════════════════════════════════════════════════════
 let _itemsData = [], _itemsFiltered = [];
 let _itemsRows = [];
+let _itemsHasSub = false;   // 업로드 파일에 보조메이커품번 열이 있는지
 let _itemsAlias = {};       // {별칭소문자: 표준명}
 let _itemsSortKey = 'maker_pn', _itemsSortAsc = true;
 
 function itmEsc(v){ return String(v==null?'':v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function itmJs(v){ return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+// 보조메이커품번 중복 검사 — 같은 브랜드 안에서 다른 품목의 메이커품번/보조메이커품번과 겹치면 안 된다
+// fileRows: 엑셀 업로드 시 같은 파일 안의 중복도 함께 확인
+function itmSubConflict(brand, makerPn, subPn, selfId, fileRows) {
+  if (!subPn) return '';
+  if (subPn === makerPn) return '보조메이커품번이 메이커품번과 같습니다.';
+  const hit = _itemsData.find(x => (x.brand_raw||'')===brand && String(x.id)!==String(selfId||'')
+              && x.maker_pn!==makerPn && (x.maker_pn===subPn || x.sub_maker_pn===subPn));
+  if (hit) return `보조메이커품번 ${subPn}은(는) 이미 ${hit.maker_pn} 품목에 등록되어 있습니다.`;
+  if (fileRows) {
+    const f = fileRows.find(x => x.brand===brand && x.maker_pn!==makerPn && (x.maker_pn===subPn || x.sub_maker_pn===subPn));
+    if (f) return `보조메이커품번 ${subPn}이(가) 파일 안의 ${f.maker_pn}과(와) 겹칩니다.`;
+  }
+  return '';
+}
 function itmNum(v){ const x=String(v==null?'':v).trim(); return x===''?null:(Number.isFinite(+x)?Math.trunc(+x):null); }
 
 async function loadItemsData() {
@@ -1811,7 +1827,7 @@ async function loadItemsData() {
   let masters, lgs, ics;
   try {
     [masters, lgs, ics] = await Promise.all([
-      pull('maker_pn_master','id,brand,maker_pn,description,moq,leadtime_days,stock_std_days'),
+      pull('maker_pn_master','id,brand,maker_pn,sub_maker_pn,description,moq,leadtime_days,stock_std_days'),
       pull('maker_pn_lgpn_map','maker_pn_id,lg_pn'),
       pull('maker_pn_itemcode_map','maker_pn_id,item_code')
     ]);
@@ -1829,6 +1845,7 @@ async function loadItemsData() {
     brand: stdBrand(m.brand),
     brand_raw: m.brand,
     maker_pn: m.maker_pn || '',
+    sub_maker_pn: m.sub_maker_pn || '',
     description: m.description || '',
     moq: m.moq, leadtime_days: m.leadtime_days, stock_std_days: m.stock_std_days,
     lg_pns: lgMap[m.id] || [],
@@ -1855,6 +1872,7 @@ function filterItems() {
     return (r.brand||'').toLowerCase().includes(kw)
         || (r.brand_raw||'').toLowerCase().includes(kw)
         || (r.maker_pn||'').toLowerCase().includes(kw)
+        || (r.sub_maker_pn||'').toLowerCase().includes(kw)
         || (r.description||'').toLowerCase().includes(kw)
         || r.lg_pns.some(v => (v||'').toLowerCase().includes(kw))
         || r.item_codes.some(v => (v||'').toLowerCase().includes(kw));
@@ -1889,6 +1907,7 @@ function renderItemsTable() {
   document.getElementById('items-thead').innerHTML = `<tr>
     <th style="width:110px;" onclick="sortItems('brand')">브랜드명${arrow('brand')}<div class="col-resizer"></div></th>
     <th style="width:140px;" onclick="sortItems('maker_pn')">메이커품번${arrow('maker_pn')}<div class="col-resizer"></div></th>
+    <th style="width:140px;" onclick="sortItems('sub_maker_pn')">보조메이커품번${arrow('sub_maker_pn')}<div class="col-resizer"></div></th>
     <th style="width:210px;" onclick="sortItems('description')">품명및규격${arrow('description')}<div class="col-resizer"></div></th>
     ${Array.from({length:maxLg},(_,i)=>`<th style="width:125px;">LG품번${i+1}<div class="col-resizer"></div></th>`).join('')}
     ${Array.from({length:maxIc},(_,i)=>`<th style="width:110px;">ERP품목코드${i+1}<div class="col-resizer"></div></th>`).join('')}
@@ -1898,11 +1917,11 @@ function renderItemsTable() {
     <th class="center" style="width:120px;">관리<div class="col-resizer"></div></th>
   </tr>`;
 
-  const colspan = 7 + maxLg + maxIc;
+  const colspan = 8 + maxLg + maxIc;
   const tbody = document.getElementById('items-tbody');
   if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:20px;color:var(--muted);">검색 결과가 없습니다.</td></tr>`;
-    setTimeout(()=>initColResize('items-table','al_items_v2'),50);
+    setTimeout(()=>initColResize('items-table','al_items_v3'),50);
     return;
   }
 
@@ -1913,6 +1932,7 @@ function renderItemsTable() {
     return `<tr>
       <td style="font-weight:700;">${itmEsc(r.brand)||dash}</td>
       <td class="mono" style="font-weight:700;">${itmEsc(r.maker_pn)}</td>
+      <td class="mono">${itmEsc(r.sub_maker_pn)}</td>
       <td style="white-space:normal;">${itmEsc(r.description)||dash}</td>
       ${lgCells}${icCells}
       <td class="mono" style="text-align:right;">${r.moq!=null?Number(r.moq).toLocaleString():dash}</td>
@@ -1924,7 +1944,7 @@ function renderItemsTable() {
       </td>
     </tr>`;
   }).join('');
-  setTimeout(()=>initColResize('items-table','al_items_v2'),50);
+  setTimeout(()=>initColResize('items-table','al_items_v3'),50);
 }
 
 // ── 동적 입력행 ──
@@ -1944,7 +1964,7 @@ function itmDynVals(kind) {
 
 async function openItemsAddModal() {
   document.getElementById('itemsModalTitle').textContent = '품목 등록';
-  ['im-id','im-brand','im-mkpn','im-desc','im-moq','im-lead','im-std'].forEach(id=>document.getElementById(id).value='');
+  ['im-id','im-brand','im-mkpn','im-subpn','im-desc','im-moq','im-lead','im-std'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('im-brand').value = 'SMART';
   document.getElementById('im-lg-rows').innerHTML = '';
   document.getElementById('im-ic-rows').innerHTML = '';
@@ -1962,6 +1982,7 @@ function openItemsEditModal(id) {
   document.getElementById('im-id').value    = r.id;
   document.getElementById('im-brand').value = r.brand_raw || r.brand || '';
   document.getElementById('im-mkpn').value  = r.maker_pn || '';
+  document.getElementById('im-subpn').value = r.sub_maker_pn || '';
   document.getElementById('im-desc').value  = r.description || '';
   document.getElementById('im-moq').value   = (r.moq!=null?r.moq:'');
   document.getElementById('im-lead').value  = (r.leadtime_days!=null?r.leadtime_days:'');
@@ -2003,9 +2024,12 @@ async function saveItemsModal() {
 
   const dup = _itemsData.find(r => r.maker_pn===makerPn && (r.brand_raw||'')===brand && String(r.id)!==String(id));
   if (dup) { alert('같은 브랜드에 이미 등록된 메이커품번입니다.'); return; }
+  const subPn = (document.getElementById('im-subpn').value||'').trim();
+  const subErr = itmSubConflict(brand, makerPn, subPn, id);
+  if (subErr) { alert(subErr); return; }
 
   const body = {
-    brand, maker_pn: makerPn, description: desc || null,
+    brand, maker_pn: makerPn, sub_maker_pn: subPn || null, description: desc || null,
     moq:            itmNum(document.getElementById('im-moq').value),
     leadtime_days:  itmNum(document.getElementById('im-lead').value),
     stock_std_days: itmNum(document.getElementById('im-std').value)
@@ -2051,11 +2075,14 @@ function loadItemsExcel(e) {
   fr.onload = ev => {
     const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
     const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+    // 보조메이커품번 열이 있는 파일만 그 값을 반영한다(열이 없으면 기존 값 유지)
+    _itemsHasSub = raw.some(r => Object.prototype.hasOwnProperty.call(r, '보조메이커품번'));
     _itemsRows = raw.map(r => {
       const pick = pre => Object.keys(r).filter(k=>k.startsWith(pre)).map(k=>String(r[k]||'').trim()).filter(Boolean);
       return {
         brand:       String(r['브랜드명']||'').trim(),
         maker_pn:    String(r['메이커품번']||'').trim(),
+        sub_maker_pn: String(r['보조메이커품번']||'').trim(),
         description: String(r['품명및규격']||'').trim(),
         lg_pns:      pick('LG품번'),
         item_codes:  pick('ERP품목코드'),
@@ -2067,7 +2094,7 @@ function loadItemsExcel(e) {
 
     document.getElementById('itemsPreviewStat').textContent = `총 ${_itemsRows.length.toLocaleString()}건`;
     document.getElementById('itemsPreviewBody').innerHTML = _itemsRows.slice(0,30).map(r=>`<tr>
-      <td>${itmEsc(r.brand)}</td><td>${itmEsc(r.maker_pn)}</td><td>${itmEsc(r.description)}</td>
+      <td>${itmEsc(r.brand)}</td><td>${itmEsc(r.maker_pn)}</td><td>${itmEsc(r.sub_maker_pn)}</td><td>${itmEsc(r.description)}</td>
       <td>${itmEsc(r.lg_pns.join(', '))}</td><td>${itmEsc(r.item_codes.join(', '))}</td>
       <td>${r.moq??''}</td><td>${r.leadtime_days??''}</td><td>${r.stock_std_days??''}</td></tr>`).join('');
     document.getElementById('itemsPreviewSection').style.display = 'block';
@@ -2091,6 +2118,11 @@ async function submitItemsData() {
     const body = { brand:r.brand, maker_pn:r.maker_pn, description:r.description||null,
                    moq:r.moq, leadtime_days:r.leadtime_days, stock_std_days:r.stock_std_days };
     const exist = _itemsData.find(x => x.maker_pn===r.maker_pn && (x.brand_raw||'')===r.brand);
+    if (_itemsHasSub) {
+      const subErr = itmSubConflict(r.brand, r.maker_pn, r.sub_maker_pn, exist ? exist.id : null, _itemsRows);
+      if (subErr) { failed++; if(errs.length<3) errs.push(r.maker_pn+': '+subErr); continue; }
+      body.sub_maker_pn = r.sub_maker_pn || null;
+    }
     let mid;
     if (exist) {
       const {error} = await sb.from('maker_pn_master').update(body).eq('id', exist.id);
@@ -2120,7 +2152,7 @@ async function downloadItemsData() {
   const maxLg = Math.max(1, ...src.map(r=>r.lg_pns.length));
   const maxIc = Math.max(1, ...src.map(r=>r.item_codes.length));
   const rows = src.map(r => {
-    const o = { '브랜드명':r.brand_raw||r.brand, '메이커품번':r.maker_pn, '품명및규격':r.description };
+    const o = { '브랜드명':r.brand_raw||r.brand, '메이커품번':r.maker_pn, '보조메이커품번':r.sub_maker_pn||'', '품명및규격':r.description };
     for(let i=0;i<maxLg;i++) o['LG품번'+(i+1)] = r.lg_pns[i]||'';
     for(let i=0;i<maxIc;i++) o['ERP품목코드'+(i+1)] = r.item_codes[i]||'';
     o['MOQ'] = r.moq ?? ''; o['리드타임'] = r.leadtime_days ?? ''; o['적정재고기준'] = r.stock_std_days ?? '';
@@ -2133,7 +2165,7 @@ async function downloadItemsData() {
 
 function downloadItemsTemplate(){
   const ws = XLSX.utils.json_to_sheet([{
-    '브랜드명':'SMART','메이커품번':'예시: RC-98TRJ1K20','품명및규격':'예시: RC- 1/8W 2012 5% 1.2K Ω',
+    '브랜드명':'SMART','메이커품번':'예시: RC-98TRJ1K20','보조메이커품번':'RCF98TRJ1K20','품명및규격':'예시: RC- 1/8W 2012 5% 1.2K Ω',
     'LG품번1':'EBC63476201','LG품번2':'','ERP품목코드1':'3000-1779','ERP품목코드2':'',
     'MOQ':'5000','리드타임':'84','적정재고기준':'60'
   }]);
