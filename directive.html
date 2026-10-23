@@ -117,6 +117,9 @@ body.md-task .dv-nt{display:none!important;}
 .tk-ar-tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4px;} .tk-ar-tbl th{background:#eef3fa;color:#142C52;font-size:12px;padding:6px;border:1px solid #d6dde8;text-align:left;}
 .tk-ar-tbl td{border:1px solid #e3e8ef;padding:3px;} .tk-ar-tbl input,.tk-ar-tbl select{width:100%;box-sizing:border-box;height:30px;border:1px solid #d6dde8;padding:0 6px;font-family:'Noto Sans KR',sans-serif;font-size:12px;}
 .tk-ar-tbl tr.del td{opacity:.35;text-decoration:line-through;} .tk-ar-tbl .x{border:none;background:none;color:#C8001E;font-size:15px;cursor:pointer;width:100%;}
+.tk-pa-row{display:flex;gap:4px;align-items:center;margin-bottom:4px;} .tk-pa-row input{flex:1;height:30px;border:1px solid #d6dde8;padding:0 8px;font-family:'Noto Sans KR',sans-serif;font-size:13px;}
+.tk-pa-row button{width:28px;height:30px;border:1px solid #d6dde8;background:#fff;cursor:pointer;color:#142C52;} .tk-pa-row button:disabled{color:#c5cbd4;cursor:not-allowed;} .tk-pa-row .n{font-size:11px;color:#6b7280;width:64px;text-align:right;}
+.tk-hint td{background:#fffbe6!important;color:#8a6d00;font-size:12px;padding:8px 12px!important;}
 .tl-where{background:#f2f8f3;border-left:3px solid #2e7d4f;padding:8px 12px;margin-bottom:12px;font-size:13px;line-height:1.6;} .tl-where b{color:#142C52;} .tl-where .sub{color:#6b7280;font-size:12px;}
 .tk-tlh span{position:absolute;top:4px;white-space:nowrap;} .tk-tlh span.mo{top:22px;font-weight:700;}
 .tk-bar{position:absolute;top:8px;height:14px;border-radius:2px;} .tk-plan{background:#FCE7A0;border:1px solid #E3B341;box-sizing:border-box;}
@@ -702,7 +705,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <span class="fb-label" style="margin-left:6px;">일정</span><select class="tk-scsel" onchange="tkScaleSel(this.value)" title="일정표 보기 단위 / 숨기기"></select>
       <button class="btn btn-primary" onclick="renderTkMaster()">🔍 조회</button>
       <button class="btn btn-outline" onclick="['tkArea','tkSt','tkWho','tkKw'].forEach(i=>document.getElementById(i).value='');renderTkMaster()">초기화</button>
-      <button class="btn btn-primary" id="tkAddBtn" onclick="tkAddMenu(event)" title="새 추진과제 또는 이 과제의 세부과제 등록">＋ 등록 ▾</button>
+      <button class="btn btn-primary" id="tkAddBtn" onclick="tkOpenProj()" title="새 추진과제 등록 (과제명·기간·분야)">＋ 새 추진과제</button>
       <button class="btn btn-outline tk-pedit" onclick="tkOpenProj(tkCurId())">과제 수정</button>
       <button class="btn btn-outline" onclick="tkExcel()">엑셀 내보내기</button>
       <span class="tk-legend"><i class="lg-plan"></i>계획 <i class="lg-done"></i>진척 <i class="lg-late"></i>지연 <i class="lg-today"></i>오늘</span>
@@ -711,7 +714,6 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <div class="tbl-wrap" id="tkWrap"><table class="dv-table tk-table" id="tkTable"><thead id="tkThead"></thead><tbody id="tkBody"></tbody></table></div>
   </div>
 </div>
-<div class="tk-scale" id="tkAddMenu"><div class="tk-scale-t">등록</div><button id="tkAddProj" onclick="tkAddPick('proj')">새 추진과제</button><button id="tkAddItem" onclick="tkAddPick('item')">세부과제 (선택한 과제)</button></div>
 <div class="tk-scale" id="tkScaleMenu"><div class="tk-scale-t">일정 보기 단위</div><button onclick="tkSetScale('day')">일별</button><button onclick="tkSetScale('week')">주별</button><button onclick="tkSetScale('month')">월별</button></div>
 <div class="modal-ov" id="tkProjOv">
   <div class="modal" style="width:620px;">
@@ -730,7 +732,8 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
         <div class="form-row"><label class="form-label">상태</label><select class="form-select" id="tkPjSt"><option>준비</option><option>진행</option><option>완료</option><option>보류</option></select></div>
         <div class="form-row"><label class="form-label">완료일</label><input type="date" class="form-input" id="tkPjDone"></div>
       </div>
-      <div class="form-row"><label class="form-label">분야 <span style="color:var(--muted);font-weight:400;">— 한 줄에 하나씩, 적은 순서대로 표시 (세부과제가 없어도 줄이 보입니다)</span></label><textarea class="form-textarea" id="tkPjAreas" style="min-height:90px;" placeholder="A. 법인 설립·재무&#10;B. 법인장 본사교육"></textarea></div>
+      <div class="form-row"><label class="form-label">분야 <span style="color:var(--muted);font-weight:400;">— 위에서부터 이 순서로 표시. 세부과제는 저장 후 분야 줄의 「수정」에서 추가</span></label>
+        <div id="tkPjArList"></div><button type="button" class="btn btn-outline" style="margin-top:6px;" onclick="tkPjArAdd()">＋ 분야 추가</button></div>
       <div class="form-row"><label class="form-label">메모</label><textarea class="form-textarea" id="tkPjMemo" style="min-height:50px;"></textarea></div>
     </div>
     <div class="modal-ft"><button class="btn btn-red" id="tkPjDel" onclick="tkDelProj()">삭제</button><span style="flex:1"></span><button class="btn btn-outline" onclick="tkCloseProj()">취소</button><button class="btn btn-primary" onclick="tkSaveProj()">저장</button></div>
@@ -1262,6 +1265,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.55 (2026-10-23) — 추진과제 단계별 버튼 정리: 조회줄 「＋ 새 추진과제」(등록 메뉴 폐지) / 과제 창 분야 = 줄 입력(＋ 분야 추가·↑↓ 순서·✕, 세부과제 있는 분야는 삭제 불가, 이름 바꾸면 세부과제·세부진척현황도) / 분야 줄은 「수정」만(＋세부과제 삭제) / 세부과제 없는 과제 안내 줄
    directive.html v3.54 (2026-10-23) — 추진과제 마일스톤 미사용(등록 칸·정보줄·일정표 점선/◆·범례 삭제) / 분야 줄 「수정」 = 분야 수정 창(분야 이름 + 그 분야 세부과제 이름·담당·시작·목표·상태·진척 한 번에 수정·줄 추가·✕ 삭제)
    directive.html v3.53 (2026-10-23) — 추진과제: 일정 보기(일별·주별·월별·숨기기)를 조회줄 선택으로(제목 칸 클릭 폐지, 마스터·세부진척현황 공용), 고정칸 경계선·달 경계 진한 줄 삭제 / 세부진척현황(추진과제) 추진과제·분야 셀 병합 + 세부과제 일정 막대(활동 일자 = 점), 활동 없는 세부과제도 표시
    directive.html v3.52 (2026-10-23) — 추진과제 활동 기록 창 신규(tlOv: 어디에 기록되는지 표시 · 일자·활동내용·목표·완료·완료유무·진척 함께 바꾸기·첨부 · 신규 📒 업무일지 / 수정 연동 표시·삭제 확인), 마스터 ＋활동·세부진척현황 수정·＋활동 입력·주간업무 줄 클릭 모두 이 창 / 주간업무에서 추진과제 활동은 대분류 「추진과제」(중분류 = 추진과제명, 내용 앞 [세부과제])
@@ -3517,14 +3521,6 @@ function tkProjSync(el){
   document.querySelectorAll('.tk-psel').forEach(x=>{ if(x!==el) x.value=el.value; });
   const w=document.getElementById('tkWrap'); if(w) delete w.dataset.scrolled; tkProjChange();
 }
-function tkAddMenu(ev){
-  ev.stopPropagation(); const m=document.getElementById('tkAddMenu'), pj=tkCur();
-  document.getElementById('tkAddProj').style.display=me?'':'none';
-  const bi=document.getElementById('tkAddItem'); bi.style.display=pj&&tkCanEdit(null)?'':'none'; bi.textContent='세부과제 — '+(pj?pj.name:'');
-  const r=ev.currentTarget.getBoundingClientRect(); m.style.left=Math.min(r.left,window.innerWidth-260)+'px'; m.style.top=(r.bottom+4)+'px'; m.classList.add('open');
-}
-function tkAddPick(k){ document.getElementById('tkAddMenu').classList.remove('open'); if(k==='proj') tkOpenProj(); else tkOpenItem(); }
-document.addEventListener('click',ev=>{ const m=document.getElementById('tkAddMenu'); if(m&&!m.contains(ev.target)) m.classList.remove('open'); });
 // 분야 이름 바꾸기: 과제의 분야 목록 + 그 분야 세부과제(task_items.area) + 세부진척현황 프로젝트(dev_items.program)
 /* v3.54: 분야 수정 창 */
 let tkArCur=null, tkArRows=[];
@@ -3691,7 +3687,7 @@ function renderTkMaster(){
   document.getElementById('tkAreaList').innerHTML=areas.map(a=>`<option value="${esc(a)}">`).join('');
   document.getElementById('tkWhoList').innerHTML=emps.filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('');
   document.querySelectorAll('.tk-pedit').forEach(b=>{ b.style.display=pj&&tkCanProj(pj)?'':'none'; });
-  if(!pj){ head.innerHTML='<span>등록된 추진과제가 없습니다.'+(me?' 「＋ 등록 ▾ → 새 추진과제」로 등록하세요.':'')+'</span>'; document.getElementById('tkThead').innerHTML=''; document.getElementById('tkBody').innerHTML=''; document.getElementById('tkCnt').textContent=''; return; }
+  if(!pj){ head.innerHTML='<span>등록된 추진과제가 없습니다.'+(me?' 「＋ 새 추진과제」로 등록하세요.':'')+'</span>'; document.getElementById('tkThead').innerHTML=''; document.getElementById('tkBody').innerHTML=''; document.getElementById('tkCnt').textContent=''; return; }
   const agg=tkAgg(all), dd=pj.target_date?dayDiff(todayStr(),pj.target_date):null, lateN=all.filter(tkLate).length, doneN=all.filter(t=>tkStLabel(t)==='완료').length;
   head.innerHTML=`<span class="tk-nm">${esc(pj.name)}</span>`
     +`<span>법인 <b>${esc(pj.corp||'SMEKR')}</b></span>`+(pj.owner_dept?`<span>주관 <b>${esc(pj.owner_dept)}</b></span>`:'')
@@ -3724,7 +3720,8 @@ function renderTkMaster(){
         +`${tkHide?'':`<td class="tk-tl-c">${tkBarHtml(t,R,pj)}</td>`}</tr>`;
     });
   });
-  document.getElementById('tkBody').innerHTML=body||'<tr><td colspan="10" style="text-align:center;padding:24px;color:#9aa1ab;">세부과제가 없습니다'+(tkCanEdit(null)?' — 「＋ 세부과제」로 등록하세요':'')+'</td></tr>';
+  if(body&&!all.length) body=`<tr class="tk-hint"><td colspan="${tkHide?9:10}">💡 분야 줄의 「수정」을 눌러 그 분야의 세부과제를 추가하세요</td></tr>`+body;
+  document.getElementById('tkBody').innerHTML=body||`<tr><td colspan="${tkHide?9:10}" style="text-align:center;padding:24px;color:#9aa1ab;">분야가 없습니다${tkCanProj(pj)?' — 「과제 수정」에서 분야를 추가하세요':''}</td></tr>`;
   document.getElementById('tkCnt').textContent=list.length+'건';
   if(tkHide){ applyResize('tkTable','tk_col_v3h',[300,80,70,70,70,60,70,80,200]); document.getElementById('tkCnt').textContent=list.length+'건'; return; }
   applyResize('tkTable','tk_col_v3',[230,66,60,60,60,52,62,72,188,tkW(R)]);
@@ -3771,19 +3768,41 @@ function tkOpenProj(id){
   g('tkPjDept').innerHTML='<option value=""></option>'+TK_DEPTS().map(d=>`<option${(p?p.owner_dept:me.dept)===d?' selected':''}>${d}</option>`).join('');
   g('tkPjDept').disabled=!tkCanAdmin();   // 일반 부서는 주관부서 = 본인 부서 고정
   if(!tkCanAdmin()&&![...g('tkPjDept').options].some(o=>o.value===me.dept)) g('tkPjDept').insertAdjacentHTML('beforeend',`<option selected>${esc(me.dept)}</option>`);
-  g('tkPjAreas').value=p?(p.areas||[]).join('\n'):'';
+  // v3.55: 분야 = 줄 입력(이름 바꾸면 세부과제·세부진척현황도 함께). 세부과제에만 남은 분야도 목록에 넣는다
+  tkPaRows=(p?(p.areas||[]):[]).map(a=>({orig:a,name:a}));
+  if(p) tkItems.forEach(t=>{ if(t.project_id===p.id&&t.area&&!tkPaRows.some(r=>r.orig===t.area)) tkPaRows.push({orig:t.area,name:t.area}); });
+  if(!tkPaRows.length) tkPaRows.push({orig:null,name:''});
+  tkPaRender();
   g('tkPjDel').style.display=p?'':'none';
   g('tkProjOv').classList.add('open');
 }
+let tkPaRows=[];
+function tkPaCnt(r){ return r.orig&&tkEditProj?tkItems.filter(t=>t.project_id===tkEditProj.id&&t.area===r.orig).length:0; }
+function tkPaKeep(){ document.querySelectorAll('#tkPjArList input').forEach((el,i)=>{ if(tkPaRows[i]) tkPaRows[i].name=el.value; }); }
+function tkPaRender(){
+  document.getElementById('tkPjArList').innerHTML=tkPaRows.map((r,i)=>{ const n=tkPaCnt(r);
+    return `<div class="tk-pa-row"><input value="${esc(r.name)}" placeholder="예: ${i+1}. 현황 조사"><span class="n">${n?'세부과제 '+n:''}</span>`
+      +`<button type="button" title="위로" onclick="tkPaMove(${i},-1)"${i===0?' disabled':''}>↑</button><button type="button" title="아래로" onclick="tkPaMove(${i},1)"${i===tkPaRows.length-1?' disabled':''}>↓</button>`
+      +`<button type="button" title="${n?'세부과제가 있는 분야는 지울 수 없습니다':'삭제'}" onclick="tkPaDel(${i})"${n?' disabled':''} style="color:#C8001E;">✕</button></div>`; }).join('');
+}
+function tkPaAdd(){ tkPaKeep(); tkPaRows.push({orig:null,name:''}); tkPaRender(); const ins=document.querySelectorAll('#tkPjArList input'); ins[ins.length-1].focus(); }
+function tkPaMove(i,d){ tkPaKeep(); const j=i+d; if(j<0||j>=tkPaRows.length) return; const x=tkPaRows[i]; tkPaRows[i]=tkPaRows[j]; tkPaRows[j]=x; tkPaRender(); }
+function tkPaDel(i){ tkPaKeep(); if(tkPaCnt(tkPaRows[i])) return; if(tkPaRows[i].name.trim()&&!confirm('정말 삭제하시겠습니까?')) return; tkPaRows.splice(i,1); if(!tkPaRows.length) tkPaRows.push({orig:null,name:''}); tkPaRender(); }
 function tkCloseProj(){ document.getElementById('tkProjOv').classList.remove('open'); tkEditProj=null; }
 async function tkSaveProj(){
   const g=k=>document.getElementById(k).value.trim(), name=g('tkPjName');
   if(!name){ showToast('추진과제명을 입력해주세요','err'); return; }
-  const areasIn=[]; document.getElementById('tkPjAreas').value.split('\n').map(x=>x.trim()).filter(Boolean).forEach(a=>{ if(areasIn.indexOf(a)<0) areasIn.push(a); });
-  if(tkEditProj){ const used=[...new Set(tkItems.filter(t=>t.project_id===tkEditProj.id).map(t=>t.area||''))].filter(a=>a&&areasIn.indexOf(a)<0); if(used.length&&!confirm('세부과제가 있는 분야가 목록에서 빠졌습니다: '+used.join(', ')+'\n그 세부과제는 목록 끝에 그대로 보입니다. 저장할까요?')) return; }
+  tkPaKeep(); const areasIn=[], renames=[];
+  for(const r of tkPaRows){ const nm=String(r.name||'').trim();
+    if(!nm){ if(tkPaCnt(r)){ showToast('세부과제가 있는 분야 이름은 비울 수 없습니다','err'); return; } continue; }
+    if(areasIn.indexOf(nm)>=0){ showToast('같은 분야 이름이 두 번 있습니다: '+nm,'err'); return; }
+    areasIn.push(nm); if(r.orig&&r.orig!==nm) renames.push([r.orig,nm]); }
   const body={areas:areasIn,name:name,corp:g('tkPjCorp')||null,owner_dept:g('tkPjDept')||null,start_date:g('tkPjStart')||null,target_date:g('tkPjTarget')||null,done_date:g('tkPjDone')||null,status:g('tkPjSt'),memo:g('tkPjMemo')||null,updated_at:new Date().toISOString()};
   try{
-    if(tkEditProj){ await sbPatch('task_projects',tkEditProj.id,body); }
+    if(tkEditProj){ await sbPatch('task_projects',tkEditProj.id,body);
+      // 이름을 바꾼 분야: 세부과제(task_items.area)·세부진척현황(dev_items.program)도 함께
+      for(const [o,n] of renames){ for(const t of tkItems.filter(x=>x.project_id===tkEditProj.id&&x.area===o)){ await sbPatch('task_items',t.id,{area:n,updated_at:body.updated_at}); if(t.dev_item_id) await sbPatch('dev_items',t.dev_item_id,{program:n,updated_at:body.updated_at}); } }
+      if(renames.length) await dvLoad(); }
     else{ const r=await sbPost('task_projects',Object.assign(body,{created_by:me.id,created_name:me.name})); try{localStorage.setItem('tk_proj',String(r[0].id));}catch(_){} document.getElementById('tkProjSel').value=''; }
     tkCloseProj(); await tkLoad(); if(!tkEditProj){ let v=null; try{v=localStorage.getItem('tk_proj');}catch(_){} if(v) document.getElementById('tkProjSel').value=v; }
     dvApplyDept(); dvFillFilters(); renderCur(); showToast('저장되었습니다','ok');
@@ -3796,7 +3815,7 @@ async function tkDelProj(){
   try{ await sbPatch('task_projects',tkEditProj.id,{is_deleted:true,updated_at:new Date().toISOString()}); tkCloseProj(); document.getElementById('tkProjSel').value=''; try{localStorage.removeItem('tk_proj');}catch(_){} await tkLoad(); renderCur(); showToast('삭제되었습니다','ok'); }
   catch(e){ showToast('오류: '+e.message,'err'); }
 }
-function tkAreaBtns(a,pj){ if(a==='(분야 없음)') return ''; return (tkCanProj(pj)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkOpenArea(this.dataset.a)" title="분야 이름과 그 분야 세부과제 수정·추가">수정</button> `:'')+(tkCanEdit(null)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkNewIn(this.dataset.a)">＋ 세부과제</button>`:''); }
+function tkAreaBtns(a,pj){ if(a==='(분야 없음)') return ''; return (tkCanProj(pj)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkOpenArea(this.dataset.a)" title="분야 이름과 그 분야 세부과제 수정·추가·삭제">수정</button>`:''); }
 /* ── v3.53: 추진과제 › 세부진척현황 — 추진과제·분야 셀 병합 + 세부과제 일정 막대(활동 일자 = 점) ── */
 function renderTkLog(){
   const pj=tkCur(), th0=document.querySelector('#dvLogTable thead'), tb=document.getElementById('dvLogTable');
