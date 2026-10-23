@@ -99,6 +99,18 @@ body.md-dir .tab-bar{background:#fdf6f6;} body.md-report .tab-bar{background:#f3
 .tk-table td.tk-sticky,.tk-table th.tk-sticky{position:sticky;left:0;z-index:2;background:#fff;} .tk-table th.tk-sticky{z-index:8;cursor:pointer;}
 .tk-table tr.tk-grp td{background:#eef3fa;font-weight:700;} .tk-table tr.tk-grp td.tk-sticky{background:#eef3fa;cursor:pointer;}
 .tk-tl{position:relative;height:30px;} .tk-tlh{position:relative;height:40px;color:#142C52;font-size:11px;}
+/* v3.51: 일정 머리줄 2단(위 = 년월/년, 아래 = 일·주·월) + 본문 세로줄 맨 아래까지 */
+.tk-hb{position:absolute;top:0;height:18px;line-height:18px;padding-left:4px;font-weight:700;white-space:nowrap;overflow:hidden;box-sizing:border-box;border-right:1px solid #8f9db3;border-bottom:1px solid #c5cfdc;}
+.tk-hc{position:absolute;top:18px;height:22px;line-height:22px;text-align:center;white-space:nowrap;overflow:hidden;box-sizing:border-box;border-right:1px solid #c5cfdc;}
+.tk-hc.mb{border-right-color:#8f9db3;}
+.tk-tlh .ms-dot{position:absolute;top:0;width:12px;margin-left:-6px;text-align:center;color:#7c3aed;font-size:12px;line-height:18px;z-index:3;cursor:default;}
+.tk-table td.tk-tl-c,#dvMsTable td.tk-tl-c{position:relative;vertical-align:top;}
+.tk-table td.tk-tl-c>.tk-tl,#dvMsTable td.tk-tl-c>.tk-tl{position:absolute;top:0;bottom:0;left:0;height:auto;min-height:30px;}
+.tk-tl .tk-bar{top:50%;margin-top:-7px;}
+.tk-ml{position:absolute;top:0;bottom:0;width:0;border-left:1px solid #b6c2d3;}
+.tk-only{display:none!important;} body.md-task .tk-only{display:inline-flex!important;} body.md-task select.tk-only{display:inline-block!important;}
+body.md-task .dv-nt{display:none!important;}
+.tk-psel{min-width:200px;font-weight:700;}
 .tk-tlh span{position:absolute;top:4px;white-space:nowrap;} .tk-tlh span.mo{top:22px;font-weight:700;}
 .tk-bar{position:absolute;top:8px;height:14px;border-radius:2px;} .tk-plan{background:#FCE7A0;border:1px solid #E3B341;box-sizing:border-box;}
 .tk-done{background:#34A853;} .tk-drop{background:#e5e7eb!important;border-color:#9ca3af!important;} .tk-late{background:#E5534B;opacity:.85;}
@@ -665,8 +677,6 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <button class="tab-btn" onclick="switchTab('vmhist')" id="tab-vmhist" title="거래처나 메이커 하나로 프로젝트 활동·주간업무·지시사항·업무일지를 날짜순으로 모아 봅니다 — 부서 선택과 관계없이 모든 부서">🔎 거래처·메이커별</button>
   </div>
   <div class="tabs-grp" id="tabs-task">
-    <span class="tabs-lead">추진과제 ▸</span>
-    <select id="tkProjSel" onchange="tkProjChange()" title="추진과제 선택"></select>
     <button class="tab-btn" onclick="switchTab('tkmaster')" id="tab-tkmaster">📑 추진과제 마스터</button>
     <button class="tab-btn" onclick="switchTab('tklog')" id="tab-tklog" title="추진과제 세부과제별 활동 기록">📝 세부진척현황</button>
   </div>
@@ -677,15 +687,15 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
   <div class="mt-wrap">
     <div class="tk-head" id="tkHead"></div>
     <div class="filter-bar">
-      <span class="fb-label">분야</span><select id="tkArea"><option value="">전체</option></select>
+      <span class="fb-label">추진과제</span><select id="tkProjSel" class="tk-psel" onchange="tkProjSync(this)" title="추진과제 선택"></select>
+      <span class="fb-label" style="margin-left:6px;">분야</span><select id="tkArea"><option value="">전체</option></select>
       <span class="fb-label" style="margin-left:6px;">상태</span><select id="tkSt"><option value="">전체</option><option value="open">미완료</option><option value="late">지연</option><option value="준비">준비</option><option value="진행">진행</option><option value="완료">완료</option><option value="보류">보류</option></select>
       <span class="fb-label" style="margin-left:6px;">담당</span><input type="text" id="tkWho" list="tkWhoList" placeholder="담당 (전체)" style="width:110px;height:32px;" onkeydown="if(event.key==='Enter')renderTkMaster()"><datalist id="tkWhoList"></datalist>
       <input type="text" id="tkKw" placeholder="세부과제 검색" style="width:150px;height:32px;" onkeydown="if(event.key==='Enter')renderTkMaster()">
       <button class="btn btn-primary" onclick="renderTkMaster()">🔍 조회</button>
       <button class="btn btn-outline" onclick="['tkArea','tkSt','tkWho','tkKw'].forEach(i=>document.getElementById(i).value='');renderTkMaster()">초기화</button>
-      <button class="btn btn-primary tk-edit" onclick="tkOpenItem()">＋ 세부과제</button>
-      <button class="btn btn-outline tk-adm" onclick="tkOpenProj()">＋ 추진과제</button>
-      <button class="btn btn-outline tk-adm" onclick="tkOpenProj(tkCurId())">과제 수정</button>
+      <button class="btn btn-primary" id="tkAddBtn" onclick="tkAddMenu(event)" title="새 추진과제 또는 이 과제의 세부과제 등록">＋ 등록 ▾</button>
+      <button class="btn btn-outline tk-pedit" onclick="tkOpenProj(tkCurId())">과제 수정</button>
       <button class="btn btn-outline" onclick="tkExcel()">엑셀 내보내기</button>
       <span class="tk-legend"><i class="lg-plan"></i>계획 <i class="lg-done"></i>진척 <i class="lg-late"></i>지연 <i class="lg-today"></i>오늘 <i class="lg-ms"></i>마일스톤</span>
       <span class="cnt-badge" id="tkCnt"></span>
@@ -693,6 +703,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <div class="tbl-wrap" id="tkWrap"><table class="dv-table tk-table" id="tkTable"><thead id="tkThead"></thead><tbody id="tkBody"></tbody></table></div>
   </div>
 </div>
+<div class="tk-scale" id="tkAddMenu"><div class="tk-scale-t">등록</div><button id="tkAddProj" onclick="tkAddPick('proj')">새 추진과제</button><button id="tkAddItem" onclick="tkAddPick('item')">세부과제 (선택한 과제)</button></div>
 <div class="tk-scale" id="tkScaleMenu"><div class="tk-scale-t">일정 보기 단위</div><button onclick="tkSetScale('day')">일별</button><button onclick="tkSetScale('week')">주별</button><button onclick="tkSetScale('month')">월별</button></div>
 <div class="modal-ov" id="tkProjOv">
   <div class="modal" style="width:620px;">
@@ -1006,13 +1017,15 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <span class="fb-label">기간</span><input type="date" id="dvFrom" title="시작일" onkeydown="if(event.key==='Enter')renderDvLog()"><span style="color:var(--muted);">~</span><input type="date" id="dvTo" title="종료일" onkeydown="if(event.key==='Enter')renderDvLog()">
       <select id="dvPeriod" onchange="dvSetRange(this.value,true)" title="자주 쓰는 기간을 날짜 칸에 넣습니다. 넣은 뒤 조회를 누르세요"></select>
       <span class="fb-label" style="margin-left:6px;">상태</span><select id="dvSt" title="미완료 = 완료유무가 진행중·미결인 줄 + 목표일정이 있는데 완료일정이 없는 줄 / 기한 지남 = 목표일정이 지났는데 완료되지 않은 줄"><option value="">전체</option><option value="open">미완료</option><option value="미결">　└ 미결</option><option value="진행중">　└ 진행중</option><option value="late">　└ 기한 지남</option><option value="done">완료</option></select>
-      <span class="fb-label" style="margin-left:6px;">구분</span><select id="dvKind"><option value="">전체</option><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select>
-      <span class="fb-label" style="margin-left:6px;">법인</span><select id="dvCorp" onchange="dvFillProg()"><option value="">전체</option><option value="-">본사(법인 없음)</option></select><select id="dvProg" title="대과제"><option value="">전체 대과제</option></select>
-      <span class="fb-label" style="margin-left:6px;">거래처</span><input type="text" id="dvVendor" list="dvVOnlyList" placeholder="거래처 (전체)" style="width:160px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
-      <span class="fb-label" style="margin-left:6px;">메이커</span><input type="text" id="dvMaker" list="dvMOnlyList" placeholder="메이커 (전체)" style="width:140px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()"><datalist id="dvVendorList"></datalist><datalist id="dvVOnlyList"></datalist><datalist id="dvMOnlyList"></datalist><datalist id="dvItemList"></datalist>
-      <span class="fb-label" style="margin-left:6px;">프로젝트</span><input type="text" id="dvKw" list="dvItemList" placeholder="프로젝트명·내용 (전체)" style="width:200px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
+      <span class="fb-label tk-only" style="margin-left:6px;">추진과제</span><select id="tkProjSel2" class="tk-only tk-psel" onchange="tkProjSync(this)"></select>
+      <span class="fb-label tk-only" style="margin-left:6px;">분야</span><select id="dvTkArea" class="tk-only"><option value="">전체</option></select>
+      <span class="fb-label dv-nt" style="margin-left:6px;">구분</span><select id="dvKind" class="dv-nt"><option value="">전체</option><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select>
+      <span class="fb-label dv-nt" style="margin-left:6px;">법인</span><select id="dvCorp" class="dv-nt" onchange="dvFillProg()"><option value="">전체</option><option value="-">본사(법인 없음)</option></select><select id="dvProg" class="dv-nt" title="대과제"><option value="">전체 대과제</option></select>
+      <span class="fb-label dv-nt" style="margin-left:6px;">거래처</span><input type="text" id="dvVendor" class="dv-nt" list="dvVOnlyList" placeholder="거래처 (전체)" style="width:160px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
+      <span class="fb-label dv-nt" style="margin-left:6px;">메이커</span><input type="text" id="dvMaker" class="dv-nt" list="dvMOnlyList" placeholder="메이커 (전체)" style="width:140px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()"><datalist id="dvVendorList"></datalist><datalist id="dvVOnlyList"></datalist><datalist id="dvMOnlyList"></datalist><datalist id="dvItemList"></datalist>
+      <span class="fb-label" style="margin-left:6px;" id="dvKwLb">프로젝트</span><input type="text" id="dvKw" list="dvItemList" placeholder="프로젝트명·내용 (전체)" style="width:200px;height:32px;" onkeydown="if(event.key==='Enter')renderDvLog()">
       <button class="btn btn-primary" onclick="renderDvLog()">🔍 조회</button>
-      <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvMaker').value='';document.getElementById('dvKw').value='';document.getElementById('dvKind').value='';document.getElementById('dvSt').value='';document.getElementById('dvCorp').value='';dvFillProg();dvAllRange();renderDvLog()">초기화</button>
+      <button class="btn btn-outline" onclick="document.getElementById('dvVendor').value='';document.getElementById('dvMaker').value='';document.getElementById('dvKw').value='';document.getElementById('dvKind').value='';document.getElementById('dvSt').value='';document.getElementById('dvCorp').value='';document.getElementById('dvTkArea').value='';dvFillProg();dvAllRange();renderDvLog()">초기화</button>
       <button class="btn btn-primary dv-edit" onclick="dvOpenLog()">＋ 활동 입력</button>
       <button class="btn btn-outline" onclick="dvPrint('log')">인쇄</button>
       <button class="btn btn-outline" onclick="dvExcel('log')">엑셀 내보내기</button>
@@ -1198,6 +1211,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.51 (2026-10-23) — 추진과제: 과제 선택을 조회줄 맨 앞(마스터·세부진척현황 공용) + 「＋ 등록 ▾」(새 추진과제 / 세부과제), 등록 권한 B안(누구나·주관부서 = 본인 부서), 분야 줄 수정(이름 바꾸기)·＋세부과제, 법인 표기 SMEKR / 일정 머리줄 2단(일별·주별 10/1W·월별) + 세로줄 맨 아래까지·마일스톤 ◆ / 세부진척현황 추진과제 칸(추진과제·분야·세부과제·담당·작성), 부품개발 조건 숨김
    directive.html v3.50 (2026-10-23) — 추진과제 분야 목록(task_projects.areas): 과제 등록 창에서 분야를 먼저 정하고 세부과제가 없어도 분야 줄 표시 + 그 줄에서 「＋ 세부과제」, 담당부서 목록에 재경팀·상무이사 등 추가
    directive.html v3.49 (2026-10-23) — 상단 선택 순서 지시사항·부서별보고·추진과제, 부서별보고 탭 묶음(보고│개발관리│조회)·이름(부품개발 마스터·세부진척현황), 선택 표시 강화(꼬리·메뉴별 탭 줄 색·선택 탭 밑줄·현재 위치 줄·부서 선택 강조) / 「추진과제」 신규: 추진과제 마스터(task_projects·task_items, 일정표 일/주/월, 진척률 담당 입력) + 세부진척현황(dev_items kind='추진과제', 분야=program)
    directive.html v3.48 (2026-10-22) — 세부 진척현황 검색 「업체」 → 「거래처」(거래처 칸만) + 「메이커」(메이커 칸만) 분리, 묶음 이름으로 이동 시 메이커/거래처 칸 자동 구분
@@ -2752,21 +2766,40 @@ function dvFillProg(){
   const cur=pr.value, ls=c.value==='-'?[]:dvPrograms(c.value);
   pr.innerHTML='<option value="">전체 대과제</option>'+ls.map(v=>`<option${v===cur?' selected':''}>${esc(v)}</option>`).join('');
 }
+// v3.51: 추진과제 화면의 세부진척현황 — 칸을 추진과제 / 분야 / 세부과제 / 담당 / 작성으로 바꿔 쓴다
+function dvIsTask(){ return document.body.classList.contains('md-task'); }
+function dvTkOf(itemId){ const t=tkItems.find(x=>x.dev_item_id===itemId), p=t?tkProjects.find(x=>x.id===t.project_id):null; return {t:t||null,p:p||null}; }
+function dvLogHead(task){
+  const L=task?['추진과제','분야','세부과제','담당','일자','작성']:['거래처 / 과제','메이커','프로젝트','공급구분','일자','단계'];
+  const ths=document.querySelectorAll('#dvLogTable thead th'); L.forEach((x,i)=>{ if(ths[i]&&ths[i].firstChild) ths[i].firstChild.nodeValue=x; });
+  const lb=document.getElementById('dvKwLb'); if(lb) lb.textContent=task?'세부과제':'프로젝트';
+  const kw=document.getElementById('dvKw'); if(kw) kw.placeholder=task?'세부과제·내용 (전체)':'프로젝트명·내용 (전체)';
+  if(task){ const sel=document.getElementById('dvTkArea'), keep=sel.value, pj=tkCur(), ar=((pj&&pj.areas)||[]).slice(); dvI.forEach(i=>{ if(i.program&&ar.indexOf(i.program)<0) ar.push(i.program); });
+    sel.innerHTML='<option value="">전체</option>'+ar.map(a=>`<option${a===keep?' selected':''}>${esc(a)}</option>`).join(''); }
+}
 function renderDvLog(){
   dvFillProg();
+  const task=dvIsTask(); dvLogHead(task);
   const ed=dvCanEdit(); let h='', n=0;
-  const ts=tsState('dvLogTable'), GK={vendor:g=>g.it.vendor,maker:g=>g.it.maker,title:g=>g.it.title,supply:g=>g.it.supply_type};
-  const gs=tsSort(dvLogGroups(),'dvLogTable',GK);
+  const ts=tsState('dvLogTable'), GK=task?{vendor:g=>(dvTkOf(g.it.id).p||{}).name||'',maker:g=>g.it.program||'',title:g=>g.it.title,supply:g=>(dvTkOf(g.it.id).t||{}).owner_name||''}:{vendor:g=>g.it.vendor,maker:g=>g.it.maker,title:g=>g.it.title,supply:g=>g.it.supply_type};
+  const tkA=task?document.getElementById('dvTkArea').value:'';
+  const gs=tsSort(dvLogGroups().filter(g=>!tkA||g.it.program===tkA),'dvLogTable',GK);
+  // 추진과제 화면 칸 값
+  const C1=it=>task?esc((dvTkOf(it.id).p||{}).name||''):`${esc(it.vendor||'')}${it.kind==='법인과제'?'<span class="dv-note">법인·과제</span>':''}`;
+  const C2=it=>esc(task?(it.program||''):(it.maker||''));
+  const C4=it=>esc(task?((dvTkOf(it.id).t||{}).owner_name||''):(it.supply_type||''));
+  const C6=l=>task?esc(l.emp_name&&l.emp_name!=='엑셀이관'?l.emp_name:''):(l.stage?`<span class="dv-st s-진행중">${esc(dvStageName(l.stage))}</span>`:'');
+  const CK=it=>task?'':' onclick="dvPickVendor('+it.id+')"';
   if(!ts.raw&&!GK[ts.k]){
     // 활동 칼럼 정렬: 프로젝트 묶음을 풀고 활동 한 줄씩 나열
     const flat=[]; gs.forEach(g=>g.logs.forEach(l=>flat.push({it:g.it,l:l})));
     const fs=tsSort(flat,'dvLogTable',{date:x=>x.l.log_date||'',stage:x=>x.l.stage||'',content:x=>x.l.content,target:x=>x.l.target_date,done:x=>x.l.done_date||x.l.done_state});
     fs.forEach(x=>{
       const it=x.it, l=x.l; n++;
-      h+=`<tr class="dv-log g1"><td class="dv-v" onclick="dvPickVendor(${it.id})" title="이 거래처·메이커의 전체 진척 보기"><div class="dv-stk">${esc(it.vendor||'')}${it.kind==='법인과제'?'<span class="dv-note">법인·과제</span>':''}</div></td>
-        <td class="dv-v" onclick="dvPickVendor(${it.id})"><div class="dv-stk">${esc(it.maker||'')}</div></td>
-        <td class="dv-ti" onclick="dvOpenItem(${it.id})" title="프로젝트 상세"><div class="dv-stk">${esc(it.title||'(이름 없음)')}${dvCorpTag(it)}</div></td><td>${esc(it.supply_type||'')}</td>
-        <td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${l.stage?`<span class="dv-st s-진행중">${esc(dvStageName(l.stage))}</span>`:''}</td>
+      h+=`<tr class="dv-log g1"><td class="dv-v"${CK(it)}><div class="dv-stk">${C1(it)}</div></td>
+        <td class="dv-v"${CK(it)}><div class="dv-stk">${C2(it)}</div></td>
+        <td class="dv-ti" onclick="dvOpenItem(${it.id})" title="상세"><div class="dv-stk">${esc(it.title||'(이름 없음)')}${task?'':dvCorpTag(it)}</div></td><td>${C4(it)}</td>
+        <td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${C6(l)}</td>
         <td class="dv-c"${ed?` onclick="dvOpenLog(${l.id})" title="눌러서 수정"`:''}>${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>
         <td>${ed?`<button class="btn btn-outline mt-btn" onclick="dvOpenLog(${l.id})">수정</button>`:''}</td></tr>`;
     });
@@ -2777,15 +2810,15 @@ function renderDvLog(){
   }
   gs.forEach(g=>{
     const it=g.it, rows=g.logs.length||1, dirs=dvDirCount(it.id);
-    const head=`<td class="dv-v" rowspan="${rows}" onclick="dvPickVendor(${it.id})" title="이 거래처·메이커의 전체 진척 보기"><div class="dv-stk">${esc(it.vendor||'')}${it.kind==='법인과제'?'<span class="dv-note">법인·과제</span>':''}</div></td>
-      <td class="dv-v" rowspan="${rows}" onclick="dvPickVendor(${it.id})" title="이 메이커의 전체 진척 보기"><div class="dv-stk">${esc(it.maker||'')}</div></td>
-      <td class="dv-ti" rowspan="${rows}" onclick="dvOpenItem(${it.id})" title="프로젝트 상세"><div class="dv-stk">${esc(it.title||'(이름 없음)')}${dvCorpTag(it)}${dvOwner(it)!==DV_DEPT?`<span class="dv-dept">${esc(dvOwner(it).replace(/팀$/,''))}</span>`:''}${dirs.length?`<span class="dv-dir" onclick="event.stopPropagation();dvGoDir(${dirs[0].id})" title="이 프로젝트에 걸린 지시">📌 지시 ${dirs.length}</span>`:''}</div></td>
-      <td rowspan="${rows}">${esc(it.supply_type||'')}</td>`;
+    const head=`<td class="dv-v" rowspan="${rows}"${CK(it)}><div class="dv-stk">${C1(it)}</div></td>
+      <td class="dv-v" rowspan="${rows}"${CK(it)}><div class="dv-stk">${C2(it)}</div></td>
+      <td class="dv-ti" rowspan="${rows}" onclick="dvOpenItem(${it.id})" title="상세"><div class="dv-stk">${esc(it.title||'(이름 없음)')}${task?'':dvCorpTag(it)}${!task&&dvOwner(it)!==DV_DEPT?`<span class="dv-dept">${esc(dvOwner(it).replace(/팀$/,''))}</span>`:''}${dirs.length?`<span class="dv-dir" onclick="event.stopPropagation();dvGoDir(${dirs[0].id})" title="이 프로젝트에 걸린 지시">📌 지시 ${dirs.length}</span>`:''}</div></td>
+      <td rowspan="${rows}">${C4(it)}</td>`;
     const tail=`<td rowspan="${rows}">${ed?`<button class="btn btn-outline mt-btn" onclick="dvOpenLog(null,${it.id})">＋ 활동</button>`:''}</td>`;
     if(!g.logs.length){ h+=`<tr class="g1">${head}<td class="dv-d">-</td><td></td><td style="color:#9aa1ab;">활동 기록 없음</td><td></td><td></td><td></td>${tail}</tr>`; return; }
     g.logs.forEach((l,ix)=>{
       n++;
-      h+=`<tr class="dv-log${ix===0?' g1':''}">${ix===0?head:''}<td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${l.stage?`<span class="dv-st s-진행중">${esc(dvStageName(l.stage))}</span>`:''}</td>
+      h+=`<tr class="dv-log${ix===0?' g1':''}">${ix===0?head:''}<td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${C6(l)}</td>
         <td class="dv-c"${ed?` onclick="dvOpenLog(${l.id})" title="눌러서 수정"`:''}>${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>${ix===0?tail:''}</tr>`;
     });
   });
@@ -3412,10 +3445,40 @@ function tkFillProj(){
   const sel=document.getElementById('tkProjSel'); let keep=sel.value; if(!keep){ try{keep=localStorage.getItem('tk_proj')||'';}catch(_){} }
   sel.innerHTML=tkProjects.length?tkProjects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join(''):'<option value="">등록된 추진과제 없음</option>';
   if(keep&&tkProjects.some(p=>String(p.id)===String(keep))) sel.value=keep;
-  document.querySelectorAll('.tk-adm').forEach(b=>{ b.style.display=tkCanAdmin()?'':'none'; });
+  const opts=tkProjects.map(p=>`<option value="${p.id}">${esc(p.name)}${p.corp?'':' (SMEKR)'}</option>`).join('');
+  const cv=String(sel.value||((tkProjects[0]||{}).id||''));
+  document.querySelectorAll('.tk-psel').forEach(x=>{ x.innerHTML=(opts||'<option value="">등록된 추진과제 없음</option>')+(me?'<option value="__new">＋ 새 추진과제 등록…</option>':''); x.value=cv; });
+}
+function tkProjSync(el){
+  if(el.value==='__new'){ const cur=tkCurId(); document.querySelectorAll('.tk-psel').forEach(x=>{ x.value=cur||''; }); tkOpenProj(); return; }
+  document.querySelectorAll('.tk-psel').forEach(x=>{ if(x!==el) x.value=el.value; });
+  const w=document.getElementById('tkWrap'); if(w) delete w.dataset.scrolled; tkProjChange();
+}
+function tkAddMenu(ev){
+  ev.stopPropagation(); const m=document.getElementById('tkAddMenu'), pj=tkCur();
+  document.getElementById('tkAddProj').style.display=me?'':'none';
+  const bi=document.getElementById('tkAddItem'); bi.style.display=pj&&tkCanEdit(null)?'':'none'; bi.textContent='세부과제 — '+(pj?pj.name:'');
+  const r=ev.currentTarget.getBoundingClientRect(); m.style.left=Math.min(r.left,window.innerWidth-260)+'px'; m.style.top=(r.bottom+4)+'px'; m.classList.add('open');
+}
+function tkAddPick(k){ document.getElementById('tkAddMenu').classList.remove('open'); if(k==='proj') tkOpenProj(); else tkOpenItem(); }
+document.addEventListener('click',ev=>{ const m=document.getElementById('tkAddMenu'); if(m&&!m.contains(ev.target)) m.classList.remove('open'); });
+// 분야 이름 바꾸기: 과제의 분야 목록 + 그 분야 세부과제(task_items.area) + 세부진척현황 프로젝트(dev_items.program)
+async function tkRenameArea(a){
+  const pj=tkCur(); if(!pj||!tkCanProj(pj)){ showToast('분야 수정은 결재권자·개발기획팀·주관부서만 할 수 있습니다','err'); return; }
+  const nv=(prompt('분야 이름 수정',a)||'').trim(); if(!nv||nv===a) return;
+  if((pj.areas||[]).indexOf(nv)>=0||tkItems.some(t=>t.project_id===pj.id&&t.area===nv)){ if(!confirm('「'+nv+'」 분야가 이미 있습니다. 합칠까요?')) return; }
+  try{
+    const now=new Date().toISOString(), areas=(pj.areas||[]).map(x=>x===a?nv:x).filter((x,i,l)=>l.indexOf(x)===i);
+    await sbPatch('task_projects',pj.id,{areas:areas,updated_at:now});
+    const its=tkItems.filter(t=>t.project_id===pj.id&&(t.area||'')===a);
+    for(const t of its){ await sbPatch('task_items',t.id,{area:nv,updated_at:now}); if(t.dev_item_id) await sbPatch('dev_items',t.dev_item_id,{program:nv,updated_at:now}); }
+    await Promise.all([tkLoad(),dvLoad()]); dvApplyDept(); dvFillFilters(); renderCur(); showToast('분야 이름을 바꿨습니다','ok');
+  }catch(e){ showToast('오류: '+e.message,'err'); }
 }
 function tkProjChange(){ try{localStorage.setItem('tk_proj',document.getElementById('tkProjSel').value);}catch(_){} dvApplyDept(); dvFillFilters(); renderCur(); }
 function tkCanAdmin(){ return !!me&&(canDecide()||me.dept===DV_DEPT); }
+// v3.51(B안): 추진과제 등록은 누구나(주관부서 = 본인 부서), 수정·삭제는 결재권자·개발기획팀 또는 주관부서
+function tkCanProj(p){ return !!me&&(tkCanAdmin()||!p||p.owner_dept===me.dept); }
 function tkCanEdit(t){ const pj=tkCur(); return !!me&&(tkCanAdmin()||(t&&(t.owner_id===me.id||t.owner_name===me.name||t.owner_dept===me.dept))||(!t&&pj&&pj.owner_dept===me.dept)); }
 function tkD(s){ return s?toDate(s):null; }
 function tkLate(t){ return !t.done_date&&t.status!=='완료'&&t.status!=='Drop'&&t.target_date&&t.target_date<todayStr(); }
@@ -3441,14 +3504,34 @@ function tkX(d,R){   // 날짜 → 일정표 안의 x(px)
 }
 function tkW(R){ const e=new Date(R.b); e.setDate(e.getDate()+1); return Math.ceil(tkX(e,R)); }
 function tkHeadHtml(R,pj){
-  const u=TK_UNIT[tkScale].w, W=tkW(R); let h='';
-  const d=new Date(R.a);
-  if(tkScale==='month'){ while(d<=R.b){ h+=`<span style="left:${tkX(d,R)+4}px;top:13px;font-weight:700;">${String(d.getFullYear()).slice(2)}.${d.getMonth()+1}월</span>`; d.setMonth(d.getMonth()+1); } }
-  else if(tkScale==='week'){ let lm=-1; while(d<=R.b){ h+=`<span style="left:${tkX(d,R)+3}px;">${d.getMonth()+1}/${d.getDate()}</span>`; if(d.getMonth()!==lm){ lm=d.getMonth(); h+=`<span class="mo" style="left:${tkX(d,R)+3}px;">${String(d.getFullYear()).slice(2)}.${d.getMonth()+1}월</span>`; } d.setDate(d.getDate()+7); } }
-  else { while(d<=R.b){ const wk=d.getDay(); h+=`<span style="left:${tkX(d,R)+7}px;${wk===0?'color:#C8001E;':wk===6?'color:#1a4fa0;':''}">${d.getDate()}</span>`; if(d.getDate()===1||+d===+R.a) h+=`<span class="mo" style="left:${tkX(d,R)+3}px;">${String(d.getFullYear()).slice(2)}.${d.getMonth()+1}월</span>`; d.setDate(d.getDate()+1); } }
+  const W=tkW(R); let h='';
+  const yy=d=>String(d.getFullYear()).slice(2);
+  const band=(x1,x2,txt)=>{ x1=Math.max(0,x1); x2=Math.min(W,x2); return x2>x1?`<div class="tk-hb" style="left:${x1}px;width:${x2-x1}px;" title="${txt}">${txt}</div>`:''; };
+  const cell=(x1,x2,txt,cls,st)=>`<div class="tk-hc${cls?' '+cls:''}" style="left:${x1}px;width:${x2-x1}px;${st||''}">${txt}</div>`;
+  if(tkScale==='month'){
+    for(let y=R.a.getFullYear();y<=R.b.getFullYear();y++) h+=band(tkX(new Date(y,0,1),R),tkX(new Date(y+1,0,1),R),y+'년');
+    const d=new Date(R.a.getFullYear(),R.a.getMonth(),1);
+    while(d<=R.b){ const n=new Date(d.getFullYear(),d.getMonth()+1,1); h+=cell(tkX(d,R),tkX(n,R),(d.getMonth()+1)+'월','mb','font-weight:700;'); d.setTime(n.getTime()); }
+  }else{
+    const m=new Date(R.a.getFullYear(),R.a.getMonth(),1);
+    while(m<=R.b){ const n=new Date(m.getFullYear(),m.getMonth()+1,1); h+=band(tkX(m,R),tkX(n,R),yy(m)+'.'+(m.getMonth()+1)+'월'); m.setTime(n.getTime()); }
+    const d=new Date(R.a);
+    if(tkScale==='week'){
+      while(d<=R.b){ const n=new Date(d); n.setDate(n.getDate()+7); h+=cell(tkX(d,R),tkX(n,R),(d.getMonth()+1)+'/'+(Math.floor((d.getDate()-1)/7)+1)+'W',n.getMonth()!==d.getMonth()||n.getDate()===1?'mb':'',''); d.setTime(n.getTime()); }
+    }else{
+      while(d<=R.b){ const n=new Date(d); n.setDate(n.getDate()+1); const wk=d.getDay(); h+=cell(tkX(d,R),tkX(n,R),d.getDate(),n.getDate()===1?'mb':'',wk===0?'color:#C8001E;':wk===6?'color:#1a4fa0;':''); d.setTime(n.getTime()); }
+    }
+  }
   h+=`<div class="tk-today" style="left:${tkX(toDate(todayStr()),R)}px;" title="오늘 ${todayStr()}"></div>`;
-  if(pj) (pj.milestones||[]).forEach(m=>{ if(!m||!m.date) return; const x=tkX(toDate(m.date),R); h+=`<div class="tk-msl" style="left:${x}px;"></div><span class="ms-lb" style="left:${x+3}px;" title="${esc(m.date)}">◆ ${esc(m.label||'')}</span>`; });
-  return `<div class="tk-tlh" style="width:${W}px;background:repeating-linear-gradient(to right,transparent 0,transparent ${u-1}px,rgba(20,44,82,.16) ${u-1}px,rgba(20,44,82,.16) ${u}px);">${h}</div>`;
+  if(pj) (pj.milestones||[]).forEach(m=>{ if(!m||!m.date) return; const x=tkX(toDate(m.date),R); h+=`<div class="tk-msl" style="left:${x}px;top:18px;"></div><div class="ms-dot" style="left:${x}px;" title="◆ ${esc(m.label||'')} ${esc(m.date)}">◆</div>`; });
+  return `<div class="tk-tlh" style="width:${W}px;">${h}</div>`;
+}
+// 본문 세로줄: 단위(일·주·월)마다 옅은 줄 + 달이 바뀌는 곳은 진한 줄
+function tkGridHtml(R){
+  if(tkScale==='month') return '';
+  let h=''; const m=new Date(R.a.getFullYear(),R.a.getMonth()+1,1);
+  while(m<=R.b){ h+=`<div class="tk-ml" style="left:${tkX(m,R)}px;"></div>`; m.setMonth(m.getMonth()+1); }
+  return h;
 }
 function tkBarHtml(t,R,pj){
   const u=TK_UNIT[tkScale].w, W=tkW(R), td=toDate(todayStr()); let h='';
@@ -3461,9 +3544,10 @@ function tkBarHtml(t,R,pj){
     else if(t.progress>0) h+=`<div class="tk-bar tk-done" style="left:${sx}px;width:${Math.max(2,(ex-sx)*Math.min(100,t.progress)/100)}px;" title="진척 ${esc(tip)}"></div>`;
     if(tkLate(t)){ const tx=tkX(new Date(td.getFullYear(),td.getMonth(),td.getDate()+1),R); if(tx>ex) h+=`<div class="tk-bar tk-late" style="left:${ex}px;width:${tx-ex}px;" title="지연 ${esc(t.target_date)} → 오늘"></div>`; }
   }else if(s||e){ const x=tkX(s||e,R); h+=`<div class="tk-bar tk-plan" style="left:${x}px;width:${Math.max(6,u/3)}px;" title="${esc(tip)} (시작·목표 중 하나만 있음)"></div>`; }
-  h+=`<div class="tk-today" style="left:${tkX(td,R)}px;"></div>`;
+  h+=tkGridHtml(R)+`<div class="tk-today" style="left:${tkX(td,R)}px;"></div>`;
   if(pj) (pj.milestones||[]).forEach(m=>{ if(m&&m.date) h+=`<div class="tk-msl" style="left:${tkX(toDate(m.date),R)}px;" title="◆ ${esc(m.label||'')} ${esc(m.date)}"></div>`; });
-  return `<div class="tk-tl" style="width:${W}px;background:repeating-linear-gradient(to right,transparent 0,transparent ${u-1}px,#eef1f5 ${u-1}px,#eef1f5 ${u}px);">${h}</div>`;
+  const gc=tkScale==='month'?'#b6c2d3':'#e6eaf0';
+  return `<div class="tk-tl" style="width:${W}px;background:repeating-linear-gradient(to right,transparent 0,transparent ${u-1}px,${gc} ${u-1}px,${gc} ${u}px);">${h}</div>`;
 }
 function tkAgg(list){   // 분야 줄: 전체 기간, 진척 = 기간 가중 평균
   const st=list.map(t=>t.start_date).filter(Boolean).sort(), tg=list.map(t=>t.target_date).filter(Boolean).sort();
@@ -3486,11 +3570,11 @@ function renderTkMaster(){
   areaSel.innerHTML='<option value="">전체</option>'+areas.map(a=>`<option${a===keepA?' selected':''}>${esc(a)}</option>`).join('');
   document.getElementById('tkAreaList').innerHTML=areas.map(a=>`<option value="${esc(a)}">`).join('');
   document.getElementById('tkWhoList').innerHTML=emps.filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('');
-  document.querySelectorAll('.tk-edit').forEach(b=>{ b.style.display=pj&&tkCanEdit(null)?'':'none'; });
-  if(!pj){ head.innerHTML='<span>등록된 추진과제가 없습니다.'+(tkCanAdmin()?' 「＋ 추진과제」로 등록하세요.':'')+'</span>'; document.getElementById('tkThead').innerHTML=''; document.getElementById('tkBody').innerHTML=''; document.getElementById('tkCnt').textContent=''; return; }
+  document.querySelectorAll('.tk-pedit').forEach(b=>{ b.style.display=pj&&tkCanProj(pj)?'':'none'; });
+  if(!pj){ head.innerHTML='<span>등록된 추진과제가 없습니다.'+(me?' 「＋ 등록 ▾ → 새 추진과제」로 등록하세요.':'')+'</span>'; document.getElementById('tkThead').innerHTML=''; document.getElementById('tkBody').innerHTML=''; document.getElementById('tkCnt').textContent=''; return; }
   const agg=tkAgg(all), dd=pj.target_date?dayDiff(todayStr(),pj.target_date):null, lateN=all.filter(tkLate).length, doneN=all.filter(t=>tkStLabel(t)==='완료').length;
   head.innerHTML=`<span class="tk-nm">${esc(pj.name)}</span>`
-    +(pj.corp?`<span>법인 <b>${esc(pj.corp)}</b></span>`:'')+(pj.owner_dept?`<span>주관 <b>${esc(pj.owner_dept)}</b></span>`:'')
+    +`<span>법인 <b>${esc(pj.corp||'SMEKR')}</b></span>`+(pj.owner_dept?`<span>주관 <b>${esc(pj.owner_dept)}</b></span>`:'')
     +`<span>기간 <b>${esc(pj.start_date||'?')} ~ ${esc(pj.target_date||'?')}</b>${dd!=null?` <span class="tk-dd">${dd>=0?'D-'+dd:'D+'+(-dd)}</span>`:''}</span>`
     +`<span>전체 진척 <span class="tk-pg"><i style="width:${agg.progress}%"></i></span><b>${agg.progress}%</b></span>`
     +`<span>세부과제 <b>${all.length}</b> · 완료 <b>${doneN}</b>${lateN?` · <b style="color:#C8001E;">지연 ${lateN}</b>`:''}</span>`
@@ -3506,10 +3590,10 @@ function renderTkMaster(){
   let body='';
   ord.forEach(a=>{
     let rows=(byA[a]||[]).slice();
-    if(!rows.length){ body+=`<tr class="tk-grp"><td class="tk-sticky" style="cursor:default;">▫ ${esc(a)} <span style="font-weight:400;color:#9aa1ab;">(0)</span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${tkCanEdit(null)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkNewIn(this.dataset.a)">＋ 세부과제</button>`:''}</td><td class="tk-tl-c">${tkBarHtml({},R,pj)}</td></tr>`; return; }
+    if(!rows.length){ body+=`<tr class="tk-grp"><td class="tk-sticky" style="cursor:default;">▫ ${esc(a)} <span style="font-weight:400;color:#9aa1ab;">(0)</span></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td style="white-space:nowrap;">${tkAreaBtns(a,pj)}</td><td class="tk-tl-c">${tkBarHtml({},R,pj)}</td></tr>`; return; }
     if(tkSortK){ const g=getters[tkSortK]; rows.sort((x,y)=>{ const p=g(x),q=g(y); return (p<q?-1:p>q?1:0)*(tkSortAsc?1:-1); }); }
     const ag=tkAgg(rows), col=!!tkCollapsed[a];
-    body+=`<tr class="tk-grp"><td class="tk-sticky" data-a="${esc(a)}" onclick="tkToggle(this.dataset.a)">${col?'▸':'▾'} ${esc(a)} <span style="font-weight:400;color:#6b7280;">(${rows.length})</span></td><td></td><td class="dv-d">${esc(md(ag.start_date||''))}</td><td class="dv-d">${esc(md(ag.target_date||''))}</td><td class="dv-d">${esc(md(ag.done_date||''))}</td><td><span class="tk-pgc">${ag.progress}%</span></td><td></td><td></td><td></td><td class="tk-tl-c">${tkBarHtml(ag,R,pj)}</td></tr>`;
+    body+=`<tr class="tk-grp"><td class="tk-sticky" data-a="${esc(a)}" onclick="tkToggle(this.dataset.a)">${col?'▸':'▾'} ${esc(a)} <span style="font-weight:400;color:#6b7280;">(${rows.length})</span></td><td></td><td class="dv-d">${esc(md(ag.start_date||''))}</td><td class="dv-d">${esc(md(ag.target_date||''))}</td><td class="dv-d">${esc(md(ag.done_date||''))}</td><td><span class="tk-pgc">${ag.progress}%</span></td><td></td><td></td><td style="white-space:nowrap;">${tkAreaBtns(a,pj)}</td><td class="tk-tl-c">${tkBarHtml(ag,R,pj)}</td></tr>`;
     if(col) return;
     rows.forEach(t=>{
       const lab=tkStLabel(t), last=tkLastLog(t), old=last?dayDiff(last,todayStr()):null, ed=tkCanEdit(t);
@@ -3551,14 +3635,17 @@ function tkAddLog(devId){ const t=tkItems.find(x=>x.dev_item_id===devId); if(t&&
 function tkGoLog(devId){ const it=dvIById[devId]; switchTab('tklog'); if(it){ dvSetVM('',''); document.getElementById('dvKw').value=it.title||''; dvAllRange(); renderDvLog(); } }
 /* ── 추진과제 등록·수정 ── */
 function tkOpenProj(id){
-  if(!tkCanAdmin()){ showToast('추진과제 등록·수정은 사장님·상무·개발기획팀만 할 수 있습니다','err'); return; }
-  const p=id?tkProjects.find(x=>x.id===id):null; tkEditProj=p;
+  const p=id?tkProjects.find(x=>x.id===id):null;
+  if(!tkCanProj(p)){ showToast('이 추진과제의 수정은 결재권자·개발기획팀·주관부서만 할 수 있습니다','err'); return; }
+  tkEditProj=p;
   const g=k=>document.getElementById(k);
   g('tkProjTitle').textContent=p?'추진과제 수정':'추진과제 등록';
   g('tkPjName').value=p?p.name:''; g('tkPjStart').value=p?(p.start_date||''):todayStr(); g('tkPjTarget').value=p?(p.target_date||''):''; g('tkPjDone').value=p?(p.done_date||''):'';
   g('tkPjSt').value=p?(p.status||'진행'):'진행'; g('tkPjMemo').value=p?(p.memo||''):'';
-  g('tkPjCorp').innerHTML='<option value="">본사 (법인 없음)</option>'+CORP_DEPTS.map(c=>`<option${p&&p.corp===c?' selected':''}>${c}</option>`).join('');
-  g('tkPjDept').innerHTML='<option value=""></option>'+TK_DEPTS().map(d=>`<option${p&&p.owner_dept===d?' selected':''}>${d}</option>`).join('');
+  g('tkPjCorp').innerHTML='<option value="">SMEKR (본사)</option>'+CORP_DEPTS.filter(c=>c!=='법인전체').map(c=>`<option${p&&p.corp===c?' selected':''}>${c}</option>`).join('');
+  g('tkPjDept').innerHTML='<option value=""></option>'+TK_DEPTS().map(d=>`<option${(p?p.owner_dept:me.dept)===d?' selected':''}>${d}</option>`).join('');
+  g('tkPjDept').disabled=!tkCanAdmin();   // 일반 부서는 주관부서 = 본인 부서 고정
+  if(!tkCanAdmin()&&![...g('tkPjDept').options].some(o=>o.value===me.dept)) g('tkPjDept').insertAdjacentHTML('beforeend',`<option selected>${esc(me.dept)}</option>`);
   g('tkPjMs').value=p?(p.milestones||[]).map(m=>(m.date||'')+' '+(m.label||'')).join('\n'):'';
   g('tkPjAreas').value=p?(p.areas||[]).join('\n'):'';
   g('tkPjDel').style.display=p?'':'none';
@@ -3589,6 +3676,7 @@ async function tkDelProj(){
   try{ await sbPatch('task_projects',tkEditProj.id,{is_deleted:true,updated_at:new Date().toISOString()}); tkCloseProj(); document.getElementById('tkProjSel').value=''; try{localStorage.removeItem('tk_proj');}catch(_){} await tkLoad(); renderCur(); showToast('삭제되었습니다','ok'); }
   catch(e){ showToast('오류: '+e.message,'err'); }
 }
+function tkAreaBtns(a,pj){ if(a==='(분야 없음)') return ''; return (tkCanProj(pj)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkRenameArea(this.dataset.a)" title="분야 이름 수정">수정</button> `:'')+(tkCanEdit(null)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkNewIn(this.dataset.a)">＋ 세부과제</button>`:''); }
 /* ── 세부과제 등록·수정 ── */
 function tkNewIn(a){ tkOpenItem(null); const el=document.getElementById('tkItArea'); if(el&&document.getElementById('tkItemOv').classList.contains('open')){ el.value=a; document.getElementById('tkItName').focus(); } }
 const TK_DEPTS=()=>{ const l=DV_DEPTS.concat(['재경팀','상무이사','대표이사','법인장']).concat(CORP_DEPTS.filter(c=>c!=='법인전체')); return l.filter((x,i)=>l.indexOf(x)===i); };
