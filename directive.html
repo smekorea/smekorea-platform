@@ -111,6 +111,7 @@ body.md-dir .tab-bar{background:#fdf6f6;} body.md-report .tab-bar{background:#f3
 .tk-only{display:none!important;} body.md-task .tk-only{display:inline-flex!important;} body.md-task select.tk-only{display:inline-block!important;}
 body.md-task .dv-nt{display:none!important;}
 .tk-psel{min-width:200px;font-weight:700;}
+.tl-where{background:#f2f8f3;border-left:3px solid #2e7d4f;padding:8px 12px;margin-bottom:12px;font-size:13px;line-height:1.6;} .tl-where b{color:#142C52;} .tl-where .sub{color:#6b7280;font-size:12px;}
 .tk-tlh span{position:absolute;top:4px;white-space:nowrap;} .tk-tlh span.mo{top:22px;font-weight:700;}
 .tk-bar{position:absolute;top:8px;height:14px;border-radius:2px;} .tk-plan{background:#FCE7A0;border:1px solid #E3B341;box-sizing:border-box;}
 .tk-done{background:#34A853;} .tk-drop{background:#e5e7eb!important;border-color:#9ca3af!important;} .tk-late{background:#E5534B;opacity:.85;}
@@ -757,6 +758,35 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <div class="modal-ft"><button class="btn btn-red" id="tkItDel" onclick="tkDelItem()">삭제</button><span style="flex:1"></span><button class="btn btn-outline" onclick="tkCloseItem()">취소</button><button class="btn btn-primary" onclick="tkSaveItem()">저장</button></div>
   </div>
 </div>
+<!-- v3.52: 추진과제 활동 기록 창 (부품개발용 「주간업무 입력 — 신규개발 활동」 대신) -->
+<div class="modal-ov" id="tlOv">
+  <div class="modal" style="width:620px;">
+    <div class="modal-hd"><span id="tlTitle">활동 기록</span><button class="sp-close" onclick="tlClose()">✕</button></div>
+    <div class="modal-bd">
+      <div class="tl-where" id="tlWhere"></div>
+      <div class="form-row-2" id="tlPick">
+        <div class="form-row"><label class="form-label">분야</label><select class="form-select" id="tlArea" onchange="tlFillItems()"></select></div>
+        <div class="form-row"><label class="form-label">세부과제<span>*</span></label><select class="form-select" id="tlItem" onchange="tlItemChange()"></select></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">일자<span>*</span></label><input type="date" class="form-input" id="tlDate"></div>
+        <div class="form-row"><label class="form-label">완료유무</label><select class="form-select" id="tlDone" onchange="tlDoneChange()"><option value="">-</option><option>진행중</option><option>미결</option><option>완료</option></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">활동내용<span>*</span></label><textarea class="form-textarea" id="tlText" style="min-height:120px;" placeholder="무엇을 했는지 / 결과·다음 할 일"></textarea></div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">목표일정</label><input type="date" class="form-input" id="tlTarget"></div>
+        <div class="form-row"><label class="form-label">완료일정</label><input type="date" class="form-input" id="tlDoneDt" onchange="if(this.value&&!document.getElementById('tlDone').value)document.getElementById('tlDone').value='완료'"></div>
+      </div>
+      <div class="form-row"><label class="form-label"><input type="checkbox" id="tlPgOn" onchange="document.getElementById('tlPg').disabled=!this.checked" style="vertical-align:middle;"> 세부과제 진척도 함께 바꾸기 <b id="tlPgV">0%</b></label><input type="range" min="0" max="100" step="5" id="tlPg" disabled oninput="document.getElementById('tlPgV').textContent=this.value+'%'" style="width:100%;"></div>
+      <details id="tlAttBox"><summary style="cursor:pointer;font-size:12px;color:var(--muted);">첨부 (설명·경로)</summary>
+        <div class="form-row-2" style="margin-top:6px;">
+          <div class="form-row"><label class="form-label">첨부 설명</label><input class="form-input" id="tlAtt" placeholder="예: 교육자료"></div>
+          <div class="form-row"><label class="form-label">첨부 경로</label><input class="form-input" id="tlPath" placeholder="링크 또는 \\server\… 경로"></div>
+        </div></details>
+    </div>
+    <div class="modal-ft"><button class="btn btn-red" id="tlDel" onclick="tlDelete()">삭제</button><label id="tlDjRow" style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="tlDj" checked> 📒 업무일지에도 기록</label><span id="tlLinked" style="font-size:12px;color:#15803d;"></span><span style="flex:1"></span><button class="btn btn-outline" onclick="tlClose()">취소</button><button class="btn btn-primary" id="tlSave" onclick="tlSaveLog()">저장</button></div>
+  </div>
+</div>
 
 <!-- ── 탭: 주간회의 ── -->
 <div class="tab-panel active" id="panel-meet">
@@ -888,7 +918,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <div class="ms-wrap" id="rpSelWrap"><button type="button" class="ms-btn" id="rpSelBtn" onclick="rpToggleSel(event)" title="월이나 주를 여러 개 골라 함께 볼 수 있습니다. 고른 뒤 조회를 누르세요">전체 기간</button><div class="ms-dd" id="rpSelDD" onclick="event.stopPropagation()"></div></div>
       <span class="fb-label" style="margin-left:6px;">상태</span><select id="rpSt" title="미완료 = 완료유무가 진행중·미결인 줄 + 목표일정이 있는데 완료일정이 없는 줄 / 기한 지남 = 목표일정이 지났는데 완료되지 않은 줄"><option value="">전체</option><option value="open">미완료</option><option value="미결">　└ 미결</option><option value="진행중">　└ 진행중</option><option value="late">　└ 기한 지남</option><option value="done">완료</option></select>
       <span class="fb-label" style="margin-left:6px;">구분</span><select id="rpKind"><option value="">전체</option><option>실적</option><option>계획</option></select>
-      <span class="fb-label" style="margin-left:6px;">대분류</span><select id="rpCat"><option value="">전체</option><option>영업</option><option>구매</option><option>품질</option><option>재고</option><option>마감</option><option>사내</option><option>법인</option><option>신규개발</option><option>기타</option></select>
+      <span class="fb-label" style="margin-left:6px;">대분류</span><select id="rpCat"><option value="">전체</option><option>영업</option><option>구매</option><option>품질</option><option>재고</option><option>마감</option><option>사내</option><option>법인</option><option>추진과제</option><option>신규개발</option><option>기타</option></select>
       <select id="rpWho" title="담당"><option value="">전체 담당</option></select>
       <span class="fb-label" style="margin-left:6px;">거래처</span><input type="text" id="rpFVendor" list="rpFVendorList" placeholder="거래처 (전체)" style="width:130px;height:32px;" onkeydown="if(event.key==='Enter')renderRpWeek()"><datalist id="rpFVendorList"></datalist>
       <span class="fb-label" style="margin-left:6px;">메이커</span><input type="text" id="rpFMaker" list="rpFMakerList" placeholder="메이커 (전체)" style="width:110px;height:32px;" onkeydown="if(event.key==='Enter')renderRpWeek()"><datalist id="rpFMakerList"></datalist>
@@ -1211,6 +1241,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.52 (2026-10-23) — 추진과제 활동 기록 창 신규(tlOv: 어디에 기록되는지 표시 · 일자·활동내용·목표·완료·완료유무·진척 함께 바꾸기·첨부 · 신규 📒 업무일지 / 수정 연동 표시·삭제 확인), 마스터 ＋활동·세부진척현황 수정·＋활동 입력·주간업무 줄 클릭 모두 이 창 / 주간업무에서 추진과제 활동은 대분류 「추진과제」(중분류 = 추진과제명, 내용 앞 [세부과제])
    directive.html v3.51 (2026-10-23) — 추진과제: 과제 선택을 조회줄 맨 앞(마스터·세부진척현황 공용) + 「＋ 등록 ▾」(새 추진과제 / 세부과제), 등록 권한 B안(누구나·주관부서 = 본인 부서), 분야 줄 수정(이름 바꾸기)·＋세부과제, 법인 표기 SMEKR / 일정 머리줄 2단(일별·주별 10/1W·월별) + 세로줄 맨 아래까지·마일스톤 ◆ / 세부진척현황 추진과제 칸(추진과제·분야·세부과제·담당·작성), 부품개발 조건 숨김
    directive.html v3.50 (2026-10-23) — 추진과제 분야 목록(task_projects.areas): 과제 등록 창에서 분야를 먼저 정하고 세부과제가 없어도 분야 줄 표시 + 그 줄에서 「＋ 세부과제」, 담당부서 목록에 재경팀·상무이사 등 추가
    directive.html v3.49 (2026-10-23) — 상단 선택 순서 지시사항·부서별보고·추진과제, 부서별보고 탭 묶음(보고│개발관리│조회)·이름(부품개발 마스터·세부진척현황), 선택 표시 강화(꼬리·메뉴별 탭 줄 색·선택 탭 밑줄·현재 위치 줄·부서 선택 강조) / 「추진과제」 신규: 추진과제 마스터(task_projects·task_items, 일정표 일/주/월, 진척률 담당 입력) + 세부진척현황(dev_items kind='추진과제', 분야=program)
@@ -2670,6 +2701,7 @@ async function dvLoad(){
   dvLogs.forEach(l=>{(dvLogsBy[l.item_id]=dvLogsBy[l.item_id]||[]).push(l);});
   // 건 안에서는 날짜순(날짜 없는 개요 기록은 맨 앞), 같은 날은 입력 순
   Object.keys(dvLogsBy).forEach(k=>{dvLogsBy[k].sort((a,b)=>{const x=a.log_date||'',y=b.log_date||'';return x<y?-1:x>y?1:((a.sort_no||0)-(b.sort_no||0))||(a.id-b.id);});});
+  if(!tkLoaded) await tkLoad();   // v3.52: 주간업무의 추진과제 줄(추진과제명)·활동 창에 필요
   rpBuildDev();
   dvLoaded=true; dvFillFilters(); rpTabVis();
 }
@@ -2900,6 +2932,8 @@ async function dvDelItem(id){
 /* 활동 입력/수정 — v3.23: 따로 있던 「활동 수정」 창을 없애고 「주간업무 수정」 창(rpOv)을 함께 쓴다.
    신규개발 칸(프로젝트 찾기·단계·마스터 단계 상태)은 대분류가 신규개발일 때만 보이고, 저장은 예전처럼 dev_logs 로 간다 */
 function dvOpenLog(logId,itemId,plan){
+  { const lg0=logId?dvLogs.find(l=>l.id===logId):null, it0=lg0?dvIById[lg0.item_id]:(itemId?dvIById[itemId]:null);
+    if((it0&&it0.kind===TK_KIND)||(!lg0&&!it0&&!plan&&curMode==='task')){ rpPass=false; return tlOpen(logId||null,it0?it0.id:null); } }
   if(!dvCanEdit()&&!rpPass){showToast('활동 입력은 개발기획팀·담당 부서와 사장님·상무님만 할 수 있습니다','err');return;}
   const g=k=>document.getElementById(k);
   const lg=logId?dvLogs.find(l=>l.id===logId):null;
@@ -3339,7 +3373,8 @@ async function dvExcel(kind){
 const RP_CATS=['영업','구매','품질','재고','마감','사내','법인','기타'];
 const RP_CORP='법인';   // v3.27: 대분류 「법인」이면 중분류 = 법인명(지시사항의 CORP_DEPTS와 같은 이름)
 const RP_DEV='신규개발';
-const RP_ORDER=['영업','구매','품질','재고','마감','사내','법인',RP_DEV,'기타'];
+const RP_TASK='추진과제';   // v3.52: 추진과제 세부과제 활동은 주간업무에 이 대분류로(중분류 = 추진과제명, 내용 앞 [세부과제])
+const RP_ORDER=['영업','구매','품질','재고','마감','사내','법인',RP_DEV,RP_TASK,'기타'];
 let rpAll=[], rpDev=[], rpById={}, rpEdit=null, rpInit=false;
 let rpSel=[], rpPer=[];   // 고른 기간 키('2026-10' = 그 달 전체, '2026-10-1' = 그 달 1주차). 비어 있으면 전체 기간 / 기간 목록
 let rpCorpPre=null;   // 법인별 탭에서 입력을 누르면 그 법인을 미리 고른다
@@ -3375,8 +3410,9 @@ function rpBuildDev(){
     else{ const mt=/(\d{4})년\s*(\d+)월\s*(\d+)주차/.exec(l.date_text||''); if(mt) wk={y:+mt[1],m:+mt[2],w:+mt[3],range:''}; }
     if(!wk) return;
     const due=/일정\s*(.+)$/.exec(l.date_text||'');
-    rpDev.push({_dev:true,id:'L'+l.id,log:l,it:it,dept:rpLogDept(l,it),rpt_year:wk.y,rpt_month:wk.m,week_no:wk.w,week_range:l.log_date?wk.range:null,kind:'실적',category:RP_DEV,
-      target_date:l.target_date||null,done_date:l.done_date||null,sub_category:it.title||'',vendor:it.vendor||'',maker:it.maker||'',content:l.content||'',assignee:rpLogWho(l),due_date:l.log_date||null,due_text:due?due[1]:null,done_state:l.done_state||null,
+    const isTk=it.kind===TK_KIND, tk=isTk?tkItems.find(x=>x.dev_item_id===it.id):null, tp=tk?tkProjects.find(x=>x.id===tk.project_id):null;
+    rpDev.push({_dev:true,id:'L'+l.id,log:l,it:it,dept:rpLogDept(l,it),rpt_year:wk.y,rpt_month:wk.m,week_no:wk.w,week_range:l.log_date?wk.range:null,kind:'실적',category:isTk?RP_TASK:RP_DEV,
+      target_date:l.target_date||null,done_date:l.done_date||null,sub_category:isTk?((tp&&tp.name)||it.program||''):(it.title||''),vendor:isTk?'':(it.vendor||''),maker:isTk?'':(it.maker||''),content:isTk?'['+(it.title||'')+'] '+(l.content||''):(l.content||''),assignee:rpLogWho(l),due_date:l.log_date||null,due_text:due?due[1]:null,done_state:l.done_state||null,
       attach_text:l.attach_text||null,attach_path:l.attach_path||null});
   });
 }
@@ -3631,7 +3667,7 @@ function tkScaleOpen(ev){
 }
 function tkSetScale(sc){ tkScale=sc; try{localStorage.setItem('tk_scale',sc);}catch(_){} document.getElementById('tkScaleMenu').classList.remove('open'); document.querySelectorAll('#tkWrap,#panel-dvmaster .tbl-wrap').forEach(w=>{ delete w.dataset.scrolled; }); renderCur(); }
 document.addEventListener('click',ev=>{ const m=document.getElementById('tkScaleMenu'); if(m&&m.classList.contains('open')&&!m.contains(ev.target)) m.classList.remove('open'); });
-function tkAddLog(devId){ const t=tkItems.find(x=>x.dev_item_id===devId); if(t&&tkCanEdit(t)) rpPass=true; dvOpenLog(null,devId); }
+function tkAddLog(devId){ return tlOpen(null,devId); }
 function tkGoLog(devId){ const it=dvIById[devId]; switchTab('tklog'); if(it){ dvSetVM('',''); document.getElementById('dvKw').value=it.title||''; dvAllRange(); renderDvLog(); } }
 /* ── 추진과제 등록·수정 ── */
 function tkOpenProj(id){
@@ -3677,6 +3713,71 @@ async function tkDelProj(){
   catch(e){ showToast('오류: '+e.message,'err'); }
 }
 function tkAreaBtns(a,pj){ if(a==='(분야 없음)') return ''; return (tkCanProj(pj)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkRenameArea(this.dataset.a)" title="분야 이름 수정">수정</button> `:'')+(tkCanEdit(null)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkNewIn(this.dataset.a)">＋ 세부과제</button>`:''); }
+/* ── v3.52: 추진과제 활동 기록 창 ── */
+let tlEdit=null, tlItemId=null;
+function tlTask(devId){ const t=tkItems.find(x=>x.dev_item_id===devId)||null, p=t?tkProjects.find(x=>x.id===t.project_id):null; return {t:t,p:p}; }
+function tlOpen(logId,devId){
+  const lg=logId?dvLogs.find(l=>l.id===logId):null; devId=lg?lg.item_id:devId;
+  const pj=devId?tlTask(devId).p:tkCur();
+  if(!pj){ showToast('추진과제를 먼저 선택하세요','err'); return; }
+  const tt=devId?tlTask(devId).t:null;
+  if(!tkCanEdit(tt)){ showToast('활동 기록은 담당자·담당부서·주관부서와 결재권자·개발기획팀만 할 수 있습니다','err'); return; }
+  tlEdit=lg||null; tlItemId=devId||null;
+  const g=k=>document.getElementById(k);
+  g('tlTitle').textContent=lg?'활동 수정':'활동 기록';
+  g('tlPick').style.display=devId?'none':'';
+  if(!devId){ const ar=(pj.areas||[]).slice(); tkItems.forEach(t=>{ if(t.project_id===pj.id&&t.area&&ar.indexOf(t.area)<0) ar.push(t.area); });
+    g('tlArea').innerHTML='<option value="">전체 분야</option>'+ar.map(a=>`<option>${esc(a)}</option>`).join(''); tlFillItems(); }
+  g('tlDate').value=lg?(lg.log_date||''):todayStr(); g('tlText').value=lg?(lg.content||''):'';
+  g('tlTarget').value=lg?(lg.target_date||''):''; g('tlDoneDt').value=lg?(lg.done_date||''):''; g('tlDone').value=lg?(lg.done_state||''):'';
+  g('tlAtt').value=lg?(lg.attach_text||''):''; g('tlPath').value=lg?(lg.attach_path||''):''; g('tlAttBox').open=!!(lg&&(lg.attach_text||lg.attach_path));
+  g('tlDel').style.display=lg?'':'none';
+  g('tlDjRow').style.display=lg?'none':'flex'; g('tlDj').checked=true;
+  g('tlLinked').textContent=lg&&lg.diary_id?'🔗 업무일지 연동됨 — 고치면 일지도 함께 바뀝니다':'';
+  tlItemChange();
+  g('tlOv').classList.add('open'); setTimeout(()=>g(devId?'tlText':'tlItem').focus(),50);
+}
+function tlFillItems(){
+  const pj=tkCur(), a=document.getElementById('tlArea').value;
+  const its=tkItems.filter(t=>pj&&t.project_id===pj.id&&t.dev_item_id&&(!a||t.area===a)&&tkCanEdit(t));
+  document.getElementById('tlItem').innerHTML='<option value="">세부과제 선택</option>'+its.map(t=>`<option value="${t.dev_item_id}">${a?'':esc(t.area||'')+' › '}${esc(t.title)}</option>`).join('');
+  tlItemChange();
+}
+function tlItemChange(){
+  const g=k=>document.getElementById(k), id=tlItemId||+g('tlItem').value||null, o=id?tlTask(id):{t:null,p:tkCur()};
+  const t=o.t, p=o.p;
+  g('tlWhere').innerHTML=`<b>${esc(p?p.name:'')}</b>${t?' › '+esc(t.area||'')+'<br>세부과제: <b>'+esc(t.title)+'</b>':''}<div class="sub">${t?`담당 ${esc(t.owner_name||'-')} · ${esc(t.owner_dept||'')} · 기간 ${esc(md(t.start_date||''))} ~ ${esc(md(t.target_date||''))} · 진척 ${(t.done_date||t.status==='완료')?100:(t.progress||0)}%`:'세부과제를 고르세요'}</div>`;
+  const pg=t?((t.done_date||t.status==='완료')?100:(t.progress||0)):0; g('tlPg').value=pg; g('tlPgV').textContent=pg+'%'; g('tlPgOn').checked=false; g('tlPg').disabled=true;
+  if(t&&!tlEdit&&!g('tlTarget').value&&t.target_date) g('tlTarget').value=t.target_date;
+}
+function tlDoneChange(){ const d=document.getElementById('tlDoneDt'); if(document.getElementById('tlDone').value==='완료'&&!d.value) d.value=document.getElementById('tlDate').value||todayStr(); }
+function tlClose(){ document.getElementById('tlOv').classList.remove('open'); tlEdit=null; tlItemId=null; }
+async function tlSaveLog(){
+  const g=k=>document.getElementById(k), gv=k=>g(k).value.trim();
+  const itemId=tlItemId||+g('tlItem').value||null, date=gv('tlDate'), text=g('tlText').value.replace(/\s+$/,'');
+  if(!itemId){ showToast('세부과제를 고르세요','err'); return; }
+  if(!date){ showToast('일자를 입력해주세요','err'); return; }
+  if(!text.trim()){ showToast('활동내용을 입력해주세요','err'); return; }
+  const o=tlTask(itemId), t=o.t, now=new Date().toISOString();
+  const body={log_date:date,content:text,target_date:gv('tlTarget')||null,done_date:gv('tlDoneDt')||null,done_state:gv('tlDone')||null,attach_text:gv('tlAtt')||null,attach_path:gv('tlPath')||null,updated_at:now};
+  const btn=g('tlSave'); btn.disabled=true;
+  try{
+    if(tlEdit){ await sbPatch('dev_logs',tlEdit.id,body); }
+    else{ const r=await sbPost('dev_logs',Object.assign(body,{item_id:itemId,employee_id:me.id,emp_name:me.name,origin:'추진과제'})); if(g('tlDj').checked) await djMake('project',r[0].id); }
+    // 세부과제 진척·상태
+    if(t){ const tp={}; if(g('tlPgOn').checked) tp.progress=+g('tlPg').value||0;
+      if(body.done_state==='완료'&&t.status!=='완료'&&!t.done_date&&confirm('이 세부과제도 완료로 바꿀까요?\n('+t.title+')')){ tp.status='완료'; tp.done_date=body.done_date||date; tp.progress=100; }
+      else if(t.status==='준비'&&!tlEdit){ tp.status='진행'; }
+      if(Object.keys(tp).length){ tp.updated_at=now; await sbPatch('task_items',t.id,tp); } }
+    tlClose(); await Promise.all([tkLoad(),dvLoad()]); dvApplyDept(); dvFillFilters(); renderCur(); showToast('저장되었습니다','ok');
+  }catch(e){ showToast('오류: '+e.message,'err'); }
+  btn.disabled=false;
+}
+async function tlDelete(){
+  if(!tlEdit||!confirm('정말 삭제하시겠습니까?')) return;
+  try{ await sbPatch('dev_logs',tlEdit.id,{is_deleted:true,updated_at:new Date().toISOString()}); tlClose(); await dvLoad(); dvApplyDept(); renderCur(); showToast('삭제되었습니다','ok'); }
+  catch(e){ showToast('오류: '+e.message,'err'); }
+}
 /* ── 세부과제 등록·수정 ── */
 function tkNewIn(a){ tkOpenItem(null); const el=document.getElementById('tkItArea'); if(el&&document.getElementById('tkItemOv').classList.contains('open')){ el.value=a; document.getElementById('tkItName').focus(); } }
 const TK_DEPTS=()=>{ const l=DV_DEPTS.concat(['재경팀','상무이사','대표이사','법인장']).concat(CORP_DEPTS.filter(c=>c!=='법인전체')); return l.filter((x,i)=>l.indexOf(x)===i); };
