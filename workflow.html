@@ -3635,7 +3635,7 @@ async function loadLinkData(type){
     var iRes=await SB.from('dev_items').select('id,title,vendor,maker,owner_dept,kind,project_id').eq('is_deleted',false).order('id',{ascending:false}).limit(2000);
     if(iRes.error) throw iRes.error;
     linkData.items=iRes.data||[];
-    var mRes=await SB.from('dev_projects').select('id,grp,vendor,maker,product,stages').eq('is_deleted',false).order('id').limit(2000);
+    var mRes=await SB.from('dev_projects').select('id,grp,vendor,maker,product,summary,stages').eq('is_deleted',false).order('id').limit(2000);
     linkData.masters=mRes.error?[]:(mRes.data||[]);
   }else if(type==='weekly'){
     var from=new Date(); from.setDate(from.getDate()-35);
@@ -3886,7 +3886,15 @@ function onLinkPjChange(){
 /* ── 부품개발 마스터 (2026-10-21) ──
    프로젝트가 마스터에 연결돼 있으면 그 마스터를 보여주고, 단계를 고르고 「마스터 단계 상태도 반영」을 켜면 저장 때 마스터 단계 상태를 바꾼다.
    연결이 없으면 같은 거래처·메이커의 마스터 목록에서 골라 연결할 수 있다(dev_items.project_id) */
-function linkMsLabel(m){ return [m.maker||m.vendor||'',m.product||''].filter(Boolean).join(' — ')||('#'+m.id); }
+function linkMsLabel(m){ var sm=String(m.summary||'').split('\n')[0].trim(); if(sm.length>28) sm=sm.slice(0,28)+'…';
+  return [m.maker||m.vendor||'',m.product||'',sm].filter(Boolean).join(' — ')||('#'+m.id); }
+// 2026-10-24: 마스터 목록 오름차순(메이커·거래처 → 제품군 → 내용 → 번호) — 가나다·ABC, 대소문자 무시
+function linkMsSort(a,b){
+  function k(x){ return [x.maker||x.vendor||'',x.product||'',x.summary||'']; }
+  var ka=k(a), kb=k(b);
+  for(var i=0;i<3;i++){ var c=String(ka[i]).localeCompare(String(kb[i]),'ko',{sensitivity:'base',numeric:true}); if(c) return c; }
+  return a.id-b.id;
+}
 function linkMsStateNow(m,stage){ var s=m&&m.stages&&m.stages[stage]; return s&&s.state?s.state+(s.date?' '+linkMd(s.date):''):'없음'; }
 function fillLinkMaster(){
   var box=document.getElementById('dm-link-ms-box'), pv=document.getElementById('dm-link-pj').value;
@@ -3898,9 +3906,9 @@ function fillLinkMaster(){
     sel.innerHTML='<option value="'+cur+'">'+escapeHtml(m?linkMsLabel(m):'마스터 #'+cur)+'</option>'; sel.disabled=true;
   }else{
     var keys=[document.getElementById('dm-maker').value,document.getElementById('dm-partner').value].concat(it?[it.maker,it.vendor]:[]).map(linkKey).filter(Boolean);
-    var hit=ms.filter(function(x){ var k=[linkKey(x.maker),linkKey(x.vendor)]; return keys.some(function(q){ return k.indexOf(q)>=0; }); });
-    var rest=ms.filter(function(x){ return hit.indexOf(x)<0; });
-    sel.innerHTML='<option value="">마스터에 연결 안 함</option>'
+    var hit=ms.filter(function(x){ var k=[linkKey(x.maker),linkKey(x.vendor)]; return keys.some(function(q){ return k.indexOf(q)>=0; }); }).sort(linkMsSort);
+    var rest=ms.filter(function(x){ return hit.indexOf(x)<0; }).sort(linkMsSort);
+    sel.innerHTML='<option value="">마스터에 연결 안 함</option><option value="new">＋ 새 마스터 만들기</option>'
       +(hit.length?'<optgroup label="같은 거래처·메이커">'+hit.map(function(x){ return linkOptHtml(x.id,linkMsLabel(x),''); }).join('')+'</optgroup>':'')
       +'<optgroup label="전체">'+rest.map(function(x){ return linkOptHtml(x.id,linkMsLabel(x),''); }).join('')+'</optgroup>';
     sel.disabled=false;
@@ -3909,12 +3917,14 @@ function fillLinkMaster(){
   onLinkMsChange();
 }
 function onLinkMsChange(){
-  var msId=+document.getElementById('dm-link-ms').value||null, stage=+document.getElementById('dm-link-stage').value||null;
+  var msV=document.getElementById('dm-link-ms').value, msNew=msV==='new';
+  var msId=msNew?null:(+msV||null), stage=+document.getElementById('dm-link-stage').value||null;
   var st=document.getElementById('dm-link-ms-st'), note=document.getElementById('dm-link-ms-note');
-  var can=!!(msId&&stage);
+  var can=!!((msId||msNew)&&stage);
   st.disabled=!can; if(!can) st.value='';
   var m=msId&&(linkData.masters||[]).find(function(x){ return x.id===msId; });
   var linked=document.getElementById('dm-link-ms').disabled;
+  if(msNew){ note.innerHTML='저장하면 <b>새 부품개발 마스터</b>를 만들고 이 프로젝트와 연결합니다 — 거래처·메이커는 일지 칸 값, 내용은 프로젝트명으로 등록됩니다.'+(stage?' 단계 상태를 고르면 함께 기록됩니다.':''); updateLinkHint(); return; }
   note.innerHTML=!msId?'마스터에 연결되지 않은 프로젝트입니다. 위 목록에서 고르면 저장할 때 연결됩니다.'
     :!stage?(linked?'':'저장하면 이 프로젝트를 선택한 마스터에 연결합니다. ')+'단계를 고르면 마스터 단계 상태도 함께 바꿀 수 있습니다.'
     :(linked?'':'저장하면 선택한 마스터에 연결합니다. ')+LINK_NUM[stage-1]+LINK_STAGES[stage-1]+' 현재 상태: <b>'+escapeHtml(linkMsStateNow(m,stage))+'</b>';
@@ -3924,7 +3934,7 @@ function updateLinkPath(){
   var el=document.getElementById('dm-link-path'); if(!el) return;
   var type=document.getElementById('dm-link-type').value;
   var msOn=linkMsChk()&&!!document.getElementById('dm-link-ms').value;
-  var pjT=['세부진척현황','주간업무(신규개발)'].concat(msOn?[document.getElementById('dm-link-ms-st').value?'마스터 단계':'마스터 연결']:[]);
+  var pjT=['세부진척현황','주간업무(신규개발)'].concat(msOn?[document.getElementById('dm-link-ms').value==='new'?'마스터 신규':document.getElementById('dm-link-ms-st').value?'마스터 단계':'마스터 연결']:[]);
   var tgt={directive:['지시사항'].concat(linkDual?pjT:linkDualWk?['주간업무(새 줄)']:[]),weekly:['주간업무'],weekly_row:['주간업무'],project:pjT}[type];
   if(!tgt){ el.style.display='none'; return; }
   el.innerHTML='반영: <b>일지</b> → '+tgt.join(' · ');
@@ -4013,8 +4023,17 @@ function readLinkSel(obj){
   if(type==='project'||(type==='directive'&&linkDual)){
     var pv=document.getElementById('dm-link-pj').value;
     if(!pv){ alert('연동할 프로젝트를 선택해주세요.\n(연동하지 않으려면 「연동 안 함」을 선택하세요)'); return false; }
-    var msSel=linkMsChk()?(+document.getElementById('dm-link-ms').value||null):null, msLinked=document.getElementById('dm-link-ms').disabled, msSt=document.getElementById('dm-link-ms-st');
-    var msInfo={masterId:msSel,connect:!!(msSel&&!msLinked),state:(msSel&&!msSt.disabled&&msSt.value)||null};
+    var msV=linkMsChk()?document.getElementById('dm-link-ms').value:'', msNew=msV==='new';
+    var msSel=msNew?null:(+msV||null), msLinked=document.getElementById('dm-link-ms').disabled, msSt=document.getElementById('dm-link-ms-st');
+    var msInfo={masterId:msSel,connect:!!((msSel||msNew)&&!msLinked),state:((msSel||msNew)&&!msSt.disabled&&msSt.value)||null};
+    if(msNew){   // 2026-10-24: 새 부품개발 마스터 — 저장 때 dev_projects에 만들고 프로젝트와 연결
+      var mIt=pv==='new'?null:(linkData.items||[]).find(function(i){ return String(i.id)===String(pv); });
+      var mV=document.getElementById('dm-partner').value.trim()||(mIt&&mIt.vendor)||'', mM=document.getElementById('dm-maker').value.trim()||(mIt&&mIt.maker)||'';
+      var mT=pv==='new'?document.getElementById('dm-link-pjn-title').value.trim():((mIt&&mIt.title)||'');
+      var mD=pv==='new'?((document.getElementById('dm-link-pjn-dept')||{}).value||''):((mIt&&mIt.owner_dept)||'');
+      if(!mV&&!mM){ alert('새 마스터의 거래처와 메이커 중 하나는 일지의 거래처·메이커 칸에 입력해주세요.'); return false; }
+      msInfo.create={vendor:mV||null,maker:mM||null,summary:mT||null,owner_dept:mD||null};
+    }
     if(pv==='new'){
       var pt=document.getElementById('dm-link-pjn-title').value.trim();
       var pvn=document.getElementById('dm-partner').value.trim(), pmk=document.getElementById('dm-maker').value.trim(), pAdd=false;
@@ -4122,6 +4141,7 @@ async function applyDiaryLink(id,sel){
 }
 // 새 프로젝트(dev_items) 만들기 — 신규개발 단독·지시+신규개발 공용
 async function createLinkPjNew(pn,rec,ms){
+  await ensureLinkMaster(ms);
   if(pn.addPartner){ try{ await SB.from('partners').insert({name:pn.vendor,note:'업무일지에서 등록('+todayStr+' '+wfSession.name+')'}); linkData.partners=null; }catch(e){ console.warn(e); } }
   var mx=await SB.from('dev_items').select('sort_no').order('sort_no',{ascending:false,nullsFirst:false}).limit(1);
   var nextSort=((mx.data&&mx.data[0]&&mx.data[0].sort_no)||0)+1;
@@ -4132,8 +4152,17 @@ async function createLinkPjNew(pn,rec,ms){
   return pins.data.id;
 }
 // 부품개발 마스터: 연결(dev_items.project_id) + 단계 상태(dev_projects.stages) — 업무보고 화면과 같은 저장 방식
+// 2026-10-24: 「＋ 새 마스터 만들기」 — 한 번만 만들고 ms.masterId에 넣는다
+async function ensureLinkMaster(ms){
+  if(!ms||!ms.create||ms.masterId) return;
+  var c=ms.create, ins=await SB.from('dev_projects').insert({grp:'신규개발',vendor:c.vendor,maker:c.maker,summary:c.summary,owner_dept:c.owner_dept,stages:{},
+    origin:'업무일지',created_by:wfSession.empId||null,created_name:wfSession.name}).select('id').single();
+  if(ins.error) throw ins.error;
+  ms.masterId=ins.data.id; delete ms.create; linkData.masters=null;
+}
 async function applyLinkMaster(itemId,ms,stage,date,isNew){
   try{
+    await ensureLinkMaster(ms);
     if(ms.connect&&!isNew){ var u=await SB.from('dev_items').update({project_id:ms.masterId,updated_at:new Date().toISOString()}).eq('id',itemId).is('project_id',null); if(u.error) throw u.error; }
     if(!ms.state||!stage||!ms.masterId) return;
     var g=await SB.from('dev_projects').select('id,stages').eq('id',ms.masterId).single(); if(g.error) throw g.error;
