@@ -539,7 +539,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .topbar .tab{height:30px;padding:0 10px;}
 #cat-legend{display:none;padding:6px 8px;}
 body.m-legend-on #cat-legend{display:flex;}
-.calendar-wrap{padding:0 0 80px;}
+.calendar-wrap{padding:0 0 4px;}
+.days{grid-auto-rows:1fr;min-height:var(--m-days-h,auto);}
 .day-headers{border-radius:0;border-left:0;border-right:0;}
 .days{border-radius:0;border-left:0;border-right:0;}
 .cell-resize-handle{display:none!important;}
@@ -632,7 +633,7 @@ body.m-legend-on #cat-legend{display:flex;}
     </div>
     <div class="right-btns">
       <button class="add-btn" onclick="onAddBtnClick()"><i class="ti ti-plus"></i> <span data-i18n="입력">입력</span></button>
-      <button class="icon-btn m-only" onclick="document.body.classList.toggle('m-legend-on')" title="범례" aria-label="범례"><i class="ti ti-info-circle"></i></button>
+      <button class="icon-btn m-only" onclick="document.body.classList.toggle('m-legend-on');fitMobDays()" title="범례" aria-label="범례"><i class="ti ti-info-circle"></i></button>
       <button class="settings-btn" id="settings-btn" onclick="toggleSettings()"><i class="ti ti-settings"></i></button>
       <div class="nav-group">
         <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}" data-i18n="← 뒤로">← 뒤로</button>
@@ -1703,7 +1704,16 @@ function renderCal(){
       </div>${corpLines}${chipHtml}${more}</div>`;
   }
   document.getElementById('days').innerHTML=html;
+  fitMobDays();
 }
+// 2026-10-24 휴대폰: 달력이 화면 아래 끝까지 차도록 — 남은 높이를 주(행)마다 고르게 나눔(일정 많은 주는 더 커짐)
+function fitMobDays(){
+  const el=document.getElementById('days'); if(!el) return;
+  if(!window.matchMedia('(max-width:768px)').matches||!el.offsetParent){ document.documentElement.style.removeProperty('--m-days-h'); return; }
+  const top=el.getBoundingClientRect().top+window.scrollY, h=Math.floor(window.innerHeight-top-6);
+  document.documentElement.style.setProperty('--m-days-h',Math.max(240,h)+'px');
+}
+window.addEventListener('resize',()=>{ clearTimeout(window._fitMobT); window._fitMobT=setTimeout(fitMobDays,120); });
 
 /* ═══ 일자별 일정 팝업 (work_diary 기반) ═══ */
 function fmtMonthDay(m,d){
@@ -1996,6 +2006,7 @@ function updateNavSub(){
 }
 function switchTab(tab){
   currentTab=tab;
+  if(tab==='cal') setTimeout(fitMobDays,0);
   ['cal','list','todo','diary','share','wfsettings'].forEach(t=>{
     const el=document.getElementById(t+'-view');
     if(el) el.style.display=t===tab?'':'none';
