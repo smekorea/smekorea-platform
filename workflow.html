@@ -522,6 +522,39 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .tabs::-webkit-scrollbar{display:none;}
 .todo-table,.diary-table,.list-table{min-width:0!important;}
 }
+/* 2026-10-24 휴대폰 달력 개선 — 상단 2줄·칸 폭 확대·음력 5일 단위·내용 높이·달력 글자 5단계 (PC 미적용) */
+.m-only{display:none!important;}
+@media screen and (max-width:768px){
+:root{--m-chip-fs:9px;}
+.m-only{display:flex!important;}
+.topbar{padding:6px 6px 4px;gap:4px 2px;}
+.topbar .nav-month{flex:1;min-width:0;}
+.topbar .nav-title{display:none;}
+.topbar .nav-month h2{flex:1;text-align:center;font-size:17px;}
+.topbar .right-btns{gap:0;}
+.topbar .add-btn,.topbar .nav-back{display:none;}
+.topbar .settings-btn{border:none;width:34px;}
+.topbar .nav-home{background:none;border:none;color:var(--text2);padding:0 6px;font-size:13px;}
+.topbar .tabs{order:3;width:100%;}
+.topbar .tab{height:30px;padding:0 10px;}
+#cat-legend{display:none;padding:6px 8px;}
+body.m-legend-on #cat-legend{display:flex;}
+.calendar-wrap{padding:0 0 80px;}
+.day-headers{border-radius:0;border-left:0;border-right:0;}
+.days{border-radius:0;border-left:0;border-right:0;}
+.cell-resize-handle{display:none!important;}
+.day-cell{min-height:calc(var(--m-chip-fs) * 4 + 14px)!important;padding:2px 1px 3px;}
+.day-num{font-size:calc(var(--m-chip-fs) + 3px);width:calc(var(--m-chip-fs) + 11px);height:calc(var(--m-chip-fs) + 11px);}
+.lunar,.other-label{font-size:max(8px,calc(var(--m-chip-fs) - 1px));}
+.week-badge{display:none;}
+.event-chip{font-size:var(--m-chip-fs);text-overflow:clip;border-radius:0;padding:0 2px;line-height:1.5;margin-bottom:1px;}
+.more-chip{font-size:var(--m-chip-fs);}
+.corp-line{font-size:var(--m-chip-fs);}
+.m-fab{position:fixed;right:16px;bottom:20px;width:52px;height:52px;border-radius:26px;border:none;background:var(--accent);color:#fff;font-size:26px;align-items:center;justify-content:center;z-index:30;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer;}
+.m-fs-btns{display:flex;gap:4px;}
+.m-fs-btns button{border:1px solid var(--border);border-radius:6px;width:34px;height:30px;font-size:12px;background:none;color:var(--text1);cursor:pointer;font-family:inherit;}
+.m-fs-btns button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+}
 </style>
 </head>
 <body data-m-keepfont=".lunar,.event-chip,.more-chip,.other-label,.week-badge,.corp-line">
@@ -599,6 +632,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
     </div>
     <div class="right-btns">
       <button class="add-btn" onclick="onAddBtnClick()"><i class="ti ti-plus"></i> <span data-i18n="입력">입력</span></button>
+      <button class="icon-btn m-only" onclick="document.body.classList.toggle('m-legend-on')" title="범례" aria-label="범례"><i class="ti ti-info-circle"></i></button>
       <button class="settings-btn" id="settings-btn" onclick="toggleSettings()"><i class="ti ti-settings"></i></button>
       <div class="nav-group">
         <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}" data-i18n="← 뒤로">← 뒤로</button>
@@ -606,6 +640,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
       </div>
     </div>
   </div>
+  <button class="m-fab m-only" onclick="onAddBtnClick()" aria-label="입력"><i class="ti ti-plus"></i></button>
 
   <div class="settings-dropdown" id="settings-dropdown">
     <h3 data-i18n="⚙ 화면 설정">⚙ 화면 설정</h3>
@@ -625,6 +660,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
         <button class="font-btn" onclick="setFont(this,'12px','11px','20px')" data-i18n="작게">작게</button>
         <button class="font-btn active" onclick="setFont(this,'14px','13px','22px')" data-i18n="보통">보통</button>
         <button class="font-btn" onclick="setFont(this,'16px','15px','26px')" data-i18n="크게">크게</button>
+      </div>
+    </div>
+    <div class="setting-row m-only">
+      <span class="setting-label">달력 글자 (휴대폰)</span>
+      <div class="m-fs-btns" id="m-fs-btns">
+        <button onclick="setCalMFs(1)" title="8px">1</button><button onclick="setCalMFs(2)" title="9px">2</button><button onclick="setCalMFs(3)" title="10px">3</button><button onclick="setCalMFs(4)" title="11px">4</button><button onclick="setCalMFs(5)" title="12px">5</button>
       </div>
     </div>
     <div class="setting-row">
@@ -1577,6 +1618,16 @@ function renderLegend(){
     <div class="cat-item"><div class="cat-dot" style="background:#B3261E"></div>${t('법인 휴무')}</div>`;
 }
 
+// 2026-10-24 휴대폰 달력 글자 5단계 — 기기(브라우저)별 저장, 기본 2단계(9px = 기존 크기)
+const CAL_MFS=[{fs:8,max:5},{fs:9,max:4},{fs:10,max:4},{fs:11,max:3},{fs:12,max:2}];
+function calMFsLevel(){ let v=2; try{ v=+localStorage.getItem('cal_m_fs')||2; }catch(_){} return Math.min(5,Math.max(1,v)); }
+function applyCalMFs(){
+  const lv=calMFsLevel(); document.documentElement.style.setProperty('--m-chip-fs',CAL_MFS[lv-1].fs+'px');
+  document.querySelectorAll('#m-fs-btns button').forEach((b,i)=>b.classList.toggle('active',i===lv-1));
+}
+function setCalMFs(lv){ try{ localStorage.setItem('cal_m_fs',lv); }catch(_){} applyCalMFs(); renderCal(); }
+document.addEventListener('DOMContentLoaded',applyCalMFs);
+(function(){ let mq=window.matchMedia('(max-width:768px)'), f=()=>{ try{ renderCal(); }catch(_){} }; if(mq.addEventListener) mq.addEventListener('change',f); })();
 function renderCal(){
   const y=cur.getFullYear(),m=cur.getMonth();
   document.getElementById('month-label').textContent=
@@ -1587,6 +1638,7 @@ function renderCal(){
   let html='';
   const gmap=buildGroupMap();   // 기간 일정 (n/m) 표시용
   const myCorp=myCorpCode();
+  const isMob=window.matchMedia('(max-width:768px)').matches, mobMax=CAL_MFS[calMFsLevel()-1].max;
   for(let i=0;i<totalCells;i++){
     const date=new Date(y,m,1-startDay+i);
     const dy=date.getFullYear(),dm=date.getMonth(),dd=date.getDate();
@@ -1595,8 +1647,11 @@ function renderCal(){
     const isT=ds===todayStr;
     const dow=date.getDay();
     const isSun=dow===0,isSat=dow===6;
-    const lbl=lunarLabel(dy,dm+1,dd);
+    const lbl0=lunarLabel(dy,dm+1,dd);
     const holiday=isHoliday(dy,dm+1,dd);
+    // 2026-10-24 휴대폰: 음력은 1·5·10·15·20·25·30일(명절)만, 1일은 월/1, 나머지는 음+일
+    let lbl=lbl0;
+    if(isMob&&lbl0){ const ld=+lbl0.split('/').pop(); lbl=(holiday||ld%5===0||ld===1)?(ld===1?lbl0:String(ld)):''; }
     let dayDisplay='';
     if(!isThis) dayDisplay=`<span class="other-label">${dm+1}/${dd}</span>`;
     // work_diary 기반: 일정/진행중/지시/후속필요 (날짜 앞 10자리 비교)
@@ -1632,7 +1687,11 @@ function renderCal(){
     const todoChips=dayTodos.map(t=>
       `<div class="event-chip" style="background:#FFF3E0;border-left-color:#E2772E;color:#111;"
         onclick="event.stopPropagation();">⏰ ${escapeHtml(t.text)}</div>`).join('');
-    const more='';
+    let more='', chipHtml=dirChips+chips+sharedChips+todoChips;
+    if(isMob){   // 휴대폰: 칸당 일정 수 제한(글자 단계별), 나머지는 +N
+      const all=chipHtml.match(/<div class="event-chip[\s\S]*?<\/div>/g)||[];
+      if(all.length>mobMax){ chipHtml=all.slice(0,mobMax).join(''); more=`<div class="more-chip">+${all.length-mobMax}</div>`; }
+    }
     html+=`<div class="day-cell${!isThis?' other-month':''}${isT?' today':''}" onclick="openDayPopup('${ds}')">
       <div class="day-top">
         <div class="lunar${holiday?' lunar-holiday':''}">${lbl?t('음')+lbl:''}</div>
@@ -1641,7 +1700,7 @@ function renderCal(){
                <div class="day-num${(isSun||isCorpOff)?' sun-num':''}${(isSat&&!isCorpOff)?' sat-num':''}${isT?' today-num':''}">${dd}</div>${isSun?`<span class="week-badge">W${isoWeekNo(date)}</span>`:''}
              </div>`
           : dayDisplay}
-      </div>${corpLines}${dirChips}${chips}${sharedChips}${todoChips}${more}</div>`;
+      </div>${corpLines}${chipHtml}${more}</div>`;
   }
   document.getElementById('days').innerHTML=html;
 }
