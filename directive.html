@@ -1147,7 +1147,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 </div></div>
 <!-- 마스터 등록/수정 -->
 <div class="modal-ov" id="dvPrOv"><div class="modal" style="width:860px;">
-  <div class="modal-hd"><span id="dvPrTitle">부품개발 마스터 등록</span><button class="sp-close" onclick="dvClosePr()">✕</button></div>
+  <div class="modal-hd" style="cursor:move;" title="끌어서 옮길 수 있습니다"><span id="dvPrTitle">부품개발 마스터 등록</span><button class="sp-close" onclick="dvClosePr()">✕</button></div>
   <div class="modal-bd" id="dvPrBody"></div>
   <div class="modal-ft"><button class="btn btn-red" id="dvPrDel" onclick="dvDelProj()" style="margin-right:auto;">삭제</button><button class="btn btn-outline" onclick="dvClosePr()">취소</button><button class="btn btn-primary" onclick="dvSaveProj()">저장</button></div>
 </div></div>
@@ -3164,33 +3164,34 @@ function renderDvMaster(){
   { const vs=document.getElementById('dvMsView'); if(vs&&vs.value!==dvMsView) vs.value=dvMsView; }
   if(dvMsView==='gantt') return renderDvMasterGantt();
   document.getElementById('dvMsHead').innerHTML='<tr><th class="fx">No</th><th class="fx fx2">메이커 / 거래처</th><th>제품군</th><th>PART NO</th><th>공급구분</th><th>내용</th><th>연간매출</th><th>목표 등록</th><th>목표 완료</th><th>실행 시작</th><th>실행 완료</th>'
-    +DV_STAGES.map((s,ix)=>`<th>${DV_NUM[ix]}<br>${s}</th>`).join('')+'<th>기타</th><th>최근 활동</th><th>비고</th></tr>';
+    +DV_STAGES.map((s,ix)=>`<th>${DV_NUM[ix]}<br>${s}</th>`).join('')+'<th>기타</th><th>최근 활동</th><th>비고</th><th>처리</th></tr>';
   const list=dvProjList(); let h='', prev=null; const dt=x=>esc(/^\d{4}-\d\d-\d\d$/.test(x||'')?x.slice(2).replace(/-/g,'.'):(x||''));
   list.forEach((p,ix)=>{
     const g=p.grp||'신규개발';
-    if(g!==prev){ h+=`<tr class="dv-grp"><td colspan="22">${esc(g)} · ${list.filter(x=>(x.grp||'신규개발')===g).length}건</td></tr>`; prev=g; }
+    if(g!==prev){ h+=`<tr class="dv-grp"><td colspan="23">${esc(g)} · ${list.filter(x=>(x.grp||'신규개발')===g).length}건</td></tr>`; prev=g; }
     const st=p.stages||{}, last=dvProjLast(p);
     const same=(a,b)=>!!a&&!!b&&(a.grp||'신규개발')===(b.grp||'신규개발')&&dvG(a)===dvG(b);
     const first=!same(list[ix-1],p); let span=1; if(first){ while(same(list[ix+span],p)) span++; }
     h+=`<tr class="p-${dvProjStatus(p)}${first?' g1':''}" onclick="dvOpenProjView(${p.id})"><td class="fx">${p.seq||''}</td>${first?`<td class="l dv-v fx fx2" rowspan="${span}">${esc(dvG(p))}${p.maker&&p.vendor?`<span class="dv-note">${esc(p.vendor)}</span>`:''}</td>`:''}<td class="l">${esc(p.product||'')}</td><td class="l">${esc(p.part_no||'')}</td><td>${esc(p.supply_type||'')}</td><td class="l">${esc(p.summary||'')}</td><td>${esc(p.annual_sales||'')}</td>
       <td>${dt(p.target_reg)}</td><td>${dt(p.target_done)}</td><td>${dt(p.exec_start)}</td><td>${dt(p.exec_done)}</td>`
-      +[1,2,3,4,5,6,7,8].map(k=>`<td>${dvStageCell(st[k])}</td>`).join('')+`<td class="l">${esc(p.stage_etc||'')}</td><td>${last?last.slice(2).replace(/-/g,'.'):''}</td><td class="l">${esc((p.remark||'').slice(0,60))}${(p.remark||'').length>60?'…':''}</td></tr>`;
+      +[1,2,3,4,5,6,7,8].map(k=>`<td>${dvStageCell(st[k])}</td>`).join('')+`<td class="l">${esc(p.stage_etc||'')}</td><td>${last?last.slice(2).replace(/-/g,'.'):''}</td><td class="l">${esc((p.remark||'').slice(0,60))}${(p.remark||'').length>60?'…':''}</td>`
+      +`<td>${dvCanEdit()?`<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();dvOpenProj(${p.id})">수정</button>`:''}</td></tr>`;
   });
   // v3.40: 세부 진척현황에는 있으나 마스터에 없는 프로젝트 — 맨 아래 묶음으로 보여주고 바로 마스터에 등록할 수 있게
   const orph=dvMsOrphans();
   if(orph.length){
-    h+=`<tr class="dv-grp dv-orph" onclick="dvMsOrphOpen=!dvMsOrphOpen;renderDvMaster()" style="cursor:pointer;"><td colspan="22">${dvMsOrphOpen?'▼':'▶'} 마스터 미등록 프로젝트 · ${orph.length}건 <span style="font-weight:400;">— 세부 진척현황에만 있는 건입니다. 눌러서 ${dvMsOrphOpen?'접기':'펼치기'} · 진척관리가 필요하면 「마스터 등록」</span></td></tr>`;
+    h+=`<tr class="dv-grp dv-orph" onclick="dvMsOrphOpen=!dvMsOrphOpen;renderDvMaster()" style="cursor:pointer;"><td colspan="23">${dvMsOrphOpen?'▼':'▶'} 마스터 미등록 프로젝트 · ${orph.length}건 <span style="font-weight:400;">— 세부 진척현황에만 있는 건입니다. 눌러서 ${dvMsOrphOpen?'접기':'펼치기'} · 진척관리가 필요하면 「마스터 등록」</span></td></tr>`;
     (dvMsOrphOpen?orph:[]).forEach(i=>{
       const ls=dvLogsBy[i.id]||[]; let last=''; ls.forEach(l=>{ if(l.log_date&&l.log_date>last) last=l.log_date; });
       h+=`<tr class="p-미등록"><td class="fx"></td><td class="l dv-v fx fx2">${esc(dvG(i))}${i.maker&&i.vendor?`<span class="dv-note">${esc(i.vendor)}</span>`:''}</td><td></td><td></td><td>${esc(i.supply_type||'')}</td><td class="l">${esc(i.title||'')}</td>`
         +'<td></td>'.repeat(4)+[1,2,3,4,5,6,7,8].map(()=>'<td></td>').join('')+`<td class="l" style="color:var(--muted);">활동 ${ls.length}건</td><td>${last?last.slice(2).replace(/-/g,'.'):''}</td>`
-        +`<td class="l">${dvCanEdit()?`<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();dvMsFromItem(${i.id})">마스터 등록</button>`:''}</td></tr>`;
+        +`<td></td><td>${dvCanEdit()?`<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();dvMsFromItem(${i.id})">마스터 등록</button>`:''}</td></tr>`;
     });
   }
-  document.getElementById('dvMsBody').innerHTML=h||'<tr><td colspan="22" class="mt-pick">등록된 신규개발 건이 없습니다</td></tr>';
+  document.getElementById('dvMsBody').innerHTML=h||'<tr><td colspan="23" class="mt-pick">등록된 신규개발 건이 없습니다</td></tr>';
   const c=k=>list.filter(p=>dvProjStatus(p)===k).length;
   document.getElementById('dvMsCnt').textContent='합계 '+list.length+'건 · 진행 '+c('진행')+' · 완료 '+c('완료')+' · Drop '+c('Drop')+(orph.length?' · 미등록 '+orph.length:'');
-  applyResize('dvMsTable','report_dvms_col_v2',[44,140,120,120,76,220,70,76,76,76,76,82,82,82,82,82,82,82,82,120,76,200]);
+  applyResize('dvMsTable','report_dvms_col_v3',[44,140,120,120,76,220,70,76,76,76,76,82,82,82,82,82,82,82,82,120,76,200,90]);
   dvFixLeft();
 }
 // 왼쪽 고정 칸(No·업체)의 위치를 지금 칸 너비에 맞춘다
@@ -3231,8 +3232,18 @@ function dvOpenProj(id){
     +`<div class="form-row" style="margin-top:12px;"><label class="form-label">비고</label><textarea class="form-textarea" id="dvPf-remark" style="min-height:60px;">${esc(p.remark||'')}</textarea></div>`
     +`<div class="form-row"><label class="form-label">메모 (협의 내용 등)</label><textarea class="form-textarea" id="dvPf-memo" style="min-height:80px;">${esc(p.memo||'')}</textarea></div>`;
   document.getElementById('dvPrBody').innerHTML=h;
-  document.getElementById('dvPrOv').classList.add('open');
+  document.getElementById('dvPrOv').classList.add('open'); dvPrPlace();
 }
+// 2026-10-24: 부품개발 마스터 팝업 — 제목줄을 끌어 옮긴다(이 화면을 닫을 때까지 위치 기억)
+let dvPrPos=null;
+function dvPrPlace(){ const m=document.querySelector('#dvPrOv .modal'); if(m) m.style.transform=dvPrPos?`translate(${dvPrPos.x}px,${dvPrPos.y}px)`:''; }
+document.addEventListener('mousedown',ev=>{
+  const hd=ev.target.closest&&ev.target.closest('#dvPrOv .modal-hd'); if(!hd||ev.target.closest('.sp-close')) return;
+  ev.preventDefault(); const b=dvPrPos||{x:0,y:0}, sx=ev.clientX, sy=ev.clientY;
+  const mv=e2=>{ dvPrPos={x:b.x+e2.clientX-sx,y:Math.max(-window.innerHeight/2+20,b.y+e2.clientY-sy)}; dvPrPlace(); };
+  const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+});
 function dvClosePr(){document.getElementById('dvPrOv').classList.remove('open');dvEditProj=null;dvMsLinkItem=null;}
 async function dvSaveProj(){
   const g=id=>document.getElementById(id).value.trim();
