@@ -532,6 +532,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .brief-ft button{height:34px;padding:0 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;border:1px solid #c7cfdc;background:#fff;color:#374151;}
 .brief-ft .brief-edit{background:#1B3A6B;border-color:#1B3A6B;color:#fff;font-weight:700;}
 .dt-row-click{cursor:pointer;}
+#shareConfirmOverlay{align-items:flex-end;}
+@media(min-width:521px){#shareConfirmOverlay{align-items:center;}}
+.brief-share-tag{font-size:11px;padding:2px 8px;border-radius:10px;background:#F3E9FF;color:#5A3286;font-weight:600;white-space:nowrap;}
+.brief-mem{display:flex;justify-content:space-between;padding:5px 12px;border-bottom:1px solid #eef0f4;font-size:12px;}
+.brief-mem:last-child{border-bottom:none;}
 /* 자동완성 목록 — 업무보고(directive.html)와 같은 형식 (2026-10-14) */
 #acDD{display:none;position:fixed;z-index:3000;background:#fff;border:1px solid #c7ccd4;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:264px;overflow:auto;font-size:12px;color:#111827;font-family:'Noto Sans KR',sans-serif;}
 #acDD div{padding:5px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5;}
@@ -2456,7 +2461,7 @@ async function loadSharedCalRecords(){
     var myName = (wfSession.name||'').trim();
     var myEntity = wfSession.entity || '';
     var qRes = await SB.from('work_diary')
-      .select('id,employee_id,date,title,content,category,status,is_shared,share_target,share_type')
+      .select('id,employee_id,date,title,content,content_type,action_type,partner,maker,dept_contact,follow_up,importance,task_stage,task_start_date,task_end_date,category,status,is_shared,share_target,share_type')
       .eq('is_shared', true)
       .neq('employee_id', wfSession.empId)
       .order('date',{ascending:false})
@@ -5483,7 +5488,7 @@ async function loadShareView() {
   var isAdmin = (myDept === '대표이사' || myDept === '상무이사');
   var filter = document.getElementById('shareTypeFilter').value;
   var qRes = await SB.from('work_diary')
-    .select('id,employee_id,date,title,content,content_type,category,status,is_shared,share_target,share_type')
+    .select('id,employee_id,date,title,content,content_type,action_type,partner,maker,dept_contact,follow_up,importance,task_stage,task_start_date,task_end_date,category,status,is_shared,share_target,share_type')
     .eq('is_shared', true)
     .order('date', { ascending: false })
     .limit(300);
@@ -5691,40 +5696,59 @@ function openShareConfirmPopup(rEncoded) {
     });
   }
 
-  var confirmBtn = '';
-  if(!isOwner && !alreadyConfirmed) {
-    confirmBtn = '<button id="shareConfirmBtn" onclick="confirmShare(' + r.id + ')" style="height:42px;padding:0 28px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">✓ 확인</button>';
-  } else if(alreadyConfirmed) {
-    confirmBtn = '<span style="font-size:13px;color:#1e7a45;font-weight:600;">✓ 확인완료</span>';
+  // 2026-10-26: 브리핑창과 같은 양식(네이비 머리줄·항목 표·상자) — 공유 기능(확인 현황·코멘트·복사·확인)은 그대로
+  var esc=escapeHtml, ds=String(r.date||'').slice(0,10), d=new Date(ds+'T00:00:00');
+  var lb=ds?lunarLabel(d.getFullYear(),d.getMonth()+1,d.getDate()):'';
+  var dayTxt=ds?fmtMonthDay(d.getMonth()+1,d.getDate())+' ('+t(DAYS[d.getDay()])+')':'';
+  var status=r.status||'완료';
+  var stC={'일정':['#E6F1FB','#0C447C'],'진행중':['#FFF3E0','#9A4A0B'],'완료':['#EAF3DE','#27500A'],'지시':['#FCEBEB','#A32D2D'],'후속필요':['#FCEBEB','#A32D2D'],'보류':['#F1EFE8','#444441']}[status]||['#F1EFE8','#444441'];
+  var share='';
+  if(r.share_target==='전체') share=t('전체공유');
+  else { try{ share=JSON.parse(r.share_target||'[]').map(function(x){ return CORP_DISPLAY_LABEL[x]||x; }).join(', '); }catch(e){ share=String(r.share_target||''); } }
+  var cell=function(k,v){ return '<div class="k">'+k+'</div><div'+(v?'':' class="none"')+'>'+(v||'-')+'</div>'; };
+  var who=esc(r._empName||'');
+  var memHtml='';
+  if(targetNames.length){
+    memHtml=targetNames.map(function(name){
+      var conf=confirms.find(function(c){ return c.emp_name===name; });
+      return conf
+        ? '<div class="brief-mem"><span style="font-weight:600;color:#111827;">'+esc(name)+'</span><span style="color:#1e7a45;">✓ 확인 '+new Date(conf.confirmed_at).toLocaleDateString('ko-KR')+'</span></div>'
+        : '<div class="brief-mem"><span style="color:#6b7280;">'+esc(name)+'</span><span style="color:#b0b6c0;">○ 미확인</span></div>';
+    }).join('');
   }
-
-  var copyBtn = !isOwner ? '<button onclick="copySharedToMyDiary()" style="height:42px;padding:0 18px;border:1.5px solid #1a4fa0;border-radius:8px;background:#fff;color:#1a4fa0;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">📋 ' + t('내 업무일지로 복사') + '</button>' : '';
-
-  var commentSection = '<div style="margin-bottom:16px;">' +
-    '<div style="font-size:11px;font-weight:700;color:#9a8e82;margin-bottom:8px;">💬 ' + t('코멘트') + '</div>' +
-    '<div id="shareCommentList" style="max-height:180px;overflow-y:auto;margin-bottom:8px;"></div>' +
-    '<div style="display:flex;gap:6px;">' +
-    '<input type="text" id="shareCommentInput" placeholder="' + t('댓글을 입력하세요...') + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addShareComment(' + r.id + ');}" style="flex:1;height:42px;border:1.5px solid #e5ddd4;border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;">' +
-    '<button onclick="addShareComment(' + r.id + ')" style="height:42px;padding:0 16px;border:none;border-radius:8px;background:#1a4fa0;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">' + t('등록') + '</button>' +
-    '</div></div>';
-
-  overlay.innerHTML = '<div class="confirm-popup-box">' +
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">' +
-    '<div><div style="font-size:16px;font-weight:700;color:#1a1612;margin-bottom:4px;">' + (r.title||'') + '</div>' +
-    '<div style="font-size:11px;color:#9a8e82;">' + (r.date||'') + ' · <span style="font-size:14px;font-weight:700;color:#1a1612;">' + (r._empName||'') + '</span> · ' + (r.category||'') + '</div></div>' +
-    '<button onclick="document.getElementById(\'shareConfirmOverlay\').remove()" style="background:none;border:none;font-size:20px;color:#b0a090;cursor:pointer;padding:0 4px;">✕</button>' +
-    '</div>' +
-    '<div style="background:#f7f5f2;border-radius:8px;padding:14px;margin-bottom:16px;">' +
-    '<div style="font-size:11px;font-weight:700;color:#9a8e82;margin-bottom:6px;">' + (r.content_type||'') + '</div>' +
-    '<div style="font-size:13px;color:#1a1612;white-space:pre-wrap;line-height:1.7;">' + (r.content||'(내용 없음)') + '</div>' +
-    '</div>' +
-    (memberRows ? '<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;color:#9a8e82;margin-bottom:8px;">확인 현황 👁 ' + (r._confirmCount||0) + '/' + (r._confirmTotal||0) + '</div>' + memberRows + '</div>' : '') +
-    commentSection +
-    '<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid #f0ede8;flex-wrap:wrap;">' +
-    copyBtn +
-    confirmBtn +
-    '<button onclick="document.getElementById(\'shareConfirmOverlay\').remove()" style="height:42px;padding:0 20px;border:1.5px solid #e5ddd4;border-radius:8px;background:#fff;color:#5a5048;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">닫기</button>' +
-    '</div></div>';
+  var confirmBtn='';
+  if(!isOwner && !alreadyConfirmed) confirmBtn='<button id="shareConfirmBtn" class="brief-edit" onclick="confirmShare('+r.id+')">✓ 확인</button>';
+  else if(alreadyConfirmed) confirmBtn='<span style="font-size:13px;color:#1e7a45;font-weight:600;">✓ 확인완료</span>';
+  var copyBtn=!isOwner?'<button onclick="copySharedToMyDiary()">📋 '+t('내 업무일지로 복사')+'</button>':'';
+  var closeJs="document.getElementById('shareConfirmOverlay').remove()";
+  overlay.onclick=null;   // 바깥을 눌러도 닫히지 않음(버튼으로만)
+  overlay.innerHTML='<div class="brief">'
+    +'<div class="brief-hd"><div class="brief-date">'+dayTxt+(lb?'<small>'+t('음')+lb+'</small>':'')+'</div>'
+    +'<span style="flex:1"></span><span class="brief-share-tag">📢 '+t('공유')+'</span>'
+    +'<span class="brief-pill" style="background:'+stC[0]+';color:'+stC[1]+'">'+t(status)+'</span>'
+    +(r.importance==='상'?'<span class="brief-pill" style="background:#FCEBEB;color:#A32D2D">중요</span>':'')
+    +'<button class="brief-x" onclick="'+closeJs+'" aria-label="닫기">×</button></div>'
+    +'<div class="brief-bd">'
+    +'<div class="brief-ttl">'+esc(r.title||'(제목 없음)')+'</div>'
+    +'<div class="brief-grid">'
+      +cell(t('업무유형'),esc(t(r.category||'')))+cell(t('활동유형'),esc(t(r.action_type||'')))
+      +cell(t('거래처'),esc(r.partner||''))+cell('메이커',esc(r.maker||''))
+      +cell(t('담당부서/담당자'),esc(r.dept_contact||''))+cell(t('내용구분'),esc(t(r.content_type||'')))
+      +cell('작성자(공유자)',who?'<b>'+who+'</b>':'')+cell('공유대상',esc(share))
+      +(r.task_stage?cell('진행단계',esc(r.task_stage))+cell('기간',r.task_start_date?esc(r.task_start_date)+' ~ '+esc(r.task_end_date||''):''):'')
+    +'</div>'
+    +'<div class="brief-box"><div class="brief-box-h">업무 내용</div><div class="brief-content"'+(r.content?'':' style="color:#9ca3af;font-size:13px;"')+'>'+(r.content?esc(r.content):'내용 없음')+'</div></div>'
+    +(r.follow_up?'<div class="brief-box"><div class="brief-box-h">'+t('후속조치')+'</div><div class="brief-content">'+esc(r.follow_up)+'</div></div>':'')
+    +(memHtml?'<div class="brief-box"><div class="brief-box-h">확인 현황 👁 '+(r._confirmCount||0)+'/'+(r._confirmTotal||0)+'</div>'+memHtml+'</div>':'')
+    +'<div class="brief-box"><div class="brief-box-h">💬 '+t('코멘트')+'</div><div style="padding:6px 12px 10px;">'
+      +'<div id="shareCommentList" style="max-height:180px;overflow-y:auto;margin-bottom:8px;"></div>'
+      +'<div style="display:flex;gap:6px;"><input type="text" id="shareCommentInput" placeholder="'+t('댓글을 입력하세요...')+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addShareComment('+r.id+');}" style="flex:1;height:38px;border:1px solid #c7cfdc;border-radius:6px;padding:0 10px;font-size:13px;font-family:inherit;">'
+      +'<button onclick="addShareComment('+r.id+')" style="height:38px;padding:0 14px;border:none;border-radius:6px;background:#1B3A6B;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">'+t('등록')+'</button></div>'
+    +'</div></div>'
+    +'</div><div class="brief-ft">'
+    +'<span class="brief-who">작성 '+dayTxt+(who?' · '+who:'')+'</span>'
+    +copyBtn+'<button onclick="'+closeJs+'">'+t('닫기')+'</button>'+confirmBtn
+    +'</div></div>';
 
   document.body.appendChild(overlay);
   loadShareComments(r.id);
