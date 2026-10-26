@@ -506,6 +506,24 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .ai-msg.user { background:#1a4fa0; color:#fff; align-self:flex-end; }
 .ai-msg.assistant { background:#fff; border:1px solid var(--border); color:var(--text1); align-self:flex-start; }
 .ai-msg.loading { background:#f0ede8; color:var(--text3); align-self:flex-start; font-style:italic; }
+/* 업무 브리핑창 (2026-10-26) — 달력 목록·업무일지 목록에서 누르면 먼저 내용 전체를 보여 주고, 수정은 버튼으로 */
+#brief-overlay{z-index:320;}
+.brief{background:var(--app-bg);border-radius:16px 16px 0 0;width:100%;max-width:640px;max-height:90vh;display:flex;flex-direction:column;border-top:1px solid var(--border);}
+@media(min-width:521px){.brief{border-radius:14px;border:1px solid var(--border);width:min(640px,94vw);max-height:84vh;}}
+.brief-hd{display:flex;align-items:center;gap:8px;padding:14px 18px 10px;border-bottom:1px solid #e5e7eb;flex-shrink:0;user-select:none;}
+@media(min-width:521px){.brief-hd{cursor:move;}}
+.brief-date{font-size:13px;color:#374151;font-weight:600;}
+.brief-date small{font-weight:400;color:#9ca3af;margin-left:4px;}
+.brief-bd{padding:14px 18px;overflow-y:auto;flex:1;}
+.brief-ttl{font-size:18px;font-weight:700;color:#111827;line-height:1.4;margin-bottom:8px;word-break:break-word;}
+.brief-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:#4b5563;padding-bottom:12px;border-bottom:1px dashed #e5e7eb;margin-bottom:12px;}
+.brief-meta b{color:#6b7280;font-weight:500;margin-right:4px;}
+.brief-sec{font-size:11px;font-weight:700;color:#6b7280;margin:12px 0 4px;}
+.brief-content{font-size:14px;line-height:1.75;color:#111827;white-space:pre-wrap;word-break:break-word;}
+.brief-ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid #e5e7eb;flex-shrink:0;}
+.brief-ft button{height:36px;padding:0 16px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:#fff;color:#374151;}
+.brief-ft .brief-edit{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+.dt-row-click{cursor:pointer;}
 /* 자동완성 목록 — 업무보고(directive.html)와 같은 형식 (2026-10-14) */
 #acDD{display:none;position:fixed;z-index:3000;background:#fff;border:1px solid #c7ccd4;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:264px;overflow:auto;font-size:12px;color:#111827;font-family:'Noto Sans KR',sans-serif;}
 #acDD div{padding:5px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5;}
@@ -1382,6 +1400,8 @@ body.m-legend-on #cat-legend{display:flex;}
   </div>
 </div>
 
+<!-- 업무 브리핑창 (보기 전용) — 바깥을 눌러도 닫히지 않음 -->
+<div class="modal-overlay" id="brief-overlay"><div class="brief" id="brief-box"></div></div>
 <div class="modal-overlay" id="scope-modal-overlay" style="z-index:500;">
   <div class="modal" style="max-width:340px;">
     <div class="modal-handle"></div>
@@ -1733,6 +1753,55 @@ function closeDayPopup(){
   document.getElementById('day-popup-overlay').classList.remove('open');
   dpDate=null;
 }
+/* ═══ 업무 브리핑창 (2026-10-26) ═══
+   달력 날짜 목록·업무일지 목록에서 항목을 누르면 내용 전체를 보여 주고, [수정]을 눌러야 수정창으로 간다 */
+var briefId=null, briefFrom=null, briefPos=null;
+function openBrief(id,from){
+  var r=diaryRecords.find(function(x){ return String(x.id)===String(id); }); if(!r){ editDiary(id); return; }
+  briefId=r.id; briefFrom=from||'';
+  var ds=String(r.date||'').slice(0,10), d=new Date(ds+'T00:00:00');
+  var lb=ds?lunarLabel(d.getFullYear(),d.getMonth()+1,d.getDate()):'';
+  var status=r.status||'완료', isSched=ds>=todayStr;
+  var g=buildGroupMap(), gt=grpTag(r,g);
+  var esc=escapeHtml, row=function(k,v){ return v?'<span><b>'+k+'</b>'+v+'</span>':''; };
+  var share='';
+  if(r.is_shared){
+    if(r.share_target==='전체') share=t('전체공유');
+    else { try{ share=JSON.parse(r.share_target||'[]').map(function(x){ return CORP_DISPLAY_LABEL[x]||x; }).join(', '); }catch(e){ share=String(r.share_target||''); } }
+  }
+  var h='<div class="brief-hd" id="brief-hd">'
+    +'<div class="brief-date">'+(ds?fmtMonthDay(d.getMonth()+1,d.getDate())+' ('+t(DAYS[d.getDay()])+')':'')+(lb?'<small>'+t('음')+lb+'</small>':'')+(gt?'<small>기간 일정'+esc(gt)+'</small>':'')+'</div>'
+    +'<span class="status-badge sb-'+esc(status)+'" style="font-size:11px;">'+t(status)+'</span>'
+    +(r.importance==='상'?'<span style="font-size:11px;font-weight:700;color:#E24B4A;">중요</span>':'')
+    +'<span style="flex:1"></span><button class="icon-btn" onclick="closeBrief()" aria-label="닫기"><i class="ti ti-x"></i></button></div>'
+    +'<div class="brief-bd">'
+    +'<div class="brief-ttl">'+esc(r.title||r.partner||'(제목 없음)')+'</div>'
+    +'<div class="brief-meta">'+row(t('업무유형'),esc(t(r.category||'')))+row(t('활동유형'),esc(t(r.action_type||'')))
+      +row(t('거래처'),esc(r.partner||''))+row('메이커',esc(r.maker||''))+row(t('담당부서/담당자'),esc(r.dept_contact||''))
+      +row(t('내용구분'),esc(t(r.content_type||'')))+(r.task_stage?row('진행',esc(r.task_stage)+(r.task_start_date?' · '+esc(r.task_start_date)+' ~ '+esc(r.task_end_date||''):'')):'')+'</div>'
+    +(r.content?'<div class="brief-content">'+esc(r.content)+'</div>':'<div style="color:#9ca3af;font-size:13px;">내용 없음</div>')
+    +(r.follow_up?'<div class="brief-sec">'+t('후속조치')+'</div><div class="brief-content">'+esc(r.follow_up)+'</div>':'')
+    +(r.link_type?'<div class="brief-sec">업무보고 연동</div><div style="pointer-events:none;">'+linkCellHtml(r)+'</div>':'')
+    +(share?'<div class="brief-sec">'+t('공유')+'</div><div style="font-size:13px;color:#374151;">'+esc(share)+'</div>':'')
+    +'</div><div class="brief-ft">'
+    +(isSched&&briefFrom==='day'?'<button onclick="briefConvert()"><i class="ti ti-transfer"></i> '+t('업무일지로 전환')+'</button>':'')
+    +'<button onclick="closeBrief()">'+t('닫기')+'</button>'
+    +'<button class="brief-edit" onclick="briefEdit()"><i class="ti ti-pencil"></i> '+t('수정')+'</button></div>';
+  document.getElementById('brief-box').innerHTML=h;
+  document.getElementById('brief-overlay').classList.add('open');
+  briefPlace();
+}
+function briefPlace(){ var b=document.getElementById('brief-box'); if(b) b.style.transform=(briefPos&&window.innerWidth>=521)?'translate('+briefPos.x+'px,'+briefPos.y+'px)':''; }
+function closeBrief(){ document.getElementById('brief-overlay').classList.remove('open'); briefId=null; }
+function briefEdit(){ var id=briefId, from=briefFrom; closeBrief(); if(from==='day') closeDayPopup(); editDiary(id); }
+function briefConvert(){ var id=briefId; closeBrief(); convertToWorkDiary(id); }
+document.addEventListener('mousedown',function(ev){   // PC: 제목줄을 끌어 옮김(화면을 닫을 때까지 위치 기억)
+  var hd=ev.target.closest&&ev.target.closest('#brief-hd'); if(!hd||window.innerWidth<521||ev.target.closest('button')) return;
+  ev.preventDefault(); var b0=briefPos||{x:0,y:0}, sx=ev.clientX, sy=ev.clientY;
+  var mv=function(e){ briefPos={x:b0.x+e.clientX-sx,y:Math.max(-window.innerHeight/2+30,b0.y+e.clientY-sy)}; briefPlace(); };
+  var up=function(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+});
 function renderDayPopupList(){
   // work_diary에서 해당 날짜 항목
   const list=diaryRecords.filter(r=>r.date===dpDate);
@@ -1787,7 +1856,7 @@ function renderDayPopupList(){
       : '';
     return `<div class="dp-item${isSchedule?' dp-item-schedule':''}">
       <div class="dp-cat-bar" style="background:${barColor}"></div>
-      <div class="dp-item-body" onclick="editDiary('${r.id}');closeDayPopup();" style="cursor:pointer;">
+      <div class="dp-item-body" onclick="openBrief('${r.id}','day')" style="cursor:pointer;" title="눌러서 내용 보기">
         <div class="dp-item-title">${escapeHtml(r.title||r.partner||'')}${grpTag(r,gmapP)}</div>
         <div class="dp-item-cat">${t(r.category||'')} · <span class="status-badge sb-${status}" style="font-size:10px;padding:1px 5px;">${t(status)}</span></div>
         ${r.content?`<div class="dp-item-memo">${escapeHtml(r.content.slice(0,80))}${r.content.length>80?'...':''}</div>`:''}
@@ -3240,7 +3309,7 @@ function renderDiary(){
       const status=r.status||'완료';
       const rowCls=r.is_work_log?'worklog':(status!=='완료'?`status-${status}`:'');
       const sbCls=`sb-${status}`;
-      return `<tr class="${rowCls}">
+      return `<tr class="${rowCls} dt-row-click" onclick="if(!event.target.closest('button,a,input'))openBrief('${r.id}','list')" title="눌러서 내용 보기">
         <td class="dt-date${d.getDay()===0?' dt-date-sun':d.getDay()===6?' dt-date-sat':''}">${dayStr}</td>
         <td class="dt-cat">${t(r.category||'')}</td>
         <td class="dt-action">${t(r.action_type||'')}</td>
