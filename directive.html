@@ -551,6 +551,23 @@ td.dv-c[onclick]{cursor:pointer;}
 .side-panel.float .tl-item{font-size:13.5px;line-height:1.65;}
 .side-panel.float .sp-sep{display:none;}
 @media(max-width:800px){.sp-meta{grid-template-columns:1fr 1fr;}.side-panel.float{left:2vw;top:4vh;}}
+/* v3.66: 지시 상세 창 — 업무보고·업무일지 브리핑창과 같은 주황 양식 (기능은 그대로) */
+.side-panel.float{border:1px solid #c7cfdc;border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.25);}
+.side-panel.float .sp-header{background:#E8711A;border-bottom:0;}
+.side-panel.float .sp-header h3{color:#fff;}
+.side-panel.float .sp-close{color:#FFE9D6;background:none;border:none;font-size:18px;}
+.side-panel.float .sp-close:hover{color:#fff;}
+.side-panel.float .sp-sec{border:1px solid #c7cfdc;border-radius:0;}
+.side-panel.float .sp-sec-hd{background:#FDF1E7;color:#9A4A0B;border-bottom:1px solid #c7cfdc;}
+.side-panel.float .sp-ttl{padding-bottom:8px;border-bottom:2px solid #E8711A;}
+.side-panel.float .sp-meta{gap:0;border-top:1px solid #c7cfdc;border-left:1px solid #c7cfdc;margin:10px 0 12px;}
+.side-panel.float .sp-meta .sp-row{margin:0;padding:6px 10px;border-right:1px solid #c7cfdc;border-bottom:1px solid #c7cfdc;}
+.side-panel.float .sp-meta .sp-label{color:#9A4A0B;font-weight:600;background:none;}
+.sp-foot{display:none;}
+.side-panel.float .sp-foot:not(:empty){display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;padding:10px 16px;border-top:1px solid #e5e7eb;background:#fafbfd;flex-shrink:0;}
+.side-panel.float .sp-foot .sp-actions{margin:0;}
+.side-panel.float .sp-foot .btn-primary{background:#E8711A;border-color:#E8711A;}
+.side-panel.float .sp-foot .sp-fsep{width:1px;height:22px;background:#d1d5db;margin:0 4px;}
 /* 주간업무(v3.15) */
 #panel-rpweek .filter-bar input{font-size:12px;font-family:inherit;color:#111827;height:32px;}
 #panel-rpweek .mt-wrap{padding-bottom:10px;overflow:hidden;}
@@ -1282,6 +1299,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <button class="sp-close" onclick="closePanel()">✕</button>
   </div>
   <div class="sp-body" id="spBody"></div>
+  <div class="sp-foot" id="spFoot"></div>
 </div>
 <!-- ── 업무일지 보기 (입력·연동 칸의 「일지」를 누르면) ── -->
 <!-- 내용 보기 브리핑창 (v3.59) -->
@@ -2305,10 +2323,15 @@ function openPanel(id,stay){
   if(curTab==='list') renderList();   // 선택 행 강조. 패널은 탭을 바꾸지 않고 그 자리에서 연다
   document.getElementById('spTitle').textContent=(d.kind==='공지'?'방침·공지':isReq(d)?'요청':'지시')+' 상세  #'+d.id;
   document.getElementById('spBody').innerHTML=buildPanel(d);
+  // v3.66: 처리 버튼(활동 입력·완료 확인·보류 / 수정·삭제 등)은 창 아래 버튼줄로 모은다 — 기능은 그대로
+  { const ft=document.getElementById('spFoot'), body=document.getElementById('spBody'); ft.innerHTML='';
+    const acts=[...body.querySelectorAll('.sp-actions')].filter(a=>a.querySelector('button'));
+    acts.forEach((a,i)=>{ if(i) ft.insertAdjacentHTML('beforeend','<span class="sp-fsep"></span>'); ft.appendChild(a); });
+    body.querySelectorAll('.sp-section-title').forEach(t=>{ const nx=t.nextElementSibling; if(!nx||nx.classList.contains('sp-section-title')) t.remove(); }); }
   if(d.dev_item_id) spLoadProj(d);
   const sp=document.getElementById('sidePanel'); sp.classList.add('float'); spPlace(sp); sp.classList.add('open');
 }
-function closePanel(){selectedId=null;const sp=document.getElementById('sidePanel');sp.classList.remove('open');sp.classList.remove('float');sp.style.left='';sp.style.top='';if(curTab==='list')renderList();}
+function closePanel(){selectedId=null;{const f=document.getElementById('spFoot'); if(f) f.innerHTML='';}const sp=document.getElementById('sidePanel');sp.classList.remove('open');sp.classList.remove('float');sp.style.left='';sp.style.top='';if(curTab==='list')renderList();}
 // 팝업 위치: 한 번 옮기면 그 자리를 기억한다(이 화면을 닫을 때까지). 화면 밖으로는 나가지 않게 한다
 let spPos=null;
 function spPlace(sp){ if(spPos){ sp.style.left=Math.max(0,Math.min(window.innerWidth-120,spPos.x))+'px'; sp.style.top=Math.max(0,Math.min(window.innerHeight-60,spPos.y))+'px'; } else { sp.style.left=''; sp.style.top=''; } }
@@ -3673,15 +3696,16 @@ async function tkLoad(){
   }catch(e){ tkProjects=[]; tkItems=[]; showToast('추진과제 불러오기 오류: '+e.message,'err'); }
   tkLoaded=true; tkFillProj();
 }
+let tkKeepId=null;   // 새로 등록한 과제를 목록을 다시 채운 뒤 고르기 위한 임시값
 function tkCurId(){ const v=+document.getElementById('tkProjSel').value; return v||null; }
 function tkCur(){ const id=tkCurId(); return tkProjects.find(p=>p.id===id)||null; }
 function tkFillProj(){
-  const sel=document.getElementById('tkProjSel'); let keep=sel.value; if(!keep){ try{keep=localStorage.getItem('tk_proj')||'';}catch(_){} }
-  sel.innerHTML=tkProjects.length?tkProjects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join(''):'<option value="">등록된 추진과제 없음</option>';
-  if(keep&&tkProjects.some(p=>String(p.id)===String(keep))) sel.value=keep;
+  // v3.66: 화면을 처음 열면 「추진과제를 선택하세요」 — 마지막 선택을 기억하지 않는다(같은 화면 안에서는 고른 과제 유지)
+  const sel=document.getElementById('tkProjSel'); const keep=sel.value||tkKeepId||'';
   const opts=tkProjects.map(p=>`<option value="${p.id}">${esc(p.name)}${p.corp?'':' (SMEKR)'}</option>`).join('');
-  const cv=String(sel.value||((tkProjects[0]||{}).id||''));
-  document.querySelectorAll('.tk-psel').forEach(x=>{ x.innerHTML=(opts||'<option value="">등록된 추진과제 없음</option>')+(me?'<option value="__new">＋ 새 추진과제 등록…</option>':''); x.value=cv; });
+  const cv=keep&&tkProjects.some(p=>String(p.id)===String(keep))?String(keep):'';
+  tkKeepId=null;
+  document.querySelectorAll('.tk-psel').forEach(x=>{ x.innerHTML='<option value="">'+(tkProjects.length?'추진과제를 선택하세요':'등록된 추진과제 없음')+'</option>'+opts+(me?'<option value="__new">＋ 새 추진과제 등록…</option>':''); x.value=cv; });
 }
 function tkProjSync(el){
   if(el.value==='__new'){ const cur=tkCurId(); document.querySelectorAll('.tk-psel').forEach(x=>{ x.value=cur||''; }); tkOpenProj(); return; }
@@ -3767,7 +3791,7 @@ async function tkRenameArea(a){
     await Promise.all([tkLoad(),dvLoad()]); dvApplyDept(); dvFillFilters(); renderCur(); showToast('분야 이름을 바꿨습니다','ok');
   }catch(e){ showToast('오류: '+e.message,'err'); }
 }
-function tkProjChange(){ try{localStorage.setItem('tk_proj',document.getElementById('tkProjSel').value);}catch(_){} dvApplyDept(); dvFillFilters(); renderCur(); }
+function tkProjChange(){ dvApplyDept(); dvFillFilters(); renderCur(); }
 function tkCanAdmin(){ return !!me&&(canDecide()||me.dept===DV_DEPT); }
 // v3.51(B안): 추진과제 등록은 누구나(주관부서 = 본인 부서), 수정·삭제는 결재권자·개발기획팀 또는 주관부서
 function tkCanProj(p){ return !!me&&(tkCanAdmin()||!p||p.owner_dept===me.dept); }
@@ -3865,7 +3889,7 @@ function renderTkMaster(){
   document.getElementById('tkAreaList').innerHTML=areas.map(a=>`<option value="${esc(a)}">`).join('');
   document.getElementById('tkWhoList').innerHTML=emps.filter(e=>e.name).map(e=>`<option value="${esc(e.name)}">`).join('');
   document.querySelectorAll('.tk-pedit').forEach(b=>{ b.style.display=pj&&tkCanProj(pj)?'':'none'; });
-  if(!pj){ head.innerHTML='<span>등록된 추진과제가 없습니다.'+(me?' 「＋ 새 추진과제」로 등록하세요.':'')+'</span>'; document.getElementById('tkThead').innerHTML=''; document.getElementById('tkBody').innerHTML=''; document.getElementById('tkCnt').textContent=''; return; }
+  if(!pj){ head.innerHTML='<span>'+(tkProjects.length?'위의 「추진과제」에서 과제를 선택하세요. 마스터와 세부진척현황이 같은 과제로 보입니다.':'등록된 추진과제가 없습니다.'+(me?' 「＋ 새 추진과제」로 등록하세요.':''))+'</span>'; document.getElementById('tkThead').innerHTML=''; document.getElementById('tkBody').innerHTML=''; document.getElementById('tkCnt').textContent=''; return; }
   const agg=tkAgg(all), dd=pj.target_date?dayDiff(todayStr(),pj.target_date):null, lateN=all.filter(tkLate).length, doneN=all.filter(t=>tkStLabel(t)==='완료').length;
   head.innerHTML=`<span class="tk-nm">${esc(pj.name)}</span>`
     +`<span>법인 <b>${esc(pj.corp||'SMEKR')}</b></span>`+(pj.owner_dept?`<span>주관 <b>${esc(pj.owner_dept)}</b></span>`:'')
@@ -4000,8 +4024,8 @@ async function tkSaveProj(){
       // 이름을 바꾼 분야: 세부과제(task_items.area)·세부진척현황(dev_items.program)도 함께
       for(const [o,n] of renames){ for(const t of tkItems.filter(x=>x.project_id===tkEditProj.id&&x.area===o)){ await sbPatch('task_items',t.id,{area:n,updated_at:body.updated_at}); if(t.dev_item_id) await sbPatch('dev_items',t.dev_item_id,{program:n,updated_at:body.updated_at}); } }
       if(renames.length) await dvLoad(); }
-    else{ const r=await sbPost('task_projects',Object.assign(body,{created_by:me.id,created_name:me.name})); try{localStorage.setItem('tk_proj',String(r[0].id));}catch(_){} document.getElementById('tkProjSel').value=''; }
-    tkCloseProj(); await tkLoad(); if(!tkEditProj){ let v=null; try{v=localStorage.getItem('tk_proj');}catch(_){} if(v) document.getElementById('tkProjSel').value=v; }
+    else{ const r=await sbPost('task_projects',Object.assign(body,{created_by:me.id,created_name:me.name})); tkKeepId=r[0].id; }
+    tkCloseProj(); await tkLoad();
     dvApplyDept(); dvFillFilters(); renderCur(); showToast('저장되었습니다','ok');
   }catch(e){ showToast('오류: '+e.message,'err'); }
 }
@@ -4057,7 +4081,7 @@ function renderTkLog(){
       h+=`<tr class="dv-log${ix===0?' g1':''}">${ix===0?lead+itemCells:''}<td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${esc(l.emp_name&&l.emp_name!=='엑셀이관'?l.emp_name:'')}</td>
         <td class="dv-c" onclick="bfLog(${l.id})" title="눌러서 내용 보기">${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>${ix===0?tail:''}</tr>`; });
   });
-  document.getElementById('dvLogBody').innerHTML=h||`<tr><td colspan="${tkHide?11:12}" class="mt-pick">해당하는 세부과제·활동이 없습니다.</td></tr>`;
+  document.getElementById('dvLogBody').innerHTML=h||`<tr><td colspan="${tkHide?11:12}" class="mt-pick">${pj?'해당하는 세부과제·활동이 없습니다.':'위의 「추진과제」에서 과제를 선택하세요.'}</td></tr>`;
   document.getElementById('dvLogCnt').textContent='세부과제 '+groups.length+' · 활동 '+n;
   const W=[140,120,210,66,72,60,360,70,70,130,84];
   if(tkHide){ applyResize('dvLogTable','report_dvlog_tk_h2',W); tsIcons('dvLogTable'); return; }
