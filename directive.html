@@ -620,6 +620,7 @@ td.dv-c[onclick]{cursor:pointer;}
 .dv-hist{border-left:2px solid var(--line-lt);margin:0 0 10px 4px;padding-left:10px;}
 .dv-hist .h{margin-bottom:9px;font-size:12.5px;} .dv-hist .h b{color:var(--point);} .dv-hist .h div{white-space:pre-wrap;line-height:1.5;}
 #printArea{display:none;}
+@media print{.tbl-wrap{max-height:none!important;overflow:visible!important;}}
 @media print{
   @page{size:A4 landscape;margin:10mm;}
   body.printing>*:not(#printArea){display:none !important;}
@@ -1692,6 +1693,7 @@ function openNewWindow(){
 }
 const TAB_PANEL={tklog:'dvlog'};   // 추진과제의 세부진척현황은 부서별보고와 같은 화면(걸러 보이는 건만 다름)
 function switchTab(tab){
+  setTimeout(fitWraps,0);
   curTab=tab;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -1710,7 +1712,17 @@ function updCrumb(){
   el.innerHTML='📍 '+parts.join('');
   const ds=document.getElementById('rpDept'); if(ds) ds.classList.toggle('on',dvCur()!=='전체');
 }
+// v3.64: 표 영역 높이를 화면 아래 끝에 맞춘다 — 가로 스크롤바가 페이지를 내리지 않아도 항상 보이게(표가 하나인 탭만, PC)
+function fitWraps(){
+  if(window.innerWidth<=768) return;
+  const pn=document.querySelector('.tab-panel.active'); if(!pn) return;
+  const ws=[...pn.querySelectorAll('.tbl-wrap')].filter(w=>w.offsetParent!==null); if(ws.length!==1) return;
+  const w=ws[0], top=w.getBoundingClientRect().top+window.scrollY;
+  w.style.maxHeight=Math.max(240,window.innerHeight-top-12)+'px';
+}
+window.addEventListener('resize',()=>{ clearTimeout(window.__fwT); window.__fwT=setTimeout(fitWraps,120); });
 function renderCur(){
+  setTimeout(fitWraps,0);
   updCrumb();
   if(curTab==='list') renderList();
   else if(curTab==='tkmaster') renderTkMaster();
