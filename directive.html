@@ -494,6 +494,16 @@ td.dv-c[onclick]{cursor:pointer;}
 .pj-box.flash{box-shadow:0 0 0 3px rgba(232,113,26,.35);}
 .bf-log.clk{cursor:pointer;} .bf-log.clk:hover{background:#FFF6EE;}
 .bf-ft .bf-del{color:#B91C1C;border-color:#F3B4B4;}
+.cl2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;}   /* v3.61: 부품개발 마스터 — 2줄까지, 넘치면 … */
+.cl2-wrap{white-space:normal!important;}
+.ms-st1{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center;}
+.ms-st1 .dv-note{margin:0;}
+.cl2.dv-note{display:-webkit-box;margin-top:2px;}
+.bf-stg{display:grid;grid-template-columns:128px 1fr;border-bottom:1px solid #eef0f4;font-size:13px;line-height:1.6;}
+.bf-stg:last-child{border-bottom:none;}
+.bf-stg>b{background:#FFFAF5;color:#9A4A0B;font-weight:600;padding:6px 10px;border-right:1px solid #eef0f4;}
+.bf-stg>div{padding:6px 10px;white-space:pre-wrap;word-break:break-word;}
+.bf-stg .dv-note{display:inline;margin-left:6px;}
 .modal{background:#fff;width:780px;max-width:100%;border-top:3px solid var(--point);box-shadow:0 10px 40px rgba(0,0,0,.25);}
 .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700;}
 @media(min-width:521px){.modal-ov .modal-hd{cursor:move;user-select:none;}}
@@ -3189,6 +3199,11 @@ function dvProjLast(p){
   dvI.forEach(i=>{ if(i.project_id===p.id||(!i.project_id&&dvSame(dvG(i),dvG(p)))){ const ls=dvLogsBy[i.id]||[]; ls.forEach(l=>{if(l.log_date&&l.log_date>last)last=l.log_date;}); } });
   return last;
 }
+function dvStageCellT(s){   // v3.61: 표 전용 — 메모는 2줄까지(전체는 브리핑창)
+  if(!s) return '';
+  const d=s.date?s.date.slice(2).replace(/-/g,'.'):'';
+  return `<div class="ms-st1">${s.state?`<span class="dv-st s-${esc(s.state)}">${esc(s.state)}</span>`:''}${d?`<span class="dv-note">${d}</span>`:''}</div>`+(s.note?`<div class="dv-note cl2">${esc(s.note)}</div>`:'');
+}
 function dvStageCell(s){
   if(!s) return '';
   const d=s.date?s.date.slice(2).replace(/-/g,'.'):'';
@@ -3258,9 +3273,9 @@ function renderDvMaster(){
     const st=p.stages||{}, last=dvProjLast(p);
     const same=(a,b)=>!!a&&!!b&&(a.grp||'신규개발')===(b.grp||'신규개발')&&dvG(a)===dvG(b);
     const first=!same(list[ix-1],p); let span=1; if(first){ while(same(list[ix+span],p)) span++; }
-    h+=`<tr class="p-${dvProjStatus(p)}${first?' g1':''}" onclick="dvOpenProjView(${p.id})"><td class="fx">${p.seq||''}</td>${first?`<td class="l dv-v fx fx2" rowspan="${span}">${esc(dvG(p))}${p.maker&&p.vendor?`<span class="dv-note">${esc(p.vendor)}</span>`:''}</td>`:''}<td class="l">${esc(p.product||'')}</td><td class="l">${esc(p.part_no||'')}</td><td>${esc(p.supply_type||'')}</td><td class="l">${esc(p.summary||'')}</td><td>${esc(p.annual_sales||'')}</td>
+    h+=`<tr class="p-${dvProjStatus(p)}${first?' g1':''}" onclick="dvOpenProjView(${p.id})"><td class="fx">${p.seq||''}</td>${first?`<td class="l dv-v fx fx2" rowspan="${span}">${esc(dvG(p))}${p.maker&&p.vendor?`<span class="dv-note">${esc(p.vendor)}</span>`:''}</td>`:''}<td class="l">${esc(p.product||'')}</td><td class="l">${esc(p.part_no||'')}</td><td>${esc(p.supply_type||'')}</td><td class="l cl2-wrap"><div class="cl2">${esc(p.summary||'')}</div></td><td>${esc(p.annual_sales||'')}</td>
       <td>${dt(p.target_reg)}</td><td>${dt(p.target_done)}</td><td>${dt(p.exec_start)}</td><td>${dt(p.exec_done)}</td>`
-      +[1,2,3,4,5,6,7,8].map(k=>`<td>${dvStageCell(st[k])}</td>`).join('')+`<td class="l">${esc(p.stage_etc||'')}</td><td>${last?last.slice(2).replace(/-/g,'.'):''}</td><td class="l">${esc((p.remark||'').slice(0,60))}${(p.remark||'').length>60?'…':''}</td>`
+      +[1,2,3,4,5,6,7,8].map(k=>`<td class="cl2-wrap">${dvStageCellT(st[k])}</td>`).join('')+`<td class="l cl2-wrap"><div class="cl2">${esc(p.stage_etc||'')}</div></td><td>${last?last.slice(2).replace(/-/g,'.'):''}</td><td class="l cl2-wrap"><div class="cl2">${esc(p.remark||'')}</div></td>`
       +`<td>${dvCanEdit()?`<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();dvOpenProj(${p.id})">수정</button>`:''}</td></tr>`;
   });
   // v3.40: 세부 진척현황에는 있으나 마스터에 없는 프로젝트 — 맨 아래 묶음으로 보여주고 바로 마스터에 등록할 수 있게
@@ -3286,21 +3301,28 @@ function dvFixLeft(){
   const w0=parseInt(ths[0].style.width)||44;
   document.querySelectorAll('#dvMsTable .fx').forEach(el=>{el.style.left=el.classList.contains('fx2')?w0+'px':'0px';});
 }
-function dvOpenProjView(id){
+// v3.61: 부품개발 마스터 보기 — 오른쪽 창 대신 주황 브리핑창(줄 어디를 눌러도). 수정은 [수정] → 마스터 수정창
+function dvOpenProjView(id){ bfProj(id); }
+function bfProj(id){
   const p=dvPById[id]; if(!p) return;
-  selectedId=null;
-  const st=p.stages||{}, kv=(a,b)=>`<b>${a}</b><span style="white-space:pre-wrap;">${esc(b||'-')}</span>`;
+  const st=p.stages||{}, ed=dvCanEdit();
   const linked=dvI.filter(i=>i.project_id===p.id||(!i.project_id&&dvSame(dvG(i),dvG(p))));
-  let h=`<div class="dv-kv">${kv('구분',p.grp)}${kv('담당부서',dvOwner(p))}${kv('거래처',p.vendor)}${kv('메이커',p.maker)}${kv('제품군',p.product)}${kv('PART NO',p.part_no)}${kv('공급구분',p.supply_type)}${kv('내용',p.summary)}${kv('연간매출',p.annual_sales)}
-    ${kv('목표일자','등록 '+(p.target_reg||'-')+' / 완료 '+(p.target_done||'-'))}${kv('실행일자','시작 '+(p.exec_start||'-')+' / 완료 '+(p.exec_done||'-'))}</div>
-    <div class="sp-section-title">단계</div><div class="dv-kv">`+DV_STAGES.map((s,ix)=>`<b>${DV_NUM[ix]}${s}</b><span>${dvStageCell(st[ix+1])||'-'}</span>`).join('')+kv('기타',p.stage_etc)+`</div>
-    <div class="sp-section-title">거래조건</div><div class="dv-kv">${kv('물류조건',p.term_logistics)}${kv('매입','마감 '+(p.buy_closing||'-')+' / 결제 '+(p.buy_payment||'-')+' / '+(p.buy_currency||'-'))}${kv('매출','마감 '+(p.sell_closing||'-')+' / 결제 '+(p.sell_payment||'-')+' / '+(p.sell_currency||'-'))}${kv('비고',p.remark)}${p.memo?kv('메모',p.memo):''}</div>
-    <div class="sp-actions">${dvCanEdit()?`<button class="btn btn-primary btn-sm" onclick="dvOpenProj(${id})">수정</button>`:''}<button class="btn btn-outline btn-sm" onclick="closePanel();dvGoVendor('${esc(dvG(p)).replace(/'/g,"\\'")}')">세부 진척현황 보기</button></div>
-    <div class="sp-section-title">이 업체의 건 (${linked.length})</div>`
-    +(linked.map(i=>{const ls=dvLogsBy[i.id]||[];return `<div class="sp-value" style="margin-bottom:5px;cursor:pointer;" onclick="dvOpenItem(${i.id})">▸ ${esc(i.title||'(이름 없음)')} <span style="color:#9aa1ab;">· 활동 ${ls.length}건${ls.length&&ls[ls.length-1].log_date?' · 최근 '+ls[ls.length-1].log_date:''}</span></div>`;}).join('')||'<span style="color:#9aa1ab;font-size:12px;">세부 진척 기록 없음</span>');
-  document.getElementById('spTitle').textContent='부품개발 마스터';
-  document.getElementById('spBody').innerHTML=h;
-  document.getElementById('sidePanel').classList.add('open');
+  const stRows=DV_STAGES.map((nm,ix)=>{ const x=st[ix+1]; return `<div class="bf-stg"><b>${DV_NUM[ix]}${esc(nm)}</b><div>${x?(x.state?`<span class="dv-st s-${esc(x.state)}">${esc(x.state)}</span>`:'')+(x.date?`<span class="dv-note">${esc(bfYmd(x.date))}</span>`:'')+(x.note?`\n${esc(x.note)}`:''):'<span style="color:#9ca3af;">-</span>'}</div></div>`; }).join('')
+    +(p.stage_etc?`<div class="bf-stg"><b>기타</b><div>${esc(p.stage_etc)}</div></div>`:'');
+  const cond=[['물류조건',p.term_logistics],['매입','마감 '+(p.buy_closing||'-')+' / 결제 '+(p.buy_payment||'-')+' / '+(p.buy_currency||'-')],['매출','마감 '+(p.sell_closing||'-')+' / 결제 '+(p.sell_payment||'-')+' / '+(p.sell_currency||'-')]]
+    .map(c=>`<div class="bf-stg"><b>${c[0]}</b><div>${esc(c[1]||'-')}</div></div>`).join('');
+  const vq=esc(dvG(p)).replace(/'/g,"\\'");
+  bfShow({head:'부품개발 마스터',sub:p.grp||'',pills:[dvProjStatus(p),p.supply_type],
+    title:[dvG(p),p.product,p.summary].filter(Boolean).join(' — '),
+    cells:[['거래처',esc(p.vendor||'')],['메이커',esc(p.maker||'')],['제품군',esc(p.product||'')],['PART NO',esc(p.part_no||'')],
+      ['공급구분',esc(p.supply_type||'')],['연간매출',esc(p.annual_sales||'')],['담당부서',esc(dvOwner(p))],['구분',esc(p.grp||'')],
+      ['목표일자',esc('등록 '+(p.target_reg||'-')+' / 완료 '+(p.target_done||'-'))],['실행일자',esc('시작 '+(p.exec_start||'-')+' / 완료 '+(p.exec_done||'-'))]],
+    boxes:[['단계 (①~⑧)',stRows],['내용',bfTxt(p.summary)],['거래조건',cond],['비고',bfTxt(p.remark)],['메모',bfTxt(p.memo)],
+      ['연결 프로젝트 ('+linked.length+') — 누르면 프로젝트',linked.length?linked.map(i=>{ const ls=dvLogsBy[i.id]||[], lt=ls.reduce((m,l)=>l.log_date&&l.log_date>m?l.log_date:m,'');
+        return `<div class="bf-log clk" onclick="bfItem(${i.id})"><b>${esc(i.title||'(이름 없음)')}</b><i>활동 ${ls.length}건${lt?' · 최근 '+esc(bfYmd(lt)):''}</i></div>`; }).join(''):'<div class="bf-content" style="color:#9ca3af;font-size:13px;">세부 진척 기록 없음</div>']],
+    who:p.created_name?'등록 · '+esc(p.created_name):'',
+    btns:[['세부 진척현황 보기',`bfClose();dvGoVendor('${vq}')`]],
+    edit:ed?()=>dvOpenProj(id):null});
 }
 const DV_PF=[['grp','구분'],['seq','No'],['owner_dept','담당부서'],['vendor','거래처'],['maker','메이커'],['product','제품군'],['part_no','PART NO'],['supply_type','공급구분'],['annual_sales','연간매출'],['summary','내용'],
   ['target_reg','목표일자 — 등록'],['target_done','목표일자 — 완료'],['exec_start','실행일자 — 시작'],['exec_done','실행일자 — 완료'],
@@ -4578,6 +4600,18 @@ async function rpSave(){
   if(!b.content.trim()){showToast('세부내용을 입력해주세요','err');return;}
   if(b.category===RP_CORP&&!b.sub_category){showToast('법인을 선택해주세요','err');return;}
   // v3.18: 거래처 칸은 거래처 정보, 메이커 칸은 메이커관리 기준. 거래처는 없으면 물어보고 등록, 메이커는 없으면 관리자설정에서 등록하라고 알린다(엑셀에서 온 기존 이름은 바꾸지 않는 한 묻지 않는다)
+  // v3.61: 같은 거래처·메이커의 신규개발 프로젝트가 있으면 — 프로젝트 활동은 주간업무에 「신규개발」 줄로 자동 표시되므로 따로 적으면 두 번 보인다
+  if(!rpEdit&&b.category!==RP_CORP&&b.category!==RP_TASK&&(b.maker||b.vendor)){
+    const hit=(dvAllI||[]).filter(i=>!i.is_deleted&&i.kind!==TK_KIND&&(b.maker?(i.maker&&dvSame(i.maker,b.maker)):(i.vendor&&dvSame(i.vendor,b.vendor))));
+    if(hit.length){
+      const nm=hit.slice(0,3).map(i=>'· '+(i.title||'(이름 없음)')).join('\n')+(hit.length>3?'\n· 외 '+(hit.length-3)+'건':'');
+      if(confirm('같은 거래처·메이커의 신규개발 프로젝트가 있습니다.\n'+nm+'\n\n이 프로젝트 활동으로 기록하면 주간업무에도 「신규개발」 줄로 자동 표시됩니다.\n(주간업무 줄로 따로 적으면 같은 내용이 두 번 보입니다)\n\n[확인] 신규개발 활동으로 바꿔 입력   [취소] 주간업무 줄로 그대로 저장')){
+        const g=k=>document.getElementById(k); g('rpFmCat').value=RP_DEV; rpCatChange();
+        g('dvLgVendor').value=b.maker||b.vendor; dvLgKeep=true; dvLogVendorChange(hit[0].id); dvLogItemChange();
+        showToast('신규개발 활동으로 바꿨습니다 — 프로젝트를 확인하고 저장하세요','ok'); return;
+      }
+    }
+  }
   const pc=rpCheckPartner(b.vendor,rpEdit&&rpEdit.vendor); if(pc===false) return;
   const mkn=rpCheckMaker(b.maker,rpEdit&&rpEdit.maker); if(mkn===false) return; b.maker=mkn||null;
   const newVendor=pc.isNew;
@@ -4726,18 +4760,20 @@ function lkPj(l,itemId){ const ed=dvCanEdit();
 function lkDir(u){ return lkHtml(lkNodesDir(u),{'일지':u.diary_id?`lkDj(${u.diary_id})`:'','지시사항':`openPanel(${u.directive_id})`},'lk-mini'); }
 function lkWkLog(l){ return lkHtml(lkNodesWkLog(l),{'일지':`lkDj(${l.diary_id})`},'lk-mini'); }
 // 업무일지 보기(읽기 전용) — 연동된 일지 내용 확인용
+// v3.61: 연동된 업무일지 보기 — 주황 브리핑창(읽기 전용, 수정은 워크플로우에서)
 async function lkDj(id){
-  const ov=document.getElementById('lkDjOv'), bd=document.getElementById('lkDjBody');
-  bd.innerHTML='<div class="form-hint">불러오는 중…</div>'; ov.classList.add('open');
+  bfShow({head:'업무일지',title:'불러오는 중…',cells:[]});
   try{
-    const r=(await sbGetAll('work_diary','select=id,date,status,title,content,emp_name,partner,maker,origin,link_type&id=eq.'+(+id)))[0];
-    if(!r){ bd.innerHTML='<div class="form-hint">업무일지를 찾을 수 없습니다 (삭제되었을 수 있습니다).</div>'; return; }
-    const row=(k,v)=>`<div class="sp-row"><div class="sp-label">${k}</div><div class="sp-value" style="white-space:pre-wrap;">${v}</div></div>`;
-    bd.innerHTML=row('작성자 · 일자',esc(r.emp_name||'')+' · '+esc(r.date||''))+row('상태',esc(r.status||''))+(r.partner?row('거래처',esc(r.partner)):'')+(r.maker?row('메이커',esc(r.maker)):'')
-      +row('제목',esc(r.title||''))+(r.content?row('내용',esc(r.content)):'')
-      +row('입력한 곳',r.origin==='업무보고'?'업무보고 화면 (업무일지는 자동 기록)':'업무일지')
-      +'<div class="form-hint">업무일지 수정은 워크플로우 화면에서 합니다. 업무보고 쪽 활동을 고치면 일지도 함께 바뀝니다.</div>';
-  }catch(e){ bd.innerHTML='<div class="form-hint">불러오기 오류: '+esc(e.message)+'</div>'; }
+    const r=(await sbGetAll('work_diary','select=id,date,status,title,content,emp_name,partner,maker,origin,link_type,category,action_type,follow_up,importance&id=eq.'+(+id)))[0];
+    if(!r){ bfShow({head:'업무일지',title:'업무일지를 찾을 수 없습니다 (삭제되었을 수 있습니다)',cells:[]}); return; }
+    bfShow({head:bfDay(r.date),sub:'업무일지',pills:[r.status,r.importance==='상'?'중요':''],
+      title:r.title||'(제목 없음)',
+      cells:[['작성자',esc(r.emp_name||'')],['일자',esc(bfYmd(r.date))],['업무유형',esc(r.category||'')],['활동유형',esc(r.action_type||'')],['거래처',esc(r.partner||'')],['메이커',esc(r.maker||'')],
+        ['입력한 곳',r.origin==='업무보고'?'업무보고 화면 (업무일지는 자동 기록)':'업무일지'],['연동',esc({project:'부품개발(진척현황)',weekly:'주간업무',weekly_row:'주간업무 줄',directive:'지시사항'}[r.link_type]||'')]],
+      boxes:[['업무 내용',bfTxt(r.content)||'<div class="bf-content" style="color:#9ca3af;font-size:13px;">내용 없음</div>'],['후속조치',bfTxt(r.follow_up)],
+        ['안내','<div class="bf-content" style="font-size:12px;color:#6b7280;">업무일지 수정은 워크플로우 화면에서 합니다. 업무보고 쪽 활동을 고치면 일지도 함께 바뀝니다.</div>']],
+      who:r.emp_name?'작성 '+esc(bfDay(r.date))+' · '+esc(r.emp_name):''});
+  }catch(e){ bfShow({head:'업무일지',title:'불러오기 오류: '+e.message,cells:[]}); }
 }
 function lkDjClose(){ document.getElementById('lkDjOv').classList.remove('open'); }
 
