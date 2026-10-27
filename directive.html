@@ -459,6 +459,35 @@ tbody tr.row-late td{background:#fff7f7;}
 /* 등록 모달 */
 .modal-ov{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:500;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 12px;}
 .modal-ov.open{display:flex;}
+/* ── 내용 보기 브리핑창 (v3.59, 2026-10-27) — 업무일지 브리핑창과 같은 양식, 제목줄 주황 ── */
+.bf-ov{z-index:600;}
+@media(min-width:521px){.bf-ov{align-items:center;}}
+.bf{background:#fff;border-radius:10px;width:min(680px,96vw);max-height:88vh;display:flex;flex-direction:column;border:1px solid #c7cfdc;overflow:hidden;color:#111827;box-shadow:0 10px 30px rgba(15,23,42,.25);}
+.bf-hd{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px;background:#E8711A;color:#fff;flex-shrink:0;user-select:none;}
+@media(min-width:521px){.bf-hd{cursor:move;}}
+.bf-date{font-size:14px;color:#fff;font-weight:600;}
+.bf-date small{font-weight:400;color:#FFE3CC;font-size:11px;margin-left:6px;}
+.bf-pill{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;background:#fff;color:#B4530F;}
+.bf-x{background:none;border:none;color:#FFE9D6;font-size:20px;cursor:pointer;width:30px;height:30px;line-height:1;}
+.bf-x:hover{color:#fff;}
+.bf-bd{padding:14px 16px;overflow-y:auto;flex:1;}
+.bf-ttl{font-size:17px;font-weight:700;color:#111827;line-height:1.45;padding-bottom:10px;border-bottom:2px solid #E8711A;margin-bottom:12px;word-break:break-word;white-space:pre-wrap;}
+.bf-grid{display:grid;grid-template-columns:96px minmax(0,1fr) 96px minmax(0,1fr);border-top:1px solid #c7cfdc;border-left:1px solid #c7cfdc;}
+.bf-grid>div{padding:6px 10px;border-right:1px solid #c7cfdc;border-bottom:1px solid #c7cfdc;font-size:12px;min-height:30px;display:flex;align-items:center;word-break:break-word;}
+.bf-grid .k{background:#FDF1E7;color:#9A4A0B;font-weight:600;white-space:nowrap;}
+.bf-grid .none{color:#9ca3af;}
+.bf-box{margin-top:12px;border:1px solid #c7cfdc;}
+.bf-box-h{background:#FDF1E7;color:#9A4A0B;font-weight:600;font-size:12px;padding:6px 10px;border-bottom:1px solid #c7cfdc;}
+.bf-content{padding:10px 12px;font-size:14px;line-height:1.75;color:#111827;white-space:pre-wrap;word-break:break-word;}
+.bf-log{padding:7px 12px;border-bottom:1px solid #eef0f4;font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word;}
+.bf-log:last-child{border-bottom:none;}
+.bf-log b{color:#9A4A0B;margin-right:8px;font-weight:600;} .bf-log i{font-style:normal;color:#7A808A;margin-left:6px;font-size:11px;}
+.bf-ft{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid #e5e7eb;background:#fafbfd;flex-shrink:0;flex-wrap:wrap;}
+.bf-who{flex:1;font-size:12px;color:#6b7280;}
+.bf-ft button{height:34px;padding:0 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;border:1px solid #c7cfdc;background:#fff;color:#374151;}
+.bf-ft .bf-edit{background:#E8711A;border-color:#E8711A;color:#fff;font-weight:700;}
+@media(max-width:520px){.bf{width:100%;}.bf-grid{grid-template-columns:90px minmax(0,1fr);}.bf-who{flex:0 0 100%;}.bf-ft{justify-content:flex-end;}}
+td.dv-c[onclick]{cursor:pointer;}
 .modal{background:#fff;width:780px;max-width:100%;border-top:3px solid var(--point);box-shadow:0 10px 40px rgba(0,0,0,.25);}
 .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700;}
 .modal-bd{padding:18px 20px 6px;}
@@ -1208,6 +1237,8 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
   <div class="sp-body" id="spBody"></div>
 </div>
 <!-- ── 업무일지 보기 (입력·연동 칸의 「일지」를 누르면) ── -->
+<!-- 내용 보기 브리핑창 (v3.59) -->
+<div class="modal-ov bf-ov" id="bfOv"><div class="bf" id="bfBox"></div></div>
 <div class="modal-ov" id="lkDjOv" onclick="if(event.target===this)lkDjClose()">
   <div class="modal" style="width:560px;">
     <div class="modal-hd"><span>업무일지 보기</span><button class="sp-close" onclick="lkDjClose()">✕</button></div>
@@ -2872,7 +2903,7 @@ function renderDvLog(){
         <td class="dv-v"${CK(it)}><div class="dv-stk">${C2(it)}</div></td>
         <td class="dv-ti" onclick="dvOpenItem(${it.id})" title="상세"><div class="dv-stk">${esc(it.title||'(이름 없음)')}${task?'':dvCorpTag(it)}</div></td><td>${C4(it)}</td>
         <td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${C6(l)}</td>
-        <td class="dv-c"${ed?` onclick="dvOpenLog(${l.id})" title="눌러서 수정"`:''}>${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>
+        <td class="dv-c" onclick="bfLog(${l.id})" title="눌러서 내용 보기">${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>
         <td>${ed?`<button class="btn btn-outline mt-btn" onclick="dvOpenLog(${l.id})">수정</button>`:''}</td></tr>`;
     });
     document.getElementById('dvLogBody').innerHTML=h||'<tr><td colspan="11" class="mt-pick">해당하는 활동 기록이 없습니다. 기간이나 업체를 바꿔 보세요.</td></tr>';
@@ -2891,7 +2922,7 @@ function renderDvLog(){
     g.logs.forEach((l,ix)=>{
       n++;
       h+=`<tr class="dv-log${ix===0?' g1':''}">${ix===0?head:''}<td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${C6(l)}</td>
-        <td class="dv-c"${ed?` onclick="dvOpenLog(${l.id})" title="눌러서 수정"`:''}>${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>${ix===0?tail:''}</tr>`;
+        <td class="dv-c" onclick="bfLog(${l.id})" title="눌러서 내용 보기">${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>${ix===0?tail:''}</tr>`;
     });
   });
   document.getElementById('dvLogBody').innerHTML=h||'<tr><td colspan="11" class="mt-pick">해당하는 활동 기록이 없습니다. 기간이나 업체를 바꿔 보세요.</td></tr>';
@@ -3320,8 +3351,8 @@ function renderDvPlan(){
     if(wkOn&&wk!==prev){ prev=wk; const k=plKey(p), g=grp[wk];
       h+=`<tr class="rp-wk"><td colspan="6"><span>${k.y}년 ${k.mo}월 ${k.w}주차 (${rpRangeOf(k.y,k.mo,k.w)}) · 계획 ${g.length} · 기록됨 ${g.filter(x=>x.log_id).length}</span></td></tr>`; }
     const lg=p.log_id?dvLogs.find(l=>l.id===p.log_id):null;
-    h+=`<tr><td class="dv-d">${esc(rpMd(p.week_date))}</td><td class="dv-v" onclick="dvGoVendor('${esc(p.vendor||'').replace(/'/g,"\\'")}')">${esc(p.vendor||'')}</td><td>${esc(p.kind||'')}</td><td class="dv-c">${esc(p.content||'')}</td>
-      <td class="dv-c">${lg?`<b style="color:var(--point);">${esc(lg.log_date||'')}</b> ${esc(lg.content||'')}`:'<span style="color:#9aa1ab;">아직 기록 없음</span>'}</td>
+    h+=`<tr><td class="dv-d">${esc(rpMd(p.week_date))}</td><td class="dv-v" onclick="dvGoVendor('${esc(p.vendor||'').replace(/'/g,"\\'")}')">${esc(p.vendor||'')}</td><td>${esc(p.kind||'')}</td><td class="dv-c" onclick="bfPlan(${p.id})" title="눌러서 내용 보기">${esc(p.content||'')}</td>
+      <td class="dv-c" onclick="bfPlan(${p.id})" title="눌러서 내용 보기">${lg?`<b style="color:var(--point);">${esc(lg.log_date||'')}</b> ${esc(lg.content||'')}`:'<span style="color:#9aa1ab;">아직 기록 없음</span>'}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="plOpen(${p.id})">수정</button>`+(lg?'':`<button class="btn btn-outline mt-btn" onclick="dvPlanToLog(${p.id})" title="실행한 내용을 세부 진척현황에 기록합니다">진척으로 기록</button>`)+`<button class="btn btn-red mt-btn" onclick="dvDelPlan(${p.id})">삭제</button>`:''}</td></tr>`;
   });
   document.getElementById('dvPlanBody').innerHTML=h||'<tr><td colspan="6" class="mt-pick">해당하는 계획이 없습니다. 기간을 바꿔 보세요.</td></tr>';
@@ -3891,7 +3922,7 @@ function renderTkLog(){
     if(!x.logs.length){ h+=`<tr class="g1">${lead}${itemCells}<td class="dv-d">-</td><td></td><td style="color:#9aa1ab;">활동 기록 없음</td><td></td><td></td><td></td>${tail}</tr>`; return; }
     x.logs.forEach((l,ix)=>{ n++;
       h+=`<tr class="dv-log${ix===0?' g1':''}">${ix===0?lead+itemCells:''}<td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${esc(l.emp_name&&l.emp_name!=='엑셀이관'?l.emp_name:'')}</td>
-        <td class="dv-c"${ed?` onclick="tlOpen(${l.id})" title="눌러서 수정"`:''}>${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>${ix===0?tail:''}</tr>`; });
+        <td class="dv-c" onclick="bfLog(${l.id})" title="눌러서 내용 보기">${esc(l.content||'')}${rpAttMark(l)}</td><td class="dv-d">${esc(rpMd(l.target_date))}</td><td class="dv-d">${rpDoneCell(l)}</td><td>${lkPj(l,it.id)}</td>${ix===0?tail:''}</tr>`; });
   });
   document.getElementById('dvLogBody').innerHTML=h||`<tr><td colspan="${tkHide?11:12}" class="mt-pick">해당하는 세부과제·활동이 없습니다.</td></tr>`;
   document.getElementById('dvLogCnt').textContent='세부과제 '+groups.length+' · 활동 '+n;
@@ -4100,7 +4131,7 @@ function renderRpWeek(){
     h+=`<tr class="rp-row${dev?' rp-dev':''}"><td>${esc(r.dept.replace(/팀$/,''))}</td><td><span class="rp-k k-${r.kind==='계획'?'p':'r'}">${esc(r.kind)}</span></td>
       <td>${cat?`<span class="rp-c${dev?' dev':''}">${esc(cat)}</span>`:''}</td><td${dev?` class="dv-ti" onclick="dvOpenItem(${r.it.id})" title="프로젝트 상세"`:''}>${esc(r.sub_category||'')}</td>
       <td class="${dev?'dv-v':'rp-v'}"${dev?` onclick="dvOpenItem(${r.it.id})" title="프로젝트 상세"`:''}>${esc(r.vendor||'')}</td><td>${esc(r.maker||'')}</td>
-      <td class="dv-c"${ed?` onclick="${open}" title="눌러서 수정"`:''}>${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td><td class="dv-d">${esc(rpDueText(r))}</td><td class="dv-d">${esc(rpMd(r.target_date))}</td>
+      <td class="dv-c" onclick="${dev?`bfLog(${r.log.id})`:`bfWk(${r.id})`}" title="눌러서 내용 보기">${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td><td class="dv-d">${esc(rpDueText(r))}</td><td class="dv-d">${esc(rpMd(r.target_date))}</td>
       <td class="dv-d">${r.done_date?esc(rpMd(r.done_date)):(r.done_state?`<span class="dv-st s-${r.done_state==='완료'?'완료':'진행중'}">${esc(r.done_state)}</span>`:'')}</td><td>${dev?lkPj(r.log,r.it.id):lkWk(r)}</td><td>${att}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="${open}">수정</button>`:''}</td></tr>`;
   });
@@ -4187,7 +4218,7 @@ function renderCorp(){
     const ed=rpCanEdit(r.dept);
     return `<tr class="rp-row"><td class="dv-d">${esc(rpMd(r.due_date))||esc(r.rpt_month+'월 '+(r.week_no||'')+'주')}</td><td>${esc(cpCorpOfRow(r)||'')}</td><td>${esc((r.dept||'').replace(/팀$/,''))}</td>
       <td><span class="rp-k k-${r.kind==='계획'?'p':'r'}">${esc(r.kind||'')}</span></td>
-      <td class="dv-c"${ed?` onclick="rpOpen(${r.id})" title="눌러서 수정"`:''}>${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td>
+      <td class="dv-c" onclick="bfWk(${r.id})" title="눌러서 내용 보기">${esc(r.content||'')}${rpLogsHtml(r)}</td><td>${esc(r.assignee||'')}</td>
       <td class="dv-d">${esc(rpMd(r.target_date))}</td><td class="dv-d">${r.done_date?esc(rpMd(r.done_date)):(r.done_state?`<span class="dv-st s-${r.done_state==='완료'?'완료':'진행중'}">${esc(r.done_state)}</span>`:'')}</td><td>${lkWk(r)}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="rpOpen(${r.id})">수정</button>`:''}</td></tr>`;
   }).join('')||'<tr><td colspan="10" class="mt-pick">해당하는 주간업무가 없습니다. 「＋ 주간업무 입력」에서 대분류 「법인」으로 기록하면 여기에 모입니다.</td></tr>';
@@ -4257,7 +4288,7 @@ async function renderVm(auto){
   const items=dvAllI.filter(i=>!i.is_deleted&&(vmHit(i.vendor,qk)||vmHit(i.maker,qk)));
   const itemIds=items.map(i=>i.id);
   items.forEach(i=>(dvLogsBy[i.id]||[]).forEach(l=>rows.push({k:'pj',date:l.log_date||'',vendor:i.vendor,maker:i.maker,ref:i.title||'(이름 없음)',
-    text:l.content||'',who:rpLogWho(l),st:l.done_date?'완료 '+rpMd(l.done_date):(l.target_date?'목표 '+rpMd(l.target_date):(l.stage?dvStageName(l.stage):'')),lk:lkPj(l,i.id),open:`dvOpenItem(${i.id})`})));
+    text:l.content||'',who:rpLogWho(l),st:l.done_date?'완료 '+rpMd(l.done_date):(l.target_date?'목표 '+rpMd(l.target_date):(l.stage?dvStageName(l.stage):'')),lk:lkPj(l,i.id),open:`dvOpenItem(${i.id})`,bf:`bfLog(${l.id})`})));
   // 프로젝트는 있는데 활동이 없는 건도 한 줄로
   items.filter(i=>!(dvLogsBy[i.id]||[]).length).forEach(i=>rows.push({k:'pj',date:'',vendor:i.vendor,maker:i.maker,ref:i.title||'(이름 없음)',text:'(활동 기록 없음)',who:'',st:'',open:`dvOpenItem(${i.id})`}));
   // ② 주간업무
@@ -4265,7 +4296,7 @@ async function renderVm(auto){
     const logs=rpLogsOf(r);
     rows.push({k:'wk',date:r.due_date||'',vendor:r.vendor,maker:r.maker,ref:(r.dept||'').replace(/팀$/,'')+(r.category?' · '+r.category:''),
       text:(r.content||'')+(logs.length?'\n'+logs.map(l=>'· '+rpMd(l.log_date||'')+' '+(l.content||'')).join('\n'):''),who:r.assignee||'',
-      st:r.done_date?'완료 '+rpMd(r.done_date):(r.done_state||(r.target_date?'목표 '+rpMd(r.target_date):r.kind||'')),lk:lkWk(r),open:rpCanEdit(r.dept)?`rpOpen(${r.id})`:''});
+      st:r.done_date?'완료 '+rpMd(r.done_date):(r.done_state||(r.target_date?'목표 '+rpMd(r.target_date):r.kind||'')),lk:lkWk(r),open:rpCanEdit(r.dept)?`rpOpen(${r.id})`:'',bf:`bfWk(${r.id})`});
   });
   // ③ 지시사항
   const ql=q.toLowerCase();
@@ -4294,7 +4325,7 @@ async function renderVm(auto){
   document.getElementById('vmBody').innerHTML=list.map(r=>`<tr class="rp-row${r.done?' row-done':''}"><td class="dv-d">${esc(r.date?r.date.slice(2).replace(/-/g,'.'):'')}</td>
     <td><span class="vm-k vm-${r.k}">${KL[r.k]}</span></td><td>${esc(r.vendor||'')}</td><td>${esc(r.maker||'')}</td>
     <td${r.open?` class="clk" onclick="${r.open}" title="눌러서 열기"`:''}>${esc(r.ref||'')}</td>
-    <td class="dv-c" style="white-space:pre-wrap;"${r.open?` onclick="${r.open}"`:''}>${esc(r.text||'')}</td><td>${esc(r.who||'')}</td><td>${esc(r.st||'')}</td><td>${r.lk||''}</td></tr>`).join('')
+    <td class="dv-c" style="white-space:pre-wrap;"${(r.bf||r.open)?` onclick="${r.bf||r.open}"`:''}${r.bf?' title="눌러서 내용 보기"':''}>${esc(r.text||'')}</td><td>${esc(r.who||'')}</td><td>${esc(r.st||'')}</td><td>${r.lk||''}</td></tr>`).join('')
     ||'<tr><td colspan="9" class="mt-pick">해당하는 기록이 없습니다. 이름을 줄여서(예: 「스위치」) 다시 찾아보세요.</td></tr>';
   document.getElementById('vmCnt').textContent='합계 '+list.length+'건';
   applyResize('vmTable','report_vm_col_v2',[76,80,140,120,200,620,80,100,150]);
@@ -4639,6 +4670,87 @@ async function lkDj(id){
   }catch(e){ bd.innerHTML='<div class="form-hint">불러오기 오류: '+esc(e.message)+'</div>'; }
 }
 function lkDjClose(){ document.getElementById('lkDjOv').classList.remove('open'); }
+
+/* ═══ 내용 보기 브리핑창 (v3.59, 2026-10-27) ═══
+   주간업무·세부 진척현황·금주계획·법인별·추진과제·거래처/메이커 검색에서 내용 칸을 누르면 전체 내용을 보여 주고,
+   [수정]을 눌러야 기존 수정창으로 간다 (처리 칸의 [수정] 버튼은 그대로 바로 수정창) */
+let bfEditFn=null, bfPos=null;
+const BF_DAYS=['일','월','화','수','목','금','토'];
+function bfDay(d){ if(!d) return ''; const x=new Date(String(d).slice(0,10)+'T00:00:00'); return isNaN(x)?String(d):(x.getMonth()+1)+'월 '+x.getDate()+'일 ('+BF_DAYS[x.getDay()]+')'; }
+function bfShow(o){
+  bfEditFn=o.edit||null;
+  const cell=(k,v)=>`<div class="k">${k}</div><div${v?'':' class="none"'}>${v||'-'}</div>`;
+  const cells=(o.cells||[]).filter(c=>c); if(cells.length%2) cells.push(['','']);
+  let h=`<div class="bf-hd" id="bfHd"><div class="bf-date">${o.head||''}${o.sub?'<small>'+o.sub+'</small>':''}</div><span style="flex:1"></span>`
+    +(o.pills||[]).filter(Boolean).map(p=>`<span class="bf-pill">${esc(p)}</span>`).join('')
+    +`<button class="bf-x" onclick="bfClose()" aria-label="닫기">×</button></div><div class="bf-bd">`
+    +`<div class="bf-ttl">${o.title?esc(o.title):'(내용 없음)'}</div>`
+    +`<div class="bf-grid">${cells.map(c=>c[0]?cell(c[0],c[1]):'<div class="k"></div><div></div>').join('')}</div>`
+    +(o.boxes||[]).filter(b=>b&&b[1]).map(b=>`<div class="bf-box"><div class="bf-box-h">${b[0]}</div>${b[1]}</div>`).join('')
+    +`</div><div class="bf-ft"><span class="bf-who">${o.who||''}</span><button onclick="bfClose()">닫기</button>`
+    +(bfEditFn?`<button class="bf-edit" onclick="bfEdit()">✎ 수정</button>`:'')+`</div>`;
+  document.getElementById('bfBox').innerHTML=h;
+  document.getElementById('bfOv').classList.add('open');
+  bfPlace();
+}
+function bfPlace(){ const b=document.getElementById('bfBox'); if(b) b.style.transform=(bfPos&&window.innerWidth>=521)?'translate('+bfPos.x+'px,'+bfPos.y+'px)':''; }
+function bfClose(){ document.getElementById('bfOv').classList.remove('open'); bfEditFn=null; }
+function bfEdit(){ const f=bfEditFn; bfClose(); if(f) f(); }
+function bfTxt(s){ return s?`<div class="bf-content">${esc(s)}</div>`:''; }
+function bfLk(html){ return html?`<div class="bf-content" style="pointer-events:none;font-size:12px;">${html}</div>`:''; }
+function bfAtt(r){ const tx=r.attach_text&&!rpIsAbs(r.attach_text)?r.attach_text:'', pth=r.attach_path||(rpIsAbs(r.attach_text)?r.attach_text:'');
+  return (tx||pth)?esc(tx)+(pth?(tx?'<br>':'')+'<span style="color:#6b7280;">'+esc(pth)+'</span>':''):''; }
+function bfDone(r){ return r.done_date?esc(rpMd(r.done_date))+(r.done_state?' · '+esc(r.done_state):''):esc(r.done_state||''); }
+// 주간업무 한 줄
+function bfWk(id){
+  const r=rpById[id]; if(!r) return;
+  const logs=rpLogsOf(r), rg=r.week_range||rpRangeOf(r.rpt_year,r.rpt_month,r.week_no);
+  bfShow({head:`${r.rpt_year}년 ${r.rpt_month}월 ${r.week_no||'-'}주차`,sub:rg,pills:[r.kind,r.done_state],
+    title:r.content,
+    cells:[['부서',esc(r.dept||'')],['담당',esc(r.assignee||'')],['대분류',esc(r.category||'')],['중분류',esc(r.sub_category||'')],
+      ['거래처',esc(r.vendor||'')],['메이커',esc(r.maker||'')],['작성일자',esc(rpDueText(r))],['목표일정',esc(rpMd(r.target_date))],
+      ['완료일정',bfDone(r)],['첨부',bfAtt(r)]],
+    boxes:[['일자별 활동 ('+logs.length+')',logs.length?logs.map(l=>`<div class="bf-log"><b>${esc(rpMd(l.log_date))}</b>${esc(rpLogText(r,l)||'(제목과 같음)')}${l.emp_name&&l.emp_name!==r.assignee?`<i>${esc(l.emp_name)}</i>`:''}</div>`).join(''):''],
+      ['연동',bfLk(lkWk(r))]],
+    who:r.emp_name?'작성 · '+esc(r.emp_name):'',
+    edit:rpCanEdit(r.dept)?()=>rpOpen(r.id):null});
+}
+function bfFindLog(id){ let l=dvLogs.find(x=>x.id===id); if(l) return l; for(const k in dvLogsBy){ l=(dvLogsBy[k]||[]).find(x=>x.id===id); if(l) return l; } return null; }
+// 세부 진척현황·추진과제 활동 한 건
+function bfLog(id){
+  const l=bfFindLog(id); if(!l) return;
+  const it=dvIById[l.item_id]||(dvAllI||[]).find(x=>x.id===l.item_id)||{}, tk=it.kind===TK_KIND;
+  const tt=tk?tlTask(it.id):null, inCur=dvLogs.some(x=>x.id===id);
+  let edit=null;
+  if(tk){ if(tkCanEdit(tt&&tt.t)) edit=()=>tlOpen(id); }
+  else if(dvCanEdit()) edit=inCur?()=>dvOpenLog(id):()=>dvOpenItem(it.id);
+  bfShow({head:l.log_date?bfDay(l.log_date):(l.date_text||''),pills:[tk?'추진과제':'세부 진척현황',l.done_state],
+    title:it.title||'(이름 없음)',
+    cells:tk?[['추진과제',esc((tt&&tt.p&&tt.p.name)||it.program||'')],['담당부서',esc(dvOwner(it))],['작성자',esc(rpLogWho(l))],['목표일정',esc(rpMd(l.target_date))],['완료일정',bfDone(l)],['첨부',bfAtt(l)]]
+      :[['거래처',esc(it.vendor||'')],['메이커',esc(it.maker||'')],['담당부서',esc(dvOwner(it))],['단계',esc(dvStageName(l.stage))],
+        ['작성자',esc(rpLogWho(l))],['목표일정',esc(rpMd(l.target_date))],['완료일정',bfDone(l)],['첨부',bfAtt(l)]],
+    boxes:[['활동 내용',bfTxt(l.content)||'<div class="bf-content" style="color:#9ca3af;font-size:13px;">내용 없음</div>'],['연동',bfLk(lkPj(l,it.id))]],
+    who:l.log_date?'작성 '+esc(bfDay(l.log_date))+(rpLogWho(l)?' · '+esc(rpLogWho(l)):''):'',
+    edit:edit});
+}
+// 금주계획 한 건
+function bfPlan(id){
+  const p=dvPlans.find(x=>x.id===id); if(!p) return;
+  const w=p.week_date?rpWeekOf(p.week_date):null, lg=p.log_id?bfFindLog(p.log_id):null;
+  bfShow({head:w?`${w.y}년 ${w.m}월 ${w.w}주차`:'금주계획',sub:w?w.range:'',pills:['금주계획',lg?'기록됨':'미기록'],
+    title:p.content,
+    cells:[['일자',esc(bfDay(p.week_date))],['구분',esc(p.kind||'')],['거래처',esc(p.vendor||'')],['담당부서',esc(p.owner_dept||'')],['작성자',esc(p.emp_name||'')],['상태',esc(p.status||'')]],
+    boxes:[['기록된 진척 활동',lg?`<div class="bf-log"><b>${esc(rpMd(lg.log_date))}</b>${esc(lg.content||'')}</div>`:'<div class="bf-content" style="color:#9ca3af;font-size:13px;">아직 세부 진척현황에 기록되지 않았습니다.</div>']],
+    who:p.emp_name?'작성 · '+esc(p.emp_name):'',
+    edit:dvCanEdit()?()=>plOpen(p.id):null});
+}
+document.addEventListener('mousedown',function(ev){   // PC: 제목줄을 끌어 옮김(화면을 닫을 때까지 위치 기억)
+  const hd=ev.target.closest&&ev.target.closest('#bfHd'); if(!hd||window.innerWidth<521||ev.target.closest('button')) return;
+  ev.preventDefault(); const b0=bfPos||{x:0,y:0}, sx=ev.clientX, sy=ev.clientY;
+  const mv=e=>{ bfPos={x:b0.x+e.clientX-sx,y:Math.max(-window.innerHeight/2+30,b0.y+e.clientY-sy)}; bfPlace(); };
+  const up=()=>{ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+});
 let djEdit=null;
 function djCanEdit(u,d){ return !!me&&!!u.diary_id&&!!u.content&&d.status!=='완료'&&(u.employee_id===me.id||canDecide()); }
 function djFind(id){ for(const k in updMap){ const u=updMap[k].find(x=>x.id===id); if(u) return u; } return null; }
