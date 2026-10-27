@@ -488,6 +488,12 @@ tbody tr.row-late td{background:#fff7f7;}
 .bf-ft .bf-edit{background:#E8711A;border-color:#E8711A;color:#fff;font-weight:700;}
 @media(max-width:520px){.bf{width:100%;}.bf-grid{grid-template-columns:90px minmax(0,1fr);}.bf-who{flex:0 0 100%;}.bf-ft{justify-content:flex-end;}}
 td.dv-c[onclick]{cursor:pointer;}
+.pj-box{border:1px solid #F3C49B;background:#FFFAF5;border-radius:6px;padding:10px 12px 12px;margin:2px 0 14px;}
+.pj-box-hd{font-size:13px;font-weight:700;color:#9A4A0B;margin-bottom:8px;}
+.pj-box-hd span{font-weight:400;color:#7A808A;font-size:11.5px;margin-left:6px;}
+.pj-box.flash{box-shadow:0 0 0 3px rgba(232,113,26,.35);}
+.bf-log.clk{cursor:pointer;} .bf-log.clk:hover{background:#FFF6EE;}
+.bf-ft .bf-del{color:#B91C1C;border-color:#F3B4B4;}
 .modal{background:#fff;width:780px;max-width:100%;border-top:3px solid var(--point);box-shadow:0 10px 40px rgba(0,0,0,.25);}
 .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700;}
 @media(min-width:521px){.modal-ov .modal-hd{cursor:move;user-select:none;}}
@@ -1070,6 +1076,27 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       </div>
       <div class="form-row" id="dvLgMsRow"><label class="form-label">부품개발 마스터 단계 상태 <span style="color:var(--muted);font-weight:400;" id="dvLgMsName"></span></label>
         <select class="form-select" id="dvLgMsState"><option value="">변경 안 함</option><option value="진행중">진행중</option><option value="완료">완료 (이 일자로 기록)</option><option value="Drop">Drop</option></select></div>
+      <!-- v3.60: 프로젝트 정보 — 오른쪽 「프로젝트 상세」 창을 없애고 이 창에서 함께 수정 -->
+      <div id="dvPjBox" class="pj-box" style="display:none;">
+        <div class="pj-box-hd">프로젝트 정보 <span>공통 — 바꾸면 이 프로젝트의 모든 활동에 적용됩니다</span></div>
+        <div class="form-row-2">
+          <div class="form-row"><label class="form-label">거래처 / 과제 <span style="color:var(--muted);font-weight:400;">(거래처 정보)</span></label><input class="form-input" id="dvPjVendor" list="rpVendorList"></div>
+          <div class="form-row"><label class="form-label">메이커 <span style="color:var(--muted);font-weight:400;">(메이커관리)</span></label><input class="form-input" id="dvPjMaker" list="rpMakerList" placeholder="메이커관리에서 선택"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row"><label class="form-label">프로젝트명</label><input class="form-input" id="dvPjTitle"></div>
+          <div class="form-row"><label class="form-label">구분 / 공급구분</label><div style="display:flex;gap:6px;"><select class="form-select" id="dvPjKind" style="width:130px;"><option value="업체개발">업체 개발</option><option value="법인과제">법인·과제</option></select><input class="form-input" id="dvPjSup" list="dvSupList" placeholder="사급 / 직거래"></div></div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-row"><label class="form-label">담당부서</label><select class="form-select" id="dvPjDept"></select></div>
+          <div class="form-row"><label class="form-label">법인</label><select class="form-select" id="dvPjCorp" onchange="dvPjCorpChange()"></select></div>
+          <div class="form-row"><label class="form-label">대과제</label><input class="form-input" id="dvPjProg" list="dvPjProgList" placeholder="예: LG CKD 이관"><datalist id="dvPjProgList"></datalist></div>
+        </div>
+        <div class="form-row-2" style="margin-bottom:0;">
+          <div class="form-row" style="margin-bottom:0;"><label class="form-label">부품개발 마스터</label><select class="form-select" id="dvPjProj"></select></div>
+          <div class="form-row" style="margin-bottom:0;"><label class="form-label">비고</label><input class="form-input" id="dvPjRemark"></div>
+        </div>
+      </div>
     </div>
     <div class="form-row-2" id="rpFmVmRow">
       <div class="form-row"><label class="form-label">거래처 <span style="color:var(--muted);font-weight:400;">(공급업체·고객사·법인 — 거래처 정보)</span></label><input class="form-input" id="rpFmVendor" list="rpVendorList" placeholder="거래처 정보에서 선택 (없으면 입력 → 등록)"></div>
@@ -2952,53 +2979,68 @@ function dvDirective(itemId){
   document.getElementById('fmTitleIn').focus();
 }
 
-/* 건 상세(오른쪽 창) */
-function dvOpenItem(id){
-  const it=dvIById[id]; if(!it) return;
-  selectedId=null;
-  const logs=dvLogsBy[id]||[], ed=dvCanEdit(), pj=it.project_id?dvPById[it.project_id]:null, dirs=dvDirCount(id);
-  const cand=dvAllP.filter(p=>dvSame(dvG(p),dvG(it))||(it.vendor&&dvSame(p.vendor,it.vendor)));
-  let h=`<div class="dv-kv"><b>구분</b><span>${it.kind==='법인과제'?'법인·과제':'업체 개발'}</span><b>거래처 / 과제</b><span>${esc(it.vendor||'-')}</span><b>메이커</b><span>${esc(it.maker||'-')}</span><b>프로젝트</b><span>${esc(it.title||'-')}</span><b>법인 / 대과제</b><span>${esc(it.corp||'-')} / ${esc(it.program||'-')}</span><b>담당부서</b><span>${esc(dvOwner(it))}</span><b>공급구분</b><span>${esc(it.supply_type||'-')}</span>
-    <b>등록 / 완료</b><span>${esc(it.reg_text||'-')} / ${esc(it.done_text||'-')}</span><b>목표일자</b><span>${esc(it.target_text||'-')}</span><b>비고</b><span style="white-space:pre-wrap;">${esc(it.remark||'-')}</span>
-    <b>마스터</b><span>${pj?`<a href="javascript:dvOpenProjView(${pj.id})">${esc(dvG(pj))} · ${esc(pj.product||'')} ${esc(pj.part_no||'')}</a>`:'연결 안 됨'}</span></div>`;
-  if(ed){
-    h+=`<div class="sp-actions" style="margin:10px 0 2px;"><button class="btn btn-primary btn-sm" onclick="dvOpenLog(null,${id})">＋ 활동 입력</button><button class="btn btn-outline btn-sm" onclick="dvPrint('item',${id})">인쇄</button>${me?`<button class="btn btn-outline btn-sm" onclick="dvDirective(${id})">지시 등록</button>`:''}</div>
-      <div class="dv-editbox"><div class="dv-editbox-hd">프로젝트 정보 수정</div>
-      <div class="form-row-2"><div><label class="form-label">거래처 / 과제 <span style="color:var(--muted);font-weight:400;">(거래처 정보)</span></label><input class="form-input" id="dvItVendor" list="rpVendorList" value="${esc(it.vendor||'')}"></div><div><label class="form-label">구분</label><select class="form-select" id="dvItKind"><option value="업체개발"${it.kind!=='법인과제'?' selected':''}>업체 개발</option><option value="법인과제"${it.kind==='법인과제'?' selected':''}>법인·과제</option></select></div></div>
-      <div class="form-row" style="margin-top:8px;"><label class="form-label">프로젝트</label><input class="form-input" id="dvItTitle" value="${esc(it.title||'')}"></div>
-      <div class="form-row-2" style="margin-top:8px;"><div><label class="form-label">법인</label><select class="form-select" id="dvItCorp" onchange="dvItCorpChange()"><option value="">없음 (본사)</option>${CORP_DEPTS.filter(k=>k!=='법인전체').map(k=>`<option${k===it.corp?' selected':''}>${k}</option>`).join('')}</select></div><div><label class="form-label">대과제 <span style="color:var(--muted);font-weight:400;">(목록에서 고르거나 새로 입력)</span></label><input class="form-input" id="dvItProg" list="dvProgList" value="${esc(it.program||'')}" placeholder="예: LG CKD 이관"><datalist id="dvProgList">${dvPrograms(it.corp||'').map(v=>`<option value="${esc(v)}">`).join('')}</datalist></div></div>
-      <div class="form-row-2" style="margin-top:8px;"><div><label class="form-label">담당부서</label><select class="form-select" id="dvItDept">${dvDeptOpts(dvOwner(it))}</select></div><div><label class="form-label">공급구분</label><input class="form-input" id="dvItSup" list="dvSupList" value="${esc(it.supply_type||'')}"></div></div>
-      <div class="form-row" style="margin-top:8px;"><label class="form-label">메이커 <span style="color:var(--muted);font-weight:400;">(메이커관리)</span></label><input class="form-input" id="dvItMaker" list="rpMakerList" value="${esc(it.maker||'')}" placeholder="메이커관리에서 선택"></div>
-      <div class="form-row" style="margin-top:8px;"><div><label class="form-label">부품개발 마스터</label><select class="form-select" id="dvItProj"><option value="">연결 안 함</option>${cand.map(p=>`<option value="${p.id}"${p.id===it.project_id?' selected':''}>${esc(dvG(p))} · ${esc(p.product||'')} ${esc(p.part_no||'')}</option>`).join('')}</select></div></div>
-      <div class="form-row" style="margin-top:8px;"><label class="form-label">비고</label><input class="form-input" id="dvItRemark" value="${esc(it.remark||'')}"></div>
-      <div class="dv-editbox-ft"><button class="btn btn-red btn-sm" onclick="dvDelItem(${id})">프로젝트 삭제</button><button class="btn btn-primary btn-sm" onclick="dvSaveItem(${id})">수정 내용 저장</button></div></div>`;
-  } else {
-    h+=`<div class="sp-actions" style="margin:10px 0 2px;"><button class="btn btn-outline btn-sm" onclick="dvPrint('item',${id})">인쇄</button>${me?`<button class="btn btn-outline btn-sm" onclick="dvDirective(${id})">지시 등록</button>`:''}</div>`;
-  }
-  if(dirs.length) h+='<div class="sp-section-title">이 프로젝트에 걸린 지시</div>'+dirs.map(d=>`<div class="sp-value" style="margin-bottom:4px;cursor:pointer;" onclick="dvGoDir(${d.id})">📌 ${esc(md(d.meeting_date))} ${esc(d.title)} <span class="badge badge-${statusLabel(d)[1]}">${statusLabel(d)[0]}</span></div>`).join('');
-  h+=`<div class="sp-section-title">전체 활동 (${logs.length}건)</div><div class="dv-hist">`
-    +(logs.map(l=>`<div class="h"><b>${esc(l.log_date||l.date_text||'일자 없음')}</b>${l.stage?' · '+esc(dvStageName(l.stage)):''}${l.emp_name&&l.emp_name!=='엑셀이관'?' · '+esc(l.emp_name):''}${l.target_date?' · 목표 '+esc(rpMd(l.target_date)):''}${l.done_date?' · 완료 '+esc(rpMd(l.done_date)):(l.done_state?' · '+esc(l.done_state):'')}${ed?` <a href="javascript:dvOpenLog(${l.id})" style="font-size:11px;">수정</a>`:''}<div>${esc(l.content||'')}</div></div>`).join('')||'<span style="color:#9aa1ab;">활동 기록 없음</span>')+'</div>';
-  document.getElementById('spTitle').textContent='프로젝트 상세';
-  document.getElementById('spBody').innerHTML=h;
-  document.getElementById('sidePanel').classList.add('open');
+/* 프로젝트 보기: v3.60부터 오른쪽 창 대신 브리핑창(bfItem) — 아래 참고 */
+/* ═══ v3.60: 프로젝트 정보 — 오른쪽 「프로젝트 상세」 창을 없애고, 보기는 브리핑창(bfItem), 수정은 주간업무 수정창 안 상자에서 ═══ */
+let dvPjFor=null, dvPjOrig='', dvPjOnly=false;
+const DV_PJ_F=['dvPjVendor','dvPjMaker','dvPjTitle','dvPjKind','dvPjSup','dvPjDept','dvPjCorp','dvPjProg','dvPjProj','dvPjRemark'];
+function dvPjVals(){ return DV_PJ_F.map(k=>document.getElementById(k).value.trim()).join('\u0001'); }
+function dvPjFill(it){
+  const g=k=>document.getElementById(k);
+  const cand=dvAllP.filter(p=>p.id===it.project_id||dvSame(dvG(p),dvG(it))||(it.vendor&&dvSame(p.vendor,it.vendor)));
+  g('dvPjVendor').value=it.vendor||''; g('dvPjMaker').value=it.maker||''; g('dvPjTitle').value=it.title||'';
+  g('dvPjKind').value=it.kind==='법인과제'?'법인과제':'업체개발'; g('dvPjSup').value=it.supply_type||'';
+  g('dvPjDept').innerHTML=dvDeptOpts(dvOwner(it));
+  g('dvPjCorp').innerHTML='<option value="">없음 (본사)</option>'+CORP_DEPTS.filter(k=>k!=='법인전체').map(k=>`<option${k===it.corp?' selected':''}>${k}</option>`).join('');
+  g('dvPjProg').value=it.program||''; g('dvPjProgList').innerHTML=dvPrograms(it.corp||'').map(v=>`<option value="${esc(v)}">`).join('');
+  g('dvPjProj').innerHTML='<option value="">연결 안 함</option>'+cand.map(p=>`<option value="${p.id}"${p.id===it.project_id?' selected':''}>${esc(dvG(p))} · ${esc(p.product||'')} ${esc(p.part_no||'')}</option>`).join('');
+  g('dvPjRemark').value=it.remark||'';
+  dvPjFor=it.id; dvPjOrig=dvPjVals();
 }
-function dvItCorpChange(){ const c=document.getElementById('dvItCorp').value; document.getElementById('dvProgList').innerHTML=dvPrograms(c).map(v=>`<option value="${esc(v)}">`).join(''); if(!c) document.getElementById('dvItProg').value=''; }
-async function dvSaveItem(id){
-  const old=dvIById[id]||{}, v=document.getElementById('dvItVendor').value.trim();
-  if(!v&&!document.getElementById('dvItMaker').value.trim()){showToast('거래처와 메이커 중 하나는 입력해주세요','err');return;}
-  // 법인·과제는 과제 이름을 적는 칸이라 거래처 등록을 묻지 않는다
-  const pc=document.getElementById('dvItKind').value==='법인과제'?{name:v,isNew:false}:rpCheckPartner(v,old.vendor); if(pc===false) return;
-  const mkn=rpCheckMaker(document.getElementById('dvItMaker').value,old.maker); if(mkn===false) return;
-  try{
-    if(pc.isNew) await rpAddPartner(v);
-    await sbPatch('dev_items',id,{maker:mkn||null,vendor:v||null,kind:document.getElementById('dvItKind').value,title:document.getElementById('dvItTitle').value.trim()||null,supply_type:document.getElementById('dvItSup').value.trim()||null,remark:document.getElementById('dvItRemark').value.trim()||null,owner_dept:document.getElementById('dvItDept').value,project_id:+document.getElementById('dvItProj').value||null,corp:document.getElementById('dvItCorp').value||null,program:(document.getElementById('dvItCorp').value&&document.getElementById('dvItProg').value.trim())||null,updated_at:new Date().toISOString()});
-    showToast('저장되었습니다','ok'); await dvRefresh(); dvOpenItem(id);
-  }catch(e){showToast('오류: '+e.message,'err');}
+function dvPjCorpChange(){ const c=document.getElementById('dvPjCorp').value; document.getElementById('dvPjProgList').innerHTML=dvPrograms(c).map(v=>`<option value="${esc(v)}">`).join(''); if(!c) document.getElementById('dvPjProg').value=''; }
+function dvPjChanged(){ return document.getElementById('dvPjBox').style.display!=='none'&&dvPjFor!=null&&dvPjVals()!==dvPjOrig; }
+// 저장 전 확인(거래처·메이커 등록 여부 묻기). 바뀐 것이 없으면 null, 취소하면 false, 저장할 내용이면 {id,patch,newPartner}
+function dvPjPrepare(){
+  if(!dvPjChanged()) return null;
+  const g=k=>document.getElementById(k).value.trim(), old=dvIById[dvPjFor]||{}, v=g('dvPjVendor');
+  if(!v&&!g('dvPjMaker')){ showToast('프로젝트 정보: 거래처와 메이커 중 하나는 입력해주세요','err'); return false; }
+  if(!g('dvPjTitle')){ showToast('프로젝트 정보: 프로젝트명을 입력해주세요','err'); return false; }
+  const pc=g('dvPjKind')==='법인과제'?{name:v,isNew:false}:rpCheckPartner(v,old.vendor); if(pc===false) return false;
+  const mkn=rpCheckMaker(g('dvPjMaker'),old.maker); if(mkn===false) return false;
+  return {id:dvPjFor,newPartner:pc.isNew?v:'',patch:{maker:mkn||null,vendor:v||null,kind:g('dvPjKind'),title:g('dvPjTitle'),supply_type:g('dvPjSup')||null,remark:g('dvPjRemark')||null,
+    owner_dept:g('dvPjDept'),project_id:+g('dvPjProj')||null,corp:g('dvPjCorp')||null,program:(g('dvPjCorp')&&g('dvPjProg'))||null,updated_at:new Date().toISOString()}};
+}
+async function dvPjCommit(x){ if(!x) return; if(x.newPartner) await rpAddPartner(x.newPartner); await sbPatch('dev_items',x.id,x.patch); }
+// 프로젝트 [수정]: 그 프로젝트를 고른 수정창을 연다. 세부내용을 비워 두면 프로젝트 정보만 저장된다
+function dvEditItem(id){
+  const it=dvIById[id]; if(!it) return;
+  dvOpenLog(null,id); if(!document.getElementById('rpOv').classList.contains('open')) return;
+  dvPjOnly=true;
+  document.getElementById('rpFmTitle').textContent='프로젝트 정보 수정 — '+(it.title||'')+' (세부내용을 적으면 활동도 함께 추가됩니다)';
+  const b=document.getElementById('dvPjBox'); if(b.style.display!=='none'){ setTimeout(()=>{ b.scrollIntoView({block:'center'}); b.classList.add('flash'); setTimeout(()=>b.classList.remove('flash'),1200); document.getElementById('dvPjTitle').focus(); },60); }
+}
+// 프로젝트 보기(브리핑창) — 예전 dvOpenItem(오른쪽 창)을 대신한다
+function dvOpenItem(id){ bfItem(id); }
+function bfItem(id){
+  const it=dvIById[id]||(dvAllI||[]).find(x=>x.id===id); if(!it) return;
+  const logs=(dvLogsBy[id]||[]).slice(), ed=dvCanEdit()&&it.kind!==TK_KIND&&!!dvIById[id], pj=it.project_id?dvPById[it.project_id]:null, dirs=dvDirCount(id);
+  const last=logs.reduce((m,l)=>l.log_date&&l.log_date>m?l.log_date:m,'');
+  const btns=[['인쇄',`dvPrint('item',${id})`]];
+  if(me) btns.push(['지시 등록',`bfClose();dvDirective(${id})`]);
+  if(ed){ btns.push(['＋ 활동 입력',`bfClose();dvOpenLog(null,${id})`]); btns.push(['프로젝트 삭제',`dvDelItem(${id})`,'bf-del']); }
+  bfShow({head:'프로젝트',sub:last?'최근 활동 '+rpMd(last):'',pills:[it.kind==='법인과제'?'법인·과제':'업체 개발','활동 '+logs.length+'건'],
+    title:it.title||'(이름 없음)',
+    cells:[['거래처',esc(it.vendor||'')],['메이커',esc(it.maker||'')],['담당부서',esc(dvOwner(it))],['공급구분',esc(it.supply_type||'')],
+      ['법인',esc(it.corp||'')],['대과제',esc(it.program||'')],['등록 / 완료',esc((it.reg_text||'-')+' / '+(it.done_text||'-'))],['목표일자',esc(it.target_text||'')],
+      ['마스터',pj?`<a href="javascript:void(0)" onclick="bfClose();dvOpenProjView(${pj.id})">${esc(dvG(pj))} · ${esc(pj.product||'')} ${esc(pj.part_no||'')}</a>`:''],['비고',esc(it.remark||'')]],
+    boxes:[['이 프로젝트에 걸린 지시 ('+dirs.length+')',dirs.length?dirs.map(d=>`<div class="bf-log clk" onclick="bfClose();dvGoDir(${d.id})"><b>${esc(md(d.meeting_date))}</b>${esc(d.title)} <span class="badge badge-${statusLabel(d)[1]}">${statusLabel(d)[0]}</span></div>`).join(''):''],
+      ['전체 활동 ('+logs.length+') — 누르면 활동 내용',logs.length?logs.map(l=>`<div class="bf-log clk" onclick="bfLog(${l.id})"><b>${esc(l.log_date?rpMd(l.log_date):(l.date_text||'일자 없음'))}</b>${l.stage?'<span class="dv-st s-진행중 s-stg" style="margin-right:6px;">'+esc(dvStageName(l.stage))+'</span>':''}${esc(l.content||'')}${rpLogWho(l)?`<i>${esc(rpLogWho(l))}</i>`:''}${l.done_date?`<i>완료 ${esc(rpMd(l.done_date))}</i>`:(l.target_date?`<i>목표 ${esc(rpMd(l.target_date))}</i>`:'')}</div>`).join(''):'<div class="bf-content" style="color:#9ca3af;font-size:13px;">활동 기록 없음</div>']],
+    who:it.created_name?'등록 · '+esc(it.created_name):'',
+    btns:btns, edit:ed?()=>dvEditItem(id):null});
 }
 async function dvDelItem(id){
   const n=(dvLogsBy[id]||[]).length;
   if(!confirm('정말 삭제하시겠습니까?')) return;
-  try{ await sbPatch('dev_items',id,{is_deleted:true,deleted_at:new Date().toISOString()}); showToast('삭제되었습니다','ok'); closePanel(); await dvRefresh(); }
+  try{ await sbPatch('dev_items',id,{is_deleted:true,deleted_at:new Date().toISOString()}); showToast('삭제되었습니다','ok'); bfClose(); await dvRefresh(); }
   catch(e){showToast('오류: '+e.message,'err');}
 }
 
@@ -3010,7 +3052,7 @@ function dvOpenLog(logId,itemId,plan){
   if(!dvCanEdit()&&!rpPass){showToast('활동 입력은 개발기획팀·담당 부서와 사장님·상무님만 할 수 있습니다','err');return;}
   const g=k=>document.getElementById(k);
   const lg=logId?dvLogs.find(l=>l.id===logId):null;
-  rpEdit=null; rpPromote=null; rpPass=false; dvDeptOverride=null; rpVmStash=null;
+  rpEdit=null; rpPromote=null; rpPass=false; dvDeptOverride=null; rpVmStash=null; dvPjFor=null; dvPjOnly=false;
   dvEditLog=lg||null; dvFromPlan=plan||null; rpCatLock=true;
   const it=lg?dvIById[lg.item_id]:(itemId?dvIById[itemId]:null);
   g('rpFmTitle').textContent=lg?(lg.diary_id?'주간업무 수정 — 신규개발 활동 (업무일지 연동 — 고치면 일지도 함께 바뀝니다)':'주간업무 수정 — 신규개발 활동'):'주간업무 입력 — 신규개발 활동';
@@ -3075,7 +3117,17 @@ async function dvSaveLog(){
   if(!vendor){showToast('메이커나 거래처 이름을 입력해주세요','err');return;}
   if(itemSel==='new'&&!document.getElementById('dvLgNewTitle').value.trim()){showToast('새 프로젝트 이름을 입력해주세요','err');return;}
   if(!date&&!(dvEditLog&&!dvEditLog.log_date)){showToast('작성일자를 입력해주세요','err');return;}
-  if(!text.trim()){showToast('세부내용을 입력해주세요','err');return;}
+  // v3.60: 프로젝트 정보 상자에서 바꾼 내용
+  const pjX=itemSel!=='new'?dvPjPrepare():null; if(pjX===false) return;
+  if(!text.trim()){
+    if(dvPjOnly&&!dvEditLog){
+      if(!pjX){ showToast('바뀐 내용이 없습니다 (활동도 추가하려면 세부내용을 입력하세요)','err'); return; }
+      try{ await dvPjCommit(pjX); showToast('프로젝트 정보를 저장했습니다','ok'); const pid=pjX.id; dvCloseLog(); await dvRefresh(); bfItem(pid); }
+      catch(e){ showToast('오류: '+e.message,'err'); }
+      return;
+    }
+    showToast('세부내용을 입력해주세요','err');return;
+  }
   let newMaker='', newVendor='', newPc=null;
   if(itemSel==='new'){
     newVendor=document.getElementById('dvLgNewVendor').value.trim();
@@ -3086,6 +3138,7 @@ async function dvSaveLog(){
   const btn=document.getElementById('rpFmSave'); btn.disabled=true;
   try{
     let itemId=+itemSel||null;
+    if(pjX&&pjX.id===itemId) await dvPjCommit(pjX);
     if(itemSel==='new'){
       const maxSort=dvAllI.reduce((m,i)=>Math.max(m,i.sort_no||0),0);
       if(newPc&&newPc.isNew) await rpAddPartner(newVendor);
@@ -4388,7 +4441,7 @@ function rpDoneDtChange(){ if(document.getElementById('rpFmDoneDt').value) docum
 
 /* 입력 / 수정 창 */
 function rpOpen(id){
-  dvEditLog=null; dvFromPlan=null; rpPromote=null; rpPass=false; dvDeptOverride=null; rpCatLock=false; rpVmStash=null;
+  dvEditLog=null; dvFromPlan=null; rpPromote=null; rpPass=false; dvDeptOverride=null; rpCatLock=false; rpVmStash=null; dvPjFor=null; dvPjOnly=false;
   rpEdit=id?rpById[id]:null; const r=rpEdit||{};
   if(rpEdit?!rpCanEdit(r.dept):!rpCanAdd()){ showToast('주간업무는 해당 부서 직원과 사장님·상무님만 입력할 수 있습니다','err'); return; }
   const g=k=>document.getElementById(k);
@@ -4411,7 +4464,7 @@ function rpOpen(id){
   rpDeptChange(); rpCatChange(); rpWeekHint();
   g('rpOv').classList.add('open'); g('rpFmText').focus();
 }
-function rpClose(){document.getElementById('rpOv').classList.remove('open');rpEdit=null;dvEditLog=null;dvFromPlan=null;rpPromote=null;rpPass=false;dvDeptOverride=null;rpCatLock=false;rpVmStash=null;}
+function rpClose(){dvPjFor=null;dvPjOnly=false;document.getElementById('rpOv').classList.remove('open');rpEdit=null;dvEditLog=null;dvFromPlan=null;rpPromote=null;rpPass=false;dvDeptOverride=null;rpCatLock=false;rpVmStash=null;}
 function rpDateChange(){
   const d=document.getElementById('rpFmDate').value; if(!d) return;
   const w=rpWeekOf(d); document.getElementById('rpFmY').value=w.y; document.getElementById('rpFmM').value=w.m; document.getElementById('rpFmW').value=w.w; rpWeekHint();
@@ -4455,9 +4508,14 @@ function rpDevFields(vendor,stage){
 // 거래처·메이커 칸: 신규개발이면 고른 프로젝트의 값을 보여주기만 한다(고치는 곳은 프로젝트 상세). 새 프로젝트를 만들 때는 그 아래 칸에 적는다
 function rpVmSync(){
   const g=k=>document.getElementById(k), dev=rpIsDev(), sel=g('dvLgItem').value, it=dev&&sel&&sel!=='new'?dvIById[+sel]:null;
-  g('rpFmVmRow').style.display=dev&&!it?'none':'';
+  g('rpFmVmRow').style.display=dev?'none':'';
   g('rpFmVendor').disabled=dev; g('rpFmMaker').disabled=dev;
   if(it){ g('rpFmVendor').value=it.vendor||''; g('rpFmMaker').value=it.maker||''; }
+  // v3.60: 프로젝트 정보 상자 (추진과제 세부과제는 추진과제 화면에서 관리하므로 제외)
+  const show=!!(it&&it.kind!==TK_KIND);
+  g('dvPjBox').style.display=show?'':'none';
+  if(show&&dvPjFor!==it.id) dvPjFill(it);
+  if(!show) dvPjFor=null;
 }
 function rpDevApply(){
   const g=k=>document.getElementById(k), dev=rpIsDev(), lg=dvEditLog;
@@ -4699,7 +4757,7 @@ function bfShow(o){
     +`<div class="bf-ttl">${o.title?esc(o.title):'(내용 없음)'}</div>`
     +`<div class="bf-grid">${cells.map(c=>c[0]?cell(c[0],c[1]):'<div class="k"></div><div></div>').join('')}</div>`
     +(o.boxes||[]).filter(b=>b&&b[1]).map(b=>`<div class="bf-box"><div class="bf-box-h">${b[0]}</div>${b[1]}</div>`).join('')
-    +`</div><div class="bf-ft"><span class="bf-who">${o.who||''}</span><button onclick="bfClose()">닫기</button>`
+    +`</div><div class="bf-ft"><span class="bf-who">${o.who||''}</span>`+(o.btns||[]).map(b=>`<button${b[2]?' class="'+b[2]+'"':''} onclick="${b[1]}">${b[0]}</button>`).join('')+`<button onclick="bfClose()">닫기</button>`
     +(bfEditFn?`<button class="bf-edit" onclick="bfEdit()">✎ 수정</button>`:'')+`</div>`;
   document.getElementById('bfBox').innerHTML=h;
   document.getElementById('bfOv').classList.add('open');
