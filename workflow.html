@@ -1803,7 +1803,7 @@ function openBrief(id,from){
     +'</div>'
     +'<div class="brief-box"><div class="brief-box-h">업무 내용</div>'+(r.content?'<div class="brief-content">'+esc(r.content)+'</div>':'<div class="brief-content" style="color:#9ca3af;font-size:13px;">내용 없음</div>')+'</div>'
     +(r.follow_up?'<div class="brief-box"><div class="brief-box-h">'+t('후속조치')+'</div><div class="brief-content">'+esc(r.follow_up)+'</div></div>':'')
-    +(r.link_type?'<div class="brief-box"><div class="brief-box-h">업무보고 연동</div><div class="brief-content" style="pointer-events:none;">'+linkCellHtml(r)+'</div></div>':'')
+    +(r.link_type?'<div class="brief-box"><div class="brief-box-h">업무보고 연동</div><div class="brief-content" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="pointer-events:none;">'+linkCellHtml(r)+'</span>'+briefLinkBtn(r)+'</div></div>':'')
     +'</div><div class="brief-ft">'
     +'<span class="brief-who">작성 '+dayTxt+(who?' · '+who:'')+'</span>'
     +(isSched&&briefFrom==='day'?'<button onclick="briefConvert()"><i class="ti ti-transfer"></i> '+t('업무일지로 전환')+'</button>':'')
@@ -1813,6 +1813,15 @@ function openBrief(id,from){
   document.getElementById('brief-overlay').classList.add('open');
   briefPlace();
 }
+// 2026-10-27: 연동 칸에서 업무보고 해당 기록을 새 탭으로 연다 — 진척 활동(dev_logs) ?log= / 주간업무 줄 ?wk= / 지시 ?id=
+function briefLinkUrl(r){
+  if(r.link_type==='project'&&r.link_log_id) return 'directive.html?log='+r.link_log_id;
+  if((r.link_type==='weekly'||r.link_type==='weekly_row')&&r.link_ref_id) return 'directive.html?wk='+r.link_ref_id;
+  if(r.link_type==='directive'&&r.link_ref_id) return 'directive.html?id='+r.link_ref_id;
+  return '';
+}
+function briefLinkBtn(r){ var u=briefLinkUrl(r); return u?'<button onclick="briefOpenLink(\''+u+'\')" style="height:28px;padding:0 10px;border:1px solid #E8711A;border-radius:6px;background:#fff;color:#B4530F;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">업무보고에서 열기 ↗</button>':(r.link_log_id?'':'<span style="font-size:11px;color:#9ca3af;">아직 반영 전이라 열 기록이 없습니다</span>'); }
+function briefOpenLink(u){ var w=window.open(u,'_blank'); if(!w) location.href=u; }
 function briefPlace(){ var b=document.getElementById('brief-box'); if(b) b.style.transform=(briefPos&&window.innerWidth>=521)?'translate('+briefPos.x+'px,'+briefPos.y+'px)':''; }
 function closeBrief(){ document.getElementById('brief-overlay').classList.remove('open'); briefId=null; }
 function briefEdit(){ var id=briefId, from=briefFrom; closeBrief(); if(from==='day') closeDayPopup(); editDiary(id); }
