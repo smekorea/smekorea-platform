@@ -3914,7 +3914,7 @@ function renderTkMaster(){
     if(col) return;
     rows.forEach(t=>{
       const lab=tkStLabel(t), last=tkLastLog(t), old=last?dayDiff(last,todayStr()):null, ed=tkCanEdit(t);
-      body+=`<tr><td class="tk-sticky" style="padding-left:22px;"${ed?` onclick="tkOpenItem(${t.id})" title="눌러서 수정" style="cursor:pointer;padding-left:22px;"`:''}>${esc(t.title||'')}${t.predecessor?`<div style="font-size:11px;color:#9aa1ab;">선행: ${esc(t.predecessor)}</div>`:''}</td>`
+      body+=`<tr><td class="tk-sticky" style="padding-left:22px;cursor:pointer;" onclick="bfTask(${t.id})" title="눌러서 내용 보기">${esc(t.title||'')}${t.predecessor?`<div style="font-size:11px;color:#9aa1ab;">선행: ${esc(t.predecessor)}</div>`:''}</td>`
         +`<td>${esc(t.owner_name||'')}</td><td class="dv-d">${esc(md(t.start_date||''))}</td><td class="dv-d${tkLate(t)?' late':''}">${esc(md(t.target_date||''))}</td><td class="dv-d">${esc(md(t.done_date||''))}</td>`
         +`<td><span class="tk-pgc">${(t.done_date||t.status==='완료')?100:(t.progress||0)}%</span></td><td><span class="tk-stb tk-st-${lab}">${lab}</span></td>`
         +`<td class="dv-d">${last?esc(md(last)):'<span style="color:#9aa1ab;">없음</span>'}${old!=null&&old>14&&lab!=='완료'?`<div class="tk-old">${old}일 전</div>`:''}</td>`
@@ -3973,6 +3973,26 @@ function tkScaleSel(v){ if(v==='hide') tkHide=true; else{ tkHide=false; tkScale=
   document.querySelectorAll('.tk-scsel').forEach(x=>{ x.value=tkHide?'hide':tkScale; }); document.querySelectorAll('#tkWrap,#dvLogWrap').forEach(w=>{ delete w.dataset.scrolled; }); renderCur(); }
 function tkSetScale(sc){ tkScale=sc; try{localStorage.setItem('tk_scale',sc);}catch(_){} document.getElementById('tkScaleMenu').classList.remove('open'); document.querySelectorAll('#tkWrap,#panel-dvmaster .tbl-wrap').forEach(w=>{ delete w.dataset.scrolled; }); renderCur(); }
 document.addEventListener('click',ev=>{ const m=document.getElementById('tkScaleMenu'); if(m&&m.classList.contains('open')&&!m.contains(ev.target)) m.classList.remove('open'); });
+
+/* v3.67: 추진과제 세부과제 브리핑창 — 마스터·세부진척현황의 세부과제 이름 클릭 */
+function bfTask(id){
+  const t=tkItems.find(x=>x.id===id); if(!t) return;
+  const pj=tkProjects.find(p=>p.id===t.project_id)||{}, it=t.dev_item_id?dvIById[t.dev_item_id]:null;
+  const logs=it?(dvLogsBy[it.id]||[]).slice().sort((a,b)=>String(b.log_date||'').localeCompare(String(a.log_date||''))):[];
+  const pg=(t.done_date||t.status==='완료')?100:(t.progress||0), st=tkStLabel(t);
+  const btns=[];
+  if(t.dev_item_id&&tkCanEdit(t)) btns.push(['＋ 활동',`bfClose();tlOpen(null,${t.dev_item_id})`]);
+  if(t.dev_item_id) btns.push(['세부진척현황 보기',`bfClose();tkGoLog(${t.dev_item_id})`]);
+  bfShow({head:'세부과제',sub:pj.name||'',pills:[st,pg+'%'],
+    title:t.title||'(이름 없음)',
+    cells:[['추진과제',esc(pj.name||'')],['분야',esc(t.area||'')],['담당',esc(t.owner_name||'')],['담당부서',esc(t.owner_dept||'')],
+      ['시작',esc(t.start_date?bfYmd(t.start_date):'')],['목표',esc(t.target_date?bfYmd(t.target_date):'')],['완료',esc(t.done_date?bfYmd(t.done_date):'')],['상태 · 진척',esc(st+' · '+pg+'%')],
+      t.predecessor?['선행',esc(t.predecessor)]:null],
+    boxes:[['메모',bfTxt(t.memo)],
+      ['활동 ('+logs.length+') — 누르면 활동 내용',logs.length?logs.map(l=>`<div class="bf-log clk" onclick="bfLog(${l.id})"><b>${esc(l.log_date?bfYmd(l.log_date):(l.date_text||'일자 없음'))}</b>${esc(l.content||'')}${rpLogWho(l)?`<i>${esc(rpLogWho(l))}</i>`:''}${l.done_date?`<i>완료 ${esc(bfYmd(l.done_date))}</i>`:(l.target_date?`<i>목표 ${esc(bfYmd(l.target_date))}</i>`:'')}</div>`).join(''):'<div class="bf-content" style="color:#9ca3af;font-size:13px;">활동 기록 없음</div>']],
+    who:t.created_name?'등록 · '+esc(t.created_name):'',
+    btns:btns, edit:tkCanEdit(t)?()=>tkOpenItem(t.id):null});
+}
 function tkAddLog(devId){ return tlOpen(null,devId); }
 function tkGoLog(devId){ const it=dvIById[devId]; switchTab('tklog'); if(it){ dvSetVM('',''); document.getElementById('dvKw').value=it.title||''; dvAllRange(); renderDvLog(); } }
 /* ── 추진과제 등록·수정 ── */
@@ -4074,7 +4094,7 @@ function renderTkLog(){
     if(firstP){ lead+=`<td class="dv-v" rowspan="${total}" style="vertical-align:top;"><div class="dv-stk">${esc(pj?pj.name:'')}</div></td>`; firstP=false; }
     if(a!==lastA){ lead+=`<td class="dv-v" rowspan="${aRows[a]}" style="vertical-align:top;"><div class="dv-stk">${esc(a||'(분야 없음)')}</div></td>`; lastA=a; }
     const pg=(t.done_date||t.status==='완료')?100:(t.progress||0);
-    const itemCells=`<td class="dv-ti" rowspan="${rows}" onclick="tlOpen(null,${it.id})" title="이 세부과제에 활동 기록"><div class="dv-stk">${esc(t.title||'')}<span class="tk-stb tk-st-${tkStLabel(t)}" style="margin-left:4px;">${tkStLabel(t)}</span><span style="font-size:11px;color:#6b7280;margin-left:4px;">${pg}%</span></div></td><td rowspan="${rows}">${esc(t.owner_name||'')}</td>`;
+    const itemCells=`<td class="dv-ti" rowspan="${rows}" onclick="bfTask(${t.id})" title="눌러서 내용 보기"><div class="dv-stk">${esc(t.title||'')}<span class="tk-stb tk-st-${tkStLabel(t)}" style="margin-left:4px;">${tkStLabel(t)}</span><span style="font-size:11px;color:#6b7280;margin-left:4px;">${pg}%</span></div></td><td rowspan="${rows}">${esc(t.owner_name||'')}</td>`;
     const tail=`<td rowspan="${rows}">${ed?`<button class="btn btn-outline mt-btn" onclick="tlOpen(null,${it.id})">＋ 활동</button>`:''}</td>${tkHide?'':`<td class="tk-tl-c" rowspan="${rows}">${tkBarHtml(t,R,pj,dots)}</td>`}`;
     if(!x.logs.length){ h+=`<tr class="g1">${lead}${itemCells}<td class="dv-d">-</td><td></td><td style="color:#9aa1ab;">활동 기록 없음</td><td></td><td></td><td></td>${tail}</tr>`; return; }
     x.logs.forEach((l,ix)=>{ n++;
