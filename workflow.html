@@ -3817,11 +3817,22 @@ async function loadLinkData(type){
   }
 }
 // 거래처 정보(partners)·메이커관리(makers) 이름 — 프로젝트 검색칸과 주간업무 새 건이 함께 쓴다
+// (2026-10-28) 1,000행 상한 회피 — range 페이지네이션 전량 조회 (build는 매번 새 쿼리를 반환)
+async function sbFetchAll(build){
+  const PAGE=1000; let out=[];
+  for(let from=0;;from+=PAGE){
+    const {data,error}=await build().range(from,from+PAGE-1);
+    if(error) return {data:out,error};
+    out=out.concat(data||[]);
+    if(!data||data.length<PAGE) break;
+  }
+  return {data:out,error:null};
+}
 async function loadLinkNames(force){
   if(linkData.partners&&!force) return;
   try{
-    var pRes=await SB.from('partners').select('name,alias1,alias2,is_active').order('name').limit(5000);
-    var mRes=await SB.from('makers').select('maker_name').order('maker_name').limit(5000);
+    var pRes=await sbFetchAll(function(){return SB.from('partners').select('name,alias1,alias2,is_active').order('name').order('id');});
+    var mRes=await sbFetchAll(function(){return SB.from('makers').select('maker_name').order('maker_name');});
     linkData.partners=pRes.data||[]; linkData.makers=(mRes.data||[]).map(function(x){return x.maker_name;}).filter(Boolean);
   }catch(e){ linkData.partners=linkData.partners||[]; linkData.makers=linkData.makers||[]; }
   var opt=function(a,tag){ return a.map(function(v){ return '<option value="'+escapeHtml(v)+'"'+(tag?' data-tag="'+tag+'"':'')+'>'; }).join(''); };

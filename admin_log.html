@@ -2533,10 +2533,21 @@ function _setSelectKeep(id,val){
   el.value=val||'';
 }
 
+// (2026-10-28) 1,000행 상한 회피 — range 페이지네이션 전량 조회 (build는 매번 새 쿼리를 반환)
+async function sbFetchAll(build){
+  const PAGE=1000; let out=[];
+  for(let from=0;;from+=PAGE){
+    const {data,error}=await build().range(from,from+PAGE-1);
+    if(error) return {data:out,error};
+    out=out.concat(data||[]);
+    if(!data||data.length<PAGE) break;
+  }
+  return {data:out,error:null};
+}
 async function loadPartnersData() {
   const tbody=document.getElementById('partners-tbody');
   tbody.innerHTML='<tr><td colspan="13"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
-  const {data,error}=await sb.from('partners').select('*').order('name');
+  const {data,error}=await sbFetchAll(()=>sb.from('partners').select('*').order('name').order('id'));
   if(error){tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
   _partnersData=data||[];
   document.getElementById('partners-count').textContent=`(${_partnersData.length}개)`;
@@ -2749,7 +2760,7 @@ async function submitPartnersData(){
 function clearPartnersPreview(){document.getElementById('partnersPreviewSection').style.display='none';_partnersRows=[];}
 
 async function downloadPartnersData(){
-  const {data}=await sb.from('partners').select('*').order('name');
+  const {data}=await sbFetchAll(()=>sb.from('partners').select('*').order('name').order('id'));
   const ws=XLSX.utils.json_to_sheet((data||[]).map(r=>({
     '업체명':r.name,'별칭1':r.alias1||'','별칭2':r.alias2||'','구분':r.type||'',
     '국가':r.country||'','마감방식':_closingLabel(r.closing_basis),'결제조건':r.payment_terms||'',
@@ -4458,7 +4469,7 @@ async function loadAliasData() {
   const [aliasRes, usageRes, partnerRes, builtRes] = await Promise.all([
     sb.from('maker_alias').select('*').order('standard_name'),
     sb.rpc('brand_usage_summary'),
-    sb.from('partners').select('id,name,alias1,alias2,type,is_active'),
+    sbFetchAll(()=>sb.from('partners').select('id,name,alias1,alias2,type,is_active').order('id')),
     sb.rpc('brand_usage_built_at'),
     sb.from('maker_partner_map').select('id,maker_name,partner_id')
   ]).then(arr=>{ _alLoadMap(arr[4], arr[2]); return arr; });

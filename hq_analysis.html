@@ -1606,9 +1606,20 @@ const ALERT_DANGER_LOSS = 100000000; // 🔴위험 경계선(손실 1억)
 //     "먼저 볼 것 3건" 슬롯에 맞음. 회사 규모가 바뀌면 이 상수만 조정할 것.
 
 let _closingBasisSet = new Set();    // LG마감기준 매입처/브랜드명
+// (2026-10-28) 1,000행 상한 회피 — range 페이지네이션 전량 조회 (build는 매번 새 쿼리를 반환)
+async function sbFetchAll(build){
+  const PAGE=1000; let out=[];
+  for(let from=0;;from+=PAGE){
+    const {data,error}=await build().range(from,from+PAGE-1);
+    if(error) return {data:out,error};
+    out=out.concat(data||[]);
+    if(!data||data.length<PAGE) break;
+  }
+  return {data:out,error:null};
+}
 async function loadClosingBasisSet(){
   try{
-    const {data,error}=await sb.from('partners').select('name,closing_basis');
+    const {data,error}=await sbFetchAll(()=>sb.from('partners').select('name,closing_basis').order('id'));
     if(error)throw error;
     _closingBasisSet=new Set((data||[]).filter(r=>String(r.closing_basis||'').includes('LG마감기준'))
                                        .map(r=>String(r.name||'').trim()).filter(Boolean));
