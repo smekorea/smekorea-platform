@@ -9,7 +9,8 @@
 <script src="smerp-mobile.js?v=1" defer></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   trade.html v1.0 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.1: 스마트전자 입고 기록(smart_po_receipt) → 매입 전표 자동 생성, 확정 시 발주 고객배정 비율로 재고 배정
    ── ① 확정 대기: 출하완료(LOT 품목) → 매출 전표 「작성중」 자동 생성, 확인 후 확정
    ── ② 직접 입력: 사급·제조·기타 매출/매입, 구매→판매 넘기기
    ── ③ 전표 목록: 기간·구분·상태 조회, 거래명세서 출력(공급자용/공급받는자용), 이카운트 반영 체크
@@ -163,7 +164,7 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
 
 <!-- ① 확정 대기 -->
 <div class="wrap" id="tab-wait">
-  <div class="info" id="waitInfo">출하관리에서 <b>출하완료</b>된 건(LOT 품목이 있는 출하)이 매출 전표 「작성중」으로 자동 생성됩니다. 실제 출하(스캔) 수량이 들어가며, 확인 후 <b>확정</b>하세요. 경고가 있으면 사유를 입력해야 확정됩니다.</div>
+  <div class="info" id="waitInfo">출하관리에서 <b>출하완료</b>된 건(LOT 품목이 있는 출하)은 매출 전표, 스마트전자 자재관리에서 <b>입고</b> 등록한 건은 매입 전표(발주 시 고객 배정 비율로 재고 배정)로 「작성중」 자동 생성됩니다. 실제 출하(스캔) 수량이 들어가며, 확인 후 <b>확정</b>하세요. 경고가 있으면 사유를 입력해야 확정됩니다.</div>
   <div class="toolbar">
     <input class="inp" id="waitQ" placeholder="거래처·품목 검색" oninput="renderWait()" style="width:220px">
     <span class="grow"></span>
@@ -458,7 +459,19 @@ async function runAutoGen(manual){
         }
       }
     }
-    msg.textContent=made?`출하완료 ${made}건을 작성중 전표로 만들었습니다.`:(manual?'새로 만들 출하완료 건이 없습니다.':'');
+    // 스마트전자 입고 기록 → 매입 전표 (발주번호·입고일 단위로 묶음)
+    const rc=await getAll('smart_po_receipt?select=id,po_item_id,qty,received_date,note,created_by&slip_id=is.null&order=id');
+    let madeIn=0;
+    if(rc.length){
+      const pis=await getAll('smart_po_item?select=id,po_id,item_code,maker_pn,description,unit_price&id=in.('+[...new Set(rc.map(x=>x.po_item_id))].join(',')+')');
+      const heads=await getAll('smart_po?select=id,po_no,maker,ordered_by&id=in.('+[...new Set(pis.map(x=>x.po_id))].join(',')+')');
+      const PI={};pis.forEach(x=>PI[x.id]=x);const PH={};heads.forEach(x=>PH[x.id]=x);
+      const groups={};
+      rc.forEach(x=>{const pi=PI[x.po_item_id];if(!pi)return;const k=pi.po_id+'|'+x.received_date;(groups[k]=groups[k]||[]).push(x);});
+      for(const k of Object.keys(groups)){const g=groups[k];const pi0=PI[g[0].po_item_id];if(await createRcvSlip(g,PI,PH[pi0.po_id]||{}))madeIn++;}
+    }
+    msg.textContent=(made||madeIn)?`출하완료 ${made}건(매출), 스마트 입고 ${madeIn}건(매입)을 작성중 전표로 만들었습니다.`:(manual?'새로 만들 출하완료·입고 건이 없습니다.':'');
+    made+=madeIn;
   }catch(e){msg.textContent='자동 생성 오류: '+e.message;}
   genRunning=false;
   if(made)await loadWait(true);
@@ -485,16 +498,40 @@ async function createShipSlip(s,its){
     return true;
   }catch(e){if(e.status===409)return false;throw e;}
 }
+async function createRcvSlip(g,PI,ph){
+  const sp=findPartner('스마트전자(주)')||findPartner(ph.maker)||null;
+  const vp=vatPct('과세');
+  const codes=[...new Set(g.map(x=>PI[x.po_item_id].item_code))];
+  const hist=sp?await priceHistory(sp.name,codes,false,g[0].received_date):{};
+  const lines=g.map((x,i)=>{const pi=PI[x.po_item_id];const info=IBYCODE[pi.item_code]||{};
+    const pr=num(pi.unit_price)||(hist[pi.item_code]||{}).price||0;const q=num(x.qty);const sup=Math.round(q*pr);
+    return {line_no:i+1,item_code:pi.item_code,description:pi.description||info.description||'',spec:info.spec||null,brand:info.brand||'SMART',
+      qty:q,unit_price:pr,supply_amt:sup,vat_amt:Math.round(sup*vp/100),source_line_id:x.id,note:x.note||null};});
+  const sup=lines.reduce((a,b)=>a+b.supply_amt,0),vat=lines.reduce((a,b)=>a+b.vat_amt,0);
+  const orderer=ph.ordered_by||g[0].created_by||null;
+  const head={entity:'KOREA',slip_type:'매입',slip_date:g[0].received_date,partner_id:sp?sp.id:null,partner_name:sp?sp.name:(ph.maker||'스마트전자'),
+    dept:empDept(g[0].created_by)||empDept(orderer)||'자재구매팀',manager:g[0].created_by||orderer,emp_no:(EMPS.find(e=>e.name===g[0].created_by)||{}).emp_no||null,
+    location_id:(LOCS[0]&&LOCS[0].id)||null,currency:SETTING.default_currency||'KRW',vat_type:'과세',status:'작성중',source_type:'스마트입고',
+    source_id:Math.min(...g.map(x=>x.id)),supply_total:sup,vat_total:vat,total:sup+vat,note:'발주 '+(ph.po_no||''),created_by:'자동(스마트입고)'};
+  try{
+    const r=await post('trade_slip',head);const id=r[0].id;
+    await post('trade_slip_line',lines.map(l=>Object.assign({slip_id:id},l)));
+    await patch('smart_po_receipt','id=in.('+g.map(x=>x.id).join(',')+')',{slip_id:id});
+    return true;
+  }catch(e){if(e.status===409)return false;throw e;}
+}
 async function loadWait(skipGen){
   const box=document.getElementById('waitTbl');
   try{
-    WAIT=await getAll('trade_slip?select=*,trade_slip_line(count)&entity=eq.'+curEntity+'&status=eq.작성중&source_type=eq.출하&order=slip_date.desc,id.desc');
+    WAIT=await getAll('trade_slip?select=*,trade_slip_line(count)&entity=eq.'+curEntity+'&status=eq.작성중&source_type=in.(출하,스마트입고)&order=slip_date.desc,id.desc');
   }catch(e){box.innerHTML=`<div class="empty">불러오기 실패: ${esc(e.message)}</div>`;return;}
   renderWait();
   if(!skipGen)runAutoGen(false);
 }
 const WAIT_COLS=[
-  {t:'출하일',k:'slip_date',w:90},
+  {t:'일자',k:'slip_date',w:90},
+  {t:'구분',k:'slip_type',w:60,f:r=>typeBadge(r.slip_type)},
+  {t:'출처',k:'source_type',w:80,f:r=>esc(r.source_type==='스마트입고'?'스마트 입고':'출하완료')},
   {t:'거래처',k:'partner_name',w:200,f:r=>esc(r.partner_name)+(r.partner_id?'':' <span class="badge b-warn">거래처 미연결</span>')},
   {t:'부서',k:'dept',w:90},{t:'담당',k:'manager',w:70},
   {t:'보관위치',k:'location_id',w:80,f:r=>esc(locName(r.location_id)),sv:r=>locName(r.location_id)},
@@ -721,7 +758,7 @@ async function dropSlip(){
   if(!curSlip.id){closeSlip();return;}
   try{
     // 출하에서 만든 전표는 기록을 남겨(취소) 다시 자동 생성되지 않게 하고, 직접 입력 전표는 지운다
-    if(curSlip.source_type==='출하')await rpc('cancel_trade_slip',{p_slip_id:curSlip.id,p_user:curUser,p_reason:'확정 대기에서 삭제'});
+    if(curSlip.source_type==='출하'||curSlip.source_type==='스마트입고')await rpc('cancel_trade_slip',{p_slip_id:curSlip.id,p_user:curUser,p_reason:'확정 대기에서 삭제'});
     else await del('trade_slip','id=eq.'+curSlip.id);
     closeSlip();toast('삭제했습니다.');refreshCurrentTab();
   }catch(e){alert('삭제 실패: '+e.message);}

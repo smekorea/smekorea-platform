@@ -265,7 +265,7 @@ thead th.num,thead th.ctr{text-align:center;}
         <th class="ctr" style="width:95px;">예상납기</th>
         <th class="ctr" style="width:80px;">경과</th>
         <th class="ctr" style="width:85px;">상태</th>
-        <th class="ctr" style="width:120px;">관리</th>
+        <th class="ctr" style="width:170px;">관리</th>
       </tr></thead>
       <tbody id="poBody"><tr><td colspan="13"><div class="loading">불러오는 중...</div></td></tr></tbody>
     </table></div>
@@ -340,6 +340,27 @@ thead th.num,thead th.ctr{text-align:center;}
     <div class="modal-ft">
       <button class="btn" onclick="closePoModal()">취소</button>
       <button class="btn btn-p" onclick="savePo()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 고객 배정 모달 (2026-10-29) -->
+<div class="mask" id="allocMask">
+  <div class="modal" style="width:min(520px,94vw);">
+    <div class="modal-hd"><span class="modal-ti">고객별 배정</span><button class="x" onclick="closeAllocModal()">×</button></div>
+    <div class="modal-bd">
+      <div id="alInfo" class="note" style="margin-bottom:10px;"></div>
+      <div id="alRows"></div>
+      <div class="frow" style="margin-top:10px;">
+        <div class="fg" style="flex:1;"><label>고객 추가</label><input type="text" id="alName" list="alList" style="width:100%;" placeholder="거래처명"><datalist id="alList"></datalist></div>
+        <div class="fg"><label>&nbsp;</label><button class="btn" onclick="addAllocRow()">＋ 추가</button></div>
+      </div>
+      <div id="alSum" class="note" style="margin-top:8px;"></div>
+      <div class="note">입고 후 매입 전표를 확정하면 입고수량이 이 비율대로 고객별 배정 재고가 됩니다. 남는 수량은 미배정입니다.</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeAllocModal()">취소</button>
+      <button class="btn btn-p" onclick="saveAlloc()">저장</button>
     </div>
   </div>
 </div>
@@ -424,6 +445,7 @@ let SALES_YMS = [];     // 매출 존재 월 목록 (오름차순)
 let STOCK = {};         // ym → {item_code: {erp, real, amt, price}}
 let STOCK_YMS = [];
 let PO = [];            // smart_po + items 평면화
+let ALLOC = [];         // smart_po_alloc (발주 품목별 고객 배정, 2026-10-29)
 let COVER = [];         // v_smart_coverage
 let PARTNERS = [];
 let ITEM_MAP = {};      // item_code → item
@@ -437,7 +459,7 @@ async function init(){
     const [cfg, items, partners] = await Promise.all([
       sb.from('smart_forecast_setting').select('*').order('id').limit(1),
       sbAll('v_smart_item','*'),
-      sbAll('partners','name,supply_mode,sales_manager,lot_check_target,is_active')
+      sbAll('partners','id,name,alias1,alias2,supply_mode,sales_manager,lot_check_target,is_active')
     ]);
     if(cfg.error) throw new Error('설정: '+cfg.error.message);
     CFG = (cfg.data&&cfg.data[0]) || {recent_months:6,season_months:3,weight_recent:50,weight_season:50,
@@ -707,6 +729,7 @@ function toggleAllFc(on){ document.querySelectorAll('.fc-ck:not(:disabled)').for
 async function loadPoData(){
   const hd = await sbAll('smart_po','*');
   const it = await sbAll('smart_po_item','*');
+  ALLOC = await sbAll('smart_po_alloc','id,po_item_id,partner_id,qty_alloc');
   const hmap = {}; hd.forEach(h=>hmap[h.id]=h);
   PO = it.map(i=>{ const h = hmap[i.po_id]||{};
     return {...i, po_no:h.po_no, order_date:h.order_date, target_ym:h.target_ym,
@@ -756,6 +779,7 @@ function renderPo(){
       <td class="ctr ${cls}">${days}</td>
       <td class="ctr ${scls}">${esc(r.status||'')}</td>
       <td class="ctr">
+        <button class="btn btn-sm" onclick="openAllocModal(${r.id})" title="고객별 배정">배정 ${ALLOC.filter(a=>a.po_item_id===r.id&&Number(a.qty_alloc)>0).length||''}</button>
         <button class="btn btn-sm" onclick="openRcvModal(${r.id})">입고</button>
         <button class="btn btn-sm" onclick="deletePoItem(${r.id})">삭제</button>
       </td>
@@ -815,10 +839,90 @@ async function savePo(){
     if(e1) throw new Error(e1.message);
     const items = poDraft.map(d=>({ po_id:hd.id, item_code:d.item_code, maker_pn:d.maker_pn,
       description:d.description, qty_ordered:d.qty_ordered, qty_received:0, unit_price:d.unit_price||null }));
-    const {error:e2} = await sb.from('smart_po_item').insert(items);
+    const {data:ins, error:e2} = await sb.from('smart_po_item').insert(items).select('id,item_code,qty_ordered');
     if(e2) throw new Error(e2.message);
-    alert(`발주 ${no} 등록 완료 (${items.length}품목)`);
+    let allocMsg='';
+    try{ const n = await autoAllocate(ins||[]); allocMsg = n ? `\n고객 배정 ${n}건을 최근 매출 비율로 자동 생성했습니다 (발주 목록 [배정]에서 수정).` : ''; }
+    catch(ea){ allocMsg = '\n※ 고객 배정 자동 생성 실패: '+ea.message+' (발주 목록 [배정]에서 직접 입력)'; }
+    alert(`발주 ${no} 등록 완료 (${items.length}품목)`+allocMsg);
     closePoModal(); poDraft=[]; await loadPo(); switchTab('po');
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
+
+// ── 고객별 배정 (2026-10-29) ──
+// 발주수량을 최근 N개월(설정 recent_months) 고객별 매출수량 비율로 나눠 smart_po_alloc에 저장.
+// 입고 후 매입 전표를 확정하면 이 비율대로 고객별 배정 재고가 잡힌다(매입매출관리 재고원장).
+function partnerIdByName(name){
+  const n = String(name||'').trim();
+  const p = PARTNERS.find(x=>x.name===n) || PARTNERS.find(x=>x.alias1===n||x.alias2===n);
+  return p ? p.id : null;
+}
+async function customerShares(codes){
+  const months = CFG.recent_months || 6; const base = ymStr(new Date()); const out = {};
+  for(let i=1;i<=months;i++){
+    const [y,m] = ymAdd(base,-i).split('-').map(Number);
+    const rows = await sbAll('sales_data','item_code,customer,qty', q=>q.eq('year', String(y%100)+'년').eq('month', m+'월').in('item_code', codes));
+    rows.forEach(r=>{ const pid = partnerIdByName(r.customer); if(!pid) return;
+      const o = out[r.item_code] = out[r.item_code]||{}; o[pid] = (o[pid]||0) + (Number(r.qty)||0); });
+  }
+  return out;
+}
+async function autoAllocate(items){
+  if(!items.length) return 0;
+  const shares = await customerShares([...new Set(items.map(i=>i.item_code))]);
+  const rows = [];
+  items.forEach(it=>{
+    const sh = shares[it.item_code]; if(!sh) return;
+    const ent = Object.entries(sh).filter(([,q])=>q>0); const tot = ent.reduce((s,[,q])=>s+q,0); if(!tot) return;
+    const qo = Number(it.qty_ordered)||0;
+    const part = ent.map(([pid,q])=>({po_item_id:it.id, partner_id:Number(pid), qty_alloc:Math.floor(qo*q/tot)}));
+    let rem = qo - part.reduce((s,x)=>s+x.qty_alloc,0);
+    part.sort((a,b)=>b.qty_alloc-a.qty_alloc); if(part.length) part[0].qty_alloc += rem;
+    part.filter(x=>x.qty_alloc>0).forEach(x=>rows.push(x));
+  });
+  if(!rows.length) return 0;
+  const {error} = await sb.from('smart_po_alloc').insert(rows);
+  if(error) throw new Error(error.message);
+  return rows.length;
+}
+let allocId = null, allocDraft = [];
+function openAllocModal(id){
+  const r = PO.find(x=>x.id===id); if(!r) return;
+  allocId = id;
+  allocDraft = ALLOC.filter(a=>a.po_item_id===id).map(a=>({partner_id:a.partner_id, qty_alloc:Number(a.qty_alloc)||0}));
+  $('alInfo').innerHTML = `${esc(r.po_no)} · ${esc(r.item_code)} ${esc(r.maker_pn||'')}<br>발주 ${nf(r.qty_ordered)} · 입고 ${nf(r.qty_received)}`;
+  $('alList').innerHTML = PARTNERS.filter(p=>p.is_active!==false).map(p=>`<option value="${esc(p.name)}">`).join('');
+  renderAlloc(); $('allocMask').classList.add('on');
+}
+function renderAlloc(){
+  const r = PO.find(x=>x.id===allocId)||{};
+  const sum = allocDraft.reduce((s,a)=>s+(Number(a.qty_alloc)||0),0);
+  const pname = id => (PARTNERS.find(p=>p.id===id)||{}).name || id;
+  $('alRows').innerHTML = allocDraft.length ? `<table><thead><tr><th style="width:240px;">고객</th><th class="num" style="width:130px;">배정수량</th><th class="ctr" style="width:50px;"></th></tr></thead><tbody>${
+    allocDraft.map((a,i)=>`<tr><td>${esc(pname(a.partner_id))}</td>
+      <td class="num"><input type="number" min="0" value="${a.qty_alloc}" style="width:115px;text-align:right;" onchange="allocDraft[${i}].qty_alloc=Number(this.value)||0;renderAlloc()"></td>
+      <td class="ctr"><button class="btn btn-sm" onclick="allocDraft.splice(${i},1);renderAlloc()">×</button></td></tr>`).join('')}</tbody></table>`
+    : '<div class="note">배정이 없습니다. 입고분은 전부 「미배정」 재고가 됩니다.</div>';
+  const diff = (Number(r.qty_ordered)||0) - sum;
+  $('alSum').innerHTML = `배정 합계 ${nf(sum)} / 발주 ${nf(r.qty_ordered)} ${diff>0?`· 미배정 ${nf(diff)}`:(diff<0?'· <span class="danger">발주수량 초과</span>':'')}`;
+}
+function addAllocRow(){
+  const n = ($('alName').value||'').trim(); const pid = partnerIdByName(n);
+  if(!pid){ alert('거래처 목록에 있는 이름을 선택하세요.'); return; }
+  if(allocDraft.some(a=>a.partner_id===pid)){ alert('이미 추가된 고객입니다.'); return; }
+  allocDraft.push({partner_id:pid, qty_alloc:0}); $('alName').value=''; renderAlloc();
+}
+function closeAllocModal(){ $('allocMask').classList.remove('on'); allocId=null; }
+async function saveAlloc(){
+  const r = PO.find(x=>x.id===allocId); if(!r) return;
+  const sum = allocDraft.reduce((s,a)=>s+(Number(a.qty_alloc)||0),0);
+  if(sum > Number(r.qty_ordered) && !confirm(`배정 합계(${nf(sum)})가 발주수량(${nf(r.qty_ordered)})보다 많습니다.\n그대로 저장할까요?`)) return;
+  try{
+    const {error:e1} = await sb.from('smart_po_alloc').delete().eq('po_item_id', allocId);
+    if(e1) throw new Error(e1.message);
+    const rows = allocDraft.filter(a=>a.qty_alloc>0).map(a=>({po_item_id:allocId, partner_id:a.partner_id, qty_alloc:a.qty_alloc}));
+    if(rows.length){ const {error:e2} = await sb.from('smart_po_alloc').insert(rows); if(e2) throw new Error(e2.message); }
+    closeAllocModal(); await loadPo();
   }catch(e){ alert('저장 실패: '+e.message); }
 }
 
@@ -841,6 +945,13 @@ async function saveRcv(){
   try{
     const {error} = await sb.from('smart_po_item').update({qty_received:q, note:($('rcvNote').value||'').trim()||null}).eq('id', rcvId);
     if(error) throw new Error(error.message);
+    // (2026-10-29) 이번에 늘어난(줄어든) 수량을 입고 기록으로 남김 → 매입매출관리 ① 확정 대기에 매입 전표로 생성
+    const delta = q - Number(r.qty_received||0);
+    if(delta !== 0){
+      const {error:er} = await sb.from('smart_po_receipt').insert({po_item_id:rcvId, qty:delta, received_date:todayStr(),
+        note: delta<0 ? '입고수량 정정' : (($('rcvNote').value||'').trim()||null), created_by: localStorage.getItem('sme_user')||USER});
+      if(er) throw new Error('입고 기록: '+er.message);
+    }
     // 헤더 상태 재계산 — 같은 발주번호의 모든 품목이 채워지면 입고완료
     const sibs = PO.filter(x=>x.po_id===r.po_id).map(x=> x.id===rcvId ? {...x, qty_received:q} : x);
     const allDone = sibs.every(x=>Number(x.qty_received) >= Number(x.qty_ordered));
@@ -852,6 +963,7 @@ async function saveRcv(){
 }
 async function deletePoItem(id){
   const r = PO.find(x=>x.id===id); if(!r) return;
+  if(Number(r.qty_received)>0){ alert('입고 기록이 있는 품목은 삭제할 수 없습니다. 입고수량을 0으로 정정한 뒤 삭제하세요.'); return; }
   if(!confirm(`${r.po_no} · ${r.item_code} 품목을 삭제할까요?`)) return;
   const {error} = await sb.from('smart_po_item').delete().eq('id', id);
   if(error){ alert('삭제 실패: '+error.message); return; }
