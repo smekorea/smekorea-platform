@@ -2538,9 +2538,62 @@ async function loadCorpCalRecords(){
 function directiveChipText(r){
   return (r._late?'D+'+r._lateDays+' ':'')+(r._mine?'':'['+(r.owner_dept||'')+'] ')+(r.title||'')+(r.status==='완료보고'?' (완료보고)':'');
 }
-function openDirective(id){
+// 2026-10-29: 달력에서 지시사항을 누르면 업무보고로 넘어가지 않고 달력 안에서 브리핑창으로 본다(읽기 전용) — 처리는 「업무보고에서 열기」
+function openDirectiveTab(id){
   const w=window.open('directive.html?id='+encodeURIComponent(id),'_blank');
   if(!w) location.href='directive.html?id='+encodeURIComponent(id);
+}
+async function openDirective(id){
+  if(!SB){ openDirectiveTab(id); return; }
+  try{
+    var dr=await SB.from('directives').select('*').eq('id',id).maybeSingle();
+    if(dr.error||!dr.data){ openDirectiveTab(id); return; }
+    var r=dr.data;
+    var ar=await SB.from('directive_assignees').select('employee_id').eq('directive_id',id);
+    var ids=((ar&&ar.data)||[]).map(function(a){ return a.employee_id; });
+    var names=[];
+    if(ids.length){ var er=await SB.from('employees').select('id,name').in('id',ids); names=((er&&er.data)||[]).map(function(e){ return e.name; }); }
+    var ur=await SB.from('directive_updates').select('type,state,emp_name,content,created_at,old_due,new_due').eq('directive_id',id).order('created_at',{ascending:false}).limit(5);
+    var ups=(ur&&ur.data)||[];
+    var esc=escapeHtml;
+    var cell=function(k,v){ return '<div class="k">'+k+'</div><div'+(v?'':' class="none"')+'>'+(v||'-')+'</div>'; };
+    var stC={'지시됨':['#E6F1FB','#0C447C'],'진행중':['#FFF3E0','#9A4A0B'],'완료보고':['#FEF9C3','#854d0e'],'완료':['#EAF3DE','#27500A']}[r.status]||['#F1EFE8','#444441'];
+    var due=r.due_date?String(r.due_date).slice(0,10):'';
+    var dueTxt=due?esc(due)+(r.due_change_count?' <span style="color:#A32D2D;font-size:11px;">(변경 '+Number(r.due_change_count)+'회'+(r.due_date_original?' · 최초 '+esc(String(r.due_date_original).slice(0,10)):'')+')</span>':''):'';
+    var owner=esc(r.owner_dept||'')+(names.length?' / '+esc(names.join(', ')):'');
+    var issuer=esc(r.issuer_name||'')+(r.issuer_dept?' <span style="color:#6b7280;">('+esc(r.issuer_dept)+')</span>':'');
+    var fmt=function(ts){ if(!ts) return ''; var d=new Date(ts); return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+    var upLbl=function(u){ if(u.type==='완료보고') return u.state==='불가'?'불가 요청':'완료 요청'; if(u.type==='반려'||u.type==='코멘트') return '보류'; if(u.type==='진행'&&u.state) return u.state==='대기'?'회신 대기':u.state; return u.type||''; };
+    var upHtml=ups.length?ups.map(function(u){
+      return '<div style="padding:8px 12px;border-bottom:1px solid #eef0f4;">'
+        +'<div style="font-size:12px;color:#6b7280;"><b style="color:#A32D2D;">'+esc(upLbl(u))+'</b> · '+esc(u.emp_name||'')+' · '+fmt(u.created_at)+(u.new_due?' · 기한 '+esc(u.old_due||'-')+' → '+esc(u.new_due):'')+'</div>'
+        +(u.content?'<div style="font-size:13px;line-height:1.6;color:#111827;white-space:pre-wrap;word-break:break-word;margin-top:2px;">'+esc(u.content)+'</div>':'')+'</div>';
+    }).join(''):'<div style="padding:10px 12px;font-size:13px;color:#9ca3af;">진행 기록이 없습니다</div>';
+    var md=r.meeting_date?String(r.meeting_date).slice(0,10):(r.created_at?String(r.created_at).slice(0,10):'');
+    var h='<div class="brief-hd" id="brief-hd" style="background:#C0392B;">'
+      +'<div class="brief-date">📌 '+t('지시사항')+'</div>'
+      +'<span style="flex:1"></span>'
+      +'<span class="brief-pill" style="background:'+stC[0]+';color:'+stC[1]+'">'+esc(r.status||'')+'</span>'
+      +(r.priority==='상'||r.priority==='긴급'?'<span class="brief-pill" style="background:#FCEBEB;color:#A32D2D">'+esc(r.priority)+'</span>':'')
+      +'<button class="brief-x" onclick="closeBrief()" aria-label="닫기">×</button></div>'
+      +'<div class="brief-bd">'
+      +'<div class="brief-ttl" style="border-bottom-color:#C0392B;">'+esc(r.title||'(제목 없음)')+'</div>'
+      +'<div class="brief-grid">'
+        +cell('지시자',issuer)+cell('상태',esc(r.status||''))
+        +cell('담당부서/담당자',owner)+cell('납기',dueTxt)
+        +cell('지시일',esc(md))+cell('우선순위',esc(r.priority||''))
+      +'</div>'
+      +'<div class="brief-box"><div class="brief-box-h">지시 내용</div>'+(r.content?'<div class="brief-content brief-main">'+esc(r.content)+'</div>':'<div class="brief-content brief-main" style="color:#9ca3af;font-size:13px;">내용 없음</div>')+'</div>'
+      +'<div class="brief-box"><div class="brief-box-h">진행 기록 (최근 '+ups.length+'건)</div>'+upHtml+'</div>'
+      +'</div><div class="brief-ft">'
+      +'<span class="brief-who">지시 '+esc(md)+(r.issuer_name?' · '+esc(r.issuer_name):'')+'</span>'
+      +'<button onclick="closeBrief()">'+t('닫기')+'</button>'
+      +'<button class="brief-edit" style="background:#C0392B;border-color:#C0392B;" onclick="closeBrief();openDirectiveTab('+Number(r.id)+')">업무보고에서 열기 ↗</button></div>';
+    briefId=null; briefFrom='directive';
+    document.getElementById('brief-box').innerHTML=h;
+    document.getElementById('brief-overlay').classList.add('open');
+    briefPlace();
+  }catch(e){ console.warn('[DirectiveBrief]',e); openDirectiveTab(id); }
 }
 async function loadDirectiveCalRecords(){
   if(!SB || !wfSession.empId) return;
