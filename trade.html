@@ -10,6 +10,7 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.4: LG사급 — 공급구분(직거래/LG사급), 출하 자동 분리, 사급 납품 수량만·마감대기, ⑥ LG 마감(기간 합산→LG전자 매출 전표, 납품은 마감완료로 보존)
    ── v1.3: 명세서 양식 정리(공급자 칸 폭 축소, 일련번호 일자 기준, 공급자용 마진금액·마진율, 디자인)
    ── v1.2: 거래명세서 미리보기(같은 화면 안, 모든 상태 · 작성중은 「미확정」 표시) + 인쇄, 언어는 법인별 자동(본사 한국어/SMECN 중국어/기타 영어)
    ── v1.1: 스마트전자 입고 기록(smart_po_receipt) → 매입 전표 자동 생성, 확정 시 발주 고객배정 비율로 재고 배정
@@ -161,6 +162,7 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
   <button class="tab-btn" id="tabbtn-new" onclick="switchTab('new')">② 직접 입력</button>
   <button class="tab-btn" id="tabbtn-list" onclick="switchTab('list')">③ 전표 목록</button>
   <button class="tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">④ 재고·배정</button>
+  <button class="tab-btn" id="tabbtn-lg" onclick="switchTab('lg')">⑥ LG 마감<span class="cnt" id="cnt-lg"></span></button>
   <button class="tab-btn" id="tabbtn-set" onclick="switchTab('set')">⑤ 설정</button>
 </div>
 
@@ -213,6 +215,26 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
     <div class="box"><div class="box-h">품목별 재고·배정</div><div class="tbl-wrap" id="stockTbl"></div></div>
     <div class="box"><div class="box-h" id="stockDetH">품목 상세</div><div class="box-b" id="stockDet"><div class="note">왼쪽에서 품목을 선택하세요.</div></div></div>
   </div>
+</div>
+
+<!-- ⑥ LG 마감 -->
+<div class="wrap" id="tab-lg" style="display:none">
+  <div class="info">LG사급 품목은 납품처(세영 등)에는 <b>수량만</b> 전표로 나가고, 15일·말일 단위로 <b>LG전자</b>에 마감 청구합니다. 기간을 고르면 「마감대기」 사급 납품을 품목별로 합산하고, LG전자 매출 전표(작성중)를 만듭니다. 납품 전표는 삭제되지 않고 「마감완료」로 남습니다.</div>
+  <div class="toolbar">
+    <input class="inp" type="date" id="lgFrom"> ~ <input class="inp" type="date" id="lgTo">
+    <button class="btn" onclick="lgQuick(0,1)">이번 달 1~15일</button>
+    <button class="btn" onclick="lgQuick(0,2)">이번 달 16일~말일</button>
+    <button class="btn" onclick="lgQuick(-1,2)">지난 달 16일~말일</button>
+    <button class="btn btn-p" onclick="loadLg()">조회</button>
+    <span class="grow"></span>
+    <span class="note" id="lgSum"></span>
+    <button class="btn btn-p" id="lgMake" onclick="makeLgSlip()" disabled>LG 마감 전표 만들기</button>
+  </div>
+  <div class="grid2">
+    <div class="box"><div class="box-h">마감대기 품목 합산 <span class="note">(LG 단가: LG전자 최근 매출단가)</span></div><div class="tbl-wrap" id="lgItemTbl"></div></div>
+    <div class="box"><div class="box-h">기간 내 사급 납품 전표</div><div class="tbl-wrap" id="lgDelTbl"></div></div>
+  </div>
+  <div class="box"><div class="box-h">최근 LG 마감 전표</div><div class="tbl-wrap" id="lgSlipTbl"></div></div>
 </div>
 
 <!-- ⑤ 설정 -->
@@ -290,6 +312,14 @@ let curEntity=loginEntity;
 let SETTING={}, LOCS=[], LOCMAP=[], PARTNERS=[], PBYID={}, ITEMS=[], IBYCODE={}, EMPS=[], RULES=[];
 let WAIT=[], NEWD=[], LIST=[], STOCK=[], STOCKDET=null;
 let curSlip=null, curLines=[], pendingWarn=null;
+let SUPPLY={};   // item_code → '직거래'|'LG사급' (최근 재고조사 공급유형)
+let LGD=[], LGITEMS=[], LGSLIPS=[];
+function kindOf(code){return SUPPLY[code]||'직거래';}
+// 사급 납품 전표: 공급구분 LG사급이면서 LG 마감 전표가 아닌 것 → 금액 없음(수량만), 재고는 차감, 매출 아님
+function isDelivery(sl){return !!sl&&sl.supply_kind==='LG사급'&&sl.source_type!=='LG마감';}
+function kindBadge(r){if(r.supply_kind!=='LG사급')return '<span class="badge" style="color:#565C64;border-color:#d1d5db">직거래</span>';
+  return r.source_type==='LG마감'?'<span class="badge b-sale">LG마감</span>':'<span class="badge b-warn">LG사급</span>';}
+function closeBadge(r){return r.close_status==='마감완료'?'<span class="badge b-done">마감완료</span>':(r.close_status==='마감대기'?(r.closed_slip_id?'<span class="badge b-draft">마감작성중</span>':'<span class="badge b-draft">마감대기</span>'):'');}
 const SORT={};
 
 /* ── 공통 ── */
@@ -421,6 +451,11 @@ async function loadMaster(){
   PARTNERS=pts;PBYID={};PARTNERS.forEach(p=>PBYID[p.id]=p);
   EMPS=emps;RULES=rules;
   if(!ITEMS.length){ITEMS=await getAll('item_lookup_mv?select=item_code,description,spec,brand&order=item_code');IBYCODE={};ITEMS.forEach(i=>IBYCODE[i.item_code]=i);}
+  if(!Object.keys(SUPPLY).length){
+    try{const lt=await api('stock_inventory?select=ym&order=ym.desc&limit=1');
+      if(lt&&lt[0]){const rows=await getAll('stock_inventory?select=item_code,supply_type&ym=eq.'+lt[0].ym);
+        rows.forEach(r=>{SUPPLY[r.item_code]=String(r.supply_type||'').replace(/\s/g,'')==='LG사급'?'LG사급':'직거래';});}}catch(e){}
+  }
   const ds=document.getElementById('deptSel');
   const depts=[...new Set(EMPS.map(x=>x.dept).filter(Boolean))];
   const keep=ds.value;
@@ -432,8 +467,8 @@ async function loadMaster(){
 let curTab='wait';
 function switchTab(k){
   curTab=k;
-  ['wait','new','list','stock','set'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===k?'':'none';document.getElementById('tabbtn-'+x).classList.toggle('active',x===k);});
-  if(k==='wait')loadWait();if(k==='new')loadNew();if(k==='list')loadList();if(k==='stock')loadStock();if(k==='set')renderSetting();
+  ['wait','new','list','stock','lg','set'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===k?'':'none';document.getElementById('tabbtn-'+x).classList.toggle('active',x===k);});
+  if(k==='wait')loadWait();if(k==='new')loadNew();if(k==='list')loadList();if(k==='stock')loadStock();if(k==='lg')loadLg();if(k==='set')renderSetting();
 }
 function renderAllTabs(){if(curTab==='wait')renderWait();else if(curTab==='new')renderNew();else if(curTab==='list')renderList();}
 async function changeEntity(){
@@ -487,20 +522,27 @@ async function runAutoGen(manual){
   if(made)await loadWait(true);
 }
 async function createShipSlip(s,its){
+  // 한 출하에 직거래·LG사급 품목이 섞이면 전표 2장으로 나눈다 (사급 = 수량만, 금액 0)
+  const groups={};its.forEach(x=>{const k=kindOf(x.item_code);(groups[k]=groups[k]||[]).push(x);});
+  let made=false;
+  for(const k of Object.keys(groups)){if(await createShipSlipKind(s,groups[k],k))made=true;}
+  return made;
+}
+async function createShipSlipKind(s,its,kind){
   const p=findPartner(s.customer);
-  const vt='과세';const vp=vatPct(vt);
+  const vt='과세';const vp=vatPct(vt);const dl=kind==='LG사급';
   const lines=its.map((x,i)=>{
-    const q=num(x.qty_scanned);const pr=num(x.unit_price);const sup=Math.round(q*pr);
+    const q=num(x.qty_scanned);const pr=num(x.unit_price);const sup=dl?0:Math.round(q*pr);
     const info=IBYCODE[x.item_code]||{};
     return {line_no:i+1,item_code:x.item_code,description:x.description||info.description||'',spec:info.spec||null,brand:x.maker||info.brand||null,
-      qty:q,unit_price:pr,supply_amt:sup,vat_amt:Math.round(sup*vp/100),source_line_id:x.id,
+      qty:q,unit_price:pr,supply_amt:sup,vat_amt:dl?0:Math.round(sup*vp/100),source_line_id:x.id,
       note:num(x.qty_required)!==q?('요구 '+num(x.qty_required)):null};
   });
   const sup=lines.reduce((a,b)=>a+b.supply_amt,0),vat=lines.reduce((a,b)=>a+b.vat_amt,0);
   const head={entity:'KOREA',slip_type:'매출',slip_date:s.ship_date,partner_id:p?p.id:null,partner_name:p?p.name:s.customer,
     dept:empDept(s.manager)||s.recv_dept||null,manager:s.manager||null,emp_no:(EMPS.find(e=>e.name===s.manager)||{}).emp_no||null,
     location_id:p?partnerLocation(p.id):(LOCS[0]&&LOCS[0].id)||null,currency:SETTING.default_currency||'KRW',vat_type:vt,
-    status:'작성중',source_type:'출하',source_id:s.id,supply_total:sup,vat_total:vat,total:sup+vat,created_by:'자동(출하완료)'};
+    status:'작성중',source_type:'출하',source_id:s.id,supply_kind:kind,supply_total:sup,vat_total:vat,total:sup+vat,created_by:'자동(출하완료)'};
   try{
     const r=await post('trade_slip',head);
     const id=r[0].id;
@@ -542,11 +584,12 @@ const WAIT_COLS=[
   {t:'일자',k:'slip_date',w:90},
   {t:'구분',k:'slip_type',w:60,f:r=>typeBadge(r.slip_type)},
   {t:'출처',k:'source_type',w:80,f:r=>esc(r.source_type==='스마트입고'?'스마트 입고':'출하완료')},
+  {t:'공급구분',k:'supply_kind',w:80,f:r=>kindBadge(r)},
   {t:'거래처',k:'partner_name',w:200,f:r=>esc(r.partner_name)+(r.partner_id?'':' <span class="badge b-warn">거래처 미연결</span>')},
   {t:'부서',k:'dept',w:90},{t:'담당',k:'manager',w:70},
   {t:'보관위치',k:'location_id',w:80,f:r=>esc(locName(r.location_id)),sv:r=>locName(r.location_id)},
   {t:'품목수',k:'n',w:60,cls:'r',f:r=>fmt(lineCount(r)),sv:r=>lineCount(r)},
-  {t:'공급가',k:'supply_total',w:110,cls:'r',f:r=>money(r.supply_total)},
+  {t:'공급가',k:'supply_total',w:110,cls:'r',f:r=>isDelivery(r)?'<span class="note">수량만</span>':money(r.supply_total)},
   {t:'합계',k:'total',w:110,cls:'r',f:r=>money(r.total)},
   {t:'',k:'act',w:70,sort:false,f:r=>`<button class="btn btn-p" onclick="event.stopPropagation();openSlip(${r.id})">확인</button>`}
 ];
@@ -586,7 +629,7 @@ function statusBadge(st){return st==='확정'?'<span class="badge b-done">확정
 function openNewSlip(tp){
   curSlip={id:null,entity:curEntity,slip_type:tp,slip_date:today(),partner_id:null,partner_name:'',dept:myDept()||null,manager:curUser,
     emp_no:(EMPS.find(e=>e.name===curUser)||{}).emp_no||null,location_id:(LOCS[0]&&LOCS[0].id)||null,currency:SETTING.default_currency||'KRW',
-    fx_rate:1,vat_type:'과세',status:'작성중',source_type:'직접',note:''};
+    fx_rate:1,vat_type:'과세',status:'작성중',source_type:'직접',supply_kind:'직거래',note:''};
   curLines=[];addLine();renderSlip();document.getElementById('slipOv').classList.add('on');
 }
 
@@ -595,14 +638,15 @@ async function openSlip(id){
   try{
     const r=await api('trade_slip?id=eq.'+id);curSlip=r[0];
     curLines=await api('trade_slip_line?slip_id=eq.'+id+'&order=line_no,id');
+    curLines.forEach(l=>l._kind=curSlip.supply_kind||'직거래');
     curSlip._warn=curSlip.status!=='작성중'?await api('trade_slip_warning?slip_id=eq.'+id+'&order=id'):[];
   }catch(e){alert('전표 불러오기 실패: '+e.message);return;}
   renderSlip();document.getElementById('slipOv').classList.add('on');
 }
 function closeSlip(){document.getElementById('slipOv').classList.remove('on');closeSug();}
 function editable(){return curSlip&&curSlip.status==='작성중';}
-function addLine(){curLines.push({id:null,line_no:curLines.length+1,item_code:'',description:'',spec:null,brand:null,qty:0,unit_price:0,supply_amt:0,vat_amt:0,note:null});}
-function recalcLine(l){l.supply_amt=Math.round(num(l.qty)*num(l.unit_price)*(curSlip.currency==='KRW'?1:100))/(curSlip.currency==='KRW'?1:100);l.vat_amt=Math.round(l.supply_amt*vatPct(curSlip.vat_type)/100*(curSlip.currency==='KRW'?1:100))/(curSlip.currency==='KRW'?1:100);}
+function addLine(){curLines.push({id:null,line_no:curLines.length+1,item_code:'',description:'',spec:null,brand:null,qty:0,unit_price:0,supply_amt:0,vat_amt:0,note:null,_kind:(curSlip&&curSlip.supply_kind)||'직거래'});}
+function recalcLine(l){if(isDelivery(curSlip)){l.supply_amt=0;l.vat_amt=0;return;}l.supply_amt=Math.round(num(l.qty)*num(l.unit_price)*(curSlip.currency==='KRW'?1:100))/(curSlip.currency==='KRW'?1:100);l.vat_amt=Math.round(l.supply_amt*vatPct(curSlip.vat_type)/100*(curSlip.currency==='KRW'?1:100))/(curSlip.currency==='KRW'?1:100);}
 function renderSlip(){
   const s=curSlip,ed=editable();
   document.getElementById('slipTitle').innerHTML=`${s.slip_type} 전표 ${s.slip_no?('· '+esc(s.slip_no)):''} &nbsp;${statusBadge(s.status)}${s.source_type!=='직접'?` <span class="badge" style="color:#fff;border-color:#fff">${esc(s.source_type)}</span>`:''}`;
@@ -620,11 +664,12 @@ function renderSlip(){
     <div class="k">통화</div><div><select class="inp" id="fCur" ${dis}>${['KRW','USD','CNY','THB','INR'].map(c=>`<option ${c===s.currency?'selected':''}>${c}</option>`).join('')}</select></div>
     <div class="k">환율</div><div><input class="inp" id="fFx" value="${esc(s.fx_rate||1)}" ${dis}></div>
     <div class="k">VAT</div><div><select class="inp" id="fVat" ${dis}>${['과세','영세','면세'].map(v=>`<option ${v===s.vat_type?'selected':''}>${v}${v==='과세'?' ('+num(SETTING.default_vat_pct)+'%)':''}</option>`).join('')}</select></div>
-    <div class="k">비고</div><div style="grid-column:span 5"><input class="inp" id="fNote" value="${esc(s.note||'')}" ${dis}></div>
+    <div class="k">공급구분</div><div><select class="inp" id="fKind" ${ed&&s.source_type!=='LG마감'?'':'disabled'}>${['직거래','LG사급'].map(v=>`<option ${v===(s.supply_kind||'직거래')?'selected':''}>${v}</option>`).join('')}</select>${s.close_status?'&nbsp;'+closeBadge(s):''}</div>
+    <div class="k">비고</div><div style="grid-column:span 3"><input class="inp" id="fNote" value="${esc(s.note||'')}" ${dis}></div>
   </div>`;
-  if(ed)h+=`<div class="toolbar"><button class="btn" onclick="syncHead();addLine();renderSlip()">＋ 품목행</button><button class="btn" onclick="syncHead();document.getElementById('pasteOv').classList.add('on')">엑셀 붙여넣기</button><span class="grow"></span><span class="note">수량·단가를 바꾸면 공급가·VAT가 자동 계산됩니다.</span></div>`;
+  if(ed)h+=`<div class="toolbar"><button class="btn" onclick="syncHead();addLine();renderSlip()">＋ 품목행</button><button class="btn" onclick="syncHead();document.getElementById('pasteOv').classList.add('on')">엑셀 붙여넣기</button><span class="grow"></span><span class="note">${isDelivery(s)?'<b>LG사급 납품</b> — 수량만 관리합니다(금액은 ⑥ LG 마감에서 LG전자로 청구). ':''}줄의 구분이 전표와 다르면 저장할 때 별도 전표로 나눕니다.</span></div>`;
   h+=`<div class="tbl-wrap" style="max-height:46vh"><table class="dt lines" id="tLines"><thead><tr>
-    <th style="width:36px">#</th><th style="width:120px">품목코드</th><th style="width:300px">품목명[규격]</th><th style="width:80px">브랜드</th>
+    <th style="width:36px">#</th><th style="width:120px">품목코드</th><th style="width:300px">품목명[규격]</th><th style="width:80px">브랜드</th><th style="width:86px">구분</th>
     <th style="width:110px" class="r">수량</th><th style="width:90px" class="r">단가</th><th style="width:120px" class="r">공급가</th><th style="width:100px" class="r">VAT</th><th style="width:150px">참고</th>${ed?'<th style="width:40px"></th>':''}</tr></thead><tbody>`;
   curLines.forEach((l,i)=>{
     const short=l.note&&/^요구 /.test(l.note);
@@ -632,6 +677,7 @@ function renderSlip(){
       <td>${ed?`<input class="inp" data-i="${i}" data-f="item_code" value="${esc(l.item_code||'')}">`:esc(l.item_code)}</td>
       <td title="${esc(l.description)}">${ed?`<input class="inp" data-i="${i}" data-f="description" value="${esc(l.description||'')}">`:esc(l.description)}</td>
       <td>${esc(l.brand||'')}</td>
+      <td>${ed&&s.source_type!=='LG마감'?`<select class="inp" data-i="${i}" data-f="_kind" style="height:26px;${(l._kind||s.supply_kind)!==s.supply_kind?'border-color:#B42318;color:#B42318':''}">${['직거래','LG사급'].map(v=>`<option ${v===(l._kind||s.supply_kind)?'selected':''}>${v}</option>`).join('')}</select>`:esc(l._kind||s.supply_kind||'직거래')}</td>
       <td class="num r">${ed?`<input class="inp" data-i="${i}" data-f="qty" value="${fmt(l.qty)}">`:fmt(l.qty)}</td>
       <td class="num r">${ed?`<input class="inp" data-i="${i}" data-f="unit_price" value="${fmt(l.unit_price,4)}">`:fmt(l.unit_price,4)}</td>
       <td class="r">${money(l.supply_amt)}</td><td class="r">${money(l.vat_amt)}</td>
@@ -665,10 +711,13 @@ function renderSlip(){
       fillLastPrices();});
     pin.addEventListener('change',()=>{if(pin.value!==curSlip.partner_name){curSlip.partner_id=null;curSlip.partner_name=pin.value;document.getElementById('fBiz').textContent='';}});
     ['fVat','fCur'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{syncHead();curLines.forEach(recalcLine);renderSlip();}));
+    const fk=document.getElementById('fKind');
+    if(fk&&!fk.disabled)fk.addEventListener('change',()=>{syncHead();curLines.forEach(l=>{l._kind=curSlip.supply_kind;recalcLine(l);});if(!isDelivery(curSlip))fillLastPrices();renderSlip();});
+    document.querySelectorAll('#tLines select[data-f="_kind"]').forEach(sel=>sel.addEventListener('change',()=>{curLines[+sel.dataset.i]._kind=sel.value;syncHead();renderSlip();}));
     document.querySelectorAll('#tLines input[data-f]').forEach(inp=>{
       const i=+inp.dataset.i,fd=inp.dataset.f;
       if(fd==='item_code'){
-        attachSuggest(inp,itemList,o=>{const l=curLines[i];l.item_code=o.i.item_code;l.description=o.i.description||'';l.spec=o.i.spec||null;l.brand=o.i.brand||null;
+        attachSuggest(inp,itemList,o=>{const l=curLines[i];l.item_code=o.i.item_code;l.description=o.i.description||'';l.spec=o.i.spec||null;l.brand=o.i.brand||null;l._kind=kindOf(o.i.item_code);
           syncHead();fillLastPrices([i]).then(renderSlip);});
       }
       inp.addEventListener('change',()=>{const l=curLines[i];
@@ -692,6 +741,7 @@ function syncHead(){
   curSlip.slip_date=g('fDate').value;curSlip.dept=g('fDept').value||null;curSlip.manager=g('fMgr').value||null;
   curSlip.location_id=+g('fLoc').value||null;curSlip.currency=g('fCur').value;curSlip.fx_rate=num(g('fFx').value)||1;
   curSlip.vat_type=g('fVat').value.replace(/ \(.*/,'');curSlip.note=g('fNote').value||null;
+  if(g('fKind')&&!g('fKind').disabled)curSlip.supply_kind=g('fKind').value;
   const pin=g('fPartner');if(pin.value!==curSlip.partner_name){curSlip.partner_id=null;curSlip.partner_name=pin.value;}
 }
 async function fillLastPrices(idx){
@@ -735,19 +785,21 @@ function applyPaste(){
   const rows=txt.split(/\r?\n/).map(r=>r.split('\t')).filter(c=>c[0]&&c[0].trim());
   if(curLines.length===1&&!curLines[0].item_code)curLines=[];
   rows.forEach(c=>{const code=c[0].trim();const it=IBYCODE[code]||{};
-    const l={id:null,line_no:curLines.length+1,item_code:code,description:it.description||'',spec:it.spec||null,brand:it.brand||null,qty:num(c[1]),unit_price:num(c[2]),supply_amt:0,vat_amt:0,note:null};
+    const l={id:null,_kind:kindOf(code),line_no:curLines.length+1,item_code:code,description:it.description||'',spec:it.spec||null,brand:it.brand||null,qty:num(c[1]),unit_price:num(c[2]),supply_amt:0,vat_amt:0,note:null};
     recalcLine(l);curLines.push(l);});
   document.getElementById('pasteOv').classList.remove('on');document.getElementById('pasteTxt').value='';
   fillLastPrices();renderSlip();
 }
 async function saveSlip(showMsg){
-  syncHead();const s=curSlip;
-  const lines=curLines.filter(l=>l.item_code||l.description);
+  syncHead();const s=curSlip;s.supply_kind=s.supply_kind||'직거래';
+  const all=curLines.filter(l=>l.item_code||l.description);
+  const lines=all.filter(l=>(l._kind||s.supply_kind)===s.supply_kind);
+  const moving=s.source_type==='LG마감'?[]:all.filter(l=>(l._kind||s.supply_kind)!==s.supply_kind);
   lines.forEach((l,i)=>{l.line_no=i+1;recalcLine(l);});
   const sup=lines.reduce((a,b)=>a+num(b.supply_amt),0),vat=lines.reduce((a,b)=>a+num(b.vat_amt),0);
   const head={entity:s.entity,slip_type:s.slip_type,slip_date:s.slip_date,partner_id:s.partner_id,partner_name:s.partner_name||null,dept:s.dept,
     manager:s.manager,emp_no:s.emp_no||null,location_id:s.location_id,currency:s.currency,fx_rate:s.fx_rate,vat_type:s.vat_type,note:s.note,
-    supply_total:sup,vat_total:vat,total:sup+vat,updated_at:new Date().toISOString()};
+    supply_kind:s.supply_kind,supply_total:sup,vat_total:vat,total:sup+vat,updated_at:new Date().toISOString()};
   try{
     if(!s.id){head.status='작성중';head.source_type=s.source_type||'직접';head.linked_slip_id=s.linked_slip_id||null;head.created_by=curUser;
       const r=await post('trade_slip',head);s.id=r[0].id;Object.assign(s,r[0]);}
@@ -756,19 +808,42 @@ async function saveSlip(showMsg){
     if(lines.length){
       const ins=await post('trade_slip_line',lines.map(l=>({slip_id:s.id,line_no:l.line_no,item_code:l.item_code||null,description:l.description||null,spec:l.spec||null,brand:l.brand||null,
         qty:num(l.qty),unit_price:num(l.unit_price),supply_amt:num(l.supply_amt),vat_amt:num(l.vat_amt),source_line_id:l.source_line_id||null,note:l.note||null})));
-      curLines=ins.map((r,i)=>Object.assign(r,{_hint:lines[i]._hint}));
+      curLines=ins.map((r,i)=>Object.assign(r,{_hint:lines[i]._hint,_kind:s.supply_kind}));
     }else curLines=[];
     Object.assign(s,head);
+    if(moving.length){const n=await moveLinesToSibling(s,moving);toast(`구분이 다른 ${n}줄을 「${moving[0]._kind}」 전표로 나눴습니다.`);showMsg=showMsg||true;}
     if(showMsg){toast('저장했습니다.');renderSlip();refreshCurrentTab();}
     return true;
   }catch(e){alert('저장 실패: '+e.message);return false;}
+}
+// 구분이 다른 줄 → 같은 출처의 다른 구분 작성중 전표에 붙이거나, 없으면 새로 만든다
+async function moveLinesToSibling(s,moving){
+  const kind=moving[0]._kind;const dl=kind==='LG사급';const vp=vatPct(s.vat_type);
+  const mk=l=>{const sup=dl?0:Math.round(num(l.qty)*num(l.unit_price));return {item_code:l.item_code||null,description:l.description||null,spec:l.spec||null,brand:l.brand||null,
+    qty:num(l.qty),unit_price:num(l.unit_price),supply_amt:sup,vat_amt:dl?0:Math.round(sup*vp/100),source_line_id:l.source_line_id||null,note:l.note||null};};
+  let sib=null;
+  if(s.source_id){const r=await api('trade_slip?source_type=eq.'+enc(s.source_type)+'&source_id=eq.'+s.source_id+'&supply_kind=eq.'+enc(kind));
+    if(r.length){if(r[0].status!=='작성중')throw new Error(`같은 출처의 「${kind}」 전표가 이미 ${r[0].status} 상태라 나눌 수 없습니다.`);sib=r[0];}}
+  if(!sib){
+    const head={entity:s.entity,slip_type:s.slip_type,slip_date:s.slip_date,partner_id:s.partner_id,partner_name:s.partner_name,dept:s.dept,manager:s.manager,emp_no:s.emp_no||null,
+      location_id:s.location_id,currency:s.currency,fx_rate:s.fx_rate,vat_type:s.vat_type,status:'작성중',source_type:s.source_type,source_id:s.source_id||null,
+      supply_kind:kind,note:s.note,created_by:curUser};
+    sib=(await post('trade_slip',head))[0];
+  }
+  const ex=await api('trade_slip_line?select=line_no&slip_id=eq.'+sib.id+'&order=line_no.desc&limit=1');let ln=ex.length?ex[0].line_no:0;
+  await post('trade_slip_line',moving.map(l=>Object.assign({slip_id:sib.id,line_no:++ln},mk(l))));
+  const al=await api('trade_slip_line?select=supply_amt,vat_amt&slip_id=eq.'+sib.id);
+  const su=al.reduce((a,b)=>a+num(b.supply_amt),0),va=al.reduce((a,b)=>a+num(b.vat_amt),0);
+  await patch('trade_slip','id=eq.'+sib.id,{supply_total:su,vat_total:va,total:su+va,updated_at:new Date().toISOString()});
+  return moving.length;
 }
 async function dropSlip(){
   if(!confirm('정말 삭제하시겠습니까?'))return;
   if(!curSlip.id){closeSlip();return;}
   try{
     // 출하에서 만든 전표는 기록을 남겨(취소) 다시 자동 생성되지 않게 하고, 직접 입력 전표는 지운다
-    if(curSlip.source_type==='출하'||curSlip.source_type==='스마트입고')await rpc('cancel_trade_slip',{p_slip_id:curSlip.id,p_user:curUser,p_reason:'확정 대기에서 삭제'});
+    if(curSlip.source_type==='LG마감')await del('trade_slip','id=eq.'+curSlip.id); // 포함된 사급 납품은 자동으로 마감대기로 돌아감
+    else if(curSlip.source_type==='출하'||curSlip.source_type==='스마트입고')await rpc('cancel_trade_slip',{p_slip_id:curSlip.id,p_user:curUser,p_reason:'확정 대기에서 삭제'});
     else await del('trade_slip','id=eq.'+curSlip.id);
     closeSlip();toast('삭제했습니다.');refreshCurrentTab();
   }catch(e){alert('삭제 실패: '+e.message);}
@@ -816,7 +891,9 @@ async function computeWarnings(){
   const p=PBYID[s.partner_id];const codes=[...new Set(lines.map(l=>l.item_code))];
   // ① 수량차이 (출하 요구수량 대비 부족)
   lines.forEach(l=>{if(l.note&&/^요구 /.test(l.note)){const req=num(l.note.replace(/^요구 /,''));if(req!==num(l.qty))out.push({line_id:l.id,warn_type:'수량차이',detail:{item_code:l.item_code,req,qty:num(l.qty)}});}});
-  if(s.slip_type==='매출'){
+  const dl=isDelivery(s),lgc=s.source_type==='LG마감';
+  if(s.slip_type==='매출'&&!lgc){
+    if(!dl){
     // ② 출고이상: 이달 누계(확정분+이번) vs 최근 3개월 평균
     const months=prevMonths(s.slip_date,3);const hist={};
     for(const m of months){
@@ -831,11 +908,13 @@ async function computeWarnings(){
     const thisQ={};lines.forEach(l=>{thisQ[l.item_code]=(thisQ[l.item_code]||0)+num(l.qty);});
     codes.forEach(c=>{const avg=(hist[c]||0)/3;if(avg<=0)return;const cur=(mtd[c]||0)+thisQ[c];const pct=(cur-avg)/avg*100;const lim=devPct(c);
       if(pct>lim){const l=lines.find(x=>x.item_code===c);out.push({line_id:l.id,warn_type:'출고이상',detail:{item_code:c,cur,avg:Math.round(avg),pct:Math.round(pct),limit:lim}});}});
+    }
     // ③ 타고객 배정 사용
     const pv=await rpc('trade_alloc_preview',{p_slip_id:s.id});
     (pv||[]).forEach(v=>{if(num(v.other_use)>0)out.push({line_id:v.line_id,warn_type:'타고객배정',detail:{item_code:v.item_code,others:v.other_detail}});});
   }
-  // ④ 단가차이: 최근 단가 대비 기준% 초과
+  // ④ 단가차이: 최근 단가 대비 기준% 초과 (사급 납품은 금액이 없으므로 제외)
+  if(dl)return out;
   const hp=await priceHistory(p.name,codes,s.slip_type==='매출',s.slip_date);
   lines.forEach(l=>{const h=hp[l.item_code];if(!h||!h.price||!num(l.unit_price))return;const pct=(num(l.unit_price)-h.price)/h.price*100;
     if(Math.abs(pct)>devPct(l.item_code))out.push({line_id:l.id,warn_type:'단가차이',detail:{item_code:l.item_code,price:num(l.unit_price),last:h.price,pct:Math.round(pct)}});});
@@ -877,10 +956,12 @@ const LIST_COLS=[
   {t:'구분',k:'slip_type',w:60,f:r=>typeBadge(r.slip_type)},
   {t:'상태',k:'status',w:70,f:r=>statusBadge(r.status)},
   {t:'출처',k:'source_type',w:70},
+  {t:'공급구분',k:'supply_kind',w:80,f:r=>kindBadge(r)},
+  {t:'마감',k:'close_status',w:80,f:r=>closeBadge(r)},
   {t:'거래처',k:'partner_name',w:200},
   {t:'부서',k:'dept',w:90},{t:'담당',k:'manager',w:70},
   {t:'품목수',k:'n',w:60,cls:'r',f:r=>fmt(lineCount(r)),sv:r=>lineCount(r)},
-  {t:'공급가',k:'supply_total',w:110,cls:'r',f:r=>money(r.supply_total)},
+  {t:'공급가',k:'supply_total',w:110,cls:'r',f:r=>isDelivery(r)?'<span class="note">수량만</span>':money(r.supply_total)},
   {t:'VAT',k:'vat_total',w:90,cls:'r',f:r=>money(r.vat_total)},
   {t:'합계',k:'total',w:110,cls:'r',f:r=>money(r.total)},
   {t:'경고',k:'w',w:60,cls:'c',f:r=>{const n=(r.trade_slip_warning&&r.trade_slip_warning[0])?r.trade_slip_warning[0].count:0;return n?`<span class="badge b-warn">${n}</span>`:'';},sv:r=>(r.trade_slip_warning&&r.trade_slip_warning[0])?r.trade_slip_warning[0].count:0},
@@ -890,7 +971,7 @@ const LIST_COLS=[
 function renderList(){
   const q=(document.getElementById('listQ').value||'').toLowerCase();const tp=document.getElementById('listType').value;const d=deptFilter();
   let rows=LIST.filter(r=>(!tp||r.slip_type===tp)&&(!d||r.dept===d)&&(!q||(r.slip_no||'').toLowerCase().includes(q)||(r.partner_name||'').toLowerCase().includes(q)));
-  const sale=rows.filter(r=>r.slip_type==='매출'&&r.status==='확정').reduce((a,b)=>a+num(b.supply_total),0);
+  const sale=rows.filter(r=>r.slip_type==='매출'&&r.status==='확정'&&!isDelivery(r)).reduce((a,b)=>a+num(b.supply_total),0);
   const buy=rows.filter(r=>r.slip_type==='매입'&&r.status==='확정').reduce((a,b)=>a+num(b.supply_total),0);
   document.getElementById('listSum').innerHTML=`${rows.length}건 · 확정 매출 공급가 <b>${money(sale)}</b> · 매입 <b>${money(buy)}</b> <button class="btn" onclick="printChecked()">선택 명세서 출력</button>`;
   rows=sortRows('tList',LIST_COLS,rows);
@@ -982,10 +1063,11 @@ body{font-family:'Noto Sans KR',sans-serif;color:#1E2225;background:#e9ecf1;-web
 .band{height:4px;background:#1B3A6B;margin-bottom:5px}
 .top{display:flex;gap:5mm;align-items:stretch}
 .lt{flex:1;display:flex;flex-direction:column}
-.ttl{display:flex;align-items:baseline;gap:10px;margin-bottom:5px}
-.ttl h1{font-size:23px;letter-spacing:9px;font-weight:700;color:#1B3A6B}
-.chip{font-size:10.5px;font-weight:700;color:#1B3A6B;border:1px solid #1B3A6B;padding:1px 7px;letter-spacing:1px}
+.ttl{display:flex;align-items:baseline;gap:7px;margin-bottom:5px;white-space:nowrap}
+.ttl h1{white-space:nowrap;font-size:23px;letter-spacing:9px;font-weight:700;color:#1B3A6B}
+.chip{white-space:nowrap;font-size:10.5px;font-weight:700;color:#1B3A6B;border:1px solid #1B3A6B;padding:1px 7px;letter-spacing:1px}
 .chip.buy{color:#fff;background:#1B3A6B}
+.chip.lg{color:#8A6116;border-color:#8A6116;background:#FFF8EC}
 .brand{margin-left:auto;font-size:10px;color:#565C64;letter-spacing:.5px}
 .brand b{display:inline-block;background:#C8001E;color:#fff;padding:0 5px;margin-right:4px;font-size:9.5px;letter-spacing:.5px}
 .cust{flex:1;border:1.5px solid #1B3A6B;border-left-width:5px;padding:6px 10px;font-size:11.5px;line-height:1.6;display:flex;flex-direction:column;justify-content:center}
@@ -1032,15 +1114,16 @@ function copyHtml(pg,kind,lang,draft,costs){
   const sup=pg.all.reduce((a,b)=>a+num(b.supply_amt),0),vat=pg.all.reduce((a,b)=>a+num(b.vat_amt),0),tq=pg.all.reduce((a,b)=>a+num(b.qty),0);
   const md=d=>d?d.slice(5).replace('-','/'):'';
   const dec=s.currency==='KRW'?0:2;const m=v=>fmt(v,dec);
+  const dl=isDelivery(s); // 사급 납품: 수량만 표시
   // 일련번호: 확정 전표는 전표번호(SK20261029-001), 작성중은 접두어+일자(SK20261029)
   const serial=(!draft&&s.slip_no)?s.slip_no:(S.slip_prefix||'')+String(s.slip_date||'').replace(/-/g,'');
   let rows=pg.ls.map(l=>`<tr><td class="c">${md(s.slip_date)}</td><td>${esc(l.item_code||'')}</td><td>${esc(l.description||'')}${l.spec?' '+esc(l.spec):''}</td>
-    <td class="r">${fmt(l.qty)}${esc(l.unit||'EA')}</td><td class="r">${fmt(l.unit_price,4)}</td><td class="r">${m(l.supply_amt)}</td><td>${esc(l.brand||'')}</td></tr>`).join('');
+    <td class="r">${fmt(l.qty)}${esc(l.unit||'EA')}</td><td class="r">${dl?'':fmt(l.unit_price,4)}</td><td class="r">${dl?'':m(l.supply_amt)}</td><td>${esc(l.brand||'')}</td></tr>`).join('');
   for(let i=pg.ls.length;i<11;i++)rows+='<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
   const last=pg.pg===pg.pn;
   // 마진 (공급자용 · 매출 전표 · 마지막 쪽): 공급가 − 원가(최근 매입단가 × 수량), 원가 미확인 품목은 제외
   let mg='';
-  if(kind==='sup'&&s.slip_type==='매출'&&last){
+  if(kind==='sup'&&s.slip_type==='매출'&&last&&!dl){
     let cs=0,base=0,miss=0;
     pg.all.forEach(l=>{const c=costs[l.item_code];if(c==null||!l.item_code){if(num(l.supply_amt))miss++;return;}cs+=c*num(l.qty);base+=num(l.supply_amt);});
     const amt=base-cs;const rate=base?amt/base*100:0;
@@ -1052,7 +1135,7 @@ function copyHtml(pg,kind,lang,draft,costs){
   <div class="band"></div>
   <div class="top">
     <div class="lt">
-      <div class="ttl"><h1>${L.title}</h1><span class="chip ${kind==='buy'?'buy':''}">${kind==='sup'?L.sup:L.buy}</span><span class="brand"><b>SME</b>${esc(S.company_name||'')}</span></div>
+      <div class="ttl"><h1>${L.title}</h1><span class="chip ${kind==='buy'?'buy':''}">${kind==='sup'?L.sup:L.buy}</span>${s.supply_kind==='LG사급'?`<span class="chip lg">${s.source_type==='LG마감'?(lang==='ko'?'LG사급 마감':'LG CLOSING'):(lang==='ko'?'LG사급':'LG CONSIGNED')}</span>`:''}<span class="brand"><b>SME</b>${esc(S.company_name||'')}</span></div>
       <div class="cust"><div class="nm">${esc(s.partner_name||'')}<small>${L.hon}</small></div>
         <div class="sub">${esc(p.address||'')}</div><div class="sub">${p.tel?'☎ '+esc(p.tel):''}${p.biz_no?` · ${L.biz} ${esc(p.biz_no)}`:''}</div></div>
     </div>
@@ -1065,14 +1148,77 @@ function copyHtml(pg,kind,lang,draft,costs){
       <tr><td class="k">${L.addr}</td><td>${esc(S.address||'')}${S.tel?'<br>'+L.tel+' '+esc(S.tel):''}</td></tr>
     </table>
   </div>
-  <div class="amt"><span class="lb">${L.amt}</span><span class="kr">${lang==='ko'&&s.currency==='KRW'?korAmount(sup+vat)+'원 '+L.won:''}</span><span class="no">${esc(s.currency==='KRW'?'₩':s.currency)} ${m(sup+vat)}</span></div>
+  ${dl?`<div class="amt"><span class="lb">${lang==='ko'?'수 량':'QTY'}</span><span class="kr">${lang==='ko'?'LG사급 납품 — 수량 확인용 (금액은 LG전자 마감 시 청구)':'LG consigned delivery — quantity only'}</span><span class="no">${fmt(tq)} EA</span></div>`
+  :`<div class="amt"><span class="lb">${L.amt}</span><span class="kr">${lang==='ko'&&s.currency==='KRW'?korAmount(sup+vat)+'원 '+L.won:''}</span><span class="no">${esc(s.currency==='KRW'?'₩':s.currency)} ${m(sup+vat)}</span></div>`}
   <table class="lt2"><colgroup><col style="width:8%"><col style="width:12%"><col style="width:38%"><col style="width:14%"><col style="width:8%"><col style="width:11%"><col style="width:9%"></colgroup>
     <thead><tr><th>${L.date}</th><th>${L.code}</th><th>${L.item}</th><th>${L.qty}</th><th>${L.price}</th><th>${L.supply}</th><th>${L.brand}</th></tr></thead><tbody>${rows}</tbody></table>
-  <table class="ft"><tr><td class="k">${L.tq}</td><td class="r">${last?fmt(tq):''}</td><td class="k">${L.supply}</td><td class="r">${last?m(sup):''}</td>
-    <td class="k">${L.vat}</td><td class="r">${last?m(vat):''}</td><td class="k">${L.total}</td><td class="r tot">${last?m(sup+vat):''}</td><td class="k">${L.recv}</td><td style="width:13%;text-align:right;color:#9aa3af">${L.sign}</td></tr></table>
+  <table class="ft"><tr><td class="k">${L.tq}</td><td class="r">${last?fmt(tq):''}</td><td class="k">${L.supply}</td><td class="r">${last&&!dl?m(sup):''}</td>
+    <td class="k">${L.vat}</td><td class="r">${last&&!dl?m(vat):''}</td><td class="k">${L.total}</td><td class="r tot">${last&&!dl?m(sup+vat):''}</td><td class="k">${L.recv}</td><td style="width:13%;text-align:right;color:#9aa3af">${L.sign}</td></tr></table>
   ${mg}
   <div class="bank"><span>${S.bank_info?`<b class="bk">${lang==='ko'?'입금계좌':(lang==='zh'?'收款账户':'Bank')}</b> ${esc(S.bank_info)}`:''}</span><span>[ ${pg.pg} / ${pg.pn} ]</span></div>
   </div>`;
+}
+
+/* ══ ⑥ LG 마감 ══ */
+function lgQuick(mo,half){
+  const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+mo);
+  const y=d.getFullYear(),m=d.getMonth()+1,last=new Date(y,m,0).getDate();const p=v=>String(v).padStart(2,'0');
+  document.getElementById('lgFrom').value=`${y}-${p(m)}-${half===1?'01':'16'}`;
+  document.getElementById('lgTo').value=`${y}-${p(m)}-${half===1?'15':p(last)}`;
+  loadLg();
+}
+async function loadLg(){
+  const f=document.getElementById('lgFrom'),t2=document.getElementById('lgTo');
+  if(!f.value||!t2.value){const d=new Date();const half=d.getDate()<=15?1:2;lgQuick(0,half);return;}
+  document.getElementById('lgItemTbl').innerHTML='<div class="loading">불러오는 중…</div>';
+  try{
+    LGD=await getAll('trade_slip?select=id,slip_no,slip_date,partner_name,dept,manager,close_status,closed_slip_id,total&entity=eq.'+curEntity+'&supply_kind=eq.LG사급&status=eq.확정&source_type=neq.LG마감&slip_date=gte.'+f.value+'&slip_date=lte.'+t2.value+'&order=slip_date,slip_no');
+    const pend=LGD.filter(r=>r.close_status==='마감대기'&&!r.closed_slip_id);
+    let lines=[];for(let i=0;i<pend.length;i+=150){lines=lines.concat(await getAll('trade_slip_line?select=slip_id,item_code,description,brand,qty&slip_id=in.('+pend.slice(i,i+150).map(r=>r.id).join(',')+')'));}
+    const m={};const pname={};pend.forEach(r=>pname[r.id]=r.partner_name);
+    lines.forEach(l=>{if(!l.item_code)return;const x=m[l.item_code]||(m[l.item_code]={item_code:l.item_code,description:l.description,brand:l.brand,qty:0,cnt:0,custs:new Set()});
+      x.qty+=num(l.qty);x.cnt++;x.custs.add(pname[l.slip_id]);});
+    LGITEMS=Object.values(m);
+    const lg=findPartner('LG전자 주식회사');
+    const hp=lg&&LGITEMS.length?await priceHistory(lg.name,LGITEMS.map(x=>x.item_code),true,t2.value):{};
+    LGITEMS.forEach(x=>{x.price=(hp[x.item_code]||{}).price||0;x.amt=Math.round(x.qty*x.price);x.cust=[...x.custs].join(', ');});
+    LGSLIPS=await api('trade_slip?select=id,slip_no,slip_date,status,total,note&entity=eq.'+curEntity+'&source_type=eq.LG마감&status=neq.취소&order=slip_date.desc,id.desc&limit=20');
+  }catch(e){document.getElementById('lgItemTbl').innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;}
+  renderLg();
+}
+const LGI_COLS=[{t:'품목코드',k:'item_code',w:110},{t:'품목명',k:'description',w:200},{t:'수량',k:'qty',w:100,cls:'r',f:r=>fmt(r.qty)},
+  {t:'납품',k:'cnt',w:55,cls:'r'},{t:'납품처',k:'cust',w:160},
+  {t:'LG 단가',k:'price',w:80,cls:'r',f:r=>r.price?fmt(r.price,4):'<span class="badge b-warn">없음</span>'},{t:'금액',k:'amt',w:110,cls:'r',f:r=>money(r.amt)}];
+const LGD_COLS=[{t:'전표번호',k:'slip_no',w:130},{t:'일자',k:'slip_date',w:90},{t:'납품처',k:'partner_name',w:170},{t:'담당',k:'manager',w:70},{t:'상태',k:'close_status',w:90,f:r=>closeBadge(r)}];
+const LGS_COLS=[{t:'전표번호',k:'slip_no',w:130,f:r=>esc(r.slip_no||'(작성중)')},{t:'일자',k:'slip_date',w:90},{t:'상태',k:'status',w:70,f:r=>statusBadge(r.status)},{t:'합계',k:'total',w:120,cls:'r',f:r=>money(r.total)},{t:'비고',k:'note',w:300}];
+function renderLg(){
+  const pend=LGD.filter(r=>r.close_status==='마감대기'&&!r.closed_slip_id);
+  const amt=LGITEMS.reduce((a,b)=>a+b.amt,0);const noPrice=LGITEMS.filter(x=>!x.price).length;
+  document.getElementById('cnt-lg').textContent=pend.length||'';
+  document.getElementById('lgSum').innerHTML=`마감대기 납품 <b>${pend.length}</b>건 · 품목 <b>${LGITEMS.length}</b> · 예상 공급가 <b>${money(amt)}</b>${noPrice?` · <span style="color:#B42318">단가 없음 ${noPrice}품목</span>`:''}`;
+  document.getElementById('lgMake').disabled=!pend.length;
+  let r1=sortRows('tLgI',LGI_COLS,LGITEMS);document.getElementById('lgItemTbl').innerHTML=tableHtml('tLgI',LGI_COLS,r1);bindTable('tLgI',LGI_COLS,renderLg);
+  let r2=sortRows('tLgD',LGD_COLS,LGD);document.getElementById('lgDelTbl').innerHTML=tableHtml('tLgD',LGD_COLS,r2,r=>`class="click" onclick="openSlip(${r.id})"`);bindTable('tLgD',LGD_COLS,renderLg);
+  let r3=sortRows('tLgS',LGS_COLS,LGSLIPS);document.getElementById('lgSlipTbl').innerHTML=tableHtml('tLgS',LGS_COLS,r3,r=>`class="click" onclick="openSlip(${r.id})"`);bindTable('tLgS',LGS_COLS,renderLg);
+}
+async function makeLgSlip(){
+  const pend=LGD.filter(r=>r.close_status==='마감대기'&&!r.closed_slip_id);if(!pend.length)return;
+  const lg=findPartner('LG전자 주식회사');if(!lg){alert('거래처에 「LG전자 주식회사」가 없습니다.');return;}
+  const f=document.getElementById('lgFrom').value,t2=document.getElementById('lgTo').value;
+  if(!confirm(`${f} ~ ${t2} 사급 납품 ${pend.length}건(${LGITEMS.length}품목)으로 LG전자 마감 전표를 만들까요?`))return;
+  const vp=vatPct('과세');
+  const lines=LGITEMS.map((x,i)=>{const it=IBYCODE[x.item_code]||{};const sup=Math.round(x.qty*x.price);
+    return {line_no:i+1,item_code:x.item_code,description:x.description||it.description||null,spec:it.spec||null,brand:x.brand||it.brand||null,qty:x.qty,unit_price:x.price,supply_amt:sup,vat_amt:Math.round(sup*vp/100)};});
+  const su=lines.reduce((a,b)=>a+b.supply_amt,0),va=lines.reduce((a,b)=>a+b.vat_amt,0);
+  try{
+    const r=await post('trade_slip',{entity:curEntity,slip_type:'매출',slip_date:t2,partner_id:lg.id,partner_name:lg.name,dept:myDept()||null,manager:curUser,
+      emp_no:(EMPS.find(e=>e.name===curUser)||{}).emp_no||null,location_id:(LOCS[0]&&LOCS[0].id)||null,currency:SETTING.default_currency||'KRW',vat_type:'과세',
+      status:'작성중',source_type:'LG마감',supply_kind:'LG사급',supply_total:su,vat_total:va,total:su+va,note:`LG 마감 ${f}~${t2} · 사급 납품 ${pend.length}건`,created_by:curUser});
+    const id=r[0].id;
+    if(lines.length)await post('trade_slip_line',lines.map(l=>Object.assign({slip_id:id},l)));
+    for(let i=0;i<pend.length;i+=150)await patch('trade_slip','id=in.('+pend.slice(i,i+150).map(x=>x.id).join(',')+')&closed_slip_id=is.null&close_status=eq.마감대기',{closed_slip_id:id});
+    toast('LG 마감 전표(작성중)를 만들었습니다. 단가 확인 후 확정하세요.');await loadLg();openSlip(id);
+  }catch(e){alert('마감 전표 생성 실패: '+e.message);}
 }
 
 /* ══ ④ 재고·배정 ══ */
