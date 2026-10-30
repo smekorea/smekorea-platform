@@ -264,7 +264,9 @@ const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const H={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'};
 const curUser=localStorage.getItem('sme_user')||'';
 const loginEntity=localStorage.getItem('sme_entity')||'KOREA';
-const ENT={KOREA:{code:'SMEKR',label:'본사'},GSMEIN:{code:'SMEIN',label:'인도'},SMECN:{code:'SMECN',label:'중국'},SMEGLOBAL:{code:'SMETH',label:'태국'}};
+let ENT={KOREA:{code:'SMEKR',label:'본사'},GSMEIN:{code:'SMEIN',label:'인도'},SMECN:{code:'SMECN',label:'중국'},SMEGLOBAL:{code:'SMETH',label:'태국'}};
+// 법인 목록은 법인 마스터(org_entity, 관리자설정 → 거래처 정보 → 법인 추가) 기준 — 실패하면 위 기본값
+async function loadEntList(){try{const r=await api('org_entity?select=entity,code,name,sort_no&order=sort_no');if(r&&r.length){const m={};r.forEach(o=>m[o.entity]={code:o.code||o.entity,label:(o.name||o.entity).replace(/\(.*\)/,'')});ENT=m;}}catch(e){}}
 let curEntity=loginEntity, curTab='list';
 let PARTNERS=[], PBYID={}, ITEMS=[], IBYCODE={}, RULES=[], HIST=[], XL=[], CHK={}, chkView='neg';
 let regItem=null, regPartner=null;
@@ -799,6 +801,7 @@ function renderChk(){
   const hq=localStorage.getItem('sme_hq_auth')||sessionStorage.getItem('hq_auth');
   if(!curUser||localStorage.getItem('sme_auth')!=='1'||hq!=='1'){alert('관리자 인증이 필요합니다. 메인 화면에서 접근해주세요.');location.href='index.html';return;}
   document.getElementById('tbUser').textContent=curUser+' 님';
+  await loadEntList();
   const es=document.getElementById('entSel');
   const ents=loginEntity==='KOREA'?Object.keys(ENT):[loginEntity];
   es.innerHTML=ents.map(e=>`<option value="${e}">${ENT[e]?ENT[e].code+' ('+ENT[e].label+')':e}</option>`).join('');
