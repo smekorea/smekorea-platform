@@ -10,6 +10,7 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.6: 직인 — 확정 전표 명세서 대표자 칸에 직인(trade_setting.stamp_url, 본사 stamp_sk.png), ⑤ 설정에서 법인별 교체
    ── v1.5: 메이커품번·LG품번 검색/표시, 명세서 표시 칸 선택(거래처 기본 저장), 단가표(price_rule) 단가·매출처별 원가 연동
    ── v1.4: LG사급 — 공급구분(직거래/LG사급), 출하 자동 분리, 사급 납품 수량만·마감대기, ⑥ LG 마감(기간 합산→LG전자 매출 전표, 납품은 마감완료로 보존)
    ── v1.3: 명세서 양식 정리(공급자 칸 폭 축소, 일련번호 일자 기준, 공급자용 마진금액·마진율, 디자인)
@@ -1012,6 +1013,8 @@ const PL={
   zh:{title:'交易明细单',sup:'供货方联',buy:'购货方联',sp:'供货方',no:'单号',biz:'登记号',tel:'电话',ceo:'法人',name:'公司名称',mgr:'负责人',addr:'地址',amt:'金 额',won:'',
       date:'日期',code:'料号',mpn:'厂家料号',lgpn:'LG料号',item:'品名[规格]',qty:'数量',price:'单价',supply:'金额',brand:'品牌',tq:'数量',vat:'税额',total:'合计',recv:'签收',sign:'签',hon:'台鉴'}
 };
+// 직인: 확정 전표에만 찍음(작성중 미리보기는 「인」). 파일 경로 또는 data URL
+function stampSrc(u){try{return /^data:/.test(u)?u:new URL(u,location.href).href;}catch(e){return u;}}
 function korAmount(n){
   n=Math.round(Math.abs(Number(n)||0));if(!n)return '영';
   const dg=['','일','이','삼','사','오','육','칠','팔','구'],u1=['','십','백','천'],u2=['','만','억','조'];
@@ -1126,6 +1129,8 @@ table{border-collapse:collapse;width:100%}
 .spt .k{background:#EDF1F7;color:#1B3A6B;text-align:center;width:29%;white-space:nowrap;font-weight:500}
 .spt .no{font-weight:700;color:#111827}
 .spt .no.dr{color:#C8001E}
+.stamp-img{position:relative;display:inline-block;width:15px;height:15px;margin-left:3px;vertical-align:middle}
+.stamp-img img{position:absolute;left:50%;top:50%;width:13mm;height:13mm;transform:translate(-50%,-50%);opacity:.92;pointer-events:none}
 .stamp{display:inline-block;color:#C8001E;border:1.2px solid #C8001E;border-radius:50%;width:15px;height:15px;line-height:12px;text-align:center;font-size:9px;margin-left:3px;vertical-align:middle}
 .amt{display:flex;align-items:center;margin:5px 0;border:1.5px solid #1B3A6B;font-size:13px}
 .amt .lb{background:#1B3A6B;color:#fff;padding:4px 12px;font-weight:700;letter-spacing:3px}
@@ -1197,7 +1202,7 @@ function copyHtml(pg,kind,lang,draft,costs,cols){
       <tr><td class="vl" rowspan="6">${L.sp.split('').join('<br>')}</td><td class="k">${L.no}</td><td class="no ${draft?'dr':''}">${esc(serial)}</td></tr>
       <tr><td class="k">${L.biz}</td><td>${esc(S.biz_no||'')}</td></tr>
       <tr><td class="k">${L.name}</td><td>${esc(S.company_name||'')}</td></tr>
-      <tr><td class="k">${L.ceo}</td><td>${esc(S.ceo||'')}<span class="stamp">${L.sign}</span></td></tr>
+      <tr><td class="k">${L.ceo}</td><td>${esc(S.ceo||'')}${(!draft&&S.stamp_url)?`<span class="stamp-img"><img src="${esc(stampSrc(S.stamp_url))}" alt=""></span>`:`<span class="stamp">${L.sign}</span>`}</td></tr>
       <tr><td class="k">${L.mgr}</td><td>${esc(s.manager||'')}${emp.phone?' / '+esc(emp.phone):''}</td></tr>
       <tr><td class="k">${L.addr}</td><td>${esc(S.address||'')}${S.tel?'<br>'+L.tel+' '+esc(S.tel):''}</td></tr>
     </table>
@@ -1355,14 +1360,23 @@ const SET_FIELDS=[
   ['default_dev_pct','출고이상 기본 기준(±%)','num'],['min_cover_weeks','총재고 부족 기준(주)','num'],
   ['slip_prefix','전표번호 접두어','txt'],['auto_start_date','출하 자동생성 시작일','date'],
   ['company_name','상호','txt'],['biz_no','사업자등록번호','txt'],['ceo','대표자','txt'],['tel','전화','txt'],
-  ['address','주소','txt'],['bank_info','입금계좌(명세서 하단)','txt']];
+  ['address','주소','txt'],['bank_info','입금계좌(명세서 하단)','txt'],['stamp_url','직인 이미지','stamp']];
 function renderSetting(){
   document.getElementById('setEntLbl').textContent=(ENT[curEntity]||{}).code||curEntity;
   document.getElementById('setFrm').innerHTML=SET_FIELDS.map(([k,l,tp,opt])=>`<div class="k">${l}</div><div>${
-    tp==='sel'?`<select class="inp" id="set_${k}">${opt.map(o=>`<option ${SETTING[k]===o?'selected':''}>${o}</option>`).join('')}</select>`
+    tp==='stamp'?`<input type="hidden" id="set_${k}" value="${esc(SETTING[k]||'')}"><span id="stampPv" style="display:inline-flex;align-items:center;gap:8px">${SETTING[k]?`<img src="${esc(stampSrc(SETTING[k]))}" style="width:48px;height:48px">`:'<span class="note">없음</span>'}</span>
+      <input type="file" accept="image/*" onchange="pickStamp(this.files[0])" style="font-size:12px;margin-left:8px"> <button class="btn btn-r" style="height:24px;padding:0 8px" onclick="clearStamp()">삭제</button>
+      <span class="note">저장을 눌러야 반영 · 확정 전표 명세서에만 찍힘</span>`
+    :tp==='sel'?`<select class="inp" id="set_${k}">${opt.map(o=>`<option ${SETTING[k]===o?'selected':''}>${o}</option>`).join('')}</select>`
     :`<input class="inp" id="set_${k}" type="${tp==='num'?'number':tp==='date'?'date':'text'}" value="${esc(SETTING[k]==null?'':SETTING[k])}">`}</div>`).join('');
   renderLocs();renderRules();
 }
+function pickStamp(f){
+  if(!f)return;if(f.size>300000){alert('300KB 이하 이미지로 올려주세요.');return;}
+  const rd=new FileReader();rd.onload=e=>{document.getElementById('set_stamp_url').value=e.target.result;
+    document.getElementById('stampPv').innerHTML=`<img src="${e.target.result}" style="width:48px;height:48px">`;};rd.readAsDataURL(f);
+}
+function clearStamp(){if(!confirm('정말 삭제하시겠습니까?'))return;document.getElementById('set_stamp_url').value='';document.getElementById('stampPv').innerHTML='<span class="note">없음 (저장을 눌러야 반영)</span>';}
 async function saveSetting(){
   const body={updated_by:curUser,updated_at:new Date().toISOString()};
   SET_FIELDS.forEach(([k,,tp])=>{const v=document.getElementById('set_'+k).value;body[k]=tp==='num'?num(v):(v===''?null:v);});
