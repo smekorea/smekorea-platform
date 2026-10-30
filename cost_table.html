@@ -15,6 +15,7 @@
    ── ① 품목별 조회(표시 칸 선택: 품번·메이커품번·LG품번) ② 단가 변경(한 품목 / 엑셀 일괄) ③ 변동 이력(영향금액) ④ 이상 감지
    ── 메이커품번·LG품번은 매핑 마스터(item_lookup_mv) 기준, LG사급 단가도 같은 표(공급구분 LG사급)
    ── 구 price_master(0행)는 price_master_old로 보관
+   ── v2.1: ③ 변동 이력 — 인상 건 묶음(사유별: 매입/판매 영향·순영향·판매 미반영·평균 마진율 전→후), 매입 영향·미반영 칸
    ══════════════════════════════════════════════════════════════ */
 :root{
   --point:#1B3A6B; --point-dk:#142C52; --point-bg:#EDF1F7;
@@ -230,9 +231,12 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
     <button class="btn btn-p" onclick="loadHist()">조회</button>
     <span class="grow"></span><span class="note" id="histSum"></span>
   </div>
+  <div class="subtab"><button class="btn btn-p" id="hv-row" onclick="histView('row')">건별</button><button class="btn" id="hv-grp" onclick="histView('grp')">인상 건 묶음 (사유별)</button>
+    <span class="note" id="hReasonChip" style="margin-left:6px"></span></div>
   <div class="kpi" id="histKpi"></div>
   <div class="tbl-wrap" id="histTbl"></div>
-  <div class="note">영향금액 = 최근 3개월 해당 매출처 판매수량 ÷ 3(월평균) × 판매가 차이. (기본) 단가는 특가가 없는 매출처 전체 수량 기준.</div>
+  <div class="note">판매 영향 = 최근 3개월 해당 매출처 판매수량 ÷ 3(월평균) × 판매가 차이 · 매입 영향 = 같은 수량 × 매입가 차이 · 순영향 = 판매 영향 − 매입 영향. (기본) 단가는 특가가 없는 매출처 전체 수량 기준.<br>
+  묶음은 <b>사유</b> 문구가 같은 줄끼리 모읍니다 (예: 「스마트전자 2026-11 단가인상」). 「판매 미반영」= 매입가는 올랐는데 그 매출처 판매가는 아직 오르지 않은 줄.</div>
 </div>
 
 <!-- ④ 이상 감지 -->
@@ -630,7 +634,9 @@ const HIST_COLS=[
   {t:'판매가 (직전 → 변경)',k:'s',w:190,f:r=>diffCell(r.prev_sell_price,r.sell_price),sv:r=>pct(r.prev_sell_price,r.sell_price)},
   {t:'매입가 (직전 → 변경)',k:'b',w:190,f:r=>diffCell(r.prev_buy_price,r.buy_price),sv:r=>pct(r.prev_buy_price,r.buy_price)},
   {t:'월평균 수량',k:'mq',w:90,cls:'r',f:r=>r.mq==null?'':fmt(r.mq,0)},
-  {t:'영향금액(월)',k:'impact',w:110,cls:'r',f:r=>r.impact==null?'':`<span class="${r.impact<0?'dn':(r.impact>0?'up':'')}">${fmt(r.impact,0)}</span>`},
+  {t:'판매 영향(월)',k:'impact',w:110,cls:'r',f:r=>r.impact==null?'':`<span class="${r.impact<0?'dn':(r.impact>0?'up':'')}">${fmt(r.impact,0)}</span>`},
+  {t:'매입 영향(월)',k:'bimpact',w:110,cls:'r',f:r=>r.bimpact==null?'':`<span class="${r.bimpact>0?'neg':''}">${fmt(r.bimpact,0)}</span>`},
+  {t:'판매 반영',k:'refl',w:80,f:r=>r.unrefl?'<span class="badge b-warn">미반영</span>':'',sv:r=>r.unrefl?1:0},
   {t:'사유',k:'change_reason',w:180},{t:'등록자',k:'registered_by',w:70}];
 async function loadHist(){
   const f=document.getElementById('hFrom'),t2=document.getElementById('hTo');
@@ -639,28 +645,84 @@ async function loadHist(){
   HIST=RULES.filter(r=>r.valid_from>=f.value&&r.valid_from<=t2.value&&(!ty||r.change_type===ty)&&
     (!q||[r.item_code,pn(r).maker_pn,r.partner_name].some(v=>(v||'').toLowerCase().includes(q)))).map(r=>Object.assign({},r));
   renderHist();
+  // 판매 미반영: 매입가가 올랐는데 같은 키(품목·매출처·구분)의 이후 단가 중 판매가가 오른 줄이 없음
+  HIST.forEach(r=>{
+    if(r.prev_buy_price==null||num(r.buy_price)<=num(r.prev_buy_price))return;
+    const base=r.prev_sell_price!=null?num(r.prev_sell_price):num(r.sell_price);
+    r.unrefl=!RULES.some(x=>x.entity===r.entity&&x.item_code===r.item_code&&(x.partner_id||0)===(r.partner_id||0)&&x.supply_kind===r.supply_kind&&x.valid_from>=r.valid_from&&num(x.sell_price)>base);
+  });
   // 영향금액: 최근 3개월 매출 수량
-  const codes=[...new Set(HIST.filter(r=>r.prev_sell_price!=null).map(r=>r.item_code))];
+  const codes=[...new Set(HIST.filter(r=>r.prev_sell_price!=null||r.prev_buy_price!=null).map(r=>r.item_code))];
   if(!codes.length||curEntity!=='KOREA')return;
   document.getElementById('histSum').textContent='영향금액 계산 중…';
   const qty={};
   try{for(const m of prevMonths(3)){for(let i=0;i<codes.length;i+=80){
     const rows=await getAll(`sales_data?select=item_code,customer,qty&year=eq.${enc(m.y)}&month=eq.${enc(m.m)}&item_code=${inList(codes.slice(i,i+80))}`);
     rows.forEach(r=>{const p=findPartner(r.customer);const key=r.item_code+'|'+(p?p.id:'?');qty[key]=(qty[key]||0)+num(r.qty);qty[r.item_code+'|*']=(qty[r.item_code+'|*']||0)+num(r.qty);});}}}catch(e){}
-  HIST.forEach(r=>{if(r.prev_sell_price==null)return;
+  HIST.forEach(r=>{if(r.prev_sell_price==null&&r.prev_buy_price==null)return;
     let q3;if(r.partner_id)q3=qty[r.item_code+'|'+r.partner_id]||0;
     else{const sp=new Set(RULES.filter(x=>x.item_code===r.item_code&&x.partner_id&&x.supply_kind===r.supply_kind&&x.valid_from<=r.valid_from&&(!x.valid_to||x.valid_to>=r.valid_from)).map(x=>x.partner_id));
       q3=(qty[r.item_code+'|*']||0)-[...sp].reduce((a,pid)=>a+(qty[r.item_code+'|'+pid]||0),0);}
-    r.mq=q3/3;r.impact=Math.round(r.mq*(num(r.sell_price)-num(r.prev_sell_price)));});
+    r.mq=q3/3;
+    r.impact=r.prev_sell_price==null?null:Math.round(r.mq*(num(r.sell_price)-num(r.prev_sell_price)));
+    r.bimpact=r.prev_buy_price==null?null:Math.round(r.mq*(num(r.buy_price)-num(r.prev_buy_price)));});
   renderHist();
 }
+/* 인상 건 묶음: 사유별 */
+let HVIEW='row',HREASON=null;
+function histView(v){HVIEW=v;if(v==='grp')HREASON=null;
+  document.getElementById('hv-row').classList.toggle('btn-p',v==='row');document.getElementById('hv-grp').classList.toggle('btn-p',v==='grp');renderHist();}
+function reasonKey(r){return (r.change_reason||'').trim()||'(사유 없음)';}
+const GRP_COLS=[
+  {t:'사유',k:'reason',w:240,f:r=>`<b>${esc(r.reason)}</b>`},{t:'적용일',k:'from',w:170,f:r=>esc(r.from===r.to?r.from:r.from+' ~ '+r.to)},
+  {t:'품목',k:'items',w:60,cls:'r'},{t:'매출처',k:'parts',w:60,cls:'r'},{t:'단가 줄',k:'n',w:65,cls:'r'},
+  {t:'매입 인상',k:'bup',w:75,cls:'r'},{t:'판매 인상',k:'sup',w:75,cls:'r'},{t:'판매 인하',k:'sdn',w:75,cls:'r'},
+  {t:'판매 미반영',k:'unrefl',w:90,cls:'r',f:r=>r.unrefl?`<span class="neg">${r.unrefl}</span>`:'0'},
+  {t:'매입 영향(월)',k:'bimp',w:115,cls:'r',f:r=>`<span class="${r.bimp>0?'neg':''}">${fmt(r.bimp,0)}</span>`},
+  {t:'판매 영향(월)',k:'simp',w:115,cls:'r',f:r=>`<span class="${r.simp>0?'up':(r.simp<0?'dn':'')}">${fmt(r.simp,0)}</span>`},
+  {t:'순영향(월)',k:'net',w:115,cls:'r',f:r=>`<b class="${r.net<0?'neg':''}">${fmt(r.net,0)}</b>`},
+  {t:'평균 마진율 (전 → 후)',k:'mg',w:150,f:r=>r.mg0==null?'':`${r.mg0.toFixed(1)}% → <b class="${r.mg1<r.mg0?'neg':''}">${r.mg1.toFixed(1)}%</b>`,sv:r=>r.mg1==null?null:r.mg1-r.mg0}];
+function groupHist(){
+  const g={};
+  HIST.forEach(r=>{const k=reasonKey(r);const a=g[k]||(g[k]={reason:k,from:r.valid_from,to:r.valid_from,its:new Set(),ps:new Set(),n:0,bup:0,sup:0,sdn:0,unrefl:0,bimp:0,simp:0,b0:0,s0:0,b1:0,s1:0});
+    if(r.valid_from<a.from)a.from=r.valid_from;if(r.valid_from>a.to)a.to=r.valid_from;
+    a.its.add(r.item_code);a.ps.add(r.partner_id||0);a.n++;
+    if(r.prev_buy_price!=null&&num(r.buy_price)>num(r.prev_buy_price))a.bup++;
+    if(r.prev_sell_price!=null&&num(r.sell_price)>num(r.prev_sell_price))a.sup++;
+    if(r.prev_sell_price!=null&&num(r.sell_price)<num(r.prev_sell_price))a.sdn++;
+    if(r.unrefl)a.unrefl++;a.bimp+=r.bimpact||0;a.simp+=r.impact||0;
+    // 마진율: 같은 품목·매출처·구분 안에서 가장 이른 줄의 직전 단가 → 가장 늦은 줄의 단가
+    const kk=r.item_code+'|'+(r.partner_id||0)+'|'+r.supply_kind;(a.keys=a.keys||{});const ex=a.keys[kk];
+    if(!ex)a.keys[kk]={first:r,last:r};else{if(r.valid_from<ex.first.valid_from)ex.first=r;if(r.valid_from>ex.last.valid_from)ex.last=r;}
+  });
+  Object.values(g).forEach(a=>Object.values(a.keys||{}).forEach(({first,last})=>{
+    if(first.prev_buy_price==null&&first.prev_sell_price==null)return;
+    const pb=first.prev_buy_price!=null?num(first.prev_buy_price):num(first.buy_price),ps=first.prev_sell_price!=null?num(first.prev_sell_price):num(first.sell_price);
+    if(!ps||!num(last.sell_price)||last.buy_price==null)return;const w=last.mq||first.mq||1;
+    a.b0+=pb*w;a.s0+=ps*w;a.b1+=num(last.buy_price)*w;a.s1+=num(last.sell_price)*w;}));
+  return Object.values(g).map(a=>Object.assign(a,{items:a.its.size,parts:a.ps.size,net:a.simp-a.bimp,
+    mg0:a.s0?(a.s0-a.b0)/a.s0*100:null,mg1:a.s1?(a.s1-a.b1)/a.s1*100:null}));
+}
+function pickReason(k){HREASON=k;HVIEW='row';document.getElementById('hv-row').classList.add('btn-p');document.getElementById('hv-grp').classList.remove('btn-p');renderHist();}
 function renderHist(){
-  const up=HIST.filter(r=>r.change_type==='인상'),dn=HIST.filter(r=>r.change_type==='인하'),bc=HIST.filter(r=>r.change_type==='매입변경'),nw=HIST.filter(r=>r.change_type==='신규');
-  const imp=a=>a.reduce((s,r)=>s+(r.impact||0),0);
+  document.getElementById('hReasonChip').innerHTML=HREASON?`사유: <b>${esc(HREASON)}</b> <button class="btn" style="height:22px;padding:0 6px" onclick="HREASON=null;renderHist()">× 해제</button>`:'';
+  if(HVIEW==='grp'){
+    const gs=groupHist();const tb=gs.reduce((s,a)=>s+a.bimp,0),ts=gs.reduce((s,a)=>s+a.simp,0),tu=gs.reduce((s,a)=>s+a.unrefl,0);
+    document.getElementById('histKpi').innerHTML=`<div><small>묶음(사유)</small><b>${gs.length}</b></div><div><small>매입 영향(월)</small><b class="neg">${fmt(tb,0)}</b></div>
+      <div><small>판매 영향(월)</small><b class="up">${fmt(ts,0)}</b></div><div><small>순영향(월)</small><b class="${ts-tb<0?'neg':''}">${fmt(ts-tb,0)}</b></div><div><small>판매 미반영</small><b class="neg">${tu}</b><small>줄</small></div>`;
+    document.getElementById('histSum').textContent=HIST.length+'건 · 사유 '+gs.length+'개';
+    const rows=sortRows('tGrp',GRP_COLS,gs.sort((a,b)=>b.to.localeCompare(a.to)));
+    document.getElementById('histTbl').innerHTML=tableHtml('tGrp',GRP_COLS,rows,r=>`class="click" onclick="pickReason('${esc(r.reason).replace(/'/g,"\\'")}')"`);bindTable('tGrp',GRP_COLS,renderHist);
+    return;
+  }
+  const src=HREASON?HIST.filter(r=>reasonKey(r)===HREASON):HIST;
+  const up=src.filter(r=>r.change_type==='인상'),dn=src.filter(r=>r.change_type==='인하'),bc=src.filter(r=>r.change_type==='매입변경'),nw=src.filter(r=>r.change_type==='신규');
+  const imp=a=>a.reduce((s,r)=>s+(r.impact||0),0);const bimp=src.reduce((s,r)=>s+(r.bimpact||0),0);const ur=src.filter(r=>r.unrefl).length;
   document.getElementById('histKpi').innerHTML=`<div><small>인상</small><b class="up">${up.length}</b><small>월 영향 ${fmt(imp(up),0)}</small></div>
-    <div><small>인하</small><b class="dn">${dn.length}</b><small>월 영향 ${fmt(imp(dn),0)}</small></div><div><small>매입변경</small><b>${bc.length}</b></div><div><small>신규</small><b>${nw.length}</b></div>`;
-  document.getElementById('histSum').textContent=HIST.length+'건';
-  const rows=sortRows('tHist',HIST_COLS,HIST.slice().sort((a,b)=>b.valid_from.localeCompare(a.valid_from)));
+    <div><small>인하</small><b class="dn">${dn.length}</b><small>월 영향 ${fmt(imp(dn),0)}</small></div><div><small>매입변경</small><b>${bc.length}</b></div><div><small>신규</small><b>${nw.length}</b></div>
+    <div><small>매입 영향(월)</small><b class="neg">${fmt(bimp,0)}</b></div><div><small>판매 미반영</small><b class="neg">${ur}</b><small>줄</small></div>`;
+  document.getElementById('histSum').textContent=src.length+'건';
+  const rows=sortRows('tHist',HIST_COLS,src.slice().sort((a,b)=>b.valid_from.localeCompare(a.valid_from)));
   document.getElementById('histTbl').innerHTML=tableHtml('tHist',HIST_COLS,rows,r=>`class="click" onclick="openHis('${esc(r.item_code)}')"`);bindTable('tHist',HIST_COLS,renderHist);
 }
 
