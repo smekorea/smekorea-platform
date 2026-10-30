@@ -442,6 +442,35 @@ th.sortable:hover{background:var(--point-bg);}
 .goal-side .chart-card{flex:1;margin:0;padding:12px 16px;display:flex;flex-direction:column;}
 .goal-side .chart-card .side-svg{flex:1;display:flex;align-items:center;}
 @media(max-width:1200px){.goal-split{grid-template-columns:1fr;}}
+
+/* ── 재고조사 차이 탭 ── */
+.sc-info{background:#EDF1F7;border-left:3px solid #1B3A6B;padding:8px 12px;font-size:12px;line-height:1.7;margin-bottom:10px;}
+.sc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:12px;}
+.sc-inp{height:30px;border:1px solid var(--border);border-radius:2px;padding:0 8px;font-size:12px;background:#fff;font-family:'Noto Sans KR',sans-serif;}
+.sc-btn{height:30px;padding:0 12px;border:1px solid var(--border);border-radius:2px;background:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
+.sc-btn:hover{border-color:#1B3A6B;color:#1B3A6B;}
+.sc-p{background:#1B3A6B;border-color:#1B3A6B;color:#fff;}
+.sc-p:hover{color:#fff;background:#142C52;}
+.sc-kpi{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.sc-kpi div{background:#fff;border:1px solid var(--border);padding:8px 14px;min-width:130px;font-size:11px;color:#565C64;}
+.sc-kpi b{display:block;font-size:18px;color:#1B3A6B;}
+.sc-wrap{overflow:auto;max-height:calc(100vh - 330px);background:#fff;border:1px solid var(--border);}
+#scTable{border-collapse:collapse;table-layout:fixed;}
+#scTable th{position:sticky;top:0;z-index:2;background:#F3F5F8;color:#1B3A6B;font-size:12px;padding:7px 6px;border-bottom:1px solid var(--border);border-right:1px solid #e8edf5;text-align:left;font-family:'Noto Sans KR',sans-serif;}
+#scTable th.sortable{cursor:pointer;}
+#scTable th.sortable:hover{background:rgba(26,86,219,.06);}
+#scTable .sort-icon{margin-left:3px;font-size:10px;color:#1a56db;}
+#scTable td{padding:4px 6px;border-bottom:1px solid #eef1f6;border-right:1px solid #e8edf5;color:#111827;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Noto Sans KR',sans-serif;}
+#scTable td:last-child,#scTable th:last-child{border-right:none;}
+#scTable td.r{text-align:right;}
+#scTable td .sc-inp{height:26px;width:100%;padding:0 5px;}
+#scTable tr.done td{background:#F6FBF8;}
+#scTable tr.hold td{background:#FAFAFA;color:#6b7280;}
+.sc-b{display:inline-block;font-size:11px;padding:0 6px;line-height:18px;border:1px solid;border-radius:2px;}
+.sc-neg{color:#B42318;font-weight:700;}
+.sc-pos{color:#1a56db;font-weight:700;}
+#scTable td.sc-neg{color:#B42318;}
+#scTable td.sc-pos{color:#1a56db;}
 </style>
 </head>
 <body>
@@ -500,6 +529,7 @@ th.sortable:hover{background:var(--point-bg);}
     <button class="pill-btn" onclick="switchTab('tab-risk',this)">위험재고</button>
     <button class="pill-btn" onclick="switchTab('tab-goal',this)">목표대비 실적</button>
     <button class="pill-btn" onclick="switchTab('tab-detail',this)">목표대비 세부</button>
+    <button class="pill-btn" onclick="switchTab('tab-count',this)">재고조사 차이<span id="scCnt" style="display:none;margin-left:5px;font-size:11px;padding:0 6px;line-height:17px;background:#C8001E;color:#fff;border-radius:9px"></span></button>
   </div>
 
   <!-- 콘텐츠 -->
@@ -836,6 +866,26 @@ th.sortable:hover{background:var(--point-bg);}
         <div class="empty-state"><div class="empty-icon">—</div><div class="empty-text">분석실행 후 확인하세요</div></div>
       </div>
     </div><!-- /tab-detail -->
+
+    <!-- ══ 탭: 재고조사 차이 (전산 ↔ 실사 불일치 검토·사유·승인) ══ -->
+    <div class="tab-panel" id="tab-count">
+      <div class="sc-info">재고조사 업로드 후 <b>전산재고 ≠ 실사재고</b> 품목을 검토합니다. 담당자가 <b>재확인 수량·원인·사유</b>를 입력하고, 관리자가 <b>확정</b>합니다.
+        기초재고(재고원장)는 실사수량으로 들어가며, 재확인 수량이 실사와 다르게 확정되면 그 차이가 「실사조정」으로 재고원장에 자동 반영됩니다. 이카운트 재고조정은 별도로 해주세요.</div>
+      <div class="sc-bar">
+        <label>조사월 <select class="sc-inp" id="scYm" onchange="scLoad()"></select></label>
+        <button class="sc-btn" onclick="scSync()" title="재고조사 자료에서 차이 품목을 다시 가져옵니다 (확정·보류 줄은 그대로 유지)">차이 품목 불러오기</button>
+        <select class="sc-inp" id="scSt" onchange="scRender()"><option value="">상태 전체</option><option>검토중</option><option>확정</option><option>보류</option></select>
+        <select class="sc-inp" id="scKind" onchange="scRender()"><option value="">공급구분 전체</option><option>직거래</option><option>LG사급</option></select>
+        <select class="sc-inp" id="scCause" onchange="scRender()"><option value="">원인 전체</option><option value="-">(미입력)</option></select>
+        <input class="sc-inp" id="scQ" placeholder="품번 · 메이커품번 · 품명" style="width:180px" oninput="scRender()">
+        <span style="flex:1"></span>
+        <button class="sc-btn" onclick="scHold()">선택 보류</button>
+        <button class="sc-btn sc-p" onclick="scApprove()">선택 확정 (관리자)</button>
+        <button class="sc-btn" onclick="scExport()">엑셀</button>
+      </div>
+      <div class="sc-kpi" id="scKpi"></div>
+      <div class="sc-wrap" id="scTbl"><div class="empty-state"><div class="empty-text">조사월을 선택하세요</div></div></div>
+    </div><!-- /tab-count -->
 
   </div><!-- /content -->
 </div><!-- /main-wrap -->
@@ -1794,6 +1844,7 @@ function switchTab(tabId,btn){
   if(tabId==='tab-risk')renderRisk();
   if(tabId==='tab-goal')renderGoal();
   if(tabId==='tab-detail')renderDetail();
+  if(tabId==='tab-count')scInit();
 }
 
 // ── 변동패턴 ── (원본 로직 그대로)
@@ -3025,6 +3076,138 @@ function toggleDrill(brand){
   if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')runAnalysis();});
 });
 document.getElementById('uploadModal').addEventListener('click',function(e){if(e.target===this)closeUploadModal();});
+
+/* ══ 재고조사 차이 (stock_count_review) — 전산↔실사 불일치 검토·원인·사유·관리자 확정 ══ */
+const SC_CAUSES=['입고누락','출고누락','수량착오(실사)','불량·파손','분실','사급 위치차이','기타'];
+let SC=[],scSort={k:'amt',asc:true},scReady=false;
+const scUser=()=>localStorage.getItem('sme_user')||'';
+const scEsc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const scN=v=>Number(v)||0;
+const scF=(v,d)=>v==null||v===''?'':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:d==null?2:d});
+const scKindOf=r=>String(r.supply_type||'').replace(/\s/g,'')==='LG사급'?'LG사급':'직거래';
+const scFinal=r=>r.recheck_qty!=null?scN(r.recheck_qty):scN(r.real_qty);
+const scDiff=r=>scFinal(r)-scN(r.erp_qty);
+const scAmt=r=>Math.round(scDiff(r)*scN(r.unit_price));
+async function scInit(){
+  if(scReady)return;scReady=true;
+  document.getElementById('scCause').innerHTML='<option value="">원인 전체</option><option value="-">(미입력)</option>'+SC_CAUSES.map(c=>`<option>${c}</option>`).join('');
+  const {data}=await sb.from('stock_inventory').select('ym').order('ym',{ascending:false}).limit(1);
+  const last=(data&&data[0]&&data[0].ym)||new Date().toISOString().slice(0,7);
+  const [y,m]=last.split('-').map(Number);const opts=[];
+  for(let i=-1;i<6;i++){const d=new Date(y,m-1-i,1);opts.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  document.getElementById('scYm').innerHTML=opts.map(o=>`<option ${o===last?'selected':''}>${o}</option>`).join('');
+  await scLoad();
+}
+async function scSync(){
+  const ym=document.getElementById('scYm').value;
+  try{const {data,error}=await sb.rpc('sync_stock_count_review',{p_ym:ym,p_entity:'KOREA'});if(error)throw error;
+    await scLoad();alert(`${ym} 재고조사에서 차이 품목 ${data}건을 불러왔습니다.\n(이미 확정·보류한 품목은 그대로 둡니다)`);}catch(e){alert('불러오기 실패: '+e.message);}
+}
+async function scLoad(){
+  const ym=document.getElementById('scYm').value;let all=[],pg=0;
+  while(true){const {data,error}=await sb.from('stock_count_review').select('*').eq('entity','KOREA').eq('ym',ym).order('item_code').range(pg*1000,(pg+1)*1000-1);
+    if(error){alert('조회 실패: '+error.message);return;}if(!data||!data.length)break;all=all.concat(data);if(data.length<1000)break;pg++;}
+  SC=all;
+  if(!SC.length){
+    const {count}=await sb.from('stock_inventory').select('id',{count:'exact',head:true}).eq('ym',ym);
+    document.getElementById('scKpi').innerHTML='';
+    document.getElementById('scTbl').innerHTML=`<div class="empty-state"><div class="empty-text">${count?`${ym} 재고조사 ${scF(count,0)}품목이 올라와 있습니다. 「차이 품목 불러오기」를 누르세요.`:`${ym} 재고조사 자료가 아직 없습니다. 먼저 재고조사를 업로드하세요.`}</div></div>`;
+    scBadge();return;
+  }
+  scRender();
+}
+function scBadge(){const n=SC.filter(r=>r.status==='검토중').length;const el=document.getElementById('scCnt');el.textContent=n;el.style.display=n?'inline-block':'none';}
+const SC_COLS=[
+  {k:'chk',t:'',w:30,sort:false},{k:'status',t:'상태',w:62},{k:'kind',t:'구분',w:62,v:scKindOf},{k:'item_code',t:'품번',w:100},{k:'maker_pn',t:'메이커품번',w:130},
+  {k:'description',t:'품명',w:150},{k:'brand',t:'브랜드',w:80},{k:'erp_qty',t:'전산',w:85},{k:'real_qty',t:'실사',w:85},
+  {k:'recheck_qty',t:'재확인 수량',w:95},{k:'diff',t:'최종 차이',w:85,v:scDiff},{k:'unit_price',t:'단가',w:70},{k:'amt',t:'차이 금액',w:105,v:scAmt},
+  {k:'cause',t:'원인',w:120},{k:'reason',t:'사유',w:220},{k:'reviewed_by',t:'검토',w:60},{k:'approved_by',t:'확정',w:60},{k:'act',t:'',w:75,sort:false}];
+const SC_NUMK=['erp_qty','real_qty','recheck_qty','diff','unit_price','amt'];
+function scRows(){
+  const st=document.getElementById('scSt').value,kd=document.getElementById('scKind').value,ca=document.getElementById('scCause').value,q=document.getElementById('scQ').value.trim().toLowerCase();
+  const rows=SC.filter(r=>(!st||r.status===st)&&(!kd||scKindOf(r)===kd)&&(!ca||(ca==='-'?!r.cause:r.cause===ca))&&
+    (!q||[r.item_code,r.maker_pn,r.description,r.lg_pn].some(v=>(v||'').toLowerCase().includes(q))));
+  const c=SC_COLS.find(x=>x.k===scSort.k)||SC_COLS[1];const g=c.v||(r=>r[c.k]);const isN=SC_NUMK.includes(c.k);
+  rows.sort((a,b)=>{const x=g(a),y=g(b);const cmp=isN?scN(x)-scN(y):String(x==null?'':x).localeCompare(String(y==null?'':y),'ko');return scSort.asc?cmp:-cmp;});
+  return rows;
+}
+function scStBadge(s){
+  if(s==='확정')return '<span class="sc-b" style="color:#2E6B4F;border-color:#9cc3b0">확정</span>';
+  if(s==='보류')return '<span class="sc-b" style="color:#888;border-color:#ccc">보류</span>';
+  return '<span class="sc-b" style="color:#8A6116;border-color:#e3cd9b">검토중</span>';
+}
+function scRender(){
+  scBadge();
+  const amtP=SC.reduce((s,r)=>s+Math.max(0,scAmt(r)),0),amtN=SC.reduce((s,r)=>s+Math.min(0,scAmt(r)),0);
+  const cnt=k=>SC.filter(r=>r.status===k).length;
+  const byCause={};SC.forEach(r=>{if(r.cause)byCause[r.cause]=(byCause[r.cause]||0)+1;});
+  document.getElementById('scKpi').innerHTML=`<div>차이 품목<b>${SC.length}</b></div>
+    <div>차이 금액 (순)<b class="${amtP+amtN<0?'sc-neg':''}">${scF(amtP+amtN,0)}</b>＋${scF(amtP,0)} / ${scF(amtN,0)}</div>
+    <div>검토중<b class="sc-neg">${cnt('검토중')}</b>원인 미입력 ${SC.filter(r=>!r.cause).length}</div><div>확정<b>${cnt('확정')}</b></div><div>보류<b>${cnt('보류')}</b></div>
+    <div style="min-width:240px">원인별<br>${Object.entries(byCause).map(([k,v])=>`${scEsc(k)} <b style="display:inline;font-size:13px">${v}</b>`).join(' · ')||'-'}</div>`;
+  const rows=scRows();
+  const head=SC_COLS.map(c=>`<th class="${c.sort===false?'':'sortable'}" data-k="${c.k}" style="width:${c.w}px">${c.k==='chk'?'<input type="checkbox" id="scAll">':scEsc(c.t)}${scSort.k===c.k?`<span class="sort-icon">${scSort.asc?'↑':'↓'}</span>`:''}</th>`).join('');
+  const body=rows.map(r=>{const ed=r.status!=='확정';const d=scDiff(r),a=scAmt(r);
+    const act=r.status==='확정'?`<button class="sc-btn" style="height:24px;padding:0 6px" onclick="scReopen(${r.id})">확정취소</button>`
+      :(r.status==='보류'?`<button class="sc-btn" style="height:24px;padding:0 6px" onclick="scSetStatus([${r.id}],'검토중')">재검토</button>`:'');
+    return `<tr class="${r.status==='확정'?'done':(r.status==='보류'?'hold':'')}">
+    <td><input type="checkbox" class="scChk" value="${r.id}"></td><td>${scStBadge(r.status)}</td><td>${scKindOf(r)}</td>
+    <td>${scEsc(r.item_code)}</td><td title="${scEsc(r.lg_pn?'LG '+r.lg_pn:'')}">${scEsc(r.maker_pn)}</td><td title="${scEsc(r.description)}">${scEsc(r.description)}</td><td>${scEsc(r.brand)}</td>
+    <td class="r">${scF(r.erp_qty,0)}</td><td class="r">${scF(r.real_qty,0)}</td>
+    <td class="r">${ed?`<input class="sc-inp" style="text-align:right" value="${r.recheck_qty==null?'':r.recheck_qty}" placeholder="${scF(r.real_qty,0)}" onchange="scSave(${r.id},'recheck_qty',this.value)">`:scF(r.recheck_qty,0)}</td>
+    <td class="r ${d<0?'sc-neg':(d>0?'sc-pos':'')}">${scF(d,0)}</td><td class="r">${scF(r.unit_price)}</td><td class="r ${a<0?'sc-neg':(a>0?'sc-pos':'')}">${scF(a,0)}</td>
+    <td>${ed?`<select class="sc-inp" onchange="scSave(${r.id},'cause',this.value)"><option value=""></option>${SC_CAUSES.map(c=>`<option ${c===r.cause?'selected':''}>${c}</option>`).join('')}</select>`:scEsc(r.cause)}</td>
+    <td title="${scEsc(r.reason)}">${ed?`<input class="sc-inp" value="${scEsc(r.reason||'')}" onchange="scSave(${r.id},'reason',this.value)">`:scEsc(r.reason)}</td>
+    <td>${scEsc(r.reviewed_by)}</td><td title="${r.approved_at?new Date(r.approved_at).toLocaleString('ko-KR'):''}">${scEsc(r.approved_by)}</td>
+    <td>${act}</td></tr>`;}).join('')
+    ||`<tr><td colspan="${SC_COLS.length}" style="text-align:center;color:#565C64;padding:20px">자료가 없습니다.</td></tr>`;
+  document.getElementById('scTbl').innerHTML=`<table id="scTable"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  const all=document.getElementById('scAll');
+  if(all){all.addEventListener('click',e=>{e.stopPropagation();document.querySelectorAll('.scChk').forEach(x=>x.checked=all.checked);});}
+  document.querySelectorAll('#scTable th.sortable').forEach(th=>th.addEventListener('click',e=>{if(e.target.classList.contains('col-resizer'))return;
+    const k=th.dataset.k;if(scSort.k===k)scSort.asc=!scSort.asc;else{scSort.k=k;scSort.asc=true;}scRender();}));
+  initColResize('scTable','sa_cw_sc_v1');
+}
+async function scSave(id,f,v){
+  const r=SC.find(x=>x.id===id);if(!r)return;
+  let val;
+  if(f==='recheck_qty'){const tx=String(v).replace(/,/g,'').trim();val=tx===''?null:Number(tx);if(val!=null&&!isFinite(val)){alert('숫자를 입력하세요.');scRender();return;}}
+  else val=String(v).trim()||null;
+  const upd={[f]:val,reviewed_by:scUser(),reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  const {error}=await sb.from('stock_count_review').update(upd).eq('id',id);
+  if(error){alert('저장 실패: '+error.message);return;}
+  Object.assign(r,upd);if(f==='recheck_qty')scRender();else scBadge();
+}
+function scChecked(){return [...document.querySelectorAll('.scChk:checked')].map(x=>+x.value);}
+async function scApprove(){
+  const ids=scChecked().filter(id=>{const r=SC.find(x=>x.id===id);return r&&r.status!=='확정';});
+  if(!ids.length){alert('확정할 품목을 선택하세요.');return;}
+  const miss=ids.map(id=>SC.find(x=>x.id===id)).filter(r=>!r.cause||!String(r.reason||'').trim());
+  if(miss.length){alert(`원인·사유가 없는 품목이 ${miss.length}건 있습니다.\n예: ${miss.slice(0,5).map(r=>r.item_code).join(', ')}`);return;}
+  const pw=prompt(`${ids.length}건을 확정합니다. 관리자 비밀번호를 입력하세요.`);if(pw==null)return;
+  if(pw!=='9901'){alert('관리자 비밀번호가 맞지 않습니다.');return;}
+  const {data,error}=await sb.rpc('approve_stock_count',{p_ids:ids,p_user:scUser()});
+  if(error){alert('확정 실패: '+error.message);return;}
+  await scLoad();alert(`${data}건 확정했습니다.`);
+}
+async function scSetStatus(ids,st){
+  const {error}=await sb.from('stock_count_review').update({status:st,reviewed_by:scUser(),reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).in('id',ids).neq('status','확정');
+  if(error){alert('변경 실패: '+error.message);return;}await scLoad();
+}
+function scHold(){const ids=scChecked();if(!ids.length){alert('보류할 품목을 선택하세요.');return;}scSetStatus(ids,'보류');}
+async function scReopen(id){
+  if(!confirm('확정을 취소하고 검토중으로 되돌릴까요? (재고원장에 반영된 실사조정도 함께 취소됩니다)'))return;
+  const pw=prompt('관리자 비밀번호를 입력하세요.');if(pw==null)return;if(pw!=='9901'){alert('관리자 비밀번호가 맞지 않습니다.');return;}
+  const {error}=await sb.rpc('reopen_stock_count',{p_id:id});if(error){alert('취소 실패: '+error.message);return;}await scLoad();
+}
+function scExport(){
+  if(!window.XLSX){alert('엑셀 라이브러리를 불러오지 못했습니다.');return;}
+  const rows=scRows().map(r=>({조사월:r.ym,상태:r.status,공급구분:scKindOf(r),품번:r.item_code,메이커품번:r.maker_pn,LG품번:r.lg_pn,품명:r.description,브랜드:r.brand,
+    전산:r.erp_qty,실사:r.real_qty,재확인:r.recheck_qty,최종차이:scDiff(r),단가:r.unit_price,차이금액:scAmt(r),원인:r.cause,사유:r.reason,검토:r.reviewed_by,확정:r.approved_by,
+    확정일시:r.approved_at?new Date(r.approved_at).toLocaleString('ko-KR'):''}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'재고조사차이');
+  XLSX.writeFile(wb,'재고조사차이_'+document.getElementById('scYm').value+'.xlsx');
+}
 </script>
 </body>
 </html>
