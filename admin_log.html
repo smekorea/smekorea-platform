@@ -57,6 +57,28 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .tab-group .tab-btn{padding:8px 12px;margin-bottom:0;border-bottom-width:2px;}
 .tab-group .tab-btn+.tab-btn{border-left:1px solid #e3e8ef;}
 .tab-group .tab-btn.active{background:#fff;}
+/* 권한 관리 */
+.pm-wrap{display:flex;gap:16px;padding:16px;align-items:flex-start;}
+.pm-left{flex:0 0 300px;}
+.pm-right{flex:1;min-width:0;}
+.pm-list{border:1px solid var(--border);max-height:calc(100vh - 290px);overflow:auto;background:#fff;}
+.pm-g1{background:var(--point);color:#fff;font-size:12px;font-weight:700;padding:5px 10px;position:sticky;top:0;z-index:1;}
+.pm-g2{background:#F3F5F8;color:var(--point);font-size:11.5px;font-weight:700;padding:4px 10px;border-top:1px solid #e8edf5;}
+.pm-item{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border-top:1px solid #eef1f5;cursor:pointer;font-size:13px;color:#111827;}
+.pm-item:hover{background:#F6F8FB;}
+.pm-item.on{background:#E8EEF8;box-shadow:inset 3px 0 0 var(--point);}
+.pm-card{border:1px solid var(--border);background:#fff;padding:14px 16px;}
+.pm-card-h{padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid #eef1f5;color:#111827;}
+.pm-form{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;}
+.pm-form label{color:var(--point);font-weight:700;font-size:12.5px;}
+.pm-form input,.pm-form select{padding:6px 9px;border:1px solid var(--border);font-size:13px;font-family:'Noto Sans KR',sans-serif;}
+.pm-mx{border-collapse:collapse;table-layout:fixed;font-size:12.5px;}
+.pm-mx th{background:#F3F5F8;color:var(--point);font-weight:700;padding:6px 8px;border:1px solid #e3e8ef;text-align:left;}
+.pm-mx th.center,.pm-mx td.center{text-align:center;}
+.pm-mx td{padding:5px 8px;border:1px solid #e8edf5;color:#111827;}
+.pm-mx tr.pm-ov td{background:#FFF9EB;}
+.pm-mx input[type=checkbox]{width:15px;height:15px;cursor:pointer;}
+.pm-mx input[type=checkbox]:disabled{cursor:default;opacity:.55;}
 .tab-btn{flex:0 0 auto;padding:11px 12px;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0;background:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;}
 .tab-btn:hover{color:var(--point);}
 .tab-btn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:none;}
@@ -398,6 +420,7 @@ td.center .al-pline{justify-content:center;}
     <button class="tab-btn" id="tab-emp-btn" onclick="switchTab('emp')">직원 관리</button>
     <button class="tab-btn" id="tab-log-btn" onclick="switchTab('log')">접속 이력</button>
     <button class="tab-btn" id="tab-ui-btn" onclick="switchTab('ui')">화면 꾸미기</button>
+    <button class="tab-btn" id="tab-perm-btn" onclick="switchTab('perm')">권한 관리</button>
   </div>
 </div>
 
@@ -1746,6 +1769,69 @@ td.center .al-pline{justify-content:center;}
 </div>
 
 <!-- 탭11: 화면 꾸미기 -->
+<!-- ══════════════════════════════════════════════════ -->
+<!-- 권한 관리 (개인 계정·역할·개인 예외·전환) -->
+<!-- ══════════════════════════════════════════════════ -->
+<div id="tab-perm" class="content" style="display:none;">
+  <div class="big-sec">
+    <div class="big-hd">
+      <span class="big-tt">권한 관리</span><span class="big-sub" id="pmSub"></span>
+      <span class="big-grow"></span>
+      <button class="big-btn big-btn-p" id="pmV-users" onclick="pmView('users')">사람</button>
+      <button class="big-btn" id="pmV-roles" onclick="pmView('roles')">역할</button>
+      <button class="big-btn" id="pmV-ops" onclick="pmView('ops')">계정 발급·전환</button>
+      <button class="big-btn" onclick="pmLoad()">새로고침</button>
+    </div>
+    <div class="big-bd" id="pmBody"><div class="loading"><div class="spinner"></div> 로딩 중...</div></div>
+  </div>
+</div>
+
+<!-- 권한 관리: 개인 로그인 (관리자설정은 기존 비밀번호로 들어왔지만 권한 관리는 개인 계정 필요) -->
+<div class="modal-overlay" id="pmLoginModal">
+  <div class="modal-box" style="width:380px;">
+    <div class="modal-hdr"><div class="modal-title">권한 관리 — 개인 계정 로그인</div><button class="modal-close" onclick="document.getElementById('pmLoginModal').classList.remove('show')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">권한 관리는 개인 계정(사번·개인 비밀번호)으로 로그인해야 열립니다.</div>
+      <div class="form-group"><label>법인</label><select id="pmL-ent"><option value="KOREA">본사 (SMEKR)</option><option value="SMEGLOBAL">태국 (SMETH)</option><option value="SMECN">중국 (SMECN)</option><option value="GSMEIN">인도 (SMEIN)</option></select></div>
+      <div class="form-group"><label>사번</label><input id="pmL-no" inputmode="numeric" autocomplete="username"></div>
+      <div class="form-group"><label>비밀번호</label><input id="pmL-pw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')pmDoLogin()"></div>
+      <div id="pmL-err" style="color:var(--accent);font-size:12.5px;min-height:18px;"></div>
+    </div>
+    <div class="modal-footer"><button class="modal-btn modal-cancel" onclick="document.getElementById('pmLoginModal').classList.remove('show')">취소</button><button class="modal-btn modal-save" onclick="pmDoLogin()">로그인</button></div>
+  </div>
+</div>
+
+<!-- 권한 관리: 직원 등록 (법인장·관리자) -->
+<div class="modal-overlay" id="pmEmpModal">
+  <div class="modal-box" style="width:520px;">
+    <div class="modal-hdr"><div class="modal-title">직원 등록 — 직원관리에 함께 등록됩니다</div><button class="modal-close" onclick="document.getElementById('pmEmpModal').classList.remove('show')">✕</button></div>
+    <div class="modal-body">
+      <div class="modal-row">
+        <div class="form-group" id="pmE-entWrap"><label>법인</label><select id="pmE-ent"></select></div>
+        <div class="form-group"><label>이름 *</label><input id="pmE-name"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>현지 이름 / 영문</label><input id="pmE-local"></div>
+        <div class="form-group"><label>부서</label><input id="pmE-dept"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>직급</label><input id="pmE-rank"></div>
+        <div class="form-group"><label>직책</label><input id="pmE-title"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>휴대폰</label><input id="pmE-phone"></div>
+        <div class="form-group"><label>이메일</label><input id="pmE-email"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>입사일</label><input id="pmE-join" type="date"></div>
+        <div class="form-group"><label>역할</label><select id="pmE-role"></select></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);">사번은 법인 번호대에서 자동으로 붙습니다. 저장 후 「계정 발급·전환」에서 임시 비밀번호를 발급하세요.</div>
+    </div>
+    <div class="modal-footer"><button class="modal-btn modal-cancel" onclick="document.getElementById('pmEmpModal').classList.remove('show')">취소</button><button class="modal-btn modal-save" onclick="pmSaveEmp()">저장</button></div>
+  </div>
+</div>
+
 <div id="tab-ui" class="content" style="display:none;">
   <div style="max-width:600px;margin:0 auto;">
 
@@ -1856,7 +1942,15 @@ td.center .al-pline{justify-content:center;}
 // 관리자 권한(HQ)이 없는 실무진은 「거래처 정보」만 사용 (등록·수정 가능, 삭제·법인 정보·엑셀 업로드는 관리자만)
 const MAIN_OK = localStorage.getItem('sme_auth') === '1';
 const HQ_OK = (localStorage.getItem('sme_hq_auth') || sessionStorage.getItem('hq_auth')) === '1';
-const PARTNER_ONLY = MAIN_OK && !HQ_OK;
+// 개인 계정(사번) 로그인이면 권한표로 판단: admin=전체 탭, admin_partners=거래처 정보, perm=권한 관리
+const TOKEN_MODE = !!localStorage.getItem('sme_token');
+const MY_PERMS = (()=>{try{return JSON.parse(localStorage.getItem('sme_perms')||'{}');}catch(e){return {};}})();
+const PV = k => !!(MY_PERMS[k] && MY_PERMS[k].v);
+const FULL_ADMIN = TOKEN_MODE ? PV('admin') : HQ_OK;
+const PARTNER_ONLY = MAIN_OK && !FULL_ADMIN;
+const CAN_PARTNERS = TOKEN_MODE ? (PV('admin_partners') || PV('admin')) : true;
+const CAN_PERM = TOKEN_MODE ? PV('perm') : HQ_OK;
+if(MAIN_OK && PARTNER_ONLY && !CAN_PARTNERS && !CAN_PERM){ alert('접근 권한이 없습니다.'); window.location.href='index.html'; }
 const MY_ENTITY = localStorage.getItem('sme_entity') || 'KOREA';
 const MY_NAME = localStorage.getItem('sme_user') || '';
 if(!MAIN_OK){
@@ -1867,15 +1961,20 @@ if(!MAIN_OK){
 const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// 권한 관리 상태 (첫 화면이 권한 관리일 때도 쓰이므로 맨 앞에 둠)
+var PM={data:null,view:'users',selEmp:null,selRole:null,issued:[],q:''};
+var PM_ACT=[['v','조회'],['c','등록'],['u','수정'],['d','삭제'],['f','확정·승인']];
+var PM_ENT={KOREA:'본사',SMEGLOBAL:'태국 SMETH',SMECN:'중국 SMECN',GSMEIN:'인도 SMEIN'};
 
 const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString('ko-KR');
 
 // ── 탭 전환 ──
 function switchTab(t) {
-  if(PARTNER_ONLY) t='partners';
+  if(PARTNER_ONLY && !((t==='partners'&&CAN_PARTNERS)||(t==='perm'&&CAN_PERM))) t = CAN_PARTNERS ? 'partners' : 'perm';
+  if(!PARTNER_ONLY && t==='perm' && !CAN_PERM) t='partners';
   try{localStorage.setItem('admin_last_tab',t);}catch(e){}
   setTimeout(fitWraps,80);setTimeout(fitWraps,700);
-  ['items','lg','partners','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
+  ['items','lg','partners','master','alias','maker','logistics','trade','stock','emp','log','ui','perm'].forEach(x => {
     document.getElementById('tab-'+x).style.display = x===t?'block':'none';
     document.getElementById('tab-'+x+'-btn').classList.toggle('active', x===t);
   });
@@ -1891,6 +1990,7 @@ function switchTab(t) {
   if(t==='emp'       && _empData.length===0)        loadEmpData();
   if(t==='log'){ if(allLogs.length===0) loadLog(); else setTimeout(initLogColResize,50); }
   if(t==='ui') loadUITab();
+  if(t==='perm') pmLoad();
 }
 
 // ── 화면 꾸미기 ──
@@ -6225,6 +6325,7 @@ window.addEventListener('resize',()=>{clearTimeout(window._fwT);window._fwT=setT
 (function(){let t0='partners';try{const v=localStorage.getItem('admin_last_tab');if(v&&document.getElementById('tab-'+v+'-btn'))t0=v;}catch(e){}
   // 다른 화면에서 바로가기: ?tab=partners&add=이름&ptype=매출처&entity=KOREA (신규 등록) / ?tab=partners&edit=id (수정)
   if(PARTNER_ONLY) applyPartnerOnlyUI();
+  if(!CAN_PERM){const pb=document.getElementById('tab-perm-btn');if(pb)pb.style.display='none';}
   const qs=new URLSearchParams(location.search);const qt=qs.get('tab');
   if(qt&&document.getElementById('tab-'+qt+'-btn'))t0=qt;
   switchTab(t0);
@@ -6240,10 +6341,223 @@ window.addEventListener('resize',()=>{clearTimeout(window._fwT);window._fwT=setT
   }
 })();
 
+/* ══════════════ 권한 관리 (개인 계정·역할·개인 예외·법인별 전환) ══════════════ */
+function pmEl(id){return document.getElementById(id);}
+function pmTok(){return localStorage.getItem('sme_token')||'';}
+async function pmRpc(fn,args){const {data,error}=await sb.rpc(fn,args);if(error)throw new Error(error.message);return data;}
+function pmIsAdmin(){return !!(PM.data&&PM.data.me&&PM.data.me.is_admin);}
+function pmView(v){PM.view=v;['users','roles','ops'].forEach(x=>pmEl('pmV-'+x).classList.toggle('big-btn-p',x===v));pmRender();}
+function pmOpenLogin(){pmEl('pmL-err').textContent='';pmEl('pmL-pw').value='';pmEl('pmL-ent').value=localStorage.getItem('sme_entity')||'KOREA';pmEl('pmLoginModal').classList.add('show');setTimeout(()=>pmEl('pmL-no').focus(),60);}
+async function pmDoLogin(){
+  const no=parseInt(pmEl('pmL-no').value,10);if(!no){pmEl('pmL-err').textContent='사번을 입력하세요.';return;}
+  let r;try{r=await pmRpc('app_login',{p_entity:pmEl('pmL-ent').value,p_emp_no:no,p_pw:pmEl('pmL-pw').value});}catch(e){pmEl('pmL-err').textContent=e.message;return;}
+  if(!r||!r.ok){pmEl('pmL-err').textContent=(r&&r.error)||'로그인 실패';return;}
+  localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);
+  try{const me=await pmRpc('app_me',{p_token:r.token});localStorage.setItem('sme_perms',JSON.stringify((me&&me.perms)||{}));}catch(e){}
+  pmEl('pmLoginModal').classList.remove('show');
+  if(r.must_change){
+    const n1=prompt('처음 로그인하셨습니다. 새 비밀번호를 입력하세요 (8자 이상, 영문+숫자)');
+    if(n1){const n2=prompt('새 비밀번호를 한 번 더 입력하세요');
+      if(n1!==n2)alert('새 비밀번호가 서로 다릅니다. 메인 화면 「비밀번호 변경」에서 다시 바꿔주세요.');
+      else{try{const c=await pmRpc('app_change_pw',{p_token:r.token,p_old:pmEl('pmL-pw').value,p_new:n1});alert(c&&c.ok?'비밀번호를 바꿨습니다.':(c&&c.error)||'변경 실패');}catch(e){alert(e.message);}}}
+  }
+  pmLoad();
+}
+async function pmLoad(){
+  const body=pmEl('pmBody');
+  if(!pmTok()){body.innerHTML='<div class="empty-state" style="padding:40px;">권한 관리는 개인 계정으로 로그인해야 합니다.<br><br><button class="row-btn" onclick="pmOpenLogin()">개인 계정 로그인</button></div>';pmOpenLogin();return;}
+  body.innerHTML='<div class="loading"><div class="spinner"></div> 로딩 중...</div>';
+  try{PM.data=await pmRpc('app_admin_data',{p_token:pmTok()});}
+  catch(e){body.innerHTML=`<div class="empty-state" style="padding:40px;">${_pe(e.message)}<br><br><button class="row-btn" onclick="pmOpenLogin()">개인 계정으로 다시 로그인</button></div>`;return;}
+  const me=PM.data.me||{};
+  pmEl('pmSub').textContent=`${me.name||''} · ${me.is_admin?'시스템 관리자 (전 법인)':(PM_ENT[me.entity]||me.entity)+' 관리'}`;
+  pmEl('pmV-roles').style.display=pmIsAdmin()?'':'none';
+  if(!pmIsAdmin()&&PM.view==='roles')PM.view='users';
+  pmView(PM.view);
+}
+function pmRender(){
+  if(!PM.data)return;
+  if(PM.view==='users')pmRenderUsers();else if(PM.view==='roles')pmRenderRoles();else pmRenderOps();
+}
+function pmRoleName(id){const r=(PM.data.roles||[]).find(x=>x.id===id);return r?r.name:'';}
+function pmPermMap(roleId){const m={};(PM.data.role_perms||[]).filter(p=>p.role_id===roleId).forEach(p=>m[p.screen_key]=p);return m;}
+function pmOvMap(empNo){const m={};(PM.data.overrides||[]).filter(o=>o.emp_no===empNo).forEach(o=>m[o.screen_key]=o);return m;}
+function pmStatus(u){
+  const b=[];
+  if(!u.role_id)b.push('<span class="badge b-gray">역할 없음</span>');
+  if(!u.has_pw)b.push('<span class="badge b-gray">미발급</span>');else if(u.must_change)b.push('<span class="badge" style="background:#FFF7E6;color:#B45309;border:1px solid #F5D49A;">임시 비번</span>');
+  if(u.locked)b.push('<span class="badge" style="background:#FDECEC;color:#B91C1C;border:1px solid #F3B4B4;">잠김</span>');
+  if(u.has_acct&&!u.acct_active)b.push('<span class="badge b-gray">사용 중지</span>');
+  return b.join(' ');
+}
+/* ── 사람 ── */
+function pmRenderUsers(){
+  const D=PM.data;const q=(PM.q||'').trim().toLowerCase();
+  const users=(D.users||[]).filter(u=>!q||[u.name,u.name_local,u.dept,String(u.emp_no),pmRoleName(u.role_id)].some(v=>String(v||'').toLowerCase().includes(q)));
+  let left=`<div style="display:flex;gap:6px;margin-bottom:8px;"><input id="pmQ" value="${_pe(PM.q||'')}" placeholder="이름·부서·사번·역할" oninput="PM.q=this.value;pmRenderUsers();setTimeout(()=>{const x=pmEl('pmQ');x.focus();x.setSelectionRange(x.value.length,x.value.length);},0)" style="flex:1;padding:6px 9px;border:1px solid var(--border);font-size:13px;">`+
+    `<button class="row-btn" onclick="pmOpenEmp()" title="직원관리에 새 직원 등록">＋ 직원</button></div><div class="pm-list">`;
+  let lastE='',lastD='';
+  users.forEach(u=>{
+    if(u.entity!==lastE){left+=`<div class="pm-g1">${_pe(PM_ENT[u.entity]||u.entity)}</div>`;lastE=u.entity;lastD='';}
+    if((u.dept||'')!==lastD){left+=`<div class="pm-g2">${_pe(u.dept||'(부서 없음)')}</div>`;lastD=u.dept||'';}
+    left+=`<div class="pm-item${PM.selEmp===u.emp_no?' on':''}" onclick="PM.selEmp=${u.emp_no};pmRenderUsers();"><div><b>${_pe(u.name)}</b> <span style="color:var(--muted);font-size:11.5px;">${u.emp_no}</span><div style="font-size:11.5px;color:var(--muted);">${_pe(pmRoleName(u.role_id)||'')}</div></div><div style="text-align:right;">${pmStatus(u)}</div></div>`;
+  });
+  left+='</div>';
+  const u=(D.users||[]).find(x=>x.emp_no===PM.selEmp);
+  let right='<div class="empty-state" style="padding:60px;">왼쪽에서 사람을 고르세요.</div>';
+  if(u){
+    const roles=(D.roles||[]).filter(r=>pmIsAdmin()||r.entity===u.entity);
+    right=`<div class="pm-card"><div class="pm-card-h"><b style="font-size:16px;">${_pe(u.name)}</b>${u.name_local?' <span style="color:var(--muted)">'+_pe(u.name_local)+'</span>':''} <span style="color:var(--muted);">· 사번 ${u.emp_no} · ${_pe(PM_ENT[u.entity]||u.entity)} · ${_pe(u.dept||'')} ${_pe(u.rank||'')}</span> <span style="margin-left:6px;">${pmStatus(u)}</span></div>`+
+      `<div class="pm-form"><label>역할</label><select id="pmU-role"><option value="">(역할 없음 — 로그인 불가)</option>${roles.map(r=>`<option value="${r.id}" ${r.id===u.role_id?'selected':''}>${_pe(r.name)}</option>`).join('')}</select>`+
+      `<label style="margin-left:12px;"><input type="checkbox" id="pmU-active" ${(!u.has_acct||u.acct_active)?'checked':''}> 계정 사용</label>`+
+      `<button class="row-btn" style="margin-left:auto;" onclick="pmSaveUser(${u.emp_no},false)">저장</button>`+
+      (u.locked?`<button class="row-btn" onclick="pmSaveUser(${u.emp_no},true)">잠금 해제</button>`:'')+
+      `<button class="row-btn" onclick="pmResetPw(${u.emp_no})">비밀번호 초기화</button></div>`+
+      `<div style="font-size:12px;color:var(--muted);margin:4px 0 10px;">마지막 로그인 ${u.last_login?_pe(String(u.last_login).slice(0,16).replace('T',' ')):'없음'}${u.fail_count?` · 실패 ${u.fail_count}회`:''}. 회색 체크 = 역할 값 · 「개인」을 켠 줄만 이 사람에게 따로 적용됩니다.</div>`+
+      pmMatrix('user',pmPermMap(u.role_id),pmOvMap(u.emp_no),u.emp_no)+`</div>`;
+  }
+  pmEl('pmBody').innerHTML=`<div class="pm-wrap"><div class="pm-left">${left}</div><div class="pm-right">${right}</div></div>`;
+}
+function pmMatrix(mode,rp,ov,empNo){
+  const scr=(PM.data.screens||[]).filter(s=>pmIsAdmin()||s.key!=='perm');
+  let h=`<table class="pm-mx"><thead><tr><th style="width:110px;">묶음</th><th style="width:190px;">화면</th>${PM_ACT.map(a=>`<th style="width:74px;" class="center">${a[1]}</th>`).join('')}${mode==='user'?'<th style="width:64px;" class="center">개인</th>':''}</tr></thead><tbody>`;
+  let lastG='';
+  scr.forEach(s=>{
+    const r=rp[s.key]||{},o=ov?ov[s.key]:null;
+    h+=`<tr class="${o?'pm-ov':''}"><td>${s.grp!==lastG?_pe(s.grp):''}</td><td>${_pe(s.label)}</td>`;lastG=s.grp;
+    PM_ACT.forEach(([a])=>{
+      if(s.actions.indexOf(a)<0){h+='<td class="center" style="color:#cbd5e1;">—</td>';return;}
+      if(mode==='role'){h+=`<td class="center"><input type="checkbox" data-s="${s.key}" data-a="${a}" ${r[a]?'checked':''}></td>`;return;}
+      const eff=o&&o[a]!=null?o[a]:!!r[a];
+      h+=`<td class="center"><input type="checkbox" ${eff?'checked':''} ${o?`onchange="pmSaveOv(${empNo},'${s.key}')" data-ov="${s.key}" data-a="${a}"`:'disabled'}></td>`;
+    });
+    if(mode==='user')h+=`<td class="center"><input type="checkbox" ${o?'checked':''} onchange="pmToggleOv(${empNo},'${s.key}',this.checked)" title="이 줄을 이 사람에게만 따로 설정"></td>`;
+    h+='</tr>';
+  });
+  return h+'</tbody></table>';
+}
+async function pmSaveUser(no,unlock){
+  const rid=pmEl('pmU-role').value;
+  try{await pmRpc('app_admin_save_user',{p_token:pmTok(),p_emp_no:no,p_role_id:rid?+rid:null,p_active:pmEl('pmU-active').checked,p_unlock:!!unlock});await pmLoad();PM.selEmp=no;pmRenderUsers();}
+  catch(e){alert('저장 실패: '+e.message);}
+}
+async function pmResetPw(no){
+  if(!confirm('이 사람의 비밀번호를 초기화합니다. 새 임시 비밀번호가 발급되고, 지금 로그인된 곳은 모두 로그아웃됩니다.'))return;
+  try{const r=await pmRpc('app_admin_reset_pw',{p_token:pmTok(),p_emp_no:no});prompt('임시 비밀번호 — 복사해서 본인에게 전달하세요 (다음 로그인 때 변경)',r.temp);await pmLoad();PM.selEmp=no;pmRenderUsers();}
+  catch(e){alert('초기화 실패: '+e.message);}
+}
+async function pmToggleOv(no,key,on){
+  const u=PM.data.users.find(x=>x.emp_no===no);const r=pmPermMap(u.role_id)[key]||{};
+  const a={p_token:pmTok(),p_emp_no:no,p_screen:key,p_v:null,p_c:null,p_u:null,p_d:null,p_f:null};
+  if(on)PM_ACT.forEach(([k])=>a['p_'+k]=!!r[k]);
+  try{await pmRpc('app_admin_save_override',a);await pmLoad();PM.selEmp=no;pmRenderUsers();}catch(e){alert('저장 실패: '+e.message);}
+}
+async function pmSaveOv(no,key){
+  const a={p_token:pmTok(),p_emp_no:no,p_screen:key};
+  PM_ACT.forEach(([k])=>{const cb=document.querySelector(`input[data-ov="${key}"][data-a="${k}"]`);a['p_'+k]=cb?cb.checked:false;});
+  try{await pmRpc('app_admin_save_override',a);const d=await pmRpc('app_admin_data',{p_token:pmTok()});PM.data=d;}catch(e){alert('저장 실패: '+e.message);pmRenderUsers();}
+}
+/* ── 역할 (시스템 관리자) ── */
+function pmRenderRoles(){
+  const D=PM.data;const roles=D.roles||[];
+  if(PM.selRole==null&&roles.length)PM.selRole=roles[0].id;
+  const cnt=id=>(D.users||[]).filter(u=>u.role_id===id).length;
+  let left=`<div style="margin-bottom:8px;"><button class="row-btn" onclick="PM.selRole=0;pmRenderRoles();">＋ 새 역할</button></div><div class="pm-list">`+
+    roles.map(r=>`<div class="pm-item${PM.selRole===r.id?' on':''}" onclick="PM.selRole=${r.id};pmRenderRoles();"><div><b>${_pe(r.name)}</b><div style="font-size:11.5px;color:var(--muted);">${_pe(r.entity?PM_ENT[r.entity]||r.entity:'공통')} · ${r.scope_entity==='all'?'전 법인':'자기 법인'}${r.is_admin?' · 관리자':''}${r.can_manage_entity&&!r.is_admin?' · 법인 관리':''}</div></div><div style="font-size:12px;color:var(--muted);">${cnt(r.id)}명</div></div>`).join('')+'</div>';
+  const r=PM.selRole===0?{id:null,name:'',entity:'KOREA',scope_entity:'own',is_admin:false,can_manage_entity:false,note:''}:roles.find(x=>x.id===PM.selRole);
+  let right='<div class="empty-state" style="padding:60px;">역할을 고르세요.</div>';
+  if(r){
+    const ents=(D.entities||[]).map(e=>`<option value="${e.entity}" ${r.entity===e.entity?'selected':''}>${_pe(PM_ENT[e.entity]||e.entity)}</option>`).join('');
+    right=`<div class="pm-card"><div class="pm-form" style="flex-wrap:wrap;">`+
+      `<label>이름</label><input id="pmR-name" value="${_pe(r.name)}" style="width:150px;">`+
+      `<label>법인</label><select id="pmR-ent"><option value="" ${!r.entity?'selected':''}>공통</option>${ents}</select>`+
+      `<label>범위</label><select id="pmR-scope"><option value="own" ${r.scope_entity!=='all'?'selected':''}>자기 법인</option><option value="all" ${r.scope_entity==='all'?'selected':''}>전 법인</option></select>`+
+      `<label><input type="checkbox" id="pmR-admin" ${r.is_admin?'checked':''}> 시스템 관리자</label>`+
+      `<label><input type="checkbox" id="pmR-manage" ${r.can_manage_entity?'checked':''}> 법인 직원 관리</label></div>`+
+      `<div class="pm-form"><label>설명</label><input id="pmR-note" value="${_pe(r.note||'')}" style="flex:1;">`+
+      `<button class="row-btn" onclick="pmSaveRole(false)">저장</button>${r.id?`<button class="row-btn" onclick="pmSaveRole(true)">복사</button><button class="row-btn row-btn-del" onclick="pmDelRole(${r.id})">삭제</button>`:''}</div>`+
+      `<div style="font-size:12px;color:var(--muted);margin:4px 0 10px;">${r.id?`이 역할을 쓰는 사람 ${cnt(r.id)}명 — 저장하면 모두에게 바로 반영됩니다.`:'새 역할 — 체크 후 저장하세요.'}</div>`+
+      pmMatrix('role',r.id?pmPermMap(r.id):{},null,null)+`</div>`;
+  }
+  pmEl('pmBody').innerHTML=`<div class="pm-wrap"><div class="pm-left">${left}</div><div class="pm-right">${right}</div></div>`;
+}
+async function pmSaveRole(copy){
+  const src=PM.selRole?PM.data.roles.find(x=>x.id===PM.selRole):null;
+  let name=pmEl('pmR-name').value.trim();if(copy){name=prompt('복사할 새 역할 이름',name+' 복사');if(!name)return;}
+  if(!name){alert('이름을 입력하세요.');return;}
+  const role={id:copy?null:(src?src.id:null),name,entity:pmEl('pmR-ent').value,scope_entity:pmEl('pmR-scope').value,is_admin:pmEl('pmR-admin').checked,can_manage_entity:pmEl('pmR-manage').checked,note:pmEl('pmR-note').value,sort_no:src?src.sort_no:99};
+  const perms={};document.querySelectorAll('.pm-mx input[data-s]').forEach(cb=>{const k=cb.dataset.s;(perms[k]=perms[k]||{screen_key:k})[cb.dataset.a]=cb.checked;});
+  try{const r=await pmRpc('app_admin_save_role',{p_token:pmTok(),p_role:role,p_perms:Object.values(perms)});await pmLoad();PM.selRole=r.id;pmView('roles');}
+  catch(e){alert('저장 실패: '+e.message);}
+}
+async function pmDelRole(id){
+  if(!confirm('정말 삭제하시겠습니까?'))return;
+  try{await pmRpc('app_admin_delete_role',{p_token:pmTok(),p_id:id});PM.selRole=null;await pmLoad();pmView('roles');}catch(e){alert('삭제 실패: '+e.message);}
+}
+/* ── 계정 발급·전환 ── */
+function pmRenderOps(){
+  const D=PM.data;const adm=pmIsAdmin();
+  const rows=(D.entities||[]).map(e=>{
+    const m=(D.modes||[]).find(x=>x.entity===e.entity)||{mode:'legacy'};const us=(D.users||[]).filter(u=>u.entity===e.entity);
+    const withRole=us.filter(u=>u.role_id).length,issued=us.filter(u=>u.role_id&&u.has_pw).length,changed=us.filter(u=>u.role_id&&u.has_pw&&!u.must_change).length;
+    const personal=m.mode==='personal';
+    return `<tr><td><b>${_pe(PM_ENT[e.entity]||e.entity)}</b></td><td>${personal?'<span class="badge b-green">개인 계정</span>':'<span class="badge b-gray">기존 공통 비밀번호</span>'}${m.switched_at?`<div style="font-size:11px;color:var(--muted);">${_pe(String(m.switched_at).slice(0,16).replace('T',' '))} ${_pe(m.switched_by||'')}</div>`:''}</td>`+
+      `<td class="center">${us.length}</td><td class="center">${withRole}</td><td class="center">${issued}</td><td class="center">${changed}</td>`+
+      `<td><button class="row-btn" onclick="pmIssue('${e.entity}')">임시 비밀번호 발급</button>`+
+      (adm?` <button class="row-btn" onclick="pmSetMode('${e.entity}','${personal?'legacy':'personal'}',${withRole},${issued})">${personal?'기존 방식으로 되돌리기':'개인 계정으로 전환'}</button>`:'')+`</td></tr>`;
+  }).join('');
+  let h=`<div class="pm-card"><div style="font-weight:700;color:var(--point);margin-bottom:6px;">법인별 로그인 방식</div>`+
+    `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px;">「개인 계정으로 전환」하면 그 법인 로그인 화면이 사번·개인 비밀번호로 바뀌고, 공통 비밀번호로는 들어올 수 없습니다. 전환 전에 역할 지정 → 임시 비밀번호 발급·전달을 끝내세요.</div>`+
+    `<table class="pm-mx"><thead><tr><th style="width:120px;">법인</th><th style="width:170px;">로그인 방식</th><th style="width:70px;" class="center">직원</th><th style="width:80px;" class="center">역할 지정</th><th style="width:80px;" class="center">비번 발급</th><th style="width:90px;" class="center">본인 변경</th><th>처리</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  if(PM.issued.length){
+    h+=`<div class="pm-card" style="margin-top:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><b style="color:var(--point);">방금 발급한 임시 비밀번호 ${PM.issued.length}명</b><span style="font-size:12px;color:var(--accent);">이 화면을 닫으면 다시 볼 수 없습니다</span><button class="row-btn" style="margin-left:auto;" onclick="pmIssuedXlsx()">엑셀 다운로드</button></div>`+
+      `<table class="pm-mx"><thead><tr><th style="width:90px;">법인</th><th style="width:70px;">사번</th><th style="width:110px;">이름</th><th style="width:110px;">부서</th><th style="width:80px;">직급</th><th>임시 비밀번호</th></tr></thead><tbody>`+
+      PM.issued.map(x=>`<tr><td>${_pe(PM_ENT[x.entity]||x.entity)}</td><td>${x.emp_no}</td><td>${_pe(x.name)}</td><td>${_pe(x.dept||'')}</td><td>${_pe(x.rank||'')}</td><td><b>${_pe(x.temp)}</b></td></tr>`).join('')+`</tbody></table></div>`;
+  }
+  pmEl('pmBody').innerHTML=`<div style="padding:16px;">${h}</div>`;
+}
+async function pmIssue(ent){
+  if(!confirm(`${PM_ENT[ent]||ent}: 역할이 있고 아직 비밀번호가 없는 계정에 임시 비밀번호를 발급합니다.`))return;
+  try{const r=await pmRpc('app_admin_issue',{p_token:pmTok(),p_entity:ent});PM.issued=PM.issued.concat(r||[]);await pmLoad();PM.view='ops';pmView('ops');if(!(r||[]).length)alert('새로 발급할 계정이 없습니다. (이미 발급했거나 역할이 없음 — 다시 발급은 사람별 「비밀번호 초기화」)');}
+  catch(e){alert('발급 실패: '+e.message);}
+}
+function pmIssuedXlsx(){
+  if(typeof XLSX==='undefined'){alert('엑셀 기능을 불러오지 못했습니다.');return;}
+  const aoa=[['법인','사번','이름','부서','직급','임시 비밀번호']].concat(PM.issued.map(x=>[PM_ENT[x.entity]||x.entity,x.emp_no,x.name,x.dept||'',x.rank||'',x.temp]));
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:12},{wch:8},{wch:12},{wch:12},{wch:8},{wch:16}];XLSX.utils.book_append_sheet(wb,ws,'임시비밀번호');
+  XLSX.writeFile(wb,'SMERP_임시비밀번호_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+async function pmSetMode(ent,mode,withRole,issued){
+  const nm=PM_ENT[ent]||ent;
+  if(mode==='personal'){
+    if(!withRole){alert(nm+': 역할이 지정된 계정이 없어 전환할 수 없습니다.');return;}
+    if(!confirm(`${nm}을(를) 개인 계정 로그인으로 전환합니다.\n\n역할 지정 ${withRole}명 · 비밀번호 발급 ${issued}명\n발급되지 않은 사람은 로그인할 수 없습니다. 진행할까요?`))return;
+  }else if(!confirm(`${nm}을(를) 기존 공통 비밀번호 방식으로 되돌립니다.`))return;
+  try{await pmRpc('app_admin_set_mode',{p_token:pmTok(),p_entity:ent,p_mode:mode});await pmLoad();pmView('ops');}catch(e){alert('전환 실패: '+e.message);}
+}
+/* ── 직원 등록 ── */
+function pmOpenEmp(){
+  const D=PM.data;const adm=pmIsAdmin();const me=D.me||{};
+  pmEl('pmE-ent').innerHTML=(D.entities||[]).map(e=>`<option value="${e.entity}">${_pe(PM_ENT[e.entity]||e.entity)}</option>`).join('');
+  pmEl('pmE-ent').value=adm?'SMEGLOBAL':me.entity;pmEl('pmE-entWrap').style.display=adm?'':'none';
+  ['name','local','dept','rank','title','phone','email','join'].forEach(k=>pmEl('pmE-'+k).value='');
+  const fill=()=>{const ent=pmEl('pmE-ent').value;pmEl('pmE-role').innerHTML='<option value="">(나중에 지정)</option>'+(D.roles||[]).filter(r=>r.entity===ent).map(r=>`<option value="${r.id}">${_pe(r.name)}</option>`).join('');};
+  pmEl('pmE-ent').onchange=fill;fill();
+  pmEl('pmEmpModal').classList.add('show');
+}
+async function pmSaveEmp(){
+  const p={entity:pmEl('pmE-ent').value,name:pmEl('pmE-name').value.trim(),name_local:pmEl('pmE-local').value.trim(),dept:pmEl('pmE-dept').value.trim(),rank:pmEl('pmE-rank').value.trim(),
+    title:pmEl('pmE-title').value.trim(),phone:pmEl('pmE-phone').value.trim(),email:pmEl('pmE-email').value.trim(),join_date:pmEl('pmE-join').value,role_id:pmEl('pmE-role').value};
+  if(!p.name){alert('이름을 입력하세요.');return;}
+  try{const r=await pmRpc('app_admin_add_employee',{p_token:pmTok(),p});pmEl('pmEmpModal').classList.remove('show');_empData=[];await pmLoad();PM.selEmp=r.emp_no;pmView('users');alert(`등록했습니다. 사번 ${r.emp_no}`);}
+  catch(e){alert('등록 실패: '+e.message);}
+}
+
 // 실무진 화면: 거래처 정보 탭만 · 법인 정보·엑셀 업로드 숨김 · 해외법인은 자기 법인만
 function applyPartnerOnlyUI(){
-  document.querySelectorAll('#adminTabBar .tab-group').forEach(g=>{if(!g.querySelector('#tab-partners-btn'))g.style.display='none';});
-  document.querySelectorAll('#adminTabBar .tab-btn').forEach(b=>{if(b.id!=='tab-partners-btn')b.style.display='none';});
+  const keep=b=>(b.id==='tab-partners-btn'&&CAN_PARTNERS)||(b.id==='tab-perm-btn'&&CAN_PERM);
+  document.querySelectorAll('#adminTabBar .tab-btn').forEach(b=>{if(!keep(b))b.style.display='none';});
+  document.querySelectorAll('#adminTabBar .tab-group').forEach(g=>{if(![...g.querySelectorAll('.tab-btn')].some(keep))g.style.display='none';});
   const se=document.getElementById('secEnt');if(se)se.style.display='none';
   const up=document.getElementById('partnersFileInput');if(up&&up.closest('label'))up.closest('label').style.display='none';
   const pe=document.getElementById('pf-entity');if(pe&&MY_ENTITY!=='KOREA'){pe.value=MY_ENTITY;pe.disabled=true;}

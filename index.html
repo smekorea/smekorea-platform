@@ -302,6 +302,7 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
 
     <div class="tb-user" id="tbUser" style="display:none;">
       <span class="tb-user-name" id="tbUserName"></span>
+      <button class="tb-logout" id="tbChpw" onclick="openChangePw(false)" style="display:none;margin-right:4px;">비밀번호 변경</button>
       <button class="tb-logout" onclick="doLogout()">로그아웃</button>
     </div>
   </div>
@@ -652,12 +653,18 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
       <option value="SMETH" data-i18n="SMETH (태국)">SMETH (태국)</option>
       <option value="SMECN" data-i18n="SMECN (중국)">SMECN (중국)</option>
     </select>
+    <div id="empNoWrap" style="display:none;">
+      <div class="popup-lbl" data-i18n="사번">사번</div>
+      <input class="popup-inp" id="empNoInput" type="text" inputmode="numeric" maxlength="10" autocomplete="username" placeholder="" onkeydown="if(event.key==='Enter')document.getElementById('pwInput').focus()">
+    </div>
+    <div id="nameWrap">
     <div class="popup-lbl" data-i18n="이름">이름</div>
     <select class="popup-sel" id="nameSelect" disabled>
       <option value="" data-i18n="— 법인을 먼저 선택해주세요 —">— 법인을 먼저 선택해주세요 —</option>
     </select>
+    </div>
     <div class="popup-lbl" data-i18n="비밀번호">비밀번호</div>
-    <input class="popup-inp" id="pwInput" type="password" maxlength="10" placeholder="••••" onkeydown="if(event.key==='Enter')checkPW()">
+    <input class="popup-inp" id="pwInput" type="password" maxlength="64" autocomplete="current-password" placeholder="••••" onkeydown="if(event.key==='Enter')checkPW()">
     <div class="popup-err" id="pwError"></div>
     <button class="popup-btn" onclick="checkPW()" data-i18n="로그인">로그인</button>
     <div class="popup-cancel" onclick="closePW()">✕ <span data-i18n="취소">취소</span></div>
@@ -675,6 +682,24 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     <div class="popup-err" id="hqPwError"></div>
     <button class="popup-btn" onclick="checkHQPW()" data-i18n="확인">확인</button>
     <div class="popup-cancel" onclick="closeHQOverlay()">✕ <span data-i18n="취소">취소</span></div>
+  </div>
+</div>
+
+<!-- 비밀번호 변경 (첫 로그인·초기화 후 필수 / 상단 메뉴) -->
+<div class="overlay" id="cpwOverlay">
+  <div class="popup-box">
+    <div class="popup-icon">🔑</div>
+    <div class="popup-title" data-i18n="비밀번호 변경">비밀번호 변경</div>
+    <div class="popup-sub" id="cpwSub" data-i18n="8자 이상, 영문과 숫자를 함께 써주세요">8자 이상, 영문과 숫자를 함께 써주세요</div>
+    <div class="popup-lbl" data-i18n="현재 비밀번호">현재 비밀번호</div>
+    <input class="popup-inp" id="cpwOld" type="password" maxlength="64" autocomplete="current-password">
+    <div class="popup-lbl" data-i18n="새 비밀번호">새 비밀번호</div>
+    <input class="popup-inp" id="cpwNew" type="password" maxlength="64" autocomplete="new-password">
+    <div class="popup-lbl" data-i18n="새 비밀번호 확인">새 비밀번호 확인</div>
+    <input class="popup-inp" id="cpwNew2" type="password" maxlength="64" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePw()">
+    <div class="popup-err" id="cpwError"></div>
+    <button class="popup-btn" onclick="submitChangePw()" data-i18n="변경">변경</button>
+    <div class="popup-cancel" id="cpwCancel" onclick="closeChangePw()">✕ <span data-i18n="취소">취소</span></div>
   </div>
 </div>
 
@@ -781,12 +806,81 @@ function initAuth(){
     document.getElementById('tbUser').style.display='flex';
     document.getElementById('tbUserName').textContent=n+' 님';
   }
+  refreshMe();
 }
 initAuth();
 
+/* ── 개인 계정 (사번·개인 비밀번호) — 법인별로 app_entity_mode가 personal일 때 ── */
+let MODES=null;
+const HQ_KEYS={'admin_log.html':['admin','admin_partners','perm'],'hq_analysis.html':['hq'],'cost_table.html':['cost'],
+  'kpi_shipping.html':['kpi_shipping'],'kpi_mfg.html':['kpi_mfg'],'kpi_purchase.html':['kpi_purchase'],'kpi_material.html':['kpi_material'],'kpi_planning.html':['kpi_planning']};
+const TARGET_KEY={trade:'trade',ship:'ship',shiplot:'shiplot',po:'po',stock:'stock',smartmat:'smartmat',schedule:'schedule',workflow:'workflow',collab:'collab',directive:'directive',orgchart:'orgchart'};
+async function rpcIdx(fn,args){
+  const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{})});
+  const tx=await r.text();if(!r.ok){let m=tx;try{m=JSON.parse(tx).message||tx;}catch(e){}throw new Error(m);}return tx?JSON.parse(tx):null;
+}
+async function loadModes(){if(MODES)return MODES;try{MODES=await rpcIdx('app_entity_modes',{})||{};}catch(e){MODES={};}return MODES;}
+function isPersonal(ent){return !!(MODES&&MODES[ent]==='personal');}
+function myPerms(){try{return JSON.parse(localStorage.getItem('sme_perms')||'{}');}catch(e){return {};}}
+function canOpen(t){
+  if(!localStorage.getItem('sme_token'))return true;           // 기존 방식 로그인
+  const k=TARGET_KEY[t];if(!k)return true;
+  const P=myPerms();if(P[k]&&P[k].v)return true;
+  alert(idxT('이 화면을 열 권한이 없습니다'));return false;
+}
+async function refreshMe(){
+  const tk=localStorage.getItem('sme_token');if(!tk)return;
+  let me=null;try{me=await rpcIdx('app_me',{p_token:tk});}catch(e){return;}
+  if(!me){ // 만료·사용중지 → 다시 로그인
+    ['sme_user','sme_auth','sme_hq_auth','sme_token','sme_emp_no','sme_perms'].forEach(k=>localStorage.removeItem(k));
+    document.getElementById('tbUser').style.display='none';return;
+  }
+  localStorage.setItem('sme_perms',JSON.stringify(me.perms||{}));
+  document.getElementById('tbChpw').style.display='';
+  if(me.must_change)openChangePw(true);
+}
+async function personalLogin(){
+  const err=document.getElementById('pwError');const no=parseInt(document.getElementById('empNoInput').value,10);const pw=document.getElementById('pwInput').value;
+  if(!no){err.textContent='⚠ '+idxT('사번을 입력해주세요');return;}
+  err.textContent=idxT('로그인 중...');
+  let r;try{r=await rpcIdx('app_login',{p_entity:pendingEntity,p_emp_no:no,p_pw:pw});}catch(e){err.textContent='⚠ '+e.message;return;}
+  if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||idxT('비밀번호가 올바르지 않습니다'));document.getElementById('pwInput').value='';return;}
+  localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));
+  localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);
+  localStorage.removeItem('sme_hq_auth');sessionStorage.removeItem('hq_auth');sessionStorage.setItem('po_auth','1');
+  let me=null;try{me=await rpcIdx('app_me',{p_token:r.token});}catch(e){}
+  localStorage.setItem('sme_perms',JSON.stringify((me&&me.perms)||{}));
+  document.getElementById('tbUser').style.display='flex';document.getElementById('tbUserName').textContent=r.name+' 님';
+  document.getElementById('tbChpw').style.display='';
+  err.textContent='';closePW();writeLog(r.name,'SMERP 로그인',r.entity);
+  if(r.must_change){openChangePw(true,pendingTarget);return;}
+  if(pendingTarget&&canOpen(pendingTarget))handleTarget(pendingTarget,r.name);
+}
+let cpwAfter='';
+function openChangePw(force,after){
+  cpwAfter=after||'';
+  ['cpwOld','cpwNew','cpwNew2'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cpwError').textContent='';
+  document.getElementById('cpwSub').textContent=force?idxT('처음 로그인하셨습니다. 비밀번호를 바꿔주세요')+' — '+idxT('8자 이상, 영문과 숫자를 함께 써주세요'):idxT('8자 이상, 영문과 숫자를 함께 써주세요');
+  document.getElementById('cpwCancel').style.display=force?'none':'';
+  document.getElementById('cpwOverlay').style.display='flex';
+  setTimeout(()=>document.getElementById('cpwOld').focus(),80);
+}
+function closeChangePw(){document.getElementById('cpwOverlay').style.display='none';}
+async function submitChangePw(){
+  const o=document.getElementById('cpwOld').value,n1=document.getElementById('cpwNew').value,n2=document.getElementById('cpwNew2').value,err=document.getElementById('cpwError');
+  if(n1!==n2){err.textContent='⚠ '+idxT('새 비밀번호가 서로 다릅니다');return;}
+  let r;try{r=await rpcIdx('app_change_pw',{p_token:localStorage.getItem('sme_token'),p_old:o,p_new:n1});}catch(e){err.textContent='⚠ '+e.message;return;}
+  if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||'');return;}
+  closeChangePw();alert(idxT('비밀번호 변경')+' ✓');
+  const t=cpwAfter;cpwAfter='';if(t&&canOpen(t))handleTarget(t,localStorage.getItem('sme_user'));
+}
+
 function doLogout(){
   if(!confirm('로그아웃 하시겠습니까?'))return;
-  ['sme_user','sme_auth','sme_hq_auth','sme_entity'].forEach(k=>localStorage.removeItem(k));
+  const tk=localStorage.getItem('sme_token');if(tk)rpcIdx('app_logout',{p_token:tk}).catch(()=>{});
+  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms'].forEach(k=>localStorage.removeItem(k));
+  document.getElementById('tbChpw').style.display='none';
   ['po_auth','hq_auth'].forEach(k=>sessionStorage.removeItem(k));
   document.getElementById('tbUser').style.display='none';
   showSection('comm');
@@ -813,6 +907,18 @@ const IDX_I18N_T = {
 "법인을 선택해주세요":{zh:"请选择公司",en:"Please select a company"},
 "이름을 선택해주세요":{zh:"请选择姓名",en:"Please select a name"},
 "비밀번호가 올바르지 않습니다":{zh:"密码不正确",en:"Incorrect password"},
+"사번":{zh:"工号",en:"Employee No."},
+"사번을 입력해주세요":{zh:"请输入工号",en:"Please enter your employee number"},
+"비밀번호 변경":{zh:"修改密码",en:"Change password"},
+"현재 비밀번호":{zh:"当前密码",en:"Current password"},
+"새 비밀번호":{zh:"新密码",en:"New password"},
+"새 비밀번호 확인":{zh:"确认新密码",en:"Confirm new password"},
+"변경":{zh:"修改",en:"Change"},
+"8자 이상, 영문과 숫자를 함께 써주세요":{zh:"至少8位，须包含字母和数字",en:"At least 8 characters with letters and numbers"},
+"처음 로그인하셨습니다. 비밀번호를 바꿔주세요":{zh:"首次登录，请修改密码",en:"First login — please change your password"},
+"새 비밀번호가 서로 다릅니다":{zh:"两次输入的新密码不一致",en:"The new passwords do not match"},
+"이 화면을 열 권한이 없습니다":{zh:"您没有打开此页面的权限",en:"You do not have permission to open this page"},
+"로그인 중...":{zh:"登录中...",en:"Signing in..."},
 "불러오는 중...":{zh:"加载中...",en:"Loading..."},
 "불러오기 실패 (새로고침 후 재시도)":{zh:"加载失败（请刷新后重试）",en:"Failed to load (please refresh and try again)"},
 };
@@ -847,6 +953,12 @@ async function onCorpSelect(){
   const corp=document.getElementById('corpSelect').value;
   const sel=document.getElementById('nameSelect');
   pendingEntity=CORP_ENTITY_MAP[corp]||'';
+  await loadModes();
+  const personal=isPersonal(pendingEntity);
+  document.getElementById('empNoWrap').style.display=personal?'':'none';
+  document.getElementById('nameWrap').style.display=personal?'none':'';
+  document.getElementById('pwInput').placeholder=personal?'':'••••';
+  if(personal){setTimeout(()=>document.getElementById('empNoInput').focus(),50);return;}
   if(!corp){ sel.innerHTML=`<option value="">${idxT('— 법인을 먼저 선택해주세요 —')}</option>`; sel.disabled=true; return; }
   sel.innerHTML=`<option value="">${idxT('불러오는 중...')}</option>`; sel.disabled=true;
   try{
@@ -865,8 +977,9 @@ function getName(){return document.getElementById('nameSelect').value;}
 function openWithPW(t){
   pendingTarget=t;
   const n=localStorage.getItem('sme_user');
-  if(n&&localStorage.getItem('sme_auth')==='1'){sessionStorage.setItem('po_auth','1');handleTarget(t,n);return;}
-  ['corpSelect','pwInput'].forEach(id=>document.getElementById(id).value='');
+  if(n&&localStorage.getItem('sme_auth')==='1'){if(!canOpen(t))return;sessionStorage.setItem('po_auth','1');handleTarget(t,n);return;}
+  ['corpSelect','pwInput','empNoInput'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('empNoWrap').style.display='none';document.getElementById('nameWrap').style.display='';
   document.getElementById('nameSelect').innerHTML=`<option value="">${idxT('— 법인을 먼저 선택해주세요 —')}</option>`;
   document.getElementById('nameSelect').disabled=true;
   pendingEntity='';
@@ -876,9 +989,10 @@ function openWithPW(t){
   setTimeout(()=>document.getElementById('corpSelect').focus(),100);
 }
 
-function checkPW(){
+async function checkPW(){
   const n=getName(),pw=document.getElementById('pwInput').value,err=document.getElementById('pwError');
   if(!document.getElementById('corpSelect').value){err.textContent='⚠ '+idxT('법인을 선택해주세요');return;}
+  if(isPersonal(pendingEntity)){ await personalLogin(); return; }
   if(!n){err.textContent='⚠ '+idxT('이름을 선택해주세요');return;}
   if(pw!==PW_MAIN){err.textContent='⚠ '+idxT('비밀번호가 올바르지 않습니다');document.getElementById('pwInput').value='';return;}
   localStorage.setItem('sme_user',n);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',pendingEntity);sessionStorage.setItem('po_auth','1');
@@ -905,6 +1019,11 @@ function handleTarget(t,n){
 }
 
 function openHQ(url,screen){
+  if(localStorage.getItem('sme_token')){
+    const k=HQ_KEYS[url]||[];const P=myPerms();
+    if(!k.some(x=>P[x]&&P[x].v)){alert(idxT('이 화면을 열 권한이 없습니다'));return;}
+    localStorage.setItem('sme_hq_auth','1');sessionStorage.setItem('hq_auth','1');writeLog(localStorage.getItem('sme_user'),screen);nav(url);return;
+  }
   if(localStorage.getItem('sme_hq_auth')==='1'){sessionStorage.setItem('hq_auth','1');writeLog(localStorage.getItem('sme_user'),screen);nav(url);return;}
   hqUrl=url;hqScreen=screen;
   document.getElementById('hqOverlaySub').textContent=`[${screen}] 경영 전용 비밀번호를 입력해주세요`;
