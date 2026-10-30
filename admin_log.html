@@ -730,6 +730,12 @@ td.center .al-pline{justify-content:center;}
         <th style="width:90px;">구분</th>
         <th style="width:100px;">공급방식</th>
         <th style="width:90px;">담당자</th>
+        <th style="width:110px;">사업자번호</th>
+        <th style="width:80px;">대표자</th>
+        <th style="width:220px;">주소</th>
+        <th style="width:110px;">전화</th>
+        <th style="width:90px;">상대 담당자</th>
+        <th style="width:140px;">명세서 표시 칸</th>
         <th style="width:150px;">마감방식/결제조건</th>
         <th class="center" style="width:100px;">계약체결유무</th>
         <th class="center" style="width:100px;">체결일자</th>
@@ -737,7 +743,7 @@ td.center .al-pline{justify-content:center;}
         <th class="center" style="width:90px;">상태</th>
         <th class="center" style="width:130px;">관리</th>
       </tr></thead>
-      <tbody id="partners-tbody"><tr><td colspan="13"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="partners-tbody"><tr><td colspan="19"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -2691,16 +2697,16 @@ async function saveEntInfo(){
 }
 async function loadPartnersData() {
   const tbody=document.getElementById('partners-tbody');
-  tbody.innerHTML='<tr><td colspan="13"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  tbody.innerHTML='<tr><td colspan="19"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const {data,error}=await sbFetchAll(()=>sb.from('partners').select('*').order('name').order('id'));
-  if(error){tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
+  if(error){tbody.innerHTML=`<tr><td colspan="19" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
   _partnersData=data||[];
   loadEntInfo();
   document.getElementById('partners-count').textContent=`(${_partnersData.length}개)`;
   if(_empData.length===0) await loadEmpData(); // 담당자 드롭다운용 직원목록 확보
   try{ await _ensureMakerKeySet(); }catch(e){ console.warn('메이커 목록 로드 실패',e); }
   renderPartnersTable();
-  setTimeout(()=>initColResize('partners-table','al_partners_v4'),50);
+  setTimeout(()=>initColResize('partners-table','al_partners_v5'),50);
 }
 
 function renderPartnersTable() {
@@ -2727,8 +2733,8 @@ function renderPartnersTable() {
   if(fStmt==='nobiz') rows=rows.filter(r=>!String(r.biz_no||'').trim());
   if(fStmt==='notel') rows=rows.filter(r=>!String(r.tel||'').trim());
   const pfr=document.getElementById('pf-result'); if(pfr) pfr.innerHTML=`<b style="color:var(--text);">${rows.length.toLocaleString()}</b> / ${_partnersData.length.toLocaleString()}건`;
-  if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="13"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="13"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
+  if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="19"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="19"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
     const aliases=[r.alias1,r.alias2].filter(Boolean).join(', ');
     const active=r.is_active!==false;
@@ -2748,6 +2754,12 @@ function renderPartnersTable() {
       <td class="center">${r.type||''}</td>
       <td class="center">${supplyBadge}</td>
       <td class="center">${r.sales_manager||''}</td>
+      <td class="center">${_pe(r.biz_no)}</td>
+      <td class="center">${_pe(r.ceo)}</td>
+      <td title="${_pe(r.address)}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${_pe(r.address)}</td>
+      <td class="center">${_pe(r.tel)}</td>
+      <td class="center">${_pe(r.contact_person)}</td>
+      <td style="font-size:11.5px;">${_stmtColsLabel(r.stmt_cols)}</td>
       <td class="center">${closingBadge}</td>
       <td class="center">${_contractSignedCell(r)}</td>
       <td class="center">${_contractDateCell(r)}</td>
@@ -2761,6 +2773,10 @@ function renderPartnersTable() {
   }).join('');
 }
 
+function _pe(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+const _STMT_LB={item_code:'품번',maker_pn:'메이커품번',lg_pn:'LG품번',spec:'규격',brand:'브랜드'};
+function _stmtColsLabel(v){if(!v)return '<span style="color:var(--muted)">기본</span>';
+  return String(v).split(',').map(k=>_STMT_LB[k.trim()]).filter(Boolean).join('·')||'<span style="color:var(--muted)">품명만</span>';}
 function _partnersManagerOptions(selected){
   const active=_empData.filter(e=>e.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
   const opts=active.map(e=>`<option value="${e.name}" ${e.name===selected?'selected':''}>${e.name}${e.dept?` (${e.dept})`:''}</option>`).join('');
@@ -2937,7 +2953,10 @@ async function downloadPartnersData(){
     '업체명':r.name,'별칭1':r.alias1||'','별칭2':r.alias2||'','구분':r.type||'',
     '국가':r.country||'','마감방식':_closingLabel(r.closing_basis),'결제조건':r.payment_terms||'',
     '계약체결유무':r.contract_signed?'체결':'미체결','체결일자':r.contract_date||'','계약체결기간':r.contract_term||'','체결중요내용':r.contract_note||'',
-    '비고':r.note||'','상태':(r.is_active!==false)?'활성':'비활성'
+    '비고':r.note||'','상태':(r.is_active!==false)?'활성':'비활성',
+    '법인':r.entity||'','이카운트코드':r.partner_code||'','사업자번호':r.biz_no||'','대표자':r.ceo||'','업태':r.biz_type||'','종목':r.biz_item||'',
+    '주소':r.address||'','전화':r.tel||'','팩스':r.fax||'','상대담당자':r.contact_person||'','휴대폰':r.mobile||'','이메일':r.email||'','통화':r.currency||'',
+    '명세서표시칸':r.stmt_cols?String(r.stmt_cols).split(',').map(k=>_STMT_LB[k.trim()]).filter(Boolean).join('·'):'기본'
   })));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'거래처정보');
   XLSX.writeFile(wb,'SME_거래처정보.xlsx');
