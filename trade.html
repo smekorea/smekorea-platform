@@ -10,6 +10,7 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.7: 회사정보·직인 입력은 관리자설정 → 거래처 정보 → 법인 정보로 이동(⑤ 설정은 안내만)
    ── v1.6: 직인 — 확정 전표 명세서 대표자 칸에 직인(trade_setting.stamp_url, 본사 stamp_sk.png), ⑤ 설정에서 법인별 교체
    ── v1.5: 메이커품번·LG품번 검색/표시, 명세서 표시 칸 선택(거래처 기본 저장), 단가표(price_rule) 단가·매출처별 원가 연동
    ── v1.4: LG사급 — 공급구분(직거래/LG사급), 출하 자동 분리, 사급 납품 수량만·마감대기, ⑥ LG 마감(기간 합산→LG전자 매출 전표, 납품은 마감완료로 보존)
@@ -1359,12 +1360,12 @@ const SET_FIELDS=[
   ['default_currency','기본 통화','sel',['KRW','USD','CNY','THB','INR']],['default_vat_pct','기본 세율(%)','num'],
   ['default_dev_pct','출고이상 기본 기준(±%)','num'],['min_cover_weeks','총재고 부족 기준(주)','num'],
   ['slip_prefix','전표번호 접두어','txt'],['auto_start_date','출하 자동생성 시작일','date'],
-  ['company_name','상호','txt'],['biz_no','사업자등록번호','txt'],['ceo','대표자','txt'],['tel','전화','txt'],
-  ['address','주소','txt'],['bank_info','입금계좌(명세서 하단)','txt'],['stamp_url','직인 이미지','stamp']];
+  ['company_info','회사정보·직인','link']];
 function renderSetting(){
   document.getElementById('setEntLbl').textContent=(ENT[curEntity]||{}).code||curEntity;
   document.getElementById('setFrm').innerHTML=SET_FIELDS.map(([k,l,tp,opt])=>`<div class="k">${l}</div><div>${
-    tp==='stamp'?`<input type="hidden" id="set_${k}" value="${esc(SETTING[k]||'')}"><span id="stampPv" style="display:inline-flex;align-items:center;gap:8px">${SETTING[k]?`<img src="${esc(stampSrc(SETTING[k]))}" style="width:48px;height:48px">`:'<span class="note">없음</span>'}</span>
+    tp==='link'?`<span class="note">${esc(SETTING.company_name||'')} · ${esc(SETTING.biz_no||'')} — 상호·사업자번호·대표자·주소·전화·입금계좌·직인은 <b>관리자설정 → 거래처 정보 → 법인 정보</b>에서 관리합니다.</span>`
+    :tp==='stamp'?`<input type="hidden" id="set_${k}" value="${esc(SETTING[k]||'')}"><span id="stampPv" style="display:inline-flex;align-items:center;gap:8px">${SETTING[k]?`<img src="${esc(stampSrc(SETTING[k]))}" style="width:48px;height:48px">`:'<span class="note">없음</span>'}</span>
       <input type="file" accept="image/*" onchange="pickStamp(this.files[0])" style="font-size:12px;margin-left:8px"> <button class="btn btn-r" style="height:24px;padding:0 8px" onclick="clearStamp()">삭제</button>
       <span class="note">저장을 눌러야 반영 · 확정 전표 명세서에만 찍힘</span>`
     :tp==='sel'?`<select class="inp" id="set_${k}">${opt.map(o=>`<option ${SETTING[k]===o?'selected':''}>${o}</option>`).join('')}</select>`
@@ -1379,7 +1380,7 @@ function pickStamp(f){
 function clearStamp(){if(!confirm('정말 삭제하시겠습니까?'))return;document.getElementById('set_stamp_url').value='';document.getElementById('stampPv').innerHTML='<span class="note">없음 (저장을 눌러야 반영)</span>';}
 async function saveSetting(){
   const body={updated_by:curUser,updated_at:new Date().toISOString()};
-  SET_FIELDS.forEach(([k,,tp])=>{const v=document.getElementById('set_'+k).value;body[k]=tp==='num'?num(v):(v===''?null:v);});
+  SET_FIELDS.filter(([,,tp])=>tp!=='link').forEach(([k,,tp])=>{const v=document.getElementById('set_'+k).value;body[k]=tp==='num'?num(v):(v===''?null:v);});
   if(body.default_vat_pct<0||body.default_vat_pct>50){alert('세율을 확인하세요.');return;}
   try{
     const ex=await api('trade_setting?entity=eq.'+curEntity);

@@ -225,6 +225,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .stk-seg button+button{border-left:1px solid var(--border);}
 .stk-seg button.on{background:var(--point);color:#fff;font-weight:700;}
 #stock-current-table th.sortable{cursor:pointer;}
+#entinfo-table th.sortable{cursor:pointer;}
+#entinfo-table th.sortable:hover{background:rgba(26,86,219,.06);}
+#entinfo-table .sort-icon{margin-left:3px;font-size:10px;color:var(--accent);}
 #stock-current-table th.sortable:hover{background:var(--point-bg);color:var(--point);}
 .stk-si{margin-left:3px;font-size:9px;color:var(--point);}
 .stk-warn{width:100%;margin-bottom:6px;padding:8px 11px;background:#FFF7E6;border:1px solid #EFC14A;border-left:4px solid #8A6116;font-size:12px;color:#4A3305;line-height:1.6;}
@@ -631,6 +634,19 @@ td.center .al-pline{justify-content:center;}
 <!-- 탭2-3: 거래처 정보 (partners) -->
 <!-- ══════════════════════════════════════════════════ -->
 <div id="tab-partners" class="content" style="display:none;">
+  <!-- 법인 정보(거래명세서 공급자) — trade_setting -->
+  <div class="up-section">
+    <div class="up-section-title">🏢 법인 정보 <span style="font-size:12px;font-weight:400;color:var(--muted);">거래명세서 공급자 칸 · 본사·해외법인</span></div>
+    <div class="tbl-wrap" style="margin-top:6px;">
+      <table id="entinfo-table">
+        <thead><tr>
+          <th class="sortable" style="width:110px;" onclick="sortEntInfo('entity')">법인<span class="sort-icon" id="eis-entity"></span></th><th class="sortable" style="width:170px;" onclick="sortEntInfo('company_name')">상호<span class="sort-icon" id="eis-company_name"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('biz_no')">사업자번호<span class="sort-icon" id="eis-biz_no"></span></th><th class="sortable" style="width:80px;" onclick="sortEntInfo('ceo')">대표자<span class="sort-icon" id="eis-ceo"></span></th>
+          <th class="sortable" style="width:300px;" onclick="sortEntInfo('address')">주소<span class="sort-icon" id="eis-address"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('tel')">전화<span class="sort-icon" id="eis-tel"></span></th><th class="sortable" style="width:230px;" onclick="sortEntInfo('bank_info')">입금계좌<span class="sort-icon" id="eis-bank_info"></span></th><th class="center" style="width:60px;">직인</th><th class="center" style="width:70px;">관리</th>
+        </tr></thead>
+        <tbody id="entinfo-tbody"><tr><td colspan="9"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
   <div class="up-section">
     <div class="up-section-title">🤝 거래처 정보 (partners) <span style="font-size:12px;font-weight:400;color:var(--muted);" id="partners-count"></span></div>
     <div class="up-toolbar">
@@ -691,6 +707,15 @@ td.center .al-pline{justify-content:center;}
       <option value="FORECAST">예측발주만</option>
       <option value="PO_BASED">PO접수만</option>
     </select>
+    <select id="pf-entity" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;">
+      <option value="">법인 전체</option><option value="KOREA">본사</option><option value="GSMEIN">인도</option><option value="SMECN">중국</option><option value="SMEGLOBAL">태국</option>
+    </select>
+    <select id="pf-stmt" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;" title="거래명세서에 나가는 거래처 정보">
+      <option value="">명세서 정보 전체</option>
+      <option value="noaddr">주소 미입력</option>
+      <option value="nobiz">사업자번호 미입력</option>
+      <option value="notel">전화 미입력</option>
+    </select>
     <span id="pf-result" style="margin-left:auto;font-size:12px;color:var(--muted);"></span>
   </div>
 
@@ -736,6 +761,38 @@ td.center .al-pline{justify-content:center;}
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closePartnerContractModal()">닫기</button>
       <button class="modal-btn modal-save" id="pcm-edit-btn">수정</button>
+    </div>
+  </div>
+</div>
+
+<!-- 법인 정보 수정 모달 (trade_setting) -->
+<div class="modal-overlay" id="entInfoModal">
+  <div class="modal-box" style="width:540px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-hdr">
+      <div class="modal-title" id="entInfoTitle">법인 정보 수정</div>
+      <button class="modal-close" onclick="document.getElementById('entInfoModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ei-entity"><input type="hidden" id="ei-stamp">
+      <div class="modal-row">
+        <div class="form-group"><label>상호</label><input id="ei-name"></div>
+        <div class="form-group"><label>사업자번호</label><input id="ei-bizno"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>대표자</label><input id="ei-ceo"></div>
+        <div class="form-group"><label>전화</label><input id="ei-tel"></div>
+      </div>
+      <div class="form-group full"><label>주소</label><input id="ei-address"></div>
+      <div class="form-group full"><label>입금계좌 (명세서 하단)</label><input id="ei-bank" placeholder="예) 기업은행 171-057740-01-017 (주)에스엠이코리아"></div>
+      <div class="form-group full"><label>직인 <span style="font-weight:400;color:var(--muted);font-size:11px;">(확정 전표 명세서에만 찍힘 · 300KB 이하)</span></label>
+        <div style="display:flex;align-items:center;gap:10px;"><span id="ei-stamp-pv"></span>
+          <input type="file" accept="image/*" onchange="pickEntStamp(this.files[0])" style="font-size:12px;">
+          <button class="row-btn row-btn-del" onclick="clearEntStamp()">삭제</button></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-cancel" onclick="document.getElementById('entInfoModal').classList.remove('show')">취소</button>
+      <button class="modal-btn modal-save" onclick="saveEntInfo()">저장</button>
     </div>
   </div>
 </div>
@@ -800,6 +857,43 @@ td.center .al-pline{justify-content:center;}
         </div>
         <div class="form-group"><label>담당자</label>
           <select id="pm-manager"><option value="">(미지정)</option></select>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:6px 0 10px;padding-top:10px;font-size:12.5px;font-weight:700;color:var(--text);">🧾 거래명세서 정보 <span style="font-weight:400;color:var(--muted);font-size:11px;">(명세서 공급받는자 칸에 표시)</span></div>
+      <div class="modal-row">
+        <div class="form-group"><label>법인</label>
+          <select id="pm-entity"><option value="KOREA">본사 (SMEKR)</option><option value="GSMEIN">인도 (SMEIN)</option><option value="SMECN">중국 (SMECN)</option><option value="SMEGLOBAL">태국 (SMETH)</option></select>
+        </div>
+        <div class="form-group"><label>이카운트 거래처코드</label><input id="pm-pcode"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>사업자번호</label><input id="pm-bizno" placeholder="000-00-00000"></div>
+        <div class="form-group"><label>대표자</label><input id="pm-ceo"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>업태</label><input id="pm-biztype"></div>
+        <div class="form-group"><label>종목</label><input id="pm-bizitem"></div>
+      </div>
+      <div class="form-group full"><label>주소</label><input id="pm-address"></div>
+      <div class="modal-row">
+        <div class="form-group"><label>전화</label><input id="pm-tel"></div>
+        <div class="form-group"><label>팩스</label><input id="pm-fax"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>상대 담당자</label><input id="pm-contact"></div>
+        <div class="form-group"><label>휴대폰</label><input id="pm-mobile"></div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label>이메일</label><input id="pm-email"></div>
+        <div class="form-group"><label>거래 통화</label><select id="pm-currency"><option value="">(법인 기본)</option><option>KRW</option><option>USD</option><option>CNY</option><option>THB</option><option>INR</option></select></div>
+      </div>
+      <div class="form-group full"><label>명세서 표시 칸 <span style="font-weight:400;color:var(--muted);font-size:11px;">(일자·품명·수량·단가·금액은 항상 표시)</span></label>
+        <div id="pm-stmtcols" style="display:flex;gap:12px;flex-wrap:wrap;font-size:13px;">
+          <label style="font-weight:400"><input type="checkbox" value="item_code"> 품번</label>
+          <label style="font-weight:400"><input type="checkbox" value="maker_pn"> 메이커품번</label>
+          <label style="font-weight:400"><input type="checkbox" value="lg_pn"> LG품번</label>
+          <label style="font-weight:400"><input type="checkbox" value="spec"> 규격</label>
+          <label style="font-weight:400"><input type="checkbox" value="brand"> 브랜드</label>
         </div>
       </div>
       <div style="border-top:1px solid var(--border);margin:6px 0 10px;padding-top:10px;font-size:12.5px;font-weight:700;color:var(--text);">📄 계약 정보</div>
@@ -2544,12 +2638,64 @@ async function sbFetchAll(build){
   }
   return {data:out,error:null};
 }
+/* ── 법인 정보 (trade_setting — 거래명세서 공급자 칸) ── */
+const ENT_INFO=[['KOREA','본사 (SMEKR)'],['GSMEIN','인도 (SMEIN)'],['SMECN','중국 (SMECN)'],['SMEGLOBAL','태국 (SMETH)']];
+let _entInfo=[];
+function _stampSrc(u){try{return /^data:/.test(u)?u:new URL(u,location.href).href;}catch(e){return u;}}
+async function loadEntInfo(){
+  const tb=document.getElementById('entinfo-tbody');if(!tb)return;
+  const {data,error}=await sb.from('trade_setting').select('*');
+  if(error){tb.innerHTML=`<tr><td colspan="9" style="color:red;padding:14px;">${error.message}</td></tr>`;return;}
+  _entInfo=data||[];
+  const e2=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let ents=ENT_INFO.slice();
+  if(_eiSort.k){const g=([e])=>{const r=_entInfo.find(x=>x.entity===e)||{};return String((_eiSort.k==='entity'?e:r[_eiSort.k])||'');};
+    ents.sort((a,b)=>_eiSort.asc?g(a).localeCompare(g(b),'ko'):g(b).localeCompare(g(a),'ko'));}
+  document.querySelectorAll('[id^="eis-"]').forEach(x=>x.textContent='');
+  if(_eiSort.k){const ic=document.getElementById('eis-'+_eiSort.k);if(ic)ic.textContent=_eiSort.asc?'↑':'↓';}
+  tb.innerHTML=ents.map(([e,l])=>{const r=_entInfo.find(x=>x.entity===e)||{};
+    return `<tr><td><b>${l}</b></td><td>${e2(r.company_name)}</td><td>${e2(r.biz_no)}</td><td>${e2(r.ceo)}</td><td title="${e2(r.address)}">${e2(r.address)}</td>
+      <td>${e2(r.tel)}</td><td title="${e2(r.bank_info)}">${e2(r.bank_info)}</td>
+      <td class="center">${r.stamp_url?`<img src="${e2(_stampSrc(r.stamp_url))}" style="width:26px;height:26px;vertical-align:middle">`:'<span style="color:var(--muted)">-</span>'}</td>
+      <td class="center"><button class="row-btn" onclick="openEntInfoModal('${e}')">수정</button></td></tr>`;}).join('');
+  setTimeout(()=>initColResize('entinfo-table','al_entinfo_v1'),50);
+}
+let _eiSort={k:null,asc:true};
+function sortEntInfo(k){if(_eiSort.k===k)_eiSort.asc=!_eiSort.asc;else{_eiSort.k=k;_eiSort.asc=true;}loadEntInfo();}
+function openEntInfoModal(e){
+  const r=_entInfo.find(x=>x.entity===e)||{entity:e};
+  document.getElementById('ei-entity').value=e;
+  document.getElementById('entInfoTitle').textContent='법인 정보 수정 — '+((ENT_INFO.find(x=>x[0]===e)||[])[1]||e);
+  [['ei-name','company_name'],['ei-bizno','biz_no'],['ei-ceo','ceo'],['ei-address','address'],['ei-tel','tel'],['ei-bank','bank_info']].forEach(([id,k])=>document.getElementById(id).value=r[k]||'');
+  document.getElementById('ei-stamp').value=r.stamp_url||'';
+  _eiStampPv();
+  document.getElementById('entInfoModal').classList.add('show');
+}
+function _eiStampPv(){const v=document.getElementById('ei-stamp').value;
+  document.getElementById('ei-stamp-pv').innerHTML=v?`<img src="${_stampSrc(v)}" style="width:56px;height:56px;border:1px solid var(--border)">`:'<span style="color:var(--muted);font-size:12px;">없음</span>';}
+function pickEntStamp(f){
+  if(!f)return;if(f.size>300000){alert('300KB 이하 이미지로 올려주세요.');return;}
+  const rd=new FileReader();rd.onload=ev=>{document.getElementById('ei-stamp').value=ev.target.result;_eiStampPv();};rd.readAsDataURL(f);
+}
+function clearEntStamp(){if(!confirm('정말 삭제하시겠습니까?'))return;document.getElementById('ei-stamp').value='';_eiStampPv();}
+async function saveEntInfo(){
+  const e=document.getElementById('ei-entity').value;
+  const body={company_name:document.getElementById('ei-name').value.trim()||null,biz_no:document.getElementById('ei-bizno').value.trim()||null,
+    ceo:document.getElementById('ei-ceo').value.trim()||null,address:document.getElementById('ei-address').value.trim()||null,
+    tel:document.getElementById('ei-tel').value.trim()||null,bank_info:document.getElementById('ei-bank').value.trim()||null,
+    stamp_url:document.getElementById('ei-stamp').value||null,updated_by:localStorage.getItem('sme_user')||null,updated_at:new Date().toISOString()};
+  const exists=_entInfo.some(x=>x.entity===e);
+  const {error}=exists?await sb.from('trade_setting').update(body).eq('entity',e):await sb.from('trade_setting').insert(Object.assign({entity:e},body));
+  if(error){alert('저장 실패: '+error.message);return;}
+  document.getElementById('entInfoModal').classList.remove('show');await loadEntInfo();
+}
 async function loadPartnersData() {
   const tbody=document.getElementById('partners-tbody');
   tbody.innerHTML='<tr><td colspan="13"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const {data,error}=await sbFetchAll(()=>sb.from('partners').select('*').order('name').order('id'));
   if(error){tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
   _partnersData=data||[];
+  loadEntInfo();
   document.getElementById('partners-count').textContent=`(${_partnersData.length}개)`;
   if(_empData.length===0) await loadEmpData(); // 담당자 드롭다운용 직원목록 확보
   try{ await _ensureMakerKeySet(); }catch(e){ console.warn('메이커 목록 로드 실패',e); }
@@ -2575,6 +2721,11 @@ function renderPartnersTable() {
   if(fMaker) rows=rows.filter(r=>_isMakerPartner(r)===(fMaker==='Y'));
   if(fActive) rows=rows.filter(r=>(r.is_active!==false)===(fActive==='true'));
   if(fSupply) rows=rows.filter(r=>(r.supply_mode||'FORECAST')===fSupply);
+  const fEnt=document.getElementById('pf-entity')?.value||'', fStmt=document.getElementById('pf-stmt')?.value||'';
+  if(fEnt) rows=rows.filter(r=>(r.entity||'KOREA')===fEnt);
+  if(fStmt==='noaddr') rows=rows.filter(r=>!String(r.address||'').trim());
+  if(fStmt==='nobiz') rows=rows.filter(r=>!String(r.biz_no||'').trim());
+  if(fStmt==='notel') rows=rows.filter(r=>!String(r.tel||'').trim());
   const pfr=document.getElementById('pf-result'); if(pfr) pfr.innerHTML=`<b style="color:var(--text);">${rows.length.toLocaleString()}</b> / ${_partnersData.length.toLocaleString()}건`;
   if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="13"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
   if(!rows.length){tbody.innerHTML='<tr><td colspan="13"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
@@ -2645,6 +2796,7 @@ function openPartnersAddModal(){
   document.getElementById('pm-manager').innerHTML=_partnersManagerOptions('');
   document.getElementById('pm-terms').value='';
   _setPartnersContractForm(null);
+  _setPartnersStmtForm(null);
   document.getElementById('pm-note').value='';
   document.getElementById('pm-active').value='true';
   document.getElementById('partnersModal').classList.add('show');
@@ -2663,9 +2815,28 @@ function openPartnersEditModal(id){
   document.getElementById('pm-manager').innerHTML=_partnersManagerOptions(r.sales_manager||'');
   _setSelectKeep('pm-terms',r.payment_terms||'');
   _setPartnersContractForm(r);
+  _setPartnersStmtForm(r);
   document.getElementById('pm-note').value=r.note||'';
   document.getElementById('pm-active').value=(r.is_active!==false)?'true':'false';
   document.getElementById('partnersModal').classList.add('show');
+}
+/* 거래명세서 정보 (partners 확장 컬럼) */
+const PM_STMT_MAP=[['pm-pcode','partner_code'],['pm-bizno','biz_no'],['pm-ceo','ceo'],['pm-biztype','biz_type'],['pm-bizitem','biz_item'],
+  ['pm-address','address'],['pm-tel','tel'],['pm-fax','fax'],['pm-contact','contact_person'],['pm-mobile','mobile'],['pm-email','email']];
+const PM_STMT_DEFAULT='item_code,description,spec,brand';
+function _setPartnersStmtForm(r){
+  document.getElementById('pm-entity').value=(r&&r.entity)||'KOREA';
+  PM_STMT_MAP.forEach(([id,k])=>{document.getElementById(id).value=(r&&r[k])||'';});
+  _setSelectKeep('pm-currency',(r&&r.currency)||'');
+  const cols=String((r&&r.stmt_cols)||PM_STMT_DEFAULT).split(',');
+  document.querySelectorAll('#pm-stmtcols input').forEach(x=>x.checked=cols.includes(x.value));
+}
+function _getPartnersStmtForm(){
+  const o={entity:document.getElementById('pm-entity').value||'KOREA',currency:document.getElementById('pm-currency').value||null};
+  PM_STMT_MAP.forEach(([id,k])=>{o[k]=document.getElementById(id).value.trim()||null;});
+  const cols=['description'].concat([...document.querySelectorAll('#pm-stmtcols input:checked')].map(x=>x.value));
+  o.stmt_cols=cols.join(',');
+  return o;
 }
 function closePartnersModal(){document.getElementById('partnersModal').classList.remove('show');}
 
@@ -2693,6 +2864,7 @@ async function savePartnersModal() {
     is_active:document.getElementById('pm-active').value==='true',
     updated_at:new Date().toISOString(),
   };
+  Object.assign(payload,_getPartnersStmtForm());
   let error;
   if(id){ ({error}=await sb.from('partners').update(payload).eq('id',id)); }
   else { ({error}=await sb.from('partners').insert(payload)); }
