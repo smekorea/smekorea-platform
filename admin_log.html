@@ -800,9 +800,10 @@ td.center .al-pline{justify-content:center;}
         <th class="center" style="width:100px;">체결일자</th>
         <th>비고</th>
         <th class="center" style="width:90px;">상태</th>
+        <th class="center" style="width:110px;">등록·수정</th>
         <th class="center" style="width:130px;">관리</th>
       </tr></thead>
-      <tbody id="partners-tbody"><tr><td colspan="19"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="partners-tbody"><tr><td colspan="20"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
     </div>
@@ -1007,6 +1008,7 @@ td.center .al-pline{justify-content:center;}
         </select>
       </div>
     </div>
+    <div id="pm-meta" style="padding:0 22px 10px;font-size:12px;color:var(--muted);"></div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closePartnersModal()">취소</button>
       <button class="modal-btn modal-save" onclick="savePartnersModal()">저장</button>
@@ -1851,14 +1853,16 @@ td.center .al-pline{justify-content:center;}
 
 <script>
 // ── 인증 ──
-(function(){
-  const hqAuth = localStorage.getItem('sme_hq_auth') || sessionStorage.getItem('hq_auth');
-  const mainAuth = localStorage.getItem('sme_auth');
-  if(hqAuth !== '1' || mainAuth !== '1'){
-    alert('접근 권한이 없습니다.');
-    window.location.href = 'index.html';
-  }
-})();
+// 관리자 권한(HQ)이 없는 실무진은 「거래처 정보」만 사용 (등록·수정 가능, 삭제·법인 정보·엑셀 업로드는 관리자만)
+const MAIN_OK = localStorage.getItem('sme_auth') === '1';
+const HQ_OK = (localStorage.getItem('sme_hq_auth') || sessionStorage.getItem('hq_auth')) === '1';
+const PARTNER_ONLY = MAIN_OK && !HQ_OK;
+const MY_ENTITY = localStorage.getItem('sme_entity') || 'KOREA';
+const MY_NAME = localStorage.getItem('sme_user') || '';
+if(!MAIN_OK){
+  alert('접근 권한이 없습니다.');
+  window.location.href = 'index.html';
+}
 
 const SUPABASE_URL = 'https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
@@ -1868,6 +1872,7 @@ const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString('ko-KR');
 
 // ── 탭 전환 ──
 function switchTab(t) {
+  if(PARTNER_ONLY) t='partners';
   try{localStorage.setItem('admin_last_tab',t);}catch(e){}
   setTimeout(fitWraps,80);setTimeout(fitWraps,700);
   ['items','lg','partners','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
@@ -2816,7 +2821,7 @@ async function loadPartnersData() {
   if(_empData.length===0) await loadEmpData(); // 담당자 드롭다운용 직원목록 확보
   try{ await _ensureMakerKeySet(); }catch(e){ console.warn('메이커 목록 로드 실패',e); }
   renderPartnersTable();
-  setTimeout(()=>initColResize('partners-table','al_partners_v5'),50);
+  setTimeout(()=>initColResize('partners-table','al_partners_v6'),50);
 }
 
 function renderPartnersTable() {
@@ -2829,6 +2834,7 @@ function renderPartnersTable() {
   const fContract=document.getElementById('pf-contract')?.value||'';
   const fMaker=document.getElementById('pf-maker')?.value||'';
   let rows=_partnersData;
+  if(PARTNER_ONLY&&MY_ENTITY!=='KOREA') rows=rows.filter(r=>(r.entity||'KOREA')===MY_ENTITY);
   if(kw){const kd=kw.replace(/[-\s]/g,'');
     rows=rows.filter(r=>['name','alias1','alias2','sales_manager','contact_person','ceo','address','email','partner_code','note','mobile','tel','biz_no'].some(k=>{
       const v=String(r[k]||'').toLowerCase();if(!v)return false;return v.includes(kw)||(kd&&v.replace(/[-\s]/g,'').includes(kd));}));}
@@ -2846,8 +2852,8 @@ function renderPartnersTable() {
   if(fStmt==='nobiz') rows=rows.filter(r=>!String(r.biz_no||'').trim());
   if(fStmt==='notel') rows=rows.filter(r=>!String(r.tel||'').trim());
   const pfr=document.getElementById('pf-result'); if(pfr) pfr.innerHTML=`<b style="color:var(--text);">${rows.length.toLocaleString()}</b> / ${_partnersData.length.toLocaleString()}건`;
-  if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="19"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="19"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
+  if(!_partnersData.length){tbody.innerHTML='<tr><td colspan="20"><div class="empty-state">등록된 거래처가 없습니다.</div></td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="20"><div class="empty-state">검색/필터 조건에 맞는 항목이 없습니다.</div></td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
     const aliases=[r.alias1,r.alias2].filter(Boolean).join(', ');
     const active=r.is_active!==false;
@@ -2878,9 +2884,10 @@ function renderPartnersTable() {
       <td class="center">${_contractDateCell(r)}</td>
       <td>${r.note||''}</td>
       <td class="center"><span class="badge ${active?'b-green':'b-gray'}" style="cursor:pointer;" onclick="togglePartnersActive(${r.id},${active})">${active?'활성':'비활성'}</span></td>
+      <td class="center" title="${_pe(_partnersMetaText(r))}">${_pe(r.updated_by||r.created_by||'')}${r.created_by&&r.updated_by&&r.updated_by!==r.created_by?` <span style="color:var(--muted);font-size:11px;">(등록 ${_pe(r.created_by)})</span>`:''}</td>
       <td class="center">
         <button class="row-btn" onclick="openPartnersEditModal(${r.id})">수정</button>
-        <button class="row-btn row-btn-del" onclick="deletePartnersRow(${r.id},'${(r.name||'').replace(/'/g,"\\'")}')">삭제</button>
+        ${PARTNER_ONLY?'':`<button class="row-btn row-btn-del" onclick="deletePartnersRow(${r.id},'${(r.name||'').replace(/'/g,"\\'")}')">삭제</button>`}
       </td>
     </tr>`;
   }).join('');
@@ -2897,13 +2904,22 @@ function _partnersManagerOptions(selected){
 }
 
 async function togglePartnersActive(id, current) {
-  const {error}=await sb.from('partners').update({is_active:!current,updated_at:new Date().toISOString()}).eq('id',id);
+  const {error}=await sb.from('partners').update({is_active:!current,updated_at:new Date().toISOString(),updated_by:MY_NAME||null}).eq('id',id);
   if(error){alert('변경 실패: '+error.message);return;}
-  const row=_partnersData.find(x=>x.id===id); if(row) row.is_active=!current;
+  const row=_partnersData.find(x=>x.id===id); if(row){row.is_active=!current;row.updated_by=MY_NAME||null;row.updated_at=new Date().toISOString();}
   renderPartnersTable();
 }
 
+function _partnersMetaText(r){
+  if(!r) return '';
+  const d=v=>v?String(v).slice(0,10):'';
+  const a=[];
+  if(r.created_by) a.push('등록 '+r.created_by+' '+d(r.created_at));
+  if(r.updated_by) a.push('최종수정 '+r.updated_by+' '+d(r.updated_at));
+  return a.join(' · ');
+}
 async function deletePartnersRow(id, name) {
+  if(PARTNER_ONLY){alert('삭제는 관리자만 할 수 있습니다.');return;}
   if(!confirm('정말 삭제하시겠습니까?')) return;
   const {error}=await sb.from('partners').delete().eq('id',id);
   if(error){alert('삭제 실패: '+error.message);return;}
@@ -2915,6 +2931,7 @@ async function deletePartnersRow(id, name) {
 function openPartnersAddModal(){
   document.getElementById('pm-id').value='';
   document.getElementById('partnersModalTitle').textContent='거래처 추가';
+  document.getElementById('pm-meta').textContent=MY_NAME?('등록자: '+MY_NAME):'';
   document.getElementById('pm-name').value='';
   document.getElementById('pm-alias1').value='';
   document.getElementById('pm-alias2').value='';
@@ -2934,6 +2951,7 @@ function openPartnersEditModal(id){
   const r=_partnersData.find(x=>x.id===id); if(!r) return;
   document.getElementById('pm-id').value=r.id;
   document.getElementById('partnersModalTitle').textContent='거래처 수정';
+  document.getElementById('pm-meta').textContent=_partnersMetaText(r)||'등록·수정 기록 없음';
   document.getElementById('pm-name').value=r.name||'';
   document.getElementById('pm-alias1').value=r.alias1||'';
   document.getElementById('pm-alias2').value=r.alias2||'';
@@ -2955,7 +2973,8 @@ const PM_STMT_MAP=[['pm-pcode','partner_code'],['pm-bizno','biz_no'],['pm-ceo','
 const PM_STMT_DEFAULT='item_code,description,spec,brand';
 function _setPartnersStmtForm(r){
   document.getElementById('pm-export').checked=!!(r&&r.is_export);
-  document.getElementById('pm-entity').value=(r&&r.entity)||'KOREA';
+  document.getElementById('pm-entity').value=(r&&r.entity)||(PARTNER_ONLY?MY_ENTITY:'KOREA');
+  document.getElementById('pm-entity').disabled=PARTNER_ONLY&&MY_ENTITY!=='KOREA';
   PM_STMT_MAP.forEach(([id,k])=>{document.getElementById(id).value=(r&&r[k])||'';});
   _setSelectKeep('pm-currency',(r&&r.currency)||'');
   const cols=String((r&&r.stmt_cols)||PM_STMT_DEFAULT).split(',');
@@ -2995,11 +3014,20 @@ async function savePartnersModal() {
     updated_at:new Date().toISOString(),
   };
   Object.assign(payload,_getPartnersStmtForm());
+  if(PARTNER_ONLY&&MY_ENTITY!=='KOREA') payload.entity=MY_ENTITY;
+  // 중복 확인: 같은 법인 안에 이름 또는 사업자번호가 같은 거래처
+  const nm=name.replace(/\s/g,'').toLowerCase(), bz=String(payload.biz_no||'').replace(/[^0-9A-Za-z]/g,'').toUpperCase();
+  const dup=_partnersData.filter(x=>String(x.id)!==String(id)&&(x.entity||'KOREA')===(payload.entity||'KOREA')&&
+    (String(x.name||'').replace(/\s/g,'').toLowerCase()===nm||(bz&&String(x.biz_no||'').replace(/[^0-9A-Za-z]/g,'').toUpperCase()===bz)));
+  if(dup.length&&!confirm('이름 또는 사업자번호가 같은 거래처가 이미 있습니다.\n\n'+dup.slice(0,5).map(x=>'· '+x.name+(x.biz_no?' ('+x.biz_no+')':'')).join('\n')+'\n\n그래도 저장하시겠습니까?')) return;
+  payload.updated_by=MY_NAME||null;
   let error;
   if(id){ ({error}=await sb.from('partners').update(payload).eq('id',id)); }
-  else { ({error}=await sb.from('partners').insert(payload)); }
+  else { payload.created_by=MY_NAME||null; ({error}=await sb.from('partners').insert(payload)); }
   if(error){alert('저장 실패: '+error.message);return;}
   closePartnersModal(); _partnersData=[]; await loadPartnersData();
+  // 매입매출관리 「신규 거래처 등록」으로 열린 창이면 안내 후 닫기 (돌아가면 자동 선택)
+  if(!id&&new URLSearchParams(location.search).has('add')&&window.opener){alert('등록했습니다. 매입매출관리 화면으로 돌아갑니다.');window.close();}
 }
 
 function loadPartnersExcel(e){
@@ -6196,6 +6224,7 @@ function fitWraps(){
 window.addEventListener('resize',()=>{clearTimeout(window._fwT);window._fwT=setTimeout(fitWraps,120);});
 (function(){let t0='partners';try{const v=localStorage.getItem('admin_last_tab');if(v&&document.getElementById('tab-'+v+'-btn'))t0=v;}catch(e){}
   // 다른 화면에서 바로가기: ?tab=partners&add=이름&ptype=매출처&entity=KOREA (신규 등록) / ?tab=partners&edit=id (수정)
+  if(PARTNER_ONLY) applyPartnerOnlyUI();
   const qs=new URLSearchParams(location.search);const qt=qs.get('tab');
   if(qt&&document.getElementById('tab-'+qt+'-btn'))t0=qt;
   switchTab(t0);
@@ -6210,6 +6239,19 @@ window.addEventListener('resize',()=>{clearTimeout(window._fwT);window._fwT=setT
     })();
   }
 })();
+
+// 실무진 화면: 거래처 정보 탭만 · 법인 정보·엑셀 업로드 숨김 · 해외법인은 자기 법인만
+function applyPartnerOnlyUI(){
+  document.querySelectorAll('#adminTabBar .tab-group').forEach(g=>{if(!g.querySelector('#tab-partners-btn'))g.style.display='none';});
+  document.querySelectorAll('#adminTabBar .tab-btn').forEach(b=>{if(b.id!=='tab-partners-btn')b.style.display='none';});
+  const se=document.getElementById('secEnt');if(se)se.style.display='none';
+  const up=document.getElementById('partnersFileInput');if(up&&up.closest('label'))up.closest('label').style.display='none';
+  const pe=document.getElementById('pf-entity');if(pe&&MY_ENTITY!=='KOREA'){pe.value=MY_ENTITY;pe.disabled=true;}
+  const tp=document.getElementById('tab-partners');
+  if(tp&&!document.getElementById('poNotice')){const n=document.createElement('div');n.id='poNotice';
+    n.style.cssText='margin:0 0 10px;padding:9px 14px;border:1px solid var(--border);border-left:4px solid var(--point);background:#F6F8FB;font-size:12.5px;';
+    n.textContent='실무 담당자 화면입니다 — 거래처 등록·수정만 가능하며, 등록자·수정자 이름이 기록됩니다. 삭제는 관리자에게 요청하세요.';tp.insertBefore(n,tp.firstChild);}
+}
 
 /* ── 창 이동: 제목줄을 잡고 끌면 창이 움직임 · 제목줄 두 번 클릭하면 원위치 ── */
 (function(){
