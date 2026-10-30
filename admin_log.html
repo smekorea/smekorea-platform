@@ -348,7 +348,6 @@ td.center .al-pline{justify-content:center;}
 <div class="tab-bar" id="adminTabBar">
   <span class="tab-grp">기준정보</span>
   <button class="tab-btn" id="tab-partners-btn" onclick="switchTab('partners')">거래처 정보</button>
-  <button class="tab-btn" id="tab-export-btn" onclick="switchTab('export')">해외매출처</button>
   <button class="tab-btn" id="tab-alias-btn" onclick="switchTab('alias')">동일메이커관리</button>
   <button class="tab-btn" id="tab-items-btn" onclick="switchTab('items')">품목 마스터</button>
   <button class="tab-btn" id="tab-lg-btn" onclick="switchTab('lg')">LG사급 기준</button>
@@ -728,6 +727,10 @@ td.center .al-pline{justify-content:center;}
       <option value="nobiz">사업자번호 미입력</option>
       <option value="notel">전화 미입력</option>
     </select>
+    <select id="pf-export" onchange="renderPartnersTable()" style="padding:7px 10px;border:1px solid var(--border,var(--border));border-radius:2px;font-size:13px;" title="3개 법인을 거치지 않는 본사 직접 수출 거래처 (HQ 거래현황분석 「해외」 집계)">
+      <option value="">수출 구분 전체</option>
+      <option value="Y">해외 직접수출만</option>
+    </select>
     <span id="pf-result" style="margin-left:auto;font-size:12px;color:var(--muted);"></span>
   </div>
 
@@ -837,7 +840,7 @@ td.center .al-pline{justify-content:center;}
             <option value="매입매출처">매입매출처</option>
           </select>
         </div>
-        <div class="form-group"><label>국가</label><input id="pm-country" list="pm-country-list" placeholder="예) 한국 / 중국 / 일본 / 태국 / 베트남"><datalist id="pm-country-list"><option value="한국"><option value="중국"><option value="일본"><option value="대만"><option value="인도"><option value="태국"><option value="베트남"><option value="미국"></datalist></div>
+        <div class="form-group"><label>국가 <label style="font-weight:400;margin-left:8px;font-size:11.5px;cursor:pointer;"><input type="checkbox" id="pm-export" style="vertical-align:middle;"> 해외 직접수출</label></label><input id="pm-country" list="pm-country-list" placeholder="예) 한국 / 중국 / 일본 / 태국 / 베트남"><datalist id="pm-country-list"><option value="한국"><option value="중국"><option value="일본"><option value="대만"><option value="인도"><option value="태국"><option value="베트남"><option value="미국"></datalist></div>
       </div>
       <div class="modal-row">
         <div class="form-group"><label>마감방식</label>
@@ -1805,13 +1808,12 @@ const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString('ko-KR');
 function switchTab(t) {
   try{localStorage.setItem('admin_last_tab',t);}catch(e){}
   setTimeout(fitWraps,80);setTimeout(fitWraps,700);
-  ['items','lg','export','partners','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
+  ['items','lg','partners','master','alias','maker','logistics','trade','stock','emp','log','ui'].forEach(x => {
     document.getElementById('tab-'+x).style.display = x===t?'block':'none';
     document.getElementById('tab-'+x+'-btn').classList.toggle('active', x===t);
   });
   if(t==='items'     && _itemsData.length===0)     loadItemsData();
   if(t==='lg'        && _lgData.length===0)         loadLgData();
-  if(t==='export'    && _exportData.length===0)     loadExportData();
   if(t==='partners'  && _partnersData.length===0)   loadPartnersData();
   if(t==='master'    && _bsrData.length===0)        loadBsrData();
   if(t==='alias'     && _aliasData.length===0)      loadAliasData();
@@ -2743,6 +2745,7 @@ function renderPartnersTable() {
   if(fSupply) rows=rows.filter(r=>(r.supply_mode||'FORECAST')===fSupply);
   const fEnt=document.getElementById('pf-entity')?.value||'', fStmt=document.getElementById('pf-stmt')?.value||'';
   if(fEnt) rows=rows.filter(r=>(r.entity||'KOREA')===fEnt);
+  if((document.getElementById('pf-export')?.value||'')==='Y') rows=rows.filter(r=>r.is_export);
   if(fStmt==='noaddr') rows=rows.filter(r=>!String(r.address||'').trim());
   if(fStmt==='nobiz') rows=rows.filter(r=>!String(r.biz_no||'').trim());
   if(fStmt==='notel') rows=rows.filter(r=>!String(r.tel||'').trim());
@@ -2762,7 +2765,7 @@ function renderPartnersTable() {
     return `
     <tr>
       <td class="center mono">${i+1}</td>
-      <td><b>${r.name||''}</b>${makerBadge}</td>
+      <td><b>${r.name||''}</b>${makerBadge}${r.is_export?' <span class="badge b-gray" style="background:#fff;border:1px solid var(--ok,#2E6B4F);color:var(--ok,#2E6B4F);font-size:10.5px;" title="해외 직접수출 — HQ 거래현황분석 「해외」 집계">수출</span>':''}</td>
       <td class="center">${r.country||''}</td>
       <td style="color:var(--muted);">${aliases}</td>
       <td class="center">${r.type||''}</td>
@@ -2855,6 +2858,7 @@ const PM_STMT_MAP=[['pm-pcode','partner_code'],['pm-bizno','biz_no'],['pm-ceo','
   ['pm-address','address'],['pm-tel','tel'],['pm-fax','fax'],['pm-contact','contact_person'],['pm-mobile','mobile'],['pm-email','email']];
 const PM_STMT_DEFAULT='item_code,description,spec,brand';
 function _setPartnersStmtForm(r){
+  document.getElementById('pm-export').checked=!!(r&&r.is_export);
   document.getElementById('pm-entity').value=(r&&r.entity)||'KOREA';
   PM_STMT_MAP.forEach(([id,k])=>{document.getElementById(id).value=(r&&r[k])||'';});
   _setSelectKeep('pm-currency',(r&&r.currency)||'');
@@ -2862,7 +2866,7 @@ function _setPartnersStmtForm(r){
   document.querySelectorAll('#pm-stmtcols input').forEach(x=>x.checked=cols.includes(x.value));
 }
 function _getPartnersStmtForm(){
-  const o={entity:document.getElementById('pm-entity').value||'KOREA',currency:document.getElementById('pm-currency').value||null};
+  const o={is_export:document.getElementById('pm-export').checked,entity:document.getElementById('pm-entity').value||'KOREA',currency:document.getElementById('pm-currency').value||null};
   PM_STMT_MAP.forEach(([id,k])=>{o[k]=document.getElementById(id).value.trim()||null;});
   const cols=['description'].concat([...document.querySelectorAll('#pm-stmtcols input:checked')].map(x=>x.value));
   o.stmt_cols=cols.join(',');
@@ -2968,7 +2972,7 @@ async function downloadPartnersData(){
     '국가':r.country||'','마감방식':_closingLabel(r.closing_basis),'결제조건':r.payment_terms||'',
     '계약체결유무':r.contract_signed?'체결':'미체결','체결일자':r.contract_date||'','계약체결기간':r.contract_term||'','체결중요내용':r.contract_note||'',
     '비고':r.note||'','상태':(r.is_active!==false)?'활성':'비활성',
-    '법인':r.entity||'','이카운트코드':r.partner_code||'','사업자번호':r.biz_no||'','대표자':r.ceo||'','업태':r.biz_type||'','종목':r.biz_item||'',
+    '해외직접수출':r.is_export?'Y':'','법인':r.entity||'','이카운트코드':r.partner_code||'','사업자번호':r.biz_no||'','대표자':r.ceo||'','업태':r.biz_type||'','종목':r.biz_item||'',
     '주소':r.address||'','전화':r.tel||'','팩스':r.fax||'','상대담당자':r.contact_person||'','휴대폰':r.mobile||'','이메일':r.email||'','통화':r.currency||'',
     '명세서표시칸':r.stmt_cols?String(r.stmt_cols).split(',').map(k=>_STMT_LB[k.trim()]).filter(Boolean).join('·'):'기본'
   })));
@@ -6094,7 +6098,7 @@ function fitWraps(){
   });
 }
 window.addEventListener('resize',()=>{clearTimeout(window._fwT);window._fwT=setTimeout(fitWraps,120);});
-(function(){let t0='partners';try{const v=localStorage.getItem('admin_last_tab');if(v&&document.getElementById('tab-'+v))t0=v;}catch(e){}switchTab(t0);})();
+(function(){let t0='partners';try{const v=localStorage.getItem('admin_last_tab');if(v&&document.getElementById('tab-'+v+'-btn'))t0=v;}catch(e){}switchTab(t0);})();
 </script>
 <!-- 신규 브랜드명 감지 경고 모달 -->
 <div id="newBrandModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);align-items:center;justify-content:center;z-index:99999;">

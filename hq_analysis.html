@@ -687,18 +687,18 @@ function getCorp(r){
   return '국내';
 }
 
-// ── 해외매출처관리(export_customers) 매칭 — 3법인 외 기타 직접수출 거래처 ──
+// ── 해외 직접수출 거래처 매칭 — 3법인 외 기타 직접수출 (2026-10-30: export_customers → 거래처 partners.is_export로 이관) ──
 let _exportCustomerSet=new Set();
 async function loadExportCustomerSet(){
   try{
-    const {data,error}=await sb.from('export_customers').select('customer,alias1,alias2,alias3').eq('is_active',true);
-    if(error){console.error('[export_customers] load error',error);return;}
+    const {data,error}=await sb.from('partners').select('name,alias1,alias2').eq('is_export',true);
+    if(error){console.error('[partners.is_export] load error',error);return;}
     const set=new Set();
     (data||[]).forEach(r=>{
-      [r.customer,r.alias1,r.alias2,r.alias3].forEach(v=>{ if(v) set.add(String(v).trim()); });
+      [r.name,r.alias1,r.alias2].forEach(v=>{ if(v) set.add(String(v).trim()); });
     });
     _exportCustomerSet=set;
-  }catch(e){console.error('[export_customers] load exception',e);}
+  }catch(e){console.error('[partners.is_export] load exception',e);}
 }
 function isExportMatch(sellerName){
   return _exportCustomerSet.has(String(sellerName||'').trim());
