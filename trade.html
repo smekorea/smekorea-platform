@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<script src="smerp-auth.js?v=1" data-screen="trade"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>매입매출관리 · SME Korea</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -11,6 +12,7 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.12: 개인 계정 권한 적용(smerp-auth.js), 전표 저장·삭제 시 수정자(updated_by)·이력(trade_slip_log) 기록 — 다른 부서 전표 수정은 이력으로 확인
    ── v1.11: 거래명세서 주소(공급자·공급받는자) 글자 축소, 신규 거래처 등록은 실무진도 가능(관리자설정 거래처 정보 화면)
    ── v1.10: 미확정 미리보기에도 직인 표시(「미리보기 · 미확정」 워터마크 강화로 구분)
    ── v1.9: 직접입력 엑셀(양식·여러 전표 업로드·붙여넣기, 오류 시 전체 중단)·목록 엑셀 다운로드, 거래처 정보 표시·신규 거래처 등록 바로가기, 부서→담당자 자동 선택, 모든 창 제목줄 끌어 이동
@@ -923,7 +925,7 @@ function addLine(){curLines.push({id:null,line_no:curLines.length+1,item_code:''
 function recalcLine(l){if(isDelivery(curSlip)){l.supply_amt=0;l.vat_amt=0;return;}l.supply_amt=Math.round(num(l.qty)*num(l.unit_price)*(curSlip.currency==='KRW'?1:100))/(curSlip.currency==='KRW'?1:100);l.vat_amt=Math.round(l.supply_amt*vatPct(curSlip.vat_type)/100*(curSlip.currency==='KRW'?1:100))/(curSlip.currency==='KRW'?1:100);}
 function renderSlip(){
   const s=curSlip,ed=editable();
-  document.getElementById('slipTitle').innerHTML=`${s.slip_type} 전표 ${s.slip_no?('· '+esc(s.slip_no)):''} &nbsp;${statusBadge(s.status)}${s.source_type!=='직접'?` <span class="badge" style="color:#fff;border-color:#fff">${esc(s.source_type)}</span>`:''}`;
+  document.getElementById('slipTitle').innerHTML=`${s.slip_type} 전표 ${s.slip_no?('· '+esc(s.slip_no)):''} &nbsp;${statusBadge(s.status)}${s.source_type!=='직접'?` <span class="badge" style="color:#fff;border-color:#fff">${esc(s.source_type)}</span>`:''}${s.updated_by?` <span style="font-size:11.5px;font-weight:400;opacity:.85">· 최종 수정 ${esc(s.updated_by)} ${esc(String(s.updated_at||'').slice(0,16).replace('T',' '))}</span>`:''}`;
   const dis=ed?'':'disabled';
   const locOpt=LOCS.map(l=>`<option value="${l.id}" ${l.id===s.location_id?'selected':''}>${esc(l.name)}</option>`).join('');
   const depts=[...new Set(EMPS.map(x=>x.dept).filter(Boolean))];
@@ -1088,7 +1090,8 @@ async function saveSlip(showMsg){
   const sup=lines.reduce((a,b)=>a+num(b.supply_amt),0),vat=lines.reduce((a,b)=>a+num(b.vat_amt),0);
   const head={entity:s.entity,slip_type:s.slip_type,slip_date:s.slip_date,partner_id:s.partner_id,partner_name:s.partner_name||null,dept:s.dept,
     manager:s.manager,emp_no:s.emp_no||null,location_id:s.location_id,currency:s.currency,fx_rate:s.fx_rate,vat_type:s.vat_type,note:s.note,
-    supply_kind:s.supply_kind,supply_total:sup,vat_total:vat,total:sup+vat,updated_at:new Date().toISOString()};
+    supply_kind:s.supply_kind,supply_total:sup,vat_total:vat,total:sup+vat,updated_at:new Date().toISOString(),updated_by:curUser||null};
+  const wasNew=!s.id;
   try{
     if(!s.id){head.status='작성중';head.source_type=s.source_type||'직접';head.linked_slip_id=s.linked_slip_id||null;head.created_by=curUser;
       const r=await post('trade_slip',head);s.id=r[0].id;Object.assign(s,r[0]);}
@@ -1101,6 +1104,7 @@ async function saveSlip(showMsg){
     }else curLines=[];
     Object.assign(s,head);
     if(moving.length){const n=await moveLinesToSibling(s,moving);toast(`구분이 다른 ${n}줄을 「${moving[0]._kind}」 전표로 나눴습니다.`);showMsg=showMsg||true;}
+    slipLog(s,wasNew?'작성':'수정',`품목 ${lines.length}줄 · 합계 ${money(sup+vat)}`);
     if(showMsg){toast('저장했습니다.');renderSlip();refreshCurrentTab();}
     return true;
   }catch(e){alert('저장 실패: '+e.message);return false;}
@@ -1126,6 +1130,11 @@ async function moveLinesToSibling(s,moving){
   await patch('trade_slip','id=eq.'+sib.id,{supply_total:su,vat_total:va,total:su+va,updated_at:new Date().toISOString()});
   return moving.length;
 }
+// 전표 이력: 누가(부서) 어떤 전표(부서)를 작성·수정·삭제했는지 — 다른 부서 전표 수정 확인용
+function slipLog(sl,action,detail){
+  if(!sl||!sl.id)return;
+  post('trade_slip_log',{slip_id:sl.id,slip_no:sl.slip_no||null,entity:sl.entity||curEntity,action,by_name:curUser||null,by_dept:myDept()||null,slip_dept:sl.dept||null,detail:detail||null}).catch(()=>{});
+}
 async function dropSlip(){
   if(!confirm('정말 삭제하시겠습니까?'))return;
   if(!curSlip.id){closeSlip();return;}
@@ -1134,6 +1143,7 @@ async function dropSlip(){
     if(curSlip.source_type==='LG마감')await del('trade_slip','id=eq.'+curSlip.id); // 포함된 사급 납품은 자동으로 마감대기로 돌아감
     else if(curSlip.source_type==='출하'||curSlip.source_type==='스마트입고')await rpc('cancel_trade_slip',{p_slip_id:curSlip.id,p_user:curUser,p_reason:'확정 대기에서 삭제'});
     else await del('trade_slip','id=eq.'+curSlip.id);
+    slipLog(curSlip,'삭제',curSlip.source_type);
     closeSlip();toast('삭제했습니다.');refreshCurrentTab();
   }catch(e){alert('삭제 실패: '+e.message);}
 }
