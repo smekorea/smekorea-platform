@@ -2653,20 +2653,29 @@ async function loadDiary(){
   if(!SB) return;
   showLoading(true);
   try{
+    // 2026-10-31 로딩 속도: 첫 1,000건과 전체 건수를 함께 받고, 나머지 묶음은 동시에 요청
     const PAGE=1000;
-    let all=[];
-    let from=0;
-    while(true){
-      const {data,error}=await SB.from('work_diary')
-        .select('*')
-        .eq('employee_id', wfSession.empId)
-        .order('date',{ascending:false})
-        .range(from, from+PAGE-1);
-      if(error) throw error;
-      if(!data||data.length===0) break;
-      all=[...all,...data];
-      if(data.length<PAGE) break;
-      from+=PAGE;
+    const q=(from)=>SB.from('work_diary')
+      .select('*', from===0?{count:'exact'}:undefined)
+      .eq('employee_id', wfSession.empId)
+      .order('date',{ascending:false})
+      .order('id',{ascending:false})
+      .range(from, from+PAGE-1);
+    const first=await q(0);
+    if(first.error) throw first.error;
+    let all=first.data||[];
+    const total=first.count||all.length;
+    if(all.length===PAGE && total>PAGE){
+      const reqs=[];
+      for(let from=PAGE; from<total; from+=PAGE) reqs.push(q(from));
+      const rest=await Promise.all(reqs);
+      rest.forEach(r=>{ if(r.error) throw r.error; all=all.concat(r.data||[]); });
+      // 받는 사이 건수가 늘어난 경우 남은 부분을 이어서 받음
+      let from=reqs.length*PAGE+PAGE;
+      while(rest.length && (rest[rest.length-1].data||[]).length===PAGE){
+        const r=await q(from); if(r.error) throw r.error;
+        all=all.concat(r.data||[]); rest.push(r); from+=PAGE;
+      }
     }
     diaryRecords=all;
     console.log(`[Diary] 총 ${diaryRecords.length}건 로드`);
@@ -5512,13 +5521,13 @@ async function wfEnterMain() {
   loadLocal(); renderLegend(); renderCal();
   syncDayHeadersOffset();
   if (SB) {
-    await loadFromSb();
-    await loadDiary();
-    await loadSharedCalRecords();
-    await loadDirectiveCalRecords();
-    await loadCorpCalRecords();
-    await loadUserCategories();
-    await loadHiddenDefaults();
+    // 2026-10-31 로딩 속도: 서로 관계없는 조회 7가지를 동시에 요청 (각 함수는 자체 try/catch)
+    await Promise.all([
+      loadFromSb(), loadDiary(), loadSharedCalRecords(), loadDirectiveCalRecords(),
+      loadCorpCalRecords(), loadUserCategories(), loadHiddenDefaults()
+    ].map(function(p){ return Promise.resolve(p).catch(function(e){ console.warn('[Init]', e); }); }));
+    applyHiddenDefaults(); // 예전 순서(사용자유형 → 숨김유형)와 같은 결과 보장
+    showLoading(false);
     renderAll();
   }
   localStorage.removeItem('cal_events');
