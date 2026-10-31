@@ -12,6 +12,7 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.13: 보관위치 = 엑셀 재고조사 창고 8곳, 스마트 입고 → 매입 전표 보관위치를 발주 품목 창고(smart_po_item.location_id)로, 창고가 다르면 전표 분리
    ── v1.12: 개인 계정 권한 적용(smerp-auth.js), 전표 저장·삭제 시 수정자(updated_by)·이력(trade_slip_log) 기록 — 다른 부서 전표 수정은 이력으로 확인
    ── v1.11: 거래명세서 주소(공급자·공급받는자) 글자 축소, 신규 거래처 등록은 실무진도 가능(관리자설정 거래처 정보 화면)
    ── v1.10: 미확정 미리보기에도 직인 표시(「미리보기 · 미확정」 워터마크 강화로 구분)
@@ -784,11 +785,11 @@ async function runAutoGen(manual){
     const rc=await getAll('smart_po_receipt?select=id,po_item_id,qty,received_date,note,created_by&slip_id=is.null&order=id');
     let madeIn=0;
     if(rc.length){
-      const pis=await getAll('smart_po_item?select=id,po_id,item_code,maker_pn,description,unit_price&id=in.('+[...new Set(rc.map(x=>x.po_item_id))].join(',')+')');
+      const pis=await getAll('smart_po_item?select=id,po_id,item_code,maker_pn,description,unit_price,location_id&id=in.('+[...new Set(rc.map(x=>x.po_item_id))].join(',')+')');
       const heads=await getAll('smart_po?select=id,po_no,maker,ordered_by&id=in.('+[...new Set(pis.map(x=>x.po_id))].join(',')+')');
       const PI={};pis.forEach(x=>PI[x.id]=x);const PH={};heads.forEach(x=>PH[x.id]=x);
       const groups={};
-      rc.forEach(x=>{const pi=PI[x.po_item_id];if(!pi)return;const k=pi.po_id+'|'+x.received_date;(groups[k]=groups[k]||[]).push(x);});
+      rc.forEach(x=>{const pi=PI[x.po_item_id];if(!pi)return;const k=pi.po_id+'|'+x.received_date+'|'+(pi.location_id||'');(groups[k]=groups[k]||[]).push(x);});
       for(const k of Object.keys(groups)){const g=groups[k];const pi0=PI[g[0].po_item_id];if(await createRcvSlip(g,PI,PH[pi0.po_id]||{}))madeIn++;}
     }
     msg.textContent=(made||madeIn)?`출하완료 ${made}건(매출), 스마트 입고 ${madeIn}건(매입)을 작성중 전표로 만들었습니다.`:(manual?'새로 만들 출하완료·입고 건이 없습니다.':'');
@@ -839,7 +840,7 @@ async function createRcvSlip(g,PI,ph){
   const orderer=ph.ordered_by||g[0].created_by||null;
   const head={entity:'KOREA',slip_type:'매입',slip_date:g[0].received_date,partner_id:sp?sp.id:null,partner_name:sp?sp.name:(ph.maker||'스마트전자'),
     dept:empDept(g[0].created_by)||empDept(orderer)||'자재구매팀',manager:g[0].created_by||orderer,emp_no:(EMPS.find(e=>e.name===g[0].created_by)||{}).emp_no||null,
-    location_id:(LOCS[0]&&LOCS[0].id)||null,currency:SETTING.default_currency||'KRW',vat_type:'과세',status:'작성중',source_type:'스마트입고',
+    location_id:PI[g[0].po_item_id].location_id||(LOCS[0]&&LOCS[0].id)||null,currency:SETTING.default_currency||'KRW',vat_type:'과세',status:'작성중',source_type:'스마트입고',
     source_id:Math.min(...g.map(x=>x.id)),supply_total:sup,vat_total:vat,total:sup+vat,note:'발주 '+(ph.po_no||''),created_by:'자동(스마트입고)'};
   try{
     const r=await post('trade_slip',head);const id=r[0].id;
