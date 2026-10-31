@@ -3743,8 +3743,17 @@ function onShareTypeChange() {
 async function loadPersonShareList() {
   var personChecks = document.getElementById('dm-person-checks');
   if (!personChecks || !SB) return;
-  var { data } = await SB.from('employees').select('id,name,rank,dept,entity').eq('active', true).order('emp_no');
+  var { data } = await SB.from('employees').select('id,name,rank,dept,entity,join_date').eq('active', true).order('emp_no');
   if (!data) return;
+  // 2026-10-31 개인공유 목록: 부서 무관, 법인 안에서 직급순 → 입사일 빠른 순
+  var rankOrder = ['대표이사','법인장','부총경리','상무','이사','팀장','책임','과장','선임','사원'];
+  var rankIdx = function(r){ var i = rankOrder.indexOf(r||''); return i < 0 ? 999 : i; };
+  data.sort(function(a, b){
+    var d = rankIdx(a.rank) - rankIdx(b.rank);
+    if (d) return d;
+    var ja = a.join_date || '9999-12-31', jb = b.join_date || '9999-12-31';
+    return ja < jb ? -1 : ja > jb ? 1 : 0;
+  });
   var corpLabels = { KOREA:'SMEKR (본사)', GSMEIN:'SMEIN (인도)', SMEGLOBAL:'SMETH (태국)', SMECN:'SMECN (중국)' };
   var corpOrder = ['KOREA','SMECN','SMEGLOBAL','GSMEIN'];
   var html = '';
