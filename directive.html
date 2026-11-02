@@ -1368,6 +1368,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.68 (2026-11-02) — 추진과제 마스터 분야 줄에 ↑↓(분야 순서 바로 변경·저장, 세부진척현황 순서 같이) — 과제 수정 권한자만, 필터 사용 중에는 숨김
    directive.html v3.58 (2026-10-23) — 일정 막대 두께 20% 키움(14→17px), 완료된 세부과제·분야는 막대 전체 초록(시작 → 완료일), 초록을 밝게(#4CCB6E)
    directive.html v3.57 (2026-10-23) — 추진과제 표 머리 「분야 · 세부과제」 칸 바탕을 다른 머리 칸과 같은 회색으로, 일정 머리 아래 줄(일·주·월) 글자를 위 줄보다 작게(10px)
    directive.html v3.56 (2026-10-23) — 분야 담당·시작·목표(task_projects.area_info): 분야 수정 창에서 입력, 분야 줄 담당 표시, 날짜는 입력값 우선(비우면 세부과제로 자동), 분야 담당도 분야 수정 가능
@@ -4057,7 +4058,26 @@ async function tkDelProj(){
   try{ await sbPatch('task_projects',tkEditProj.id,{is_deleted:true,updated_at:new Date().toISOString()}); tkCloseProj(); document.getElementById('tkProjSel').value=''; try{localStorage.removeItem('tk_proj');}catch(_){} await tkLoad(); renderCur(); showToast('삭제되었습니다','ok'); }
   catch(e){ showToast('오류: '+e.message,'err'); }
 }
-function tkAreaBtns(a,pj){ if(a==='(분야 없음)') return ''; return (tkCanArea(pj,a)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkOpenArea(this.dataset.a)" title="분야 이름과 그 분야 세부과제 수정·추가·삭제">수정</button>`:''); }
+function tkAreaBtns(a,pj){ if(a==='(분야 없음)') return ''; return tkAreaMvBtns(a,pj)+(tkCanArea(pj,a)?`<button class="btn btn-outline mt-btn" data-a="${esc(a)}" onclick="tkOpenArea(this.dataset.a)" title="분야 이름과 그 분야 세부과제 수정·추가·삭제">수정</button>`:''); }
+/* v3.68: 추진과제 마스터 분야 줄 ↑↓ — 창을 열지 않고 분야 순서 바꾸기(task_projects.areas, 세부진척현황 순서도 같이). 과제 수정 권한자만, 필터가 걸려 있으면 숨김 */
+function tkAreaOrd(pj){ const areas=((pj&&pj.areas)||[]).slice(); tkItems.forEach(t=>{ if(t.project_id===pj.id&&t.area&&areas.indexOf(t.area)<0) areas.push(t.area); }); return areas; }
+function tkAreaMvBtns(a,pj){
+  if(!pj||!tkCanProj(pj)) return '';
+  if(['tkArea','tkSt','tkWho','tkKw'].some(i=>{ const el=document.getElementById(i); return el&&String(el.value||'').trim(); })) return '';
+  const ord=tkAreaOrd(pj), i=ord.indexOf(a); if(i<0||ord.length<2) return '';
+  return `<button class="btn btn-outline mt-btn tk-mv" data-a="${esc(a)}" onclick="event.stopPropagation();tkAreaMove(this.dataset.a,-1)" title="분야를 위로"${i===0?' disabled':''}>↑</button>`
+    +`<button class="btn btn-outline mt-btn tk-mv" data-a="${esc(a)}" onclick="event.stopPropagation();tkAreaMove(this.dataset.a,1)" title="분야를 아래로"${i===ord.length-1?' disabled':''}>↓</button>`;
+}
+let tkMoving=false;
+async function tkAreaMove(a,d){
+  const pj=tkCur(); if(!pj||!tkCanProj(pj)||tkMoving) return;
+  const ord=tkAreaOrd(pj), i=ord.indexOf(a), j=i+d; if(i<0||j<0||j>=ord.length) return;
+  const x=ord[i]; ord[i]=ord[j]; ord[j]=x;
+  tkMoving=true; const prev=pj.areas; pj.areas=ord; renderCur();
+  try{ await sbPatch('task_projects',pj.id,{areas:ord,updated_at:new Date().toISOString()}); }
+  catch(e){ pj.areas=prev; renderCur(); showToast('오류: '+e.message,'err'); }
+  finally{ tkMoving=false; }
+}
 /* ── v3.53: 추진과제 › 세부진척현황 — 추진과제·분야 셀 병합 + 세부과제 일정 막대(활동 일자 = 점) ── */
 function renderTkLog(){
   const pj=tkCur(), th0=document.querySelector('#dvLogTable thead'), tb=document.getElementById('dvLogTable');
