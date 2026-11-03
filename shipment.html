@@ -178,6 +178,15 @@
 
   /* ── 주간 그리드 ── */
   .week-grid-section{padding:14px 24px;border-bottom:2px solid var(--border);background:var(--surface);}
+  /* 날짜 이동 · 지난 미완료 출하 (2026-11-03) */
+  .date-nav{display:flex;align-items:center;gap:4px;}
+  .date-nav button{border:1px solid var(--border);background:#fff;color:var(--text);font-size:12px;font-weight:700;padding:3px 8px;border-radius:2px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+  .date-nav button:hover{background:var(--bg-sub);}
+  .date-nav input[type=date]{border:1px solid var(--border);font-size:12px;padding:2px 4px;font-family:'Noto Sans KR',sans-serif;color:var(--text);}
+  .past-section{padding:12px 24px;border-bottom:2px solid var(--border);background:var(--surface);}
+  .past-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px;}
+  .past-date{font-size:12px;font-weight:800;color:#b91c1c;margin-bottom:4px;font-family:'Noto Sans KR',sans-serif;}
+  @media (max-width:640px){.past-cards{grid-template-columns:1fr;}.past-section{padding:10px 12px;}}
   .week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
   .week-day{border:1px solid var(--border);border-radius:2px;padding:7px 6px;cursor:pointer;transition:all 0.15s;background:var(--surface);}
   .week-day:hover{border-color:var(--accent2);background:var(--week-bg);}
@@ -467,7 +476,13 @@
   <div class="col-panel">
     <div class="col-header week-header">
       <div class="col-title-wrap"><div class="col-dot" style="background:var(--accent2);box-shadow:none"></div><div class="col-title week-title">선택 요일 출하</div></div>
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="date-nav" title="지난 날짜 출하도 조회·완료 처리할 수 있습니다">
+          <button onclick="shiftNavDate(-1)">◀</button>
+          <input type="date" id="navDate" onchange="goToDate(this.value)">
+          <button onclick="shiftNavDate(1)">▶</button>
+          <button onclick="goToDate(todayStr())">오늘</button>
+        </div>
         <div class="col-date" id="selectedDateLabel">-</div>
         <div class="count-badge" id="weekCount">0건</div>
       </div>
@@ -475,6 +490,9 @@
     <div class="ship-cards" id="weekList"><div class="loading"><div class="spinner"></div> 불러오는 중...</div></div>
   </div>
 </div>
+
+<div class="sec-label" id="pastLabel" style="display:none;"><div class="dot" style="background:#b91c1c"></div>지난 미완료 출하 (최근 30일) · 출하완료를 누락한 건 — 완료 처리해야 매출전표를 확정할 수 있습니다 <span class="count-badge" id="pastCount" style="margin-left:6px;">0건</span></div>
+<div class="past-section" id="pastSection" style="display:none;"><div class="past-cards" id="pastList"></div></div>
 
 <div class="sec-label"><div class="dot" style="background:var(--accent3)"></div>이번주 출하 일정 · 클릭하면 우측에 상세 표시</div>
 <div class="week-grid-section">
@@ -940,15 +958,17 @@
       if (!selectedDate) {
         selectedDate = today;
         document.getElementById('selectedDateLabel').textContent = getLocalDate(0).label;
+        document.getElementById('navDate').value = today;
         document.getElementById('weekCount').textContent = todayRows.length + '건';
         document.getElementById('weekList').innerHTML = todayRows.length > 0
           ? todayRows.map(r => renderCard(r, 'today')).join('')
           : renderEmpty('출하 일정 없음');
       } else {
-        selectWeekDate(selectedDate, document.getElementById('selectedDateLabel').textContent);
+        await goToDate(selectedDate);
       }
 
       buildDaySummary();
+      await loadPastUndone();
       await buildMonthGrid(currentYear, currentMonth);
 
       const _now = new Date();
@@ -1036,6 +1056,49 @@
         </div>`:''}
       </div>
     </div>`;
+  }
+
+  // ── 날짜 이동: 지난 날짜도 조회 (2026-11-03) ──
+  function mergeRows(rows) {
+    (rows || []).forEach(r => { const i = allData.findIndex(x => x.id === r.id); if (i >= 0) allData[i] = r; else allData.push(r); });
+  }
+  function dateLabel(str) {
+    const d = new Date(str + 'T00:00:00');
+    return str + ' (' + DAYS[d.getDay()] + ')';
+  }
+  async function goToDate(str) {
+    if (!str) return;
+    // 메인 조회(오늘-14일 이후)에 없는 날짜는 그 날짜만 따로 조회
+    if (!allData.some(r => r.ship_date === str)) {
+      try {
+        const rows = await sbGetAll('ship_schedule', 'ship_date=eq.' + str + '&order=created_at.asc');
+        mergeRows(Array.isArray(rows) ? rows : []);
+      } catch (err) { console.error('날짜 조회 실패:', err); }
+    }
+    selectWeekDate(str, dateLabel(str));
+  }
+  function shiftNavDate(n) {
+    const base = document.getElementById('navDate').value || selectedDate || todayStr();
+    const d = new Date(base + 'T00:00:00'); d.setDate(d.getDate() + n);
+    goToDate(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  }
+
+  // ── 지난 미완료 출하 (최근 30일, 오늘 이전 · 출하완료 안 된 건) ──
+  async function loadPastUndone() {
+    const from = getLocalDate(-30).str, today = todayStr();
+    let rows = [];
+    try {
+      rows = await sbGetAll('ship_schedule',
+        'ship_date=gte.' + from + '&ship_date=lt.' + today + '&or=(ship_done.is.null,ship_done.neq.완료)&order=ship_date.asc,created_at.asc');
+      rows = Array.isArray(rows) ? rows : [];
+    } catch (err) { console.error('지난 미완료 조회 실패:', err); rows = []; }
+    mergeRows(rows);
+    const show = rows.length > 0;
+    document.getElementById('pastLabel').style.display = show ? 'flex' : 'none';
+    document.getElementById('pastSection').style.display = show ? 'block' : 'none';
+    document.getElementById('pastCount').textContent = rows.length + '건';
+    document.getElementById('pastList').innerHTML = rows.map(r =>
+      `<div><div class="past-date">${dateLabel(r.ship_date)}</div>${renderCard(r, 'week')}</div>`).join('');
   }
 
   function renderEmpty(msg) {
@@ -1171,6 +1234,7 @@
 
   function selectWeekDate(dateStr, label) {
     selectedDate = dateStr;
+    const nd = document.getElementById('navDate'); if (nd) nd.value = dateStr;
     document.querySelectorAll('.week-day').forEach(el => el.classList.remove('active'));
     document.querySelectorAll(`.week-day[data-date="${dateStr}"]`).forEach(el => el.classList.add('active'));
     document.querySelectorAll('.day-sum-card').forEach(el => el.classList.remove('active'));
@@ -1184,6 +1248,7 @@
 
   function selectDayFromSummary(dateStr, label) {
     selectedDate = dateStr;
+    const nd = document.getElementById('navDate'); if (nd) nd.value = dateStr;
     document.querySelectorAll('.day-sum-card').forEach(el => el.classList.remove('active'));
     document.querySelectorAll(`.day-sum-card`).forEach(el => { if(el.textContent.trim().startsWith(label)) el.classList.add('active'); });
     document.querySelectorAll('.week-day').forEach(el => el.classList.remove('active'));

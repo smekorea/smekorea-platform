@@ -463,6 +463,7 @@
 </style>
 <link rel="stylesheet" href="smerp-mobile.css?v=1">
 <script src="smerp-mobile.js?v=1" defer></script>
+<script src="trade_autogen.js?v=1"></script>
 <style id="m-page">
 /* 휴대폰 화면(폭 768px 이하) 전용 보정 — PC 화면에는 적용되지 않음 */
 @media screen and (max-width:768px){
@@ -640,6 +641,7 @@
 
           <div style="font-size:9.5px;color:var(--muted);text-align:center;margin-bottom:7px;">스캔 결과는 위 박스에 바로 표시됩니다 (OK=파랑 / NG=빨강)</div>
           <button class="btn" id="completeBtn" style="width:100%;padding:10px;border:1.5px solid var(--act);background:#fff;color:var(--act);border-radius:var(--r-md);font-size:13px;font-weight:800;" onclick="tryCompleteScan()">✓ 출고검수 완료 확정</button>
+          <div id="completeInfo" style="display:none;margin-top:6px;padding:7px 10px;border:1px solid #d6dde8;background:#f7f9fc;font-size:12px;color:#111827;line-height:1.6;"></div>
         </div>
       </div>
 
@@ -2098,6 +2100,45 @@
 
     document.getElementById('scanInput').value = '';
     if (workerName) document.getElementById('scanInput').focus();
+    renderCompleteState();
+  }
+
+  // 출고검수 완료 확정 버튼 상태 + 거래명세서(매입매출관리) 등록 상태 표시 (2026-11-03)
+  async function renderCompleteState() {
+    const btn = document.getElementById('completeBtn');
+    const info = document.getElementById('completeInfo');
+    if (!btn || !info || !currentSchedule) return;
+    const done = currentSchedule.lot_status === '완료';
+    if (!done) {
+      btn.disabled = false;
+      btn.style.background = '#fff'; btn.style.color = 'var(--act)'; btn.style.cursor = 'pointer';
+      btn.textContent = '✓ 출고검수 완료 확정';
+      info.style.display = 'none'; info.innerHTML = '';
+      return;
+    }
+    const at = currentSchedule.lot_completed_at ? new Date(currentSchedule.lot_completed_at) : null;
+    const atTxt = at ? `${at.getMonth()+1}/${at.getDate()} ${String(at.getHours()).padStart(2,'0')}:${String(at.getMinutes()).padStart(2,'0')}` : '';
+    btn.disabled = true;
+    btn.style.background = 'var(--act)'; btn.style.color = '#fff'; btn.style.cursor = 'default';
+    btn.textContent = `✔ 검수완료 확정됨 · ${atTxt} ${currentSchedule.lot_completed_by || ''}`.trim();
+    info.style.display = 'block';
+    info.innerHTML = '거래명세서: 확인 중…';
+    const link = ' <a href="trade.html" style="color:var(--act);font-weight:700;margin-left:6px;">매입매출관리 →</a>';
+    try {
+      const slips = window.TradeAutoGen ? await TradeAutoGen.slipsForShip(currentSchedule.id) : [];
+      if (!slips.length) {
+        info.innerHTML = '<b>거래명세서:</b> <span style="color:#b45309;font-weight:700;">미등록</span> <span style="color:#6b7280;">(자동 등록 시작일 이전 출하는 대상 아님)</span>' + link;
+      } else {
+        info.innerHTML = '<b>거래명세서:</b> ' + slips.map(x => {
+          const kind = x.supply_kind === 'LG사급' ? 'LG사급 ' : '';
+          return x.status === '확정'
+            ? `<span style="color:#1B3A6B;font-weight:700;">${kind}확정 ${x.slip_no || ''}</span>`
+            : `<span style="color:#047857;font-weight:700;">${kind}확정대기 등록됨</span> <span style="color:#6b7280;">(전표번호 확정 전)</span>`;
+        }).join(' · ') + (currentSchedule.ship_done === '완료' ? '' : ' <span style="color:#b91c1c;">· 출하완료 후 확정 가능</span>') + link;
+      }
+    } catch (e) {
+      info.innerHTML = '<b>거래명세서:</b> 상태 조회 실패 (' + e.message + ')' + link;
+    }
   }
 
   function onWorkerSelect() {
@@ -3019,9 +3060,20 @@
       patchBody.note = existingNote ? (existingNote + '\n' + addLine) : addLine;
     }
     await sbPatch('ship_schedule', currentSid, patchBody);
-    showToast(forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다 (품목별 사유 등록됨)' : '✓ 출고검수가 완료되었습니다');
+    Object.assign(currentSchedule, patchBody);
+    // 검수완료 확정 → 매출전표 초안(확정대기) 즉시 생성 (2026-11-03, trade_autogen.js 공통)
+    let slipMsg = '';
+    try {
+      if (window.TradeAutoGen && currentSchedule.lot_required !== false) {
+        await TradeAutoGen.createForShips([currentSchedule]);
+        const slips = await TradeAutoGen.slipsForShip(currentSchedule.id);
+        slipMsg = slips.length ? ' · 거래명세서 확정대기 등록됨' : '';
+      }
+    } catch (e) { slipMsg = ' · ⚠ 거래명세서 등록 실패: ' + e.message; }
+    showToast((forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다 (품목별 사유 등록됨)' : '✓ 출고검수 완료 확정되었습니다') + slipMsg, slipMsg.includes('실패'));
     playSound('done');
-    setTimeout(()=>{ switchTab('list'); loadList(); }, 1200);
+    renderCompleteState();
+    setTimeout(()=>{ switchTab('list'); loadList(); }, 2500);
   }
 
   function resetForceModalPosition() {
