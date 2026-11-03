@@ -1295,7 +1295,7 @@ body.m-legend-on #cat-legend{display:flex;}
         <button type="button" class="rd-gbtn" onclick="rdMakePlan()" title="티오프 기준으로 픽업·이동·식사·CC 도착 시간을 거꾸로 계산">기본 일정 넣기</button>
         <button type="button" class="rd-cp" onclick="rdCopyForm(this)" title="카톡에 붙여넣기 좋은 글로 복사">일정 텍스트 복사</button>
       </div>
-      <table class="rd-tbl"><thead><tr><th style="width:13%">구분</th><th style="width:13%">시작</th><th style="width:13%">종료</th><th style="width:24%">장소</th><th>기타 (주소·거리/시간)</th><th style="width:30px"></th></tr></thead><tbody id="dm-rd-plan"></tbody></table>
+      <table class="rd-tbl"><thead><tr><th style="width:12%">구분</th><th style="width:17%">시간</th><th style="width:28%">장소</th><th>기타 (주소·거리/시간)</th><th style="width:30px"></th></tr></thead><tbody id="dm-rd-plan"></tbody></table>
       <button type="button" class="rd-add" onclick="rdPlanAdd()">＋ 일정 줄 추가</button>
       <datalist id="dm-rd-names"></datalist><datalist id="dm-rd-courses"></datalist><datalist id="dm-rd-places"></datalist>
     </div>
@@ -1890,13 +1890,17 @@ function rdPlanRender(){
   var e=escapeHtml;
   document.getElementById('dm-rd-plan').innerHTML=rdPlan.map(function(x,i){
     return '<tr data-i="'+i+'"><td><select class="rp-k">'+RD_KINDS.map(function(k){ return '<option'+(k===x.kind?' selected':'')+'>'+k+'</option>'; }).join('')+'</select></td>'
-      +'<td><input type="time" class="rp-s" value="'+e(x.start)+'"></td><td><input type="time" class="rp-e" value="'+e(x.end)+'"></td>'
+      +'<td><input class="rp-t" value="'+e(rdTimeTxt(x))+'" placeholder="05:35~05:55" onblur="this.value=rdTimeTxt(rdParseT(this.value))"></td>'
       +'<td><input class="rp-p" list="dm-rd-places" value="'+e(x.place)+'" autocomplete="off" onchange="rdPlaceChg(this)"></td>'
       +'<td><input class="rp-n" value="'+e(x.note)+'"></td>'
       +'<td style="text-align:center;"><button type="button" class="rd-x" title="줄 삭제" onclick="rdPlanDel('+i+')">✕</button></td></tr>';
   }).join('');
 }
-function rdPlanKeep(){ document.querySelectorAll('#dm-rd-plan tr').forEach(function(tr){ var x=rdPlan[+tr.dataset.i]; if(!x) return; x.kind=tr.querySelector('.rp-k').value; x.start=tr.querySelector('.rp-s').value; x.end=tr.querySelector('.rp-e').value; x.place=tr.querySelector('.rp-p').value.trim(); x.note=tr.querySelector('.rp-n').value.trim(); }); }
+// 시간 한 칸: 「05:35~05:55」 또는 「05:35」. 숫자만 쳐도 정리(0535 → 05:35, 0535 0555 → 05:35~05:55)
+function rdOneT(t){ t=String(t||'').replace(/[^0-9:]/g,''); var m=t.match(/^(\d{1,2}):?(\d{2})$/); if(!m) return ''; var h=+m[1], mi=+m[2]; if(h>23||mi>59) return ''; return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0'); }
+function rdParseT(v){ var parts=String(v||'').trim().split(/\s*[~\-–]\s*|\s+/).filter(Boolean); return {start:rdOneT(parts[0]),end:rdOneT(parts[1])}; }
+function rdTimeTxt(x){ return (x.start||'')+(x.end?'~'+x.end:''); }
+function rdPlanKeep(){ document.querySelectorAll('#dm-rd-plan tr').forEach(function(tr){ var x=rdPlan[+tr.dataset.i]; if(!x) return; x.kind=tr.querySelector('.rp-k').value; var tt=rdParseT(tr.querySelector('.rp-t').value); x.start=tt.start; x.end=tt.end; x.place=tr.querySelector('.rp-p').value.trim(); x.note=tr.querySelector('.rp-n').value.trim(); }); }
 function rdPlanAdd(){ rdPlanKeep(); rdPlan.push({kind:'기타',start:'',end:'',place:'',note:''}); rdPlanRender(); }
 function rdPlanDel(i){ rdPlanKeep(); var x=rdPlan[i]; if((x.place||x.start)&&!confirm('정말 삭제하시겠습니까?')) return; rdPlan.splice(i,1); rdPlanRender(); }
 function rdPlaceChg(el){ var tr=el.closest('tr'), n=tr.querySelector('.rp-n'), k=tr.querySelector('.rp-k').value, p=el.value.trim(); if((k==='픽업'||k==='식사')&&!n.value.trim()&&rdPlaces[p]) n.value=rdPlaces[p]; }
