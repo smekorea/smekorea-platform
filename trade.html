@@ -13,6 +13,8 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    trade.html v1.1 (2026-10-29) — 매입매출관리 (이카운트 매입·매출 입력 대체)
+   ── v1.15: 거래명세서(공급자용) 마진 삭제(고객 서명 시 노출) → 확정 시 원가·마진 저장(trade_slip.cost_total·margin_amt·margin_rate·cost_missing), 목록 마진금액·마진율·합계, 목록 엑셀 포함
+   ── v1.14: 출고검수 완료 확정 → 확정대기(trade_autogen.js 공통), 출하 미완료 전표 확정 불가(「출하」 열)
    ── v1.13: 보관위치 = 엑셀 재고조사 창고 8곳, 스마트 입고 → 매입 전표 보관위치를 발주 품목 창고(smart_po_item.location_id)로, 창고가 다르면 전표 분리
    ── v1.12: 개인 계정 권한 적용(smerp-auth.js), 전표 저장·삭제 시 수정자(updated_by)·이력(trade_slip_log) 기록 — 다른 부서 전표 수정은 이력으로 확인
    ── v1.11: 거래명세서 주소(공급자·공급받는자) 글자 축소, 신규 거래처 등록은 실무진도 가능(관리자설정 거래처 정보 화면)
@@ -681,18 +683,19 @@ async function downloadList(withLines){
   const ym=document.getElementById('listMonth').value||today().slice(0,7);
   const hd=['전표번호','일자','구분','상태','출처','공급구분','거래처','부서','담당'];
   const hv=r=>[r.slip_no||'',r.slip_date,r.slip_type,r.status,r.source_type,r.supply_kind||'직거래',r.partner_name||'',r.dept||'',r.manager||''];
+  const mv=r=>mgShow(r)?[num(r.margin_amt),r.margin_rate!=null?num(r.margin_rate):'',num(r.cost_missing)||'']:['','',''];
   if(!withLines){
-    xlsxSave([{name:'전표목록',cols:[16,12,8,8,10,10,26,12,10,8,14,12,14,8],aoa:[hd.concat(['품목수','공급가','VAT','합계','이카운트'])]
-      .concat(rows.map(r=>hv(r).concat([lineCount(r),num(r.supply_total),num(r.vat_total),num(r.total),r.ecount_done?'Y':''])))}],'매입매출_전표목록_'+ym+'.xlsx');
+    xlsxSave([{name:'전표목록',cols:[16,12,8,8,10,10,26,12,10,8,14,12,14,14,8,10,8],aoa:[hd.concat(['품목수','공급가','VAT','합계','마진금액','마진율(%)','원가미확인','이카운트'])]
+      .concat(rows.map(r=>hv(r).concat([lineCount(r),num(r.supply_total),num(r.vat_total),num(r.total)]).concat(mv(r)).concat([r.ecount_done?'Y':''])))}],'매입매출_전표목록_'+ym+'.xlsx');
     return;
   }
   const ids=rows.map(r=>r.id);let ls=[];
   try{for(let i=0;i<ids.length;i+=150)ls=ls.concat(await getAll('trade_slip_line?select=slip_id,line_no,item_code,maker_pn,lg_pn,description,spec,brand,qty,unit_price,supply_amt,vat_amt,note&slip_id=in.('+ids.slice(i,i+150).join(',')+')&order=slip_id,line_no'));}
   catch(e){alert('품목 불러오기 실패: '+e.message);return;}
   const by={};ls.forEach(l=>(by[l.slip_id]=by[l.slip_id]||[]).push(l));
-  const aoa=[hd.concat(['순번','품목코드','메이커품번','LG품번','품명','규격','브랜드','수량','단가','공급가','VAT','비고'])];
-  rows.forEach(r=>(by[r.id]||[]).forEach(l=>aoa.push(hv(r).concat([l.line_no,l.item_code||'',l.maker_pn||'',l.lg_pn||'',l.description||'',l.spec||'',l.brand||'',num(l.qty),num(l.unit_price),num(l.supply_amt),num(l.vat_amt),l.note||'']))));
-  xlsxSave([{name:'전표품목',cols:[16,12,8,8,10,10,26,12,10,6,20,20,16,30,16,12,10,12,12,12,20],aoa}],'매입매출_전표품목_'+ym+'.xlsx');
+  const aoa=[hd.concat(['전표 마진금액','전표 마진율(%)','순번','품목코드','메이커품번','LG품번','품명','규격','브랜드','수량','단가','공급가','VAT','비고'])];
+  rows.forEach(r=>(by[r.id]||[]).forEach(l=>aoa.push(hv(r).concat(mv(r).slice(0,2)).concat([l.line_no,l.item_code||'',l.maker_pn||'',l.lg_pn||'',l.description||'',l.spec||'',l.brand||'',num(l.qty),num(l.unit_price),num(l.supply_amt),num(l.vat_amt),l.note||'']))));
+  xlsxSave([{name:'전표품목',cols:[16,12,8,8,10,10,26,12,10,14,8,6,20,20,16,30,16,12,10,12,12,12,20],aoa}],'매입매출_전표품목_'+ym+'.xlsx');
 }
 
 /* ── 창 이동: 제목줄을 잡고 끌면 창이 움직임 · 제목줄 두 번 클릭하면 원위치 ── */
@@ -1154,8 +1157,32 @@ function warnConfirm(){
   const ws=pendingWarn.map(w=>({line_id:w.line_id||null,warn_type:w.warn_type,detail:w.detail,reason:why}));
   document.getElementById('warnOv').classList.remove('on');doConfirm(ws);
 }
+// 마진: 확정 시점 원가로 계산해 전표에 저장 (매출·LG사급 납품 제외). 원가 = 단가표 매입가(매출처별) → 최근 매입단가, 미확인 품목은 제외 (2026-11-03)
+function marginTarget(sl){return sl&&sl.slip_type==='매출'&&!isDelivery(sl);}
+async function calcMargin(sl,lines){
+  const costs=await costMap(lines.map(l=>l.item_code),sl.slip_date,[sl.partner_id]);
+  let cs=0,base=0,miss=0;
+  lines.forEach(l=>{if(!num(l.supply_amt)&&!num(l.qty))return;
+    const c=costs[sl.partner_id+'|'+l.item_code]!=null?costs[sl.partner_id+'|'+l.item_code]:costs[l.item_code];
+    if(c==null||!l.item_code){if(num(l.supply_amt))miss++;return;}cs+=c*num(l.qty);base+=num(l.supply_amt);});
+  const amt=Math.round(base-cs);
+  return {cost_total:Math.round(cs),margin_amt:amt,margin_rate:base?Math.round(amt/base*1000)/10:null,cost_missing:miss};
+}
+async function saveMargin(id){
+  const sl=(await api('trade_slip?select=id,slip_type,slip_date,partner_id,supply_kind,source_type&id=eq.'+id))[0];
+  if(!marginTarget(sl))return null;
+  const ls=await getAll('trade_slip_line?select=item_code,qty,supply_amt&slip_id=eq.'+id);
+  const m=await calcMargin(sl,ls);await patch('trade_slip','id=eq.'+id,m);return m;
+}
+// 목록에 마진이 비어 있는 확정 매출 전표가 있으면 채움 (확정 직후 저장 실패분·기존 전표)
+async function fillMissingMargins(rows){
+  const need=rows.filter(r=>r.status==='확정'&&marginTarget(r)&&r.margin_amt==null);if(!need.length)return false;
+  for(const r of need){try{Object.assign(r,await saveMargin(r.id)||{});}catch(e){}}
+  return true;
+}
 async function doConfirm(ws){
   try{const r=await rpc('confirm_trade_slip',{p_slip_id:curSlip.id,p_user:curUser,p_warnings:ws});
+    try{await saveMargin(curSlip.id);}catch(e){console.error('마진 저장 실패',e);}
     toast('확정했습니다 · '+(r&&r.slip_no||''));await openSlip(curSlip.id);refreshCurrentTab();}
   catch(e){alert('확정 실패: '+e.message);}
 }
@@ -1222,6 +1249,7 @@ async function loadList(){
   const st=document.getElementById('listStatus').value;
   try{LIST=await getAll('trade_slip?select=*,trade_slip_line(count),trade_slip_warning(count)&entity=eq.'+curEntity+'&slip_date=gte.'+d0+'&slip_date=lt.'+d1+(st?'&status=eq.'+enc(st):'')+'&order=slip_date.desc,slip_no.desc,id.desc');}
   catch(e){document.getElementById('listTbl').innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;}
+  if(LIST.some(r=>r.status==='확정'&&marginTarget(r)&&r.margin_amt==null))setTimeout(async()=>{if(await fillMissingMargins(LIST)&&curTab==='list')renderList();},0);
   renderList();
 }
 const LIST_COLS=[
@@ -1237,16 +1265,21 @@ const LIST_COLS=[
   {t:'공급가',k:'supply_total',w:110,cls:'r',f:r=>isDelivery(r)?'<span class="note">수량만</span>':money(r.supply_total)},
   {t:'VAT',k:'vat_total',w:90,cls:'r',f:r=>money(r.vat_total)},
   {t:'합계',k:'total',w:110,cls:'r',f:r=>money(r.total)},
+  {t:'마진금액',k:'margin_amt',w:110,cls:'r',f:r=>mgShow(r)?`<span style="${num(r.margin_amt)<0?'color:#C8001E':''}">${money(r.margin_amt)}</span>`+(num(r.cost_missing)?` <span class="badge b-warn" title="원가 미확인 품목은 마진 계산에서 제외">원가미확인 ${r.cost_missing}</span>`:''):'',sv:r=>mgShow(r)?num(r.margin_amt):-1e15},
+  {t:'마진율',k:'margin_rate',w:70,cls:'r',f:r=>mgShow(r)&&r.margin_rate!=null?`<span style="${num(r.margin_rate)<0?'color:#C8001E':''}">${num(r.margin_rate).toFixed(1)}%</span>`:'',sv:r=>mgShow(r)&&r.margin_rate!=null?num(r.margin_rate):-1e15},
   {t:'경고',k:'w',w:60,cls:'c',f:r=>{const n=(r.trade_slip_warning&&r.trade_slip_warning[0])?r.trade_slip_warning[0].count:0;return n?`<span class="badge b-warn">${n}</span>`:'';},sv:r=>(r.trade_slip_warning&&r.trade_slip_warning[0])?r.trade_slip_warning[0].count:0},
   {t:'이카운트',k:'ecount_done',w:70,cls:'c',f:r=>r.status==='확정'?`<input type="checkbox" ${r.ecount_done?'checked':''} onclick="event.stopPropagation()" onchange="toggleEcount(${r.id},this.checked)">`:'',sv:r=>r.ecount_done?1:0},
   {t:'인쇄',k:'pr',w:60,sort:false,cls:'c',f:r=>r.status==='확정'?`<input type="checkbox" class="prChk" value="${r.id}" onclick="event.stopPropagation()">`:''}
 ];
+function mgShow(r){return r.status==='확정'&&marginTarget(r)&&r.margin_amt!=null;}
 function renderList(){
   const q=(document.getElementById('listQ').value||'').toLowerCase();const tp=document.getElementById('listType').value;const d=deptFilter();
   let rows=LIST.filter(r=>(!tp||r.slip_type===tp)&&(!d||r.dept===d)&&(!q||(r.slip_no||'').toLowerCase().includes(q)||(r.partner_name||'').toLowerCase().includes(q)));
   const sale=rows.filter(r=>r.slip_type==='매출'&&r.status==='확정'&&!isDelivery(r)).reduce((a,b)=>a+num(b.supply_total),0);
   const buy=rows.filter(r=>r.slip_type==='매입'&&r.status==='확정').reduce((a,b)=>a+num(b.supply_total),0);
-  document.getElementById('listSum').innerHTML=`${rows.length}건 · 확정 매출 공급가 <b>${money(sale)}</b> · 매입 <b>${money(buy)}</b> <button class="btn" onclick="printChecked()">선택 명세서 출력</button> <button class="btn" onclick="downloadList(false)">목록 엑셀</button> <button class="btn" onclick="downloadList(true)">품목 포함 엑셀</button>`;
+  const mr=rows.filter(mgShow);const mAmt=mr.reduce((a,b)=>a+num(b.margin_amt),0);
+  const mBase=mr.reduce((a,b)=>a+num(b.margin_amt)+num(b.cost_total),0);
+  document.getElementById('listSum').innerHTML=`${rows.length}건 · 확정 매출 공급가 <b>${money(sale)}</b> · 매입 <b>${money(buy)}</b> · 마진 <b>${money(mAmt)}</b> (${mBase?(mAmt/mBase*100).toFixed(1)+'%':'-'}) <button class="btn" onclick="printChecked()">선택 명세서 출력</button> <button class="btn" onclick="downloadList(false)">목록 엑셀</button> <button class="btn" onclick="downloadList(true)">품목 포함 엑셀</button>`;
   rows=sortRows('tList',LIST_COLS,rows);LIST_VIEW=rows;
   document.getElementById('listTbl').innerHTML=tableHtml('tList',LIST_COLS,rows,r=>`class="click" onclick="openSlip(${r.id})"`);
   bindTable('tList',LIST_COLS,renderList);
@@ -1280,8 +1313,7 @@ async function printSlips(ids){
   try{
     const slips=await api('trade_slip?id=in.('+ids.join(',')+')&order=slip_date,slip_no');
     const lines=await getAll('trade_slip_line?slip_id=in.('+ids.join(',')+')&order=slip_id,line_no,id');
-    const costs=await costMap(lines.filter(l=>(slips.find(s=>s.id===l.slip_id)||{}).slip_type==='매출').map(l=>l.item_code),slips[0]&&slips[0].slip_date,slips.map(s=>s.partner_id));
-    openPreview([slips,lines,stmtLang(),false,costs],slips.length>1?`거래명세서 미리보기 · ${slips.length}건`:'거래명세서 미리보기');
+    openPreview([slips,lines,stmtLang(),false,{}],slips.length>1?`거래명세서 미리보기 · ${slips.length}건`:'거래명세서 미리보기');
   }catch(e){alert('미리보기 준비 실패: '+e.message);}
 }
 // 전표 창에서 바로 미리보기 (작성중은 저장 전 화면 내용 그대로, 「미확정」 표시)
@@ -1290,8 +1322,7 @@ async function previewCurrent(){
   const s=Object.assign({},curSlip);const ls=curLines.filter(l=>l.item_code||l.description).map(l=>Object.assign({},l,{slip_id:s.id||0}));
   ls.forEach(recalcLine);s.id=s.id||0;
   const draft=s.status!=='확정';
-  let costs={};try{if(s.slip_type==='매출')costs=await costMap(ls.map(l=>l.item_code),s.slip_date,[s.partner_id]);}catch(e){}
-  openPreview([[s],ls,stmtLang(),draft,costs],draft?'거래명세서 미리보기 · 미확정':'거래명세서 미리보기 · '+(s.slip_no||''));
+  openPreview([[s],ls,stmtLang(),draft,{}],draft?'거래명세서 미리보기 · 미확정':'거래명세서 미리보기 · '+(s.slip_no||''));
 }
 // 마진 계산용 원가: 품목별 최근 매입단가 (확정 매입 전표 → 이카운트 매입자료 최근 6개월)
 // 원가 키: 'pid|품번' = 단가표의 그 매출처 매입가, '품번' = 최근 매입단가
@@ -1444,16 +1475,7 @@ function copyHtml(pg,kind,lang,draft,costs,cols){
   let rows=pg.ls.map(l=>'<tr>'+C.map(x=>`<td${x.c?` class="${x.c}"`:''}>${x.v(l)}</td>`).join('')+'</tr>').join('');
   for(let i=pg.ls.length;i<11;i++)rows+='<tr>'+C.map((x,j)=>`<td>${j?'':'&nbsp;'}</td>`).join('')+'</tr>';
   const last=pg.pg===pg.pn;
-  // 마진 (공급자용 · 매출 전표 · 마지막 쪽): 공급가 − 원가(최근 매입단가 × 수량), 원가 미확인 품목은 제외
-  let mg='';
-  if(kind==='sup'&&s.slip_type==='매출'&&last&&!dl){
-    let cs=0,base=0,miss=0;
-    pg.all.forEach(l=>{const c=costs[s.partner_id+'|'+l.item_code]!=null?costs[s.partner_id+'|'+l.item_code]:costs[l.item_code];if(c==null||!l.item_code){if(num(l.supply_amt))miss++;return;}cs+=c*num(l.qty);base+=num(l.supply_amt);});
-    const amt=base-cs;const rate=base?amt/base*100:0;
-    const lb=lang==='ko'?['마진','원가: 단가표 매입가(매출처별) → 없으면 최근 매입단가','원가 미확인']:(lang==='zh'?['毛利','成本: 价格表采购价 → 最近采购单价','成本未确认']:['Margin','Cost: price table → latest purchase price','no cost']);
-    mg=`<div class="mg"><small>${lb[1]}${miss?` · ${lb[2]} ${miss}${lang==='ko'?'품목 제외':''}`:''}</small>
-      <table><tr><td class="lb">${lb[0]}</td><td class="${amt<0?'neg':''}">${m(amt)}</td><td class="${amt<0?'neg':''}">${base?rate.toFixed(1)+'%':'-'}</td></tr></table></div>`;
-  }
+  // 마진은 거래명세서에 표시하지 않음(고객 서명 시 노출) — 거래명세서 목록 마진금액·마진율로 이동 (2026-11-03)
   return `<div class="cp${kind==='buy'?' buy':''}">
   <div class="band"></div>
   <div class="top">
@@ -1477,7 +1499,6 @@ function copyHtml(pg,kind,lang,draft,costs,cols){
     <thead><tr>${C.map(x=>`<th>${x.h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
   <table class="ft"><tr><td class="k">${L.tq}</td><td class="r">${last?fmt(tq):''}</td><td class="k">${L.supply}</td><td class="r">${last&&!dl?m(sup):''}</td>
     <td class="k">${L.vat}</td><td class="r">${last&&!dl?m(vat):''}</td><td class="k">${L.total}</td><td class="r tot">${last&&!dl?m(sup+vat):''}</td><td class="k">${L.recv}</td><td style="width:13%;text-align:right;color:#9aa3af">${L.sign}</td></tr></table>
-  ${mg}
   <div class="bank"><span>${S.bank_info?`<b class="bk">${lang==='ko'?'입금계좌':(lang==='zh'?'收款账户':'Bank')}</b> ${esc(S.bank_info)}`:''}</span><span>[ ${pg.pg} / ${pg.pn} ]</span></div>
   </div>`;
 }
