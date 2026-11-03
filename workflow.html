@@ -460,6 +460,20 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
   #diary-modal-title{cursor:move;user-select:none;}
 }
 .dm-row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+/* 2026-11-03 라운딩 정보 */
+.rd-tbl{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;}
+.rd-tbl th{font-size:11px;font-weight:600;color:#4b5563;background:#e6f2e8;padding:5px 6px;text-align:left;border:1px solid #d3e6d6;}
+.rd-tbl td{padding:3px;border:1px solid #e3ede5;}
+.rd-tbl input{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:4px;padding:5px 6px;font-size:13px;font-family:'Noto Sans KR',sans-serif;color:#111827;background:transparent;}
+.rd-tbl input:focus{border-color:#27783C;outline:none;background:#fff;}
+.rd-tbl input.rd-sc{text-align:center;font-weight:700;}
+.rd-tbl .rd-x{border:none;background:none;color:#C8001E;font-size:14px;cursor:pointer;}
+.rd-add{margin-top:6px;height:28px;padding:0 10px;border:1px dashed #27783C;border-radius:6px;background:#fff;color:#27783C;font-size:12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.rd-tag{margin-left:5px;font-size:11px;font-weight:700;color:#27783C;white-space:nowrap;}
+.brief-rd{width:100%;border-collapse:collapse;font-size:13px;}
+.brief-rd th{background:#f3f4f6;color:#4b5563;font-weight:600;font-size:12px;padding:5px 8px;text-align:left;border:1px solid #e5e7eb;}
+.brief-rd td{padding:5px 8px;border:1px solid #e5e7eb;color:#111827;}
+.brief-rd td.sc{text-align:center;font-weight:700;}
 .link-badge{display:inline-block;margin-left:4px;padding:0 5px;border:1px solid rgba(26,79,160,.35);border-radius:3px;font-size:10.5px;color:#1a4fa0;background:#f5f8ff;white-space:nowrap;font-weight:600;}
 .dp-link-btn{flex-shrink:0;align-self:center;margin-left:8px;height:28px;padding:0 9px;border:1px solid #C8001E;border-radius:6px;background:#fff;color:#C8001E;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;}
 .dm-field{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px;}
@@ -1149,7 +1163,7 @@ body.m-legend-on #cat-legend{display:flex;}
       </div>
       <div class="dm-field">
         <label class="dm-label" data-i18n="활동유형">활동유형</label>
-        <select id="dm-action" class="dm-input" onchange="onSelectAddNew(this,'action_type')">
+        <select id="dm-action" class="dm-input" onchange="onSelectAddNew(this,'action_type');onActionChange()">
           <option value="방문" data-i18n="방문">방문</option>
           <option value="미팅" data-i18n="미팅">미팅</option>
           <option value="회의" data-i18n="회의">회의</option>
@@ -1255,6 +1269,18 @@ body.m-legend-on #cat-legend{display:flex;}
         </div>
       </div>
       <div id="dm-link-hint" style="display:none;font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;"></div>
+    </div>
+    <!-- 2026-11-03 라운딩 정보 — 활동유형 「라운딩」일 때만. work_diary.round_info -->
+    <div id="dm-round-row" style="display:none;margin-bottom:10px;padding:10px 12px;background:#f0f8f1;border:1px solid rgba(39,120,60,.25);border-radius:8px;">
+      <div style="font-size:11px;font-weight:700;color:#27783C;margin-bottom:8px;">⛳ 라운딩 정보 <span style="font-weight:400;color:#6b7280;">— 스코어는 라운딩 후 수정에서 입력해도 됩니다</span></div>
+      <div class="dm-row" style="margin-bottom:8px;">
+        <div class="dm-field" style="flex:2;"><label class="dm-label">골프장</label><input type="text" id="dm-rd-course" class="dm-input" list="dm-rd-courses" placeholder="예: 고성노벨CC" autocomplete="off"></div>
+        <div class="dm-field"><label class="dm-label">티오프</label><input type="time" id="dm-rd-tee" class="dm-input"></div>
+        <div class="dm-field"><label class="dm-label">코스</label><input type="text" id="dm-rd-route" class="dm-input" placeholder="예: 가야→공룡"></div>
+      </div>
+      <table class="rd-tbl"><thead><tr><th style="width:24%">이름</th><th style="width:30%">소속</th><th style="width:12%">스코어</th><th>비고</th><th style="width:30px"></th></tr></thead><tbody id="dm-rd-body"></tbody></table>
+      <button type="button" class="rd-add" onclick="rdAddRow()">＋ 줄 추가</button>
+      <datalist id="dm-rd-names"></datalist><datalist id="dm-rd-courses"></datalist>
     </div>
     <div id="dm-task-row" style="display:none;margin-bottom:10px;padding:10px 12px;background:#eef6ff;border:1px solid rgba(55,138,221,.25);border-radius:8px;">
       <div style="font-size:11px;font-weight:700;color:#185FA5;margin-bottom:8px;" data-i18n="과제 기간 및 진행단계">과제 기간 및 진행단계</div>
@@ -1714,7 +1740,7 @@ function renderCal(){
       const bar=isHighImp?'#E24B4A':isFuture?'#378ADD':status==='진행중'?'#E2772E':status==='지시'||status==='후속필요'?'#E24B4A':'#639922';
       const txt=isHighImp?'color:#E24B4A !important;font-weight:700;':'';
       return `<div class="event-chip" style="background:${bg};border-left-color:${bar};${txt}"
-        onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}${grpTag(r,gmap)}</div>`;
+        onclick="event.stopPropagation();openDayPopup('${ds}')">${escapeHtml(r.title||r.partner||'')}${rdTag(r)}${grpTag(r,gmap)}</div>`;
     }).join('');
     const sharedChips=daySharedAll.map(r=>{
       return `<div class="event-chip shared-chip" style="background:#F3E9FF;border-left-color:#8E5FC7;color:#5A3286 !important;"
@@ -1768,6 +1794,76 @@ function closeDayPopup(){
   document.getElementById('day-popup-overlay').classList.remove('open');
   dpDate=null;
 }
+/* ═══ 라운딩 정보 (2026-11-03) ═══
+   활동유형 「라운딩」을 고르면 골프장·티오프·코스 + 참석자(이름·소속·스코어·비고) 표. work_diary.round_info(jsonb)에 저장.
+   첫 줄은 본인 자동. 이름은 사내 인원·이전 참석자 자동완성(소속도 채움). 보기 = 브리핑창 표 + 목록·달력 제목 옆 본인 스코어 ⛳ */
+var rdRows=[], rdEmps=null;
+function rdMyName(){ return (wfSession&&wfSession.name)||''; }
+function onActionChange(){
+  var on=document.getElementById('dm-action').value==='라운딩', box=document.getElementById('dm-round-row');
+  if(!box) return; box.style.display=on?'':'none';
+  if(on){ if(!rdRows.length) rdFill(null,true); rdLoadNames(); }
+}
+function rdFill(r,keepBox){
+  var ri=(r&&r.round_info)||{}, me=rdMyName();
+  document.getElementById('dm-rd-course').value=ri.course||'';
+  document.getElementById('dm-rd-tee').value=ri.tee||'';
+  document.getElementById('dm-rd-route').value=ri.route||'';
+  rdRows=(ri.players||[]).map(function(p){ return {name:p.name||'',org:p.org||'',score:p.score==null?'':String(p.score),memo:p.memo||''}; });
+  if(!rdRows.length) rdRows.push({name:me,org:'SME',score:'',memo:''});
+  while(rdRows.length<4) rdRows.push({name:'',org:'',score:'',memo:''});
+  rdRender();
+  if(!keepBox){ var on=(r?r.action_type:document.getElementById('dm-action').value)==='라운딩'; document.getElementById('dm-round-row').style.display=on?'':'none'; if(on) rdLoadNames(); }
+}
+function rdRender(){
+  var e=escapeHtml;
+  document.getElementById('dm-rd-body').innerHTML=rdRows.map(function(p,i){
+    return '<tr data-i="'+i+'"><td><input class="rd-nm" list="dm-rd-names" value="'+e(p.name)+'" placeholder="이름" autocomplete="off" onchange="rdNameChg(this)"></td>'
+      +'<td><input class="rd-org" value="'+e(p.org)+'" placeholder="예: LG전자 ES회로구매팀"></td>'
+      +'<td><input class="rd-sc" type="number" min="50" max="200" value="'+e(p.score)+'"></td>'
+      +'<td><input class="rd-memo" value="'+e(p.memo)+'"></td>'
+      +'<td style="text-align:center;"><button type="button" class="rd-x" title="줄 삭제" onclick="rdDelRow('+i+')">✕</button></td></tr>';
+  }).join('');
+}
+function rdKeep(){ document.querySelectorAll('#dm-rd-body tr').forEach(function(tr){ var p=rdRows[+tr.dataset.i]; if(!p) return; var q=function(c){ return tr.querySelector(c).value.trim(); }; p.name=q('.rd-nm'); p.org=q('.rd-org'); p.score=q('.rd-sc'); p.memo=q('.rd-memo'); }); }
+function rdAddRow(){ rdKeep(); rdRows.push({name:'',org:'',score:'',memo:''}); rdRender(); var ins=document.querySelectorAll('#dm-rd-body .rd-nm'); if(ins.length) ins[ins.length-1].focus(); }
+function rdDelRow(i){ rdKeep(); var p=rdRows[i]; if((p.name||p.score)&&!confirm('정말 삭제하시겠습니까?')) return; rdRows.splice(i,1); if(!rdRows.length) rdRows.push({name:'',org:'',score:'',memo:''}); rdRender(); }
+// 이름을 고르면 소속이 비어 있을 때 채운다(사내 인원 = SME, 이전 참석자 = 마지막에 적은 소속)
+var rdOrgOf={};
+function rdNameChg(el){ var tr=el.closest('tr'), org=tr.querySelector('.rd-org'), nm=el.value.trim(); if(nm&&!org.value.trim()&&rdOrgOf[nm]) org.value=rdOrgOf[nm]; }
+async function rdLoadNames(){
+  var names={}, courses={};
+  (diaryRecords||[]).slice().sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); }).forEach(function(r){
+    var ri=r.round_info; if(!ri) return; if(ri.course) courses[ri.course]=1;
+    (ri.players||[]).forEach(function(p){ if(p.name){ names[p.name]=1; if(p.org) rdOrgOf[p.name]=p.org; } });
+  });
+  if(rdEmps===null&&SB){ rdEmps=[]; try{ var q=await SB.from('employees').select('name,entity').eq('active',true).order('emp_no'); rdEmps=((q&&q.data)||[]).filter(function(x){ return x.entity==='KOREA'; }).map(function(x){ return x.name; }); }catch(e){ console.warn(e); } }
+  (rdEmps||[]).forEach(function(n){ names[n]=1; if(!rdOrgOf[n]) rdOrgOf[n]='SME'; });
+  var e=escapeHtml;
+  document.getElementById('dm-rd-names').innerHTML=Object.keys(names).map(function(n){ return '<option value="'+e(n)+'">'+e(rdOrgOf[n]||'')+'</option>'; }).join('');
+  document.getElementById('dm-rd-courses').innerHTML=Object.keys(courses).map(function(c){ return '<option value="'+e(c)+'">'; }).join('');
+}
+// 저장 값 — 이름 없는 줄은 버림. 스코어는 숫자만
+function rdRead(){
+  rdKeep();
+  var players=[];
+  for(var i=0;i<rdRows.length;i++){ var p=rdRows[i]; if(!p.name){ if(p.score||p.org||p.memo){ alert('이름이 빈 줄이 있습니다 (지우려면 ✕)'); return false; } continue; }
+    var sc=p.score===''?null:Number(p.score); if(sc!=null&&(!isFinite(sc)||sc<30||sc>200)){ alert(p.name+' 스코어를 확인해주세요'); return false; }
+    players.push({name:p.name,org:p.org||null,score:sc,memo:p.memo||null}); }
+  var ri={course:document.getElementById('dm-rd-course').value.trim()||null,tee:document.getElementById('dm-rd-tee').value||null,route:document.getElementById('dm-rd-route').value.trim()||null,players:players};
+  return (ri.course||ri.tee||ri.route||players.length)?ri:null;
+}
+// 본인 스코어 — 작성자 이름 줄
+function rdMyScore(r){ var ri=r&&r.round_info; if(!ri||!ri.players) return null; var me=r.emp_name||rdMyName(); var p=ri.players.find(function(x){ return x.name===me; }); return p&&p.score!=null?p.score:null; }
+function rdTag(r){ var sc=rdMyScore(r); return sc==null?'':'<span class="rd-tag">⛳'+sc+'</span>'; }
+function rdBriefHtml(r){
+  var ri=r&&r.round_info; if(!ri) return '';
+  var e=escapeHtml, info=[ri.course,ri.tee,ri.route].filter(Boolean).map(e).join(' · ');
+  var rows=(ri.players||[]).map(function(p){ return '<tr><td><b>'+e(p.name||'')+'</b></td><td>'+e(p.org||'')+'</td><td class="sc">'+(p.score!=null?p.score:'-')+'</td><td>'+e(p.memo||'')+'</td></tr>'; }).join('');
+  return '<div class="brief-box"><div class="brief-box-h">⛳ 라운딩'+(info?' — '+info:'')+'</div>'
+    +(rows?'<table class="brief-rd"><thead><tr><th>이름</th><th>소속</th><th style="width:60px;text-align:center;">스코어</th><th>비고</th></tr></thead><tbody>'+rows+'</tbody></table>':'')+'</div>';
+}
+
 /* ═══ 업무 브리핑창 (2026-10-26) ═══
    달력 날짜 목록·업무일지 목록에서 항목을 누르면 내용 전체를 보여 주고, [수정]을 눌러야 수정창으로 간다 */
 var briefId=null, briefFrom=null, briefPos=null;
@@ -1803,6 +1899,7 @@ function openBrief(id,from){
       +cell('작성자',who?'<b>'+who+'</b>':'')+cell(t('공유'),esc(share))
       +(r.task_stage?cell('진행단계',esc(r.task_stage))+cell('기간',r.task_start_date?esc(r.task_start_date)+' ~ '+esc(r.task_end_date||''):''):'')
     +'</div>'
+    +rdBriefHtml(r)
     +'<div class="brief-box"><div class="brief-box-h">업무 내용</div>'+(r.content?'<div class="brief-content brief-main">'+esc(r.content)+'</div>':'<div class="brief-content brief-main" style="color:#9ca3af;font-size:13px;">내용 없음</div>')+'</div>'
     +(r.follow_up?'<div class="brief-box"><div class="brief-box-h">'+t('후속조치')+'</div><div class="brief-content">'+esc(r.follow_up)+'</div></div>':'')
     +(r.link_type?'<div class="brief-box"><div class="brief-box-h">업무보고 연동</div><div class="brief-content" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="pointer-events:none;">'+linkCellHtml(r)+'</span>'+briefLinkBtn(r)+'</div></div>':'')
@@ -1890,7 +1987,7 @@ function renderDayPopupList(){
     return `<div class="dp-item${isSchedule?' dp-item-schedule':''}">
       <div class="dp-cat-bar" style="background:${barColor}"></div>
       <div class="dp-item-body" onclick="openBrief('${r.id}','day')" style="cursor:pointer;" title="눌러서 내용 보기">
-        <div class="dp-item-title">${escapeHtml(r.title||r.partner||'')}${grpTag(r,gmapP)}</div>
+        <div class="dp-item-title">${escapeHtml(r.title||r.partner||'')}${rdTag(r)}${grpTag(r,gmapP)}</div>
         <div class="dp-item-cat">${t(r.category||'')} · <span class="status-badge sb-${status}" style="font-size:10px;padding:1px 5px;">${t(status)}</span></div>
         ${r.content?`<div class="dp-item-memo">${escapeHtml(r.content.slice(0,80))}${r.content.length>80?'...':''}</div>`:''}
       </div>
@@ -1990,7 +2087,7 @@ function renderList(){
       <td class="dt-cat">${r.category==='일정'?'—':t(r.category||'')}</td>
       <td class="dt-action">${t(r.action_type||'')}</td>
       <td class="dt-partner">${vmCell(r)}</td>
-      <td class="dt-title-cell">${escapeHtml(r.title||'')}</td>
+      <td class="dt-title-cell">${escapeHtml(r.title||'')}${rdTag(r)}</td>
       <td><div class="dt-content">${escapeHtml(r.content||'')}</div></td>
       <td class="dt-status"><span class="status-badge sb-일정">${t(r.status||'일정')}</span></td>
       <td class="dt-link">${linkCellHtml(r)}</td>
@@ -2472,7 +2569,7 @@ async function loadSharedCalRecords(){
     var myName = (wfSession.name||'').trim();
     var myEntity = wfSession.entity || '';
     var qRes = await SB.from('work_diary')
-      .select('id,employee_id,date,title,content,content_type,action_type,partner,maker,dept_contact,follow_up,importance,task_stage,task_start_date,task_end_date,category,status,is_shared,share_target,share_type')
+      .select('id,employee_id,date,title,content,content_type,action_type,partner,maker,dept_contact,follow_up,importance,task_stage,task_start_date,task_end_date,category,status,is_shared,share_target,share_type,round_info')
       .eq('is_shared', true)
       .neq('employee_id', wfSession.empId)
       .order('date',{ascending:false})
@@ -3410,7 +3507,7 @@ function renderDiary(){
         <td class="dt-action">${t(r.action_type||'')}</td>
         <td class="dt-partner">${vmCell(r)}</td>
         <td class="dt-dept-cell">${escapeHtml(r.target_dept||'')}</td>
-        <td class="dt-title-cell">${escapeHtml(r.title||'')}${taskBadgeHtml(r)}</td>
+        <td class="dt-title-cell">${escapeHtml(r.title||'')}${rdTag(r)}${taskBadgeHtml(r)}</td>
         <td>
           <div class="dt-content">${escapeHtml(r.content||'')}</div>
           ${r.follow_up?`<div class="dt-followup">→ ${escapeHtml(r.follow_up)}</div>`:''}
@@ -4465,6 +4562,7 @@ function openDiaryModal(date){
   document.getElementById('dm-task-end').value='';
   document.getElementById('dm-task-stage').value='착수';
   onContentTypeChange();
+  rdFill(null);
   document.getElementById('dm-title').value='';
   document.getElementById('dm-content').value='';
   document.getElementById('dm-followup').value='';
@@ -4532,6 +4630,7 @@ function editDiary(id){
   document.getElementById('dm-task-end').value=r.task_end_date||'';
   document.getElementById('dm-task-stage').value=r.task_stage||'착수';
   onContentTypeChange();
+  rdFill(r);
   document.getElementById('dm-title').value=r.title||'';
   document.getElementById('dm-content').value=r.content||'';
   document.getElementById('dm-followup').value=r.follow_up||'';
@@ -4872,6 +4971,8 @@ async function saveDiary(){
     task_end_date: isTaskType ? (document.getElementById('dm-task-end').value||null) : null,
     task_stage: isTaskType ? (document.getElementById('dm-task-stage').value||null) : null,
   };
+  obj.round_info = obj.action_type==='라운딩' ? rdRead() : null;   // 2026-11-03 라운딩 정보
+  if(obj.round_info===false) return;
   if(diaryCopyOrigin){ obj.origin=diaryCopyOrigin; }
 
   // 공유 처리
@@ -5581,7 +5682,7 @@ async function loadShareView() {
   var isAdmin = (myDept === '대표이사' || myDept === '상무이사');
   var filter = document.getElementById('shareTypeFilter').value;
   var qRes = await SB.from('work_diary')
-    .select('id,employee_id,date,title,content,content_type,action_type,partner,maker,dept_contact,follow_up,importance,task_stage,task_start_date,task_end_date,category,status,is_shared,share_target,share_type')
+    .select('id,employee_id,date,title,content,content_type,action_type,partner,maker,dept_contact,follow_up,importance,task_stage,task_start_date,task_end_date,category,status,is_shared,share_target,share_type,round_info')
     .eq('is_shared', true)
     .order('date', { ascending: false })
     .limit(300);
@@ -5830,6 +5931,7 @@ function openShareConfirmPopup(rEncoded) {
       +cell('작성자(공유자)',who?'<b>'+who+'</b>':'')+cell('공유대상',esc(share))
       +(r.task_stage?cell('진행단계',esc(r.task_stage))+cell('기간',r.task_start_date?esc(r.task_start_date)+' ~ '+esc(r.task_end_date||''):''):'')
     +'</div>'
+    +rdBriefHtml(r)
     +'<div class="brief-box"><div class="brief-box-h">업무 내용</div><div class="brief-content brief-main"'+(r.content?'':' style="color:#9ca3af;font-size:13px;"')+'>'+(r.content?esc(r.content):'내용 없음')+'</div></div>'
     +(r.follow_up?'<div class="brief-box"><div class="brief-box-h">'+t('후속조치')+'</div><div class="brief-content">'+esc(r.follow_up)+'</div></div>':'')
     +(memHtml?'<div class="brief-box"><div class="brief-box-h">확인 현황 👁 '+(r._confirmCount||0)+'/'+(r._confirmTotal||0)+'</div>'+memHtml+'</div>':'')
