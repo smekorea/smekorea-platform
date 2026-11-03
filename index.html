@@ -137,6 +137,11 @@ html body .tb-logo{width:auto!important;background:transparent!important;}
 .sec-title{font-size:22px;font-weight:700;color:var(--navy);}
 .sec-cnt{font-family:'Noto Sans KR',sans-serif;font-size:15px;font-weight:500;color:var(--t2);}
 .sec-cnt::after{content:"개 메뉴";}
+/* 경영 마감 · 전용 (조승연·박정용 전용 비밀번호 로그인 시만 표시, 2026-11-03) */
+.priv-grp{display:none;margin-top:28px;}
+.priv-grp.on{display:block;}
+.priv-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:15px;font-weight:700;color:var(--navy);}
+.priv-hd .priv-tag{font-size:11px;font-weight:700;color:#fff;background:var(--navy);padding:2px 8px;border-radius:2px;}
 
 /* 메뉴 목록 — 행: [메뉴명 + 설명] [상태] [바로가기] */
 .menu-tbl{display:block;width:100%;}
@@ -349,7 +354,7 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     </div>
     <div class="sb-item comm" data-key="trade" onclick="showSection('trade')">
       <div class="sb-name">거래 관리</div>
-      <div class="sb-cnt">1</div>
+      <div class="sb-cnt" id="sbCntTrade">1</div>
     </div>
     <div class="sb-item red" data-key="parts" onclick="showSection('parts')">
       <div class="sb-name">부품사업부 프로세스</div>
@@ -430,7 +435,7 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     <div class="sec-panel" id="panel-trade">
       <div class="sec-hd">
         <div class="sec-title">거래 관리</div>
-        <div class="sec-cnt">1</div>
+        <div class="sec-cnt" id="secCntTrade">1</div>
       </div>
       <table class="menu-tbl">
         <tbody>
@@ -442,6 +447,20 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
           </tr>
         </tbody>
       </table>
+      <!-- 경영 마감 · 전용 — 조승연·박정용이 전용 비밀번호로 로그인했을 때만 보임 (2026-11-03) -->
+      <div class="priv-grp" id="privGrp">
+        <div class="priv-hd">경영 마감 <span class="priv-tag">전용</span></div>
+        <table class="menu-tbl">
+          <tbody>
+            <tr onclick="openWithPW('dailyclose')">
+              <td><div class="m-name">일일 마감보고</div><div class="m-desc">거래명세서 기준 매입·매출 마감대장 · 일자별 GAP</div></td>
+              <td><div class="m-desc">매입·매출·실결제 매입 / 담당자·ERP 마진 / 일자별 매입매출 GAP / 엑셀 다운로드</div></td>
+              <td><span class="badge new-b">NEW</span></td>
+              <td><div class="act-btns"><button class="act-btn" aria-label="바로가기" onclick="event.stopPropagation();openWithPW('dailyclose')">→</button></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- 부품사업부 -->
@@ -806,7 +825,14 @@ function initAuth(){
     document.getElementById('tbUser').style.display='flex';
     document.getElementById('tbUserName').textContent=n+' 님';
   }
+  applyPrivate();
   refreshMe();
+}
+// 경영 마감 · 전용 메뉴: 전용 비밀번호(DB private_login 확인)로 로그인한 허용 명단만 표시
+function isPrivate(){return localStorage.getItem('sme_auth')==='1'&&localStorage.getItem('sme_private')==='1';}
+function applyPrivate(){
+  const on=isPrivate();const g=document.getElementById('privGrp');if(g)g.classList.toggle('on',on);
+  const c=on?2:1;['sbCntTrade','secCntTrade'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=c;});
 }
 initAuth();
 
@@ -814,7 +840,7 @@ initAuth();
 let MODES=null;
 const HQ_KEYS={'admin_log.html':['admin','admin_partners','perm'],'hq_analysis.html':['hq'],'cost_table.html':['cost'],
   'kpi_shipping.html':['kpi_shipping'],'kpi_mfg.html':['kpi_mfg'],'kpi_purchase.html':['kpi_purchase'],'kpi_material.html':['kpi_material'],'kpi_planning.html':['kpi_planning']};
-const TARGET_KEY={trade:'trade',ship:'ship',shiplot:'shiplot',po:'po',stock:'stock',smartmat:'smartmat',schedule:'schedule',workflow:'workflow',collab:'collab',directive:'directive',orgchart:'orgchart'};
+const TARGET_KEY={trade:'trade',dailyclose:'dailyclose',ship:'ship',shiplot:'shiplot',po:'po',stock:'stock',smartmat:'smartmat',schedule:'schedule',workflow:'workflow',collab:'collab',directive:'directive',orgchart:'orgchart'};
 async function rpcIdx(fn,args){
   const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{})});
   const tx=await r.text();if(!r.ok){let m=tx;try{m=JSON.parse(tx).message||tx;}catch(e){}throw new Error(m);}return tx?JSON.parse(tx):null;
@@ -832,8 +858,8 @@ async function refreshMe(){
   const tk=localStorage.getItem('sme_token');if(!tk)return;
   let me=null;try{me=await rpcIdx('app_me',{p_token:tk});}catch(e){return;}
   if(!me){ // 만료·사용중지 → 다시 로그인
-    ['sme_user','sme_auth','sme_hq_auth','sme_token','sme_emp_no','sme_perms'].forEach(k=>localStorage.removeItem(k));
-    document.getElementById('tbUser').style.display='none';return;
+    ['sme_user','sme_auth','sme_hq_auth','sme_token','sme_emp_no','sme_perms','sme_private'].forEach(k=>localStorage.removeItem(k));
+    document.getElementById('tbUser').style.display='none';applyPrivate();return;
   }
   localStorage.setItem('sme_perms',JSON.stringify(me.perms||{}));
   document.getElementById('tbChpw').style.display='';
@@ -846,7 +872,7 @@ async function personalLogin(){
   let r;try{r=await rpcIdx('app_login',{p_entity:pendingEntity,p_emp_no:no,p_pw:pw});}catch(e){err.textContent='⚠ '+e.message;return;}
   if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||idxT('비밀번호가 올바르지 않습니다'));document.getElementById('pwInput').value='';return;}
   localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));
-  localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);
+  localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);localStorage.removeItem('sme_private');
   localStorage.removeItem('sme_hq_auth');sessionStorage.removeItem('hq_auth');sessionStorage.setItem('po_auth','1');
   let me=null;try{me=await rpcIdx('app_me',{p_token:r.token});}catch(e){}
   localStorage.setItem('sme_perms',JSON.stringify((me&&me.perms)||{}));
@@ -879,7 +905,8 @@ async function submitChangePw(){
 function doLogout(){
   if(!confirm('로그아웃 하시겠습니까?'))return;
   const tk=localStorage.getItem('sme_token');if(tk)rpcIdx('app_logout',{p_token:tk}).catch(()=>{});
-  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms'].forEach(k=>localStorage.removeItem(k));
+  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private'].forEach(k=>localStorage.removeItem(k));
+  applyPrivate();
   document.getElementById('tbChpw').style.display='none';
   ['po_auth','hq_auth'].forEach(k=>sessionStorage.removeItem(k));
   document.getElementById('tbUser').style.display='none';
@@ -977,6 +1004,7 @@ function getName(){return document.getElementById('nameSelect').value;}
 function openWithPW(t){
   pendingTarget=t;
   const n=localStorage.getItem('sme_user');
+  if(t==='dailyclose'&&localStorage.getItem('sme_auth')==='1'&&!isPrivate()){alert('전용 비밀번호로 로그인한 경우에만 열 수 있습니다.\n로그아웃 후 전용 비밀번호로 다시 로그인해주세요.');return;}
   if(n&&localStorage.getItem('sme_auth')==='1'){if(!canOpen(t))return;sessionStorage.setItem('po_auth','1');handleTarget(t,n);return;}
   ['corpSelect','pwInput','empNoInput'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('empNoWrap').style.display='none';document.getElementById('nameWrap').style.display='';
@@ -994,15 +1022,21 @@ async function checkPW(){
   if(!document.getElementById('corpSelect').value){err.textContent='⚠ '+idxT('법인을 선택해주세요');return;}
   if(isPersonal(pendingEntity)){ await personalLogin(); return; }
   if(!n){err.textContent='⚠ '+idxT('이름을 선택해주세요');return;}
-  if(pw!==PW_MAIN){err.textContent='⚠ '+idxT('비밀번호가 올바르지 않습니다');document.getElementById('pwInput').value='';return;}
+  let priv=false;
+  if(pw!==PW_MAIN){
+    try{priv=await rpcIdx('private_login',{p_name:n,p_pw:pw})===true;}catch(e){priv=false;}
+    if(!priv){err.textContent='⚠ '+idxT('비밀번호가 올바르지 않습니다');document.getElementById('pwInput').value='';return;}
+  }
+  if(priv)localStorage.setItem('sme_private','1');else localStorage.removeItem('sme_private');
   localStorage.setItem('sme_user',n);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',pendingEntity);sessionStorage.setItem('po_auth','1');
   document.getElementById('tbUser').style.display='flex';
   document.getElementById('tbUserName').textContent=n+' 님';
-  closePW();writeLog(n,'SMERP 로그인',pendingEntity);handleTarget(pendingTarget,n);
+  applyPrivate();
+  closePW();writeLog(n,priv?'SMERP 로그인(전용)':'SMERP 로그인',pendingEntity);handleTarget(pendingTarget,n);
 }
 
 function handleTarget(t,n){
-  const map={trade:'trade.html',ship:'shipment.html',shiplot:'ship_lot.html',po:'po_hub.html',stock:'stock_analysis.html',smartmat:'smart_material.html',schedule:'schedule.html',workflow:'workflow.html',collab:'collab.html',directive:'directive.html',orgchart:'org_chart.html'};
+  const map={trade:'trade.html',dailyclose:'daily_close.html',ship:'shipment.html',shiplot:'ship_lot.html',po:'po_hub.html',stock:'stock_analysis.html',smartmat:'smart_material.html',schedule:'schedule.html',workflow:'workflow.html',collab:'collab.html',directive:'directive.html',orgchart:'org_chart.html'};
   if(map[t]){
     writeLog(n,t);
     if(t==='workflow') { window.open(map[t]+'?user='+encodeURIComponent(n),'_blank'); return; }
@@ -1060,7 +1094,7 @@ function nav(u){
 }
 // (2026-10-07) 바로가기 버튼으로 연 화면도 access_log에 남긴다 — SMERP 개발현황 활용도 자동 집계용.
 // 키는 행 클릭(handleTarget)과 같은 이름을 쓴다. 로그인 전이면 기록하지 않는다.
-const LOG_KEY_BY_URL={'shipment.html':'ship','ship_lot.html':'shiplot','po_hub.html':'po','stock_analysis.html':'stock','smart_material.html':'smartmat','schedule.html':'schedule','workflow.html':'workflow','collab.html':'collab','directive.html':'directive','org_chart.html':'orgchart','trade.html':'trade'};
+const LOG_KEY_BY_URL={'daily_close.html':'dailyclose','shipment.html':'ship','ship_lot.html':'shiplot','po_hub.html':'po','stock_analysis.html':'stock','smart_material.html':'smartmat','schedule.html':'schedule','workflow.html':'workflow','collab.html':'collab','directive.html':'directive','org_chart.html':'orgchart','trade.html':'trade'};
 function logByUrl(u){
   const n=localStorage.getItem('sme_user');
   const k=LOG_KEY_BY_URL[String(u).split('?')[0]];
