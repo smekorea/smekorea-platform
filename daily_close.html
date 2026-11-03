@@ -15,6 +15,7 @@
    ── 조승연·박정용이 전용 비밀번호로 로그인했을 때만 열림 (index.html → private_login, localStorage sme_private)
    ── 매입매출관리 확정 전표 기준: 매입 / 매출(국내 → 해외 거래처별 → 제조) / 실결제 매입, 담당자·ERP 마진, 하단 집계
    ── 일자별 매입·매출·GAP, 엑셀 2시트(8월 마감대장 양식 그대로 + 일자별 GAP)
+   ── v1.1: 엑셀 원본 색상·실결제 분리 열(연두)·구역별 빈 줄 3칸·해외 8곳 고정·하단 3표 정리·날짜 세로줄 연하게, ERP 마진 빈 전표 자동 계산
    ── 입력: 담당자 마진(trade_slip.mgr_margin), 실결제 매입(trade_slip.pay_amt, 비우면 매입금액), 월 조정값(close_adjust)
    ══════════════════════════════════════════════════════════════ */
 :root{
@@ -282,7 +283,47 @@ async function loadAll(){
     }
     build();renderAll();
     msg.textContent=`확정 전표 ${slips.length}건 · ${d0} ~ ${to}`;
+    fillMargins();
   }catch(e){msg.textContent='불러오기 실패: '+e.message;}
+}
+
+/* ── ERP 마진이 비어 있는 확정 매출 전표 채우기 (매입매출관리 trade.html saveMargin과 같은 기준) ──
+   원가 = 단가표 매입가(매출처별, price_lookup) → 최근 확정 매입 단가 → 이카운트 매입자료 최근 6개월, 미확인 품목은 제외 */
+const encQ=v=>encodeURIComponent(v);
+const inList=arr=>'in.('+arr.map(v=>'"'+String(v).replace(/"/g,'\\"')+'"').map(encQ).join(',')+')';
+function prevMonths(dateStr,n){const d=new Date(dateStr+'T00:00:00');let y=d.getFullYear(),m=d.getMonth()+1;const out=[];
+  for(let i=0;i<n;i++){m--;if(m===0){m=12;y--;}out.push({y:String(y%100)+'년',m:m+'월'});}return out;}
+async function costMap(codes,dateStr,pid){
+  codes=[...new Set(codes.filter(Boolean))];const out={};if(!codes.length)return out;
+  if(pid){for(let i=0;i<codes.length;i+=200){try{const r=await api('rpc/price_lookup',{method:'POST',body:JSON.stringify({p_entity:ENTITY,p_partner_id:pid,p_items:codes.slice(i,i+200),p_date:dateStr,p_kind:null})});
+    (r||[]).forEach(x=>{if(num(x.buy_price))out[pid+'|'+x.item_code]=num(x.buy_price);});}catch(e){}}}
+  for(let i=0;i<codes.length;i+=80){
+    try{(await getAll('trade_slip_line?select=item_code,unit_price,trade_slip!inner(status,slip_type,entity)&trade_slip.status=eq.확정&trade_slip.slip_type=eq.매입&trade_slip.entity=eq.'+ENTITY+'&item_code='+inList(codes.slice(i,i+80))+'&order=id.desc'))
+      .forEach(r=>{if(out[r.item_code]==null&&num(r.unit_price))out[r.item_code]=num(r.unit_price);});}catch(e){}
+  }
+  for(const m of prevMonths(dateStr,6)){const need=codes.filter(c=>out[c]==null);if(!need.length)break;
+    for(let i=0;i<need.length;i+=80){try{(await getAll(`purchase_data?select=item_code,unit_price,trade_date&year=eq.${encQ(m.y)}&month=eq.${encQ(m.m)}&item_code=${inList(need.slice(i,i+80))}&order=trade_date.desc`))
+      .forEach(r=>{if(out[r.item_code]==null&&num(r.unit_price))out[r.item_code]=num(r.unit_price);});}catch(e){}}}
+  return out;
+}
+let FILLING=false;
+async function fillMargins(){
+  const need=SLIPS.filter(s=>s.slip_type==='매출'&&!isDelivery(s)&&s.margin_amt==null);if(!need.length||FILLING)return;
+  FILLING=true;let done=0;
+  try{
+    for(const s of need){
+      try{
+        const ls=await getAll('trade_slip_line?select=item_code,qty,supply_amt&slip_id=eq.'+s.id);
+        const costs=await costMap(ls.map(l=>l.item_code),s.slip_date,s.partner_id);
+        let cs=0,base=0,miss=0;
+        ls.forEach(l=>{if(!num(l.supply_amt)&&!num(l.qty))return;const c=costs[s.partner_id+'|'+l.item_code]!=null?costs[s.partner_id+'|'+l.item_code]:costs[l.item_code];
+          if(c==null||!l.item_code){if(num(l.supply_amt))miss++;return;}cs+=c*num(l.qty);base+=num(l.supply_amt);});
+        const amt=Math.round(base-cs);const m={cost_total:Math.round(cs),margin_amt:amt,margin_rate:base?Math.round(amt/base*1000)/10:null,cost_missing:miss};
+        await patch('trade_slip','id=eq.'+s.id,m);Object.assign(s,m);done++;
+      }catch(e){console.error('마진 계산 실패',s.id,e);}
+    }
+  }finally{FILLING=false;}
+  if(done){build();renderAll();toast('ERP 마진 '+done+'건 계산');}
 }
 
 /* ── 마감대장 구성 ── */
@@ -514,147 +555,186 @@ function renderAll(){renderSale();renderBuy();renderSum();renderDay();}
 function switchTab(k){curTab=k;['sale','buy','sum','day'].forEach(x=>{document.getElementById('tab-'+x).hidden=x!==k;document.getElementById('tb-'+x).classList.toggle('active',x===k);});
   if(k==='sale')renderSale();if(k==='buy')renderBuy();if(k==='day')renderDay();}
 
-/* ── 엑셀: 시트1 = 8월 마감대장 양식, 시트2 = 일자별 GAP ── */
+/* ── 엑셀: 시트1 = 8월 마감대장 양식(원본 색상), 시트2 = 일자별 GAP ──
+   v1.1 (2026-11-03): 원본 색상(매입 하늘색·매출 파랑·마진 연노랑·소계 회색), 비고 뒤 빈 열 + 실결제 연두색,
+   구역마다 빈 줄 3칸·해외 8개 거래처 고정, 하단 3표(가마감 대조·마진·매입 구분) + LG 마감 내역, 월·일·순번 세로줄 연하게 */
+const XL_BLANK=3;
+const XL_OS_FIXED=['MOONSUNG ELECTRONICS','SME GLOBAL CO.,LTD.','GSMEIN ELECTRONICS PRIVATE LIMITED','SME(TIANJIN) ELECTRONICS CO.,LTD.',
+  'LG전자(영세율)','주식회사 신한엔지니어링','PT. LG INNOTEK INDO INDONESIA','INDIGRID TECHNOLOGY PRIVATE LIMITED'];
 async function downloadExcel(){
   if(typeof ExcelJS==='undefined'){alert('엑셀 도구를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.');return;}
   const {ym}=monthRange();const [Y,M]=ym.split('-');const t=totals();
-  const wb=new ExcelJS.Workbook();wb.calcProperties.fullCalcOnLoad=true;const ws=wb.addWorksheet(+M+'월매입매출');
-  const NAVY='FF1B3A6B',HEAD='FFD9DDE3',SUBF='FFE7ECF4',font={name:'맑은 고딕',size:10};
-  const widths={A:3,B:4,C:18,D:41,E:15,F:13,G:10,H:3.5,I:4,J:4,K:21,L:43,M:14,N:13,O:14,P:14,Q:10,R:3,S:3.5,T:19,U:45,V:15,W:13,X:11};
+  const wb=new ExcelJS.Workbook();wb.calcProperties.fullCalcOnLoad=true;
+  const ws=wb.addWorksheet(+M+'월매입매출',{views:[{state:'frozen',ySplit:5,showGridLines:false}]});
+  const C={BUY:'FFCCECFF',BUY2:'FFCCFFFF',SALE:'FF9FD8EE',SALE2:'FFCFECF7',MG:'FFFFFFCC',SUB1:'FFD9D9D9',SUB2:'FFF2F2F2',PAY:'FFC6E0B4',PAY2:'FFE2EFDA'};
+  const FONT='맑은 고딕';const NUM='#,##0_);[Red]\\(#,##0\\)';
+  const widths={A:3,B:3.6,C:18,D:41,E:14.6,F:12.7,G:10,H:3.4,I:3.6,J:4,K:21,L:43,M:14,N:12.7,O:14.4,P:14.4,Q:10,R:2,S:3,T:3.6,U:19,V:45,W:14.1,X:12.5,Y:11};
   Object.entries(widths).forEach(([c,w])=>ws.getColumn(c).width=w);
-  const thin={style:'thin',color:{argb:'FFA6ADB7'}};const bd={top:thin,bottom:thin,left:thin,right:thin};
-  const setc=(addr,v,o)=>{const c=ws.getCell(addr);c.value=v;c.font=Object.assign({},font,o&&o.font);if(o&&o.fill)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:o.fill}};
-    if(o&&o.num)c.numFmt=o.num;if(o&&o.al)c.alignment=o.al;if(!o||o.border!==false)c.border=bd;return c;};
-  const NUM='#,##0;[Red]-#,##0';
-  // 제목
-  ws.mergeCells('A1:P3');setc('A1',`${Y}년 ${M}월  매입,매출 내역`,{font:{size:16,bold:true},al:{horizontal:'center',vertical:'middle'},border:false});
-  ws.mergeCells('R1:X3');setc('R1',`${Y}년 ${M}월  매입내역[실결제 기준]`,{font:{size:16,bold:true},al:{horizontal:'center',vertical:'middle'},border:false});
-  // 머리 2줄
-  const hd={fill:HEAD,font:{bold:true},al:{horizontal:'center',vertical:'middle'}};
-  [['A4:B4','날짜'],['C4:G4','매 입 내 역'],['H4:J4','날짜'],['K4:N4','매 출 내 역'],['O4:O5','담당자 마진'],['P4:P5','ERP 마진'],['Q4:Q5','비고'],['R4:S4','날짜'],['T4:X4','매 입 내 역']]
-    .forEach(([r,v])=>{ws.mergeCells(r);setc(r.split(':')[0],v,hd);});
-  const h5={A:'월',B:'일',C:'업체명',D:'상세내역',E:'매입금액',F:'세액',G:'입고창고',H:'월',I:'일',J:'순번',K:'업체명',L:'상세내역',M:'매출금액',N:'부가세',R:'월',S:'일',T:'업체명',U:'상세내역',V:'매입금액',W:'세액',X:'입고창고'};
-  Object.entries(h5).forEach(([c,v])=>setc(c+'5',v,hd));
-  ['B4','D4','E4','F4','G4','I4','J4','L4','M4','N4','S4','U4','V4','W4','X4'].forEach(a=>ws.getCell(a).border=bd);
-  ws.views=[{state:'frozen',ySplit:5}];
-  let r=6;
+  const line=a=>({style:'thin',color:{argb:a}});const N=line('FFA6ADB7'),LT=line('FFE0E0E0');
+  // 날짜 칸(월·일·순번) 사이 세로줄만 연하게
+  const DATE_GRP={A:'L',B:'R',H:'L',I:'M',J:'R',S:'L',T:'R'};
+  const bdFor=col=>{const g=DATE_GRP[col];return {top:N,bottom:N,left:(g==='M'||g==='R')?LT:N,right:(g==='L'||g==='M')?LT:N};};
+  const setc=(addr,v,o)=>{o=o||{};const c=ws.getCell(addr);c.value=v;
+    c.font=Object.assign({name:FONT,size:10},o.font||{});
+    if(o.fill)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:o.fill}};
+    if(o.num)c.numFmt=o.num;if(o.al)c.alignment=o.al;
+    if(o.border!==false)c.border=bdFor(addr.replace(/\d+/g,''));return c;};
+  const ctr={horizontal:'center',vertical:'middle'};
+  const F=(v,res)=>({formula:v,result:res});
+  // ── 제목
+  ws.getRow(1).height=20;ws.getRow(2).height=20;ws.getRow(3).height=20;
+  ws.mergeCells('A1:Q3');setc('A1',`${Y}년 ${M}월  매입,매출 내역`,{font:{size:28,bold:true},al:ctr,border:false});
+  ws.mergeCells('S1:Y3');setc('S1',`${Y}년 ${M}월  매입내역[실결제 기준]`,{font:{size:28,bold:true},al:ctr,border:false});
+  // ── 머리 2줄
+  const H4=(r,v,fill,size)=>{ws.mergeCells(r);const a=r.split(':')[0];setc(a,v,{fill,font:{bold:true,size:size||11},al:ctr});
+    const [s,e]=r.split(':');const cs=s.replace(/\d+/,''),ce=e.replace(/\d+/,''),rs=+s.replace(/\D+/,''),re=+e.replace(/\D+/,'');
+    for(let rr=rs;rr<=re;rr++)for(let k=cs.charCodeAt(0);k<=ce.charCodeAt(0);k++){const cell=ws.getCell(String.fromCharCode(k)+rr);cell.border=bdFor(String.fromCharCode(k));cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};}};
+  H4('A4:B4','날짜',C.BUY);H4('C4:G4','매 입 내 역',C.BUY);
+  H4('H4:J4','날짜',C.SALE);H4('K4:N4','매 출 내 역',C.SALE);H4('O4:O5','담당자 마진',C.SALE,10);H4('P4:P5','ERP 마진',C.SALE,10);H4('Q4:Q5','비고',C.SALE,10);
+  H4('S4:T4','날짜',C.PAY);H4('U4:Y4','매 입 내 역',C.PAY);
+  const h5=(cols,fill)=>Object.entries(cols).forEach(([c,v])=>setc(c+'5',v,{fill,font:{size:10},al:ctr}));
+  h5({A:'월',B:'일',C:'업체명',D:'상세내역',E:'매입금액',F:'세액',G:'입고창고'},C.BUY2);
+  h5({H:'월',I:'일',J:'순번',K:'업체명',L:'상세내역',M:'매출금액',N:'부가세'},C.SALE2);
+  h5({S:'월',T:'일',U:'업체명',V:'상세내역',W:'매입금액',X:'세액',Y:'입고창고'},C.PAY2);
+  ws.getRow(4).height=20;ws.getRow(5).height=18;
+  // ── 줄 쓰기
   const md=s=>{const d=new Date(s.slip_date+'T00:00:00');return [d.getMonth()+1,d.getDate()];};
+  const BUYC='ABCDEFG',SALEC='HIJKLMNOPQ',PAYC='STUVWXY';
+  const blankL=row=>{BUYC.split('').forEach(c=>setc(c+row,null,{al:c<'C'?ctr:undefined}));PAYC.split('').forEach(c=>setc(c+row,null));};
+  const blankM=row=>SALEC.split('').forEach(c=>setc(c+row,null,{fill:(c==='O'||c==='P')?C.MG:undefined}));
   const putBuy=(row,s)=>{const [m,d]=md(s);
-    setc('A'+row,m);setc('B'+row,d);setc('C'+row,s.partner_name||'');setc('D'+row,detail(s));
-    setc('E'+row,Math.round(SV(s)),{num:NUM});setc('F'+row,Math.round(VV(s)),{num:NUM});setc('G'+row,whTag(s));
-    setc('R'+row,m);setc('S'+row,d);setc('T'+row,s.partner_name||'');setc('U'+row,detail(s));
-    setc('V'+row,Math.round(PV(s)),{num:NUM});setc('W'+row,{formula:`V${row}*0.1`,result:Math.round(PV(s)*0.1)},{num:NUM});setc('X'+row,whTag(s));};
+    setc('A'+row,m,{al:ctr});setc('B'+row,d,{al:ctr});setc('C'+row,s.partner_name||'',{al:{horizontal:'center'}});setc('D'+row,detail(s));
+    setc('E'+row,Math.round(SV(s)),{num:NUM});setc('F'+row,Math.round(VV(s)),{num:NUM});setc('G'+row,whTag(s),{al:ctr});
+    setc('S'+row,m,{al:ctr});setc('T'+row,d,{al:ctr});setc('U'+row,s.partner_name||'',{al:{horizontal:'center'}});setc('V'+row,detail(s));
+    setc('W'+row,Math.round(PV(s)),{num:NUM});setc('X'+row,F(`W${row}*0.1`,Math.round(PV(s)*0.1)),{num:NUM});setc('Y'+row,whTag(s),{al:ctr});};
   const putSale=(row,s)=>{const [m,d]=md(s);
-    setc('H'+row,m);setc('I'+row,d);setc('J'+row,seqNo(s));setc('K'+row,s.partner_name||'');setc('L'+row,detail(s));
+    setc('H'+row,m,{al:ctr});setc('I'+row,d,{al:ctr});setc('J'+row,seqNo(s),{al:ctr});setc('K'+row,s.partner_name||'',{al:{horizontal:'center'}});setc('L'+row,detail(s));
     setc('M'+row,Math.round(SV(s)),{num:NUM});
     setc('N'+row,s.vat_type==='과세'?Math.round(VV(s)):(s.vat_type==='영세'?'수출':(s.vat_type||'')),{num:NUM,al:{horizontal:s.vat_type==='과세'?'right':'center'}});
-    setc('O'+row,s.mgr_margin==null?null:num(s.mgr_margin),{num:NUM});setc('P'+row,s.margin_amt==null?null:num(s.margin_amt),{num:NUM});setc('Q'+row,s.note||'');};
-  const blank=(row,cols)=>cols.split('').forEach(c=>setc(c+row,null));
-  const subSale=(row,label,a,b,vals)=>{ws.mergeCells(`H${row}:L${row}`);setc('H'+row,label,{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-    ['M','O','P'].forEach(c=>setc(c+row,a<=b?{formula:`SUM(${c}${a}:${c}${b})`,result:vals[c]}:0,{num:NUM,fill:SUBF,font:{bold:true}}));
-    setc('N'+row,null,{fill:SUBF});setc('Q'+row,null,{fill:SUBF});};
-  // 블록 1: 부품사업부 (좌 매입 / 가운데 국내 → 해외)
-  const midRows=[];const subs=[];
+    setc('O'+row,s.mgr_margin==null?null:num(s.mgr_margin),{num:NUM,fill:C.MG});setc('P'+row,s.margin_amt==null?null:num(s.margin_amt),{num:NUM,fill:C.MG});setc('Q'+row,s.note||'');};
+  const sumF=(c,a,b,res)=>a<=b?F(`SUM(${c}${a}:${c}${b})`,res):0;
+  const subSale=(row,label,a,b,rows,fill)=>{ws.mergeCells(`H${row}:L${row}`);setc('H'+row,label,{fill,font:{bold:true},al:ctr});
+    ['I','J','K','L'].forEach(c=>{ws.getCell(c+row).border=bdFor(c);});
+    setc('M'+row,sumF('M',a,b,sumOf(rows,SV)),{num:NUM,fill,font:{bold:true}});
+    setc('N'+row,null,{fill});
+    setc('O'+row,sumF('O',a,b,sumOf(rows,MM)),{num:NUM,fill,font:{bold:true}});
+    setc('P'+row,sumF('P',a,b,sumOf(rows,MG)),{num:NUM,fill,font:{bold:true}});setc('Q'+row,null,{fill});};
+  const subLeft=(row,label,a,b,rows,fill)=>{
+    ws.mergeCells(`A${row}:D${row}`);setc('A'+row,label,{fill,font:{bold:true},al:ctr});['B','C','D'].forEach(c=>ws.getCell(c+row).border=bdFor(c));
+    setc('E'+row,sumF('E',a,b,sumOf(rows,SV)),{num:NUM,fill,font:{bold:true}});setc('F'+row,sumF('F',a,b,sumOf(rows,VV)),{num:NUM,fill,font:{bold:true}});setc('G'+row,null,{fill});
+    ws.mergeCells(`S${row}:V${row}`);setc('S'+row,label,{fill:C.PAY2,font:{bold:true},al:ctr});['T','U','V'].forEach(c=>ws.getCell(c+row).border=bdFor(c));
+    setc('W'+row,sumF('W',a,b,sumOf(rows,PV)),{num:NUM,fill:C.PAY2,font:{bold:true}});setc('X'+row,sumF('X',a,b,Math.round(sumOf(rows,PV)*0.1)),{num:NUM,fill:C.PAY2,font:{bold:true}});setc('Y'+row,null,{fill:C.PAY2});};
   const order=s=>[s.slip_date,String(s.slip_no||'')].join('|');
   const srt=rows=>rows.slice().sort((a,b)=>order(a).localeCompare(order(b)));
-  midRows.push(...srt(SALE_DOM).map(s=>({s})));
-  midRows.push({sub:'소계(국내)',rows:SALE_DOM,dom:true});
-  const og=osGroups();
-  og.forEach(g=>{midRows.push(...srt(g.rows).map(s=>({s})));midRows.push({sub:g.name,rows:g.rows,os:true});});
-  if(og.length)midRows.push({osTotal:true});
-  const buyPt=srt(BUY_PT);const n1=Math.max(buyPt.length,midRows.length,1);
-  const start1=r;let grpStart=r;const osSubRows=[];let domSubRow=null;
-  for(let i=0;i<n1;i++){const row=r+i;
-    if(buyPt[i])putBuy(row,buyPt[i]);else blank(row,'ABCDEFGRSTUVWX');
-    const m=midRows[i];
-    if(!m){blank(row,'HIJKLMNOPQ');continue;}
+  // ── 블록 1: 부품사업부 (가운데 = 국내 → 해외 거래처별 고정 8곳 + 그 외)
+  const mid=[];
+  mid.push(...srt(SALE_DOM).map(s=>({s})));for(let i=0;i<XL_BLANK;i++)mid.push({b:1});
+  mid.push({sub:'소계(국내)',rows:SALE_DOM,fill:C.SUB1,kind:'dom'});
+  const og={};osGroups().forEach(g=>og[g.name]=g.rows);
+  const names=XL_OS_FIXED.concat(Object.keys(og).filter(k=>!XL_OS_FIXED.includes(k)));
+  names.forEach(k=>{const rows=og[k]||[];mid.push(...srt(rows).map(s=>({s})));for(let i=0;i<XL_BLANK;i++)mid.push({b:1});mid.push({sub:k,rows,fill:C.SUB2,kind:'os'});});
+  mid.push({osTotal:1});
+  const left1=srt(BUY_PT);const r0=6;const n1=Math.max(left1.length+XL_BLANK,mid.length);
+  let grpStart=r0,domRow=null,osTotRow=null;const osRows=[];
+  for(let i=0;i<n1;i++){const row=r0+i;
+    if(left1[i])putBuy(row,left1[i]);else blankL(row);
+    const m=mid[i];
+    if(!m||m.b){blankM(row);continue;}
     if(m.s){putSale(row,m.s);continue;}
-    if(m.sub){const vals={M:sumOf(m.rows,SV),O:sumOf(m.rows,MM),P:sumOf(m.rows,MG)};subSale(row,m.sub,grpStart,row-1,vals);
-      if(m.dom)domSubRow=row;else osSubRows.push(row);grpStart=row+1;continue;}
-    if(m.osTotal){ws.mergeCells(`H${row}:L${row}`);setc('H'+row,'소  계(해외)',{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-      ['M','O','P'].forEach(c=>setc(c+row,{formula:osSubRows.map(x=>c+x).join('+')||'0',result:c==='M'?t.saleOs:(c==='O'?t.mmOs:t.mgOs)},{num:NUM,fill:SUBF,font:{bold:true}}));
-      setc('N'+row,'수출',{fill:SUBF,al:{horizontal:'center'}});setc('Q'+row,null,{fill:SUBF});m.row=row;}
+    if(m.sub){subSale(row,m.sub,grpStart,row-1,m.rows,m.fill);if(m.kind==='dom')domRow=row;else osRows.push(row);grpStart=row+1;continue;}
+    if(m.osTotal){ws.mergeCells(`H${row}:L${row}`);setc('H'+row,'소  계(해외)',{fill:C.SUB1,font:{bold:true},al:ctr});['I','J','K','L'].forEach(c=>ws.getCell(c+row).border=bdFor(c));
+      ['M','O','P'].forEach(c=>setc(c+row,F(osRows.map(x=>c+x).join('+'),c==='M'?t.saleOs:(c==='O'?t.mmOs:t.mgOs)),{num:NUM,fill:C.SUB1,font:{bold:true}}));
+      setc('N'+row,'수출',{fill:C.SUB1,al:ctr});setc('Q'+row,null,{fill:C.SUB1});osTotRow=row;}
   }
-  r+=n1;
-  const osTotRow=(midRows.find(m=>m.osTotal)||{}).row||null;
-  // 부품사업부 매입 소계
-  const ptRow=r;ws.mergeCells(`A${r}:D${r}`);setc('A'+r,'부품사업부',{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-  setc('E'+r,{formula:`SUM(E${start1}:E${r-1})`,result:t.buyPt},{num:NUM,fill:SUBF,font:{bold:true}});setc('F'+r,{formula:`SUM(F${start1}:F${r-1})`,result:t.buyPtV},{num:NUM,fill:SUBF,font:{bold:true}});setc('G'+r,null,{fill:SUBF});
-  ws.mergeCells(`R${r}:U${r}`);setc('R'+r,'부품사업부',{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-  setc('V'+r,{formula:`SUM(V${start1}:V${r-1})`,result:t.payPt},{num:NUM,fill:SUBF,font:{bold:true}});setc('W'+r,{formula:`SUM(W${start1}:W${r-1})`,result:Math.round(t.payPt*0.1)},{num:NUM,fill:SUBF,font:{bold:true}});setc('X'+r,null,{fill:SUBF});
-  blank(r,'HIJKLMNOPQ');r++;
-  // 블록 2: 제조사업부
-  const buyMf=srt(BUY_MF),saleMf=srt(SALE_MF);const n2=Math.max(buyMf.length,saleMf.length);const start2=r;
-  for(let i=0;i<n2;i++){const row=r+i;if(buyMf[i])putBuy(row,buyMf[i]);else blank(row,'ABCDEFGRSTUVWX');if(saleMf[i])putSale(row,saleMf[i]);else blank(row,'HIJKLMNOPQ');}
-  r+=n2;
-  const mfRow=r;
-  ws.mergeCells(`A${r}:D${r}`);setc('A'+r,'제조사업부',{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-  setc('E'+r,n2?{formula:`SUM(E${start2}:E${r-1})`,result:t.buyMf}:0,{num:NUM,fill:SUBF,font:{bold:true}});setc('F'+r,n2?{formula:`SUM(F${start2}:F${r-1})`,result:t.buyMfV}:0,{num:NUM,fill:SUBF,font:{bold:true}});setc('G'+r,null,{fill:SUBF});
-  ws.mergeCells(`H${r}:L${r}`);setc('H'+r,'제조',{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-  setc('M'+r,n2?{formula:`SUM(M${start2}:M${r-1})`,result:t.saleMf}:0,{num:NUM,fill:SUBF,font:{bold:true}});['N','O','P','Q'].forEach(c=>setc(c+r,null,{fill:SUBF}));
-  ws.mergeCells(`R${r}:U${r}`);setc('R'+r,'제조사업부',{fill:SUBF,font:{bold:true},al:{horizontal:'center'}});
-  setc('V'+r,n2?{formula:`SUM(V${start2}:V${r-1})`,result:t.payMf}:0,{num:NUM,fill:SUBF,font:{bold:true}});setc('W'+r,n2?{formula:`SUM(W${start2}:W${r-1})`,result:Math.round(t.payMf*0.1)}:0,{num:NUM,fill:SUBF,font:{bold:true}});setc('X'+r,null,{fill:SUBF});
-  r++;
-  // 합계
-  const totRow=r;const wf={fill:NAVY,font:{bold:true,color:{argb:'FFFFFFFF'}}};
-  ws.mergeCells(`A${r}:D${r}`);setc('A'+r,'매입 합계',Object.assign({al:{horizontal:'center'}},wf));
-  setc('E'+r,{formula:`E${ptRow}+E${mfRow}`,result:t.buy},Object.assign({num:NUM},wf));setc('F'+r,{formula:`F${ptRow}+F${mfRow}`,result:t.buyPtV+t.buyMfV},Object.assign({num:NUM},wf));setc('G'+r,null,wf);
-  ws.mergeCells(`H${r}:L${r}`);setc('H'+r,'매출 합  계',Object.assign({al:{horizontal:'center'}},wf));
-  const mParts=[domSubRow,osTotRow].filter(Boolean);
-  setc('M'+r,{formula:[...mParts.map(x=>'M'+x),'M'+mfRow].join('+'),result:t.sale},Object.assign({num:NUM},wf));
-  setc('N'+r,null,wf);
-  setc('O'+r,{formula:mParts.map(x=>'O'+x).join('+')||'0',result:t.mm},Object.assign({num:NUM},wf));
-  setc('P'+r,{formula:mParts.map(x=>'P'+x).join('+')||'0',result:t.mg},Object.assign({num:NUM},wf));setc('Q'+r,null,wf);
-  ws.mergeCells(`R${r}:U${r}`);setc('R'+r,'매입 합계',Object.assign({al:{horizontal:'center'}},wf));
-  setc('V'+r,{formula:`V${ptRow}+V${mfRow}`,result:t.pay},Object.assign({num:NUM},wf));setc('W'+r,{formula:`W${ptRow}+W${mfRow}`,result:Math.round(t.pay*0.1)},Object.assign({num:NUM},wf));setc('X'+r,null,wf);
-  r+=2;
-  // 하단 집계 (8월 양식 870~886행)
-  const L=(a,v,o)=>setc(a,v,Object.assign({fill:HEAD,font:{bold:true}},o||{}));
-  const V=(a,v,res)=>setc(a,res===undefined?v:{formula:v,result:res},{num:NUM});
-  const b0=r;
-  L('D'+r,'ERP 미입고처리');V('E'+r,t.unrecv);
-  L('L'+r,`${String(Y).slice(2)}년${M}월 가마감내역`);L('M'+r,'매입합계');V('O'+r,`E${totRow}`,t.buy);r++;
-  L('D'+r,'조정 후 매입');V('E'+r,`E${totRow}+E${b0}`,t.buyAdj);L('M'+r,'매출합계');V('O'+r,`M${totRow}`,t.sale);r++;
-  L('D'+r,'가마감 매입합계(이카운트)');V('E'+r,t.ecTotal==null?null:t.ecTotal);L('M'+r,'매입매출Gap');V('O'+r,`O${r-1}-O${r-2}`,t.gap);r++;
-  L('D'+r,'차이');V('E'+r,t.ecTotal==null?null:`E${r-1}-E${r-2}`,t.ecTotal==null?undefined:t.ecTotal-t.buyAdj);L('M'+r,'마진');L('O'+r,'담당자');V('P'+r,`O${totRow}`,t.mm);r++;
-  L('O'+r,'ERP');V('P'+r,`P${totRow}`,t.mg);r++;
-  L('O'+r,'차이금액');V('P'+r,`P${r-2}-P${r-1}`,t.mm-t.mg);r+=2;
-  L('M'+r,'구분');L('O'+r,'매출');L('P'+r,'마진');r++;
-  const kd=r;
-  L('M'+r,'국내');V('O'+r,t.saleDom-t.lgDomS);V('P'+r,t.mgDom-t.lgDomM);r++;
-  L('M'+r,'해외');V('O'+r,t.saleOs-t.lgOsS);V('P'+r,t.mgOs-t.lgOsM);r+=2;
-  L('L'+r,'LG 사급');L('N'+r,'매출');L('O'+r,'마진');r++;
-  L('D'+r,'직거래매입');V('E'+r,t.buyPt-t.buyLg);L('M'+r,'국내매출');V('N'+r,t.lgDomS);V('O'+r,t.lgDomM);r++;
-  L('D'+r,'사급매입');V('E'+r,t.buyLg);L('M'+r,'해외매출');V('N'+r,t.lgOsS);V('O'+r,t.lgOsM);r++;
-  L('D'+r,'제조매입');V('E'+r,`E${mfRow}`,t.buyMf);L('M'+r,'합계');V('N'+r,`N${r-2}+N${r-1}`,t.lgDomS+t.lgOsS);V('O'+r,`O${r-2}+O${r-1}`,t.lgDomM+t.lgOsM);r+=2;
-  // LG 마감 내역
-  L('K'+r,'LG 마감 내역 · 사급 납품 납품처');L('L'+r,'사급 납품 전표');L('M'+r,'수량');L('N'+r,'마감완료');L('O'+r,'마감대기');r++;
+  let r=r0+n1;
+  const ptRow=r;subLeft(r,'부품사업부',r0,r-1,BUY_PT,C.SUB2);blankM(r);r++;
+  // ── 블록 2: 제조사업부
+  const lb=srt(BUY_MF),sb=srt(SALE_MF);const n2=Math.max(lb.length,sb.length)+XL_BLANK;const r2=r;
+  for(let i=0;i<n2;i++){const row=r+i;if(lb[i])putBuy(row,lb[i]);else blankL(row);if(sb[i])putSale(row,sb[i]);else blankM(row);}
+  r+=n2;const mfRow=r;
+  subLeft(r,'제조사업부',r2,r-1,BUY_MF,C.SUB1);subSale(r,'제조',r2,r-1,SALE_MF,C.SUB1);r++;
+  // ── 합계 줄
+  const totRow=r;const bold={bold:true,size:11};
+  ws.mergeCells(`A${r}:D${r}`);setc('A'+r,'매입 합계',{fill:C.BUY,font:bold,al:ctr});['B','C','D'].forEach(c=>ws.getCell(c+r).border=bdFor(c));
+  setc('E'+r,F(`E${ptRow}+E${mfRow}`,t.buy),{num:NUM,fill:C.BUY,font:bold});setc('F'+r,F(`F${ptRow}+F${mfRow}`,t.buyPtV+t.buyMfV),{num:NUM,fill:C.BUY,font:bold});setc('G'+r,null,{fill:C.BUY});
+  ws.mergeCells(`H${r}:L${r}`);setc('H'+r,'매출 합  계',{fill:C.SALE2,font:bold,al:ctr});['I','J','K','L'].forEach(c=>ws.getCell(c+r).border=bdFor(c));
+  setc('M'+r,F(`M${domRow}+M${osTotRow}+M${mfRow}`,t.sale),{num:NUM,fill:C.SALE2,font:bold});setc('N'+r,null,{fill:C.SALE2});
+  setc('O'+r,F(`O${domRow}+O${osTotRow}`,t.mm),{num:NUM,fill:C.SALE2,font:bold});setc('P'+r,F(`P${domRow}+P${osTotRow}`,t.mg),{num:NUM,fill:C.SALE2,font:bold});setc('Q'+r,null,{fill:C.SALE2});
+  ws.mergeCells(`S${r}:V${r}`);setc('S'+r,'매입 합계',{fill:C.PAY,font:bold,al:ctr});['T','U','V'].forEach(c=>ws.getCell(c+r).border=bdFor(c));
+  setc('W'+r,F(`W${ptRow}+W${mfRow}`,t.pay),{num:NUM,fill:C.PAY,font:bold});setc('X'+r,F(`X${ptRow}+X${mfRow}`,Math.round(t.pay*0.1)),{num:NUM,fill:C.PAY,font:bold});setc('Y'+r,null,{fill:C.PAY});
+  ws.getRow(r).height=20;r+=2;
+
+  // ── 하단 집계: ① 가마감 대조(C~E) · ② 마진(K~Q) · ③ 매입 구분(U~W)
+  const T0=r;const ttl=(rng,v,fill)=>{ws.mergeCells(rng);const a=rng.split(':')[0];setc(a,v,{fill,font:{bold:true,size:11},al:ctr});
+    const cs=rng.split(':')[1].replace(/\d+/,'');let k=a.replace(/\d+/,'').charCodeAt(0);for(;k<=cs.charCodeAt(0);k++)ws.getCell(String.fromCharCode(k)+a.replace(/\D+/,'')).border=bdFor('');};
+  const lbl=(rng,v,fill)=>{const a=rng.split(':')[0];if(rng.includes(':')){ws.mergeCells(rng);ws.getCell(rng.split(':')[1]).border=bdFor('');}setc(a,v,{fill,font:{bold:true},al:{horizontal:'left',indent:1}});};
+  const val=(a,v,o)=>setc(a,v,Object.assign({num:NUM},o||{}));
+  // ①
+  ttl(`C${T0}:E${T0}`,`① ${String(Y).slice(2)}년 ${+M}월 가마감 대조`,C.BUY);
+  let q=T0+1;const rows1=[
+    ['매입 합계',F(`E${totRow}`,t.buy)],['ERP 미입고처리',t.unrecv||null],['조정 후 매입',null],['가마감 매입합계(이카운트)',t.ecTotal],
+    ['이카운트와 차이',null],['매출 합계',F(`M${totRow}`,t.sale)],['매입매출 GAP',null]];
+  const q0=q;rows1.forEach((x,i)=>{lbl(`C${q}:D${q}`,x[0],C.BUY2);
+    let v=x[1];if(i===2)v=F(`E${q0}+E${q0+1}`,t.buyAdj);if(i===4)v=t.ecTotal==null?null:F(`E${q0+3}-E${q0+2}`,t.ecTotal-t.buyAdj);if(i===6)v=F(`E${q0+5}-E${q0}`,t.gap);
+    val('E'+q,v,(i===1||i===3)?{fill:C.MG}:(i===6?{font:{bold:true}}:{}));q++;});
+  // ②
+  ttl(`K${T0}:Q${T0}`,'② 마진 (국내·해외 / LG사급 / 제조)',C.SALE);
+  const hr=T0+1;lbl(`K${hr}:L${hr}`,'구분',C.SALE2);['매출','ERP 마진','담당자 마진','차이','마진율'].forEach((h,i)=>setc(String.fromCharCode(77+i)+hr,h,{fill:C.SALE2,font:{bold:true},al:ctr}));
+  const mrow=[['국내 (LG사급 제외)',t.saleDom-t.lgDomS,t.mgDom-t.lgDomM,sumOf(SALE_DOM.filter(s=>s.supply_kind!=='LG사급'),MM)],
+    ['해외 (LG사급 제외)',t.saleOs-t.lgOsS,t.mgOs-t.lgOsM,sumOf(SALE_OS.filter(s=>s.supply_kind!=='LG사급'),MM)],
+    ['LG사급 국내',t.lgDomS,t.lgDomM,sumOf(SALE_DOM.filter(s=>s.supply_kind==='LG사급'),MM)],
+    ['LG사급 해외',t.lgOsS,t.lgOsM,sumOf(SALE_OS.filter(s=>s.supply_kind==='LG사급'),MM)]];
+  let p=hr+1;const p0=p;
+  mrow.forEach(x=>{lbl(`K${p}:L${p}`,x[0],C.SALE2);val('M'+p,x[1]);val('N'+p,x[2],{fill:C.MG});val('O'+p,x[3],{fill:C.MG});
+    val('P'+p,F(`O${p}-N${p}`,x[3]-x[2]));setc('Q'+p,F(`IF(M${p}=0,"",N${p}/M${p})`,x[1]?x[2]/x[1]:''),{num:'0.0%',al:{horizontal:'right'}});p++;});
+  lbl(`K${p}:L${p}`,'합계 (제조 제외)',C.SUB1);
+  const ms=[0,1,2].map(j=>mrow.reduce((a,x)=>a+x[j+1],0));const mres={M:ms[0],N:ms[1],O:ms[2],P:ms[2]-ms[1]};
+  ['M','N','O','P'].forEach(c=>val(c+p,F(`SUM(${c}${p0}:${c}${p-1})`,mres[c]),{fill:C.SUB1,font:{bold:true}}));
+  setc('Q'+p,F(`IF(M${p}=0,"",N${p}/M${p})`,ms[0]?ms[1]/ms[0]:''),{num:'0.0%',fill:C.SUB1,font:{bold:true},al:{horizontal:'right'}});p++;
+  lbl(`K${p}:L${p}`,'제조 (매출)',C.SALE2);val('M'+p,F(`M${mfRow}`,t.saleMf));['N','O','P','Q'].forEach(c=>setc(c+p,null));p++;
+  // ③
+  ttl(`U${T0}:W${T0}`,'③ 매입 구분',C.PAY);
+  let u=T0+1;const u0=u;
+  [['직거래매입',t.buyPt-t.buyLg],['사급매입',t.buyLg],['제조매입',F(`E${mfRow}`,t.buyMf)],['매입 합계',null],['실결제 매입 합계',F(`W${totRow}`,t.pay)],['실결제 − 매입',null]]
+    .forEach((x,i)=>{lbl(`U${u}:V${u}`,x[0],i===3?C.SUB1:C.PAY2);let v=x[1];
+      if(i===3)v=F(`SUM(W${u0}:W${u0+2})`,t.buy);if(i===5)v=F(`W${u0+4}-W${u0+3}`,t.pay-t.buy);
+      val('W'+u,v,i===3?{fill:C.SUB1,font:{bold:true}}:{});u++;});
+  // LG 마감 내역 (② 아래)
+  let g=Math.max(q,p,u)+1;
+  ttl(`K${g}:P${g}`,'LG 마감 내역 · 사급 납품(수량만) 납품처별',C.SALE);g++;
+  lbl(`K${g}:L${g}`,'납품처',C.SALE2);['전표','수량','마감완료','마감대기'].forEach((h,i)=>setc(String.fromCharCode(77+i)+g,h,{fill:C.SALE2,font:{bold:true},al:ctr}));g++;
   const by={};DELIV.forEach(s=>{const k=s.partner_name||'-';const x=by[k]||(by[k]={n:0,qty:0,done:0,wait:0});x.n++;x.qty+=(FIRST[s.id]||{}).qty||0;if(s.close_status==='마감완료')x.done++;else x.wait++;});
-  Object.keys(by).forEach(k=>{setc('K'+r,k);V('L'+r,by[k].n);V('M'+r,by[k].qty);V('N'+r,by[k].done);V('O'+r,by[k].wait);r++;});
-  if(!Object.keys(by).length){setc('K'+r,'이 기간 사급 납품 없음');r++;}
+  const ks=Object.keys(by);
+  if(!ks.length){ws.mergeCells(`K${g}:P${g}`);setc('K'+g,'이 기간 사급 납품 없음',{al:ctr});g++;}
+  ks.forEach(k=>{ws.mergeCells(`K${g}:L${g}`);setc('K'+g,k);ws.getCell('L'+g).border=bdFor('');val('M'+g,by[k].n);val('N'+g,by[k].qty);val('O'+g,by[k].done);val('P'+g,by[k].wait,by[k].wait?{font:{color:{argb:'FFC00000'}}}:{});g++;});
   ws.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9};
 
-  // 시트2: 일자별 GAP
-  const w2=wb.addWorksheet('일자별 매입매출 GAP');
+  // ── 시트2: 일자별 GAP
+  const w2=wb.addWorksheet('일자별 매입매출 GAP',{views:[{state:'frozen',ySplit:3,showGridLines:false}]});
   [12,6,16,16,16,17,17,17,15,9].forEach((w,i)=>w2.getColumn(i+1).width=w);
-  w2.mergeCells('A1:J1');const c1=w2.getCell('A1');c1.value=`${Y}년 ${M}월 일자별 매입·매출 GAP (기준일 ${document.getElementById('toSel').value})`;c1.font={name:'맑은 고딕',size:14,bold:true};c1.alignment={horizontal:'center'};
+  w2.mergeCells('A1:J1');const c1=w2.getCell('A1');c1.value=`${Y}년 ${M}월 일자별 매입·매출 GAP (기준일 ${document.getElementById('toSel').value})`;
+  c1.font={name:FONT,size:16,bold:true};c1.alignment=ctr;w2.getRow(1).height=28;
+  const bd={top:N,bottom:N,left:N,right:N};
   const hdr=['일자','요일','매입','매출','GAP(매출-매입)','누계 매입','누계 매출','누계 GAP','ERP 마진','마진율'];
-  hdr.forEach((v,i)=>{const c=w2.getCell(3,i+1);c.value=v;c.font={name:'맑은 고딕',size:10,bold:true};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:HEAD}};c.alignment={horizontal:'center'};c.border=bd;});
-  w2.views=[{state:'frozen',ySplit:3}];
-  const rows=dayRows();
-  rows.forEach((d,i)=>{const rr=4+i;
-    const vals=[d.date,d.dow,Math.round(d.buy),Math.round(d.sale),{formula:`D${rr}-C${rr}`,result:Math.round(d.gap)},
-      {formula:i?`F${rr-1}+C${rr}`:`C${rr}`,result:Math.round(d.cbuy)},{formula:i?`G${rr-1}+D${rr}`:`D${rr}`,result:Math.round(d.csale)},{formula:`G${rr}-F${rr}`,result:Math.round(d.cgap)},
-      Math.round(d.margin),{formula:`IF(D${rr}=0,"",I${rr}/D${rr})`,result:d.sale?d.margin/d.sale:''}];
-    vals.forEach((v,j)=>{const c=w2.getCell(rr,j+1);c.value=v;c.font={name:'맑은 고딕',size:10,color:(d.dow==='일'?{argb:'FFC8001E'}:(d.dow==='토'?{argb:'FF1A56DB'}:undefined))};c.border=bd;
-      if(j>=2&&j<=8)c.numFmt=NUM;if(j===9)c.numFmt='0.0%';if(j<2)c.alignment={horizontal:'center'};});
+  const hfill=[C.SUB2,C.SUB2,C.BUY,C.SALE,C.SUB1,C.BUY,C.SALE,C.SUB1,C.MG,C.MG];
+  hdr.forEach((v,i)=>{const c=w2.getCell(3,i+1);c.value=v;c.font={name:FONT,size:10,bold:true};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:hfill[i]}};c.alignment=ctr;c.border=bd;});
+  const drows=dayRows();
+  drows.forEach((d,i)=>{const rr=4+i;
+    const vals=[d.date,d.dow,Math.round(d.buy),Math.round(d.sale),F(`D${rr}-C${rr}`,Math.round(d.gap)),
+      F(i?`F${rr-1}+C${rr}`:`C${rr}`,Math.round(d.cbuy)),F(i?`G${rr-1}+D${rr}`:`D${rr}`,Math.round(d.csale)),F(`G${rr}-F${rr}`,Math.round(d.cgap)),
+      Math.round(d.margin),F(`IF(D${rr}=0,"",I${rr}/D${rr})`,d.sale?d.margin/d.sale:'')];
+    vals.forEach((v,j)=>{const c=w2.getCell(rr,j+1);c.value=v;c.border=bd;
+      c.font={name:FONT,size:10,color:d.dow==='일'?{argb:'FFC00000'}:(d.dow==='토'?{argb:'FF1F4E9E'}:undefined)};
+      if(j>=2&&j<=8)c.numFmt=NUM;if(j===9)c.numFmt='0.0%';if(j<2)c.alignment=ctr;});
   });
-  const tr=4+rows.length;const last=tr-1;
-  [['A','월 합계'],['C',{formula:`SUM(C4:C${last})`,result:Math.round(t.buy)}],['D',{formula:`SUM(D4:D${last})`,result:Math.round(DAYS.reduce((a,d)=>a+d.sale,0))}],
-   ['E',{formula:`D${tr}-C${tr}`,result:0}],['I',{formula:`SUM(I4:I${last})`,result:Math.round(DAYS.reduce((a,d)=>a+d.margin,0))}],['J',{formula:`IF(D${tr}=0,"",I${tr}/D${tr})`,result:''}]]
-    .forEach(([c,v])=>{const cell=w2.getCell(c+tr);cell.value=v;});
-  for(let j=1;j<=10;j++){const c=w2.getCell(tr,j);c.font={name:'맑은 고딕',size:10,bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};c.border=bd;if(j>=3&&j<=9)c.numFmt=NUM;if(j===10)c.numFmt='0.0%';}
-  w2.mergeCells(`A${tr}:B${tr}`);w2.getCell('A'+tr).alignment={horizontal:'center'};
+  const tr=4+drows.length,last=tr-1;
+  w2.mergeCells(`A${tr}:B${tr}`);
+  const dB=Math.round(DAYS.reduce((a,d)=>a+d.buy,0)),dS=Math.round(DAYS.reduce((a,d)=>a+d.sale,0)),dM=Math.round(DAYS.reduce((a,d)=>a+d.margin,0));
+  [['A','월 합계'],['C',F(`SUM(C4:C${last})`,dB)],['D',F(`SUM(D4:D${last})`,dS)],['E',F(`D${tr}-C${tr}`,dS-dB)],['I',F(`SUM(I4:I${last})`,dM)],['J',F(`IF(D${tr}=0,"",I${tr}/D${tr})`,dS?dM/dS:'')]]
+    .forEach(([c,v])=>{w2.getCell(c+tr).value=v;});
+  for(let j=1;j<=10;j++){const c=w2.getCell(tr,j);c.font={name:FONT,size:10,bold:true};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:C.SUB1}};c.border=bd;
+    if(j>=3&&j<=9)c.numFmt=NUM;if(j===10)c.numFmt='0.0%';}
+  w2.getCell('A'+tr).alignment=ctr;
   w2.pageSetup={orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:1,paperSize:9};
 
   const buf=await wb.xlsx.writeBuffer();
