@@ -3267,8 +3267,12 @@ function dvStageCell(s){
 function dvProjList(){
   const g=document.getElementById('dvGrp').value, ps=document.getElementById('dvPst').value, kw=document.getElementById('dvMsKw').value.trim().toLowerCase();
   return dvP.filter(p=>(!g||(p.grp||'신규개발')===g)&&(!ps||dvProjStatus(p)===ps)&&(!kw||kwHit([p.vendor,p.maker,p.product,p.part_no,p.summary,p.remark].join(' '),kw)))
-    .sort(dvMsSort);
+    .sort(dvMsSeqSort?((a,b)=>String(a.grp||'신규개발').localeCompare(String(b.grp||'신규개발'),'ko')||((a.seq||0)-(b.seq||0))*dvMsSeqSort||a.id-b.id):dvMsSort);
 }
+// 2026-11-05: No 머리 클릭 — 번호 오름차순 → 내림차순 → 기본(메이커 순). 번호는 구분별로 등록일 순 부여(DB 트리거)
+let dvMsSeqSort=0;
+function dvMsSeqToggle(){ dvMsSeqSort=dvMsSeqSort===1?-1:dvMsSeqSort===-1?0:1; renderDvMaster(); }
+function dvMsSeqTh(cls){ return `<th class="${cls?cls+' ':''}sortable" onclick="dvMsSeqToggle()" title="누를 때마다 번호 오름차순 → 내림차순 → 메이커 순">No<span class="sort-icon">${dvMsSeqSort===1?'↑':dvMsSeqSort===-1?'↓':''}</span></th>`; }
 // 2026-11-05: 부품개발 마스터 정렬 — 구분 → 메이커/거래처 → 제품군 → 내용 순(가나다·ABC, 대소문자 무시)
 // 같은 메이커·거래처 건은 등록 시점(seq)과 무관하게 항상 연달아 묶여 보이게 함
 function dvMsSort(a,b){
@@ -3307,7 +3311,7 @@ function dvMsTask(p){
 function renderDvMasterGantt(){
   const list=dvProjList(), ts=list.map(dvMsTask), R=tkRange(ts.filter(t=>t.start_date||t.target_date),null);
   const sc={day:'일별',week:'주별',month:'월별'}[tkScale];
-  document.getElementById('dvMsHead').innerHTML=`<tr><th>No</th><th onclick="tkScaleOpen(event)" style="cursor:pointer;" title="눌러서 일정 보기 단위(일별·주별·월별) 선택">메이커 / 거래처 <span style="font-weight:400;font-size:11px;">[${sc} ▾]</span></th><th>제품군</th><th>내용</th><th>단계</th><th>등록일</th><th>완료 목표</th><th>완료일</th><th>최근 활동</th><th class="tk-tl-h" style="padding:0;">${tkHeadHtml(R,null)}</th></tr>`;
+  document.getElementById('dvMsHead').innerHTML=`<tr>${dvMsSeqTh('')}<th onclick="tkScaleOpen(event)" style="cursor:pointer;" title="눌러서 일정 보기 단위(일별·주별·월별) 선택">메이커 / 거래처 <span style="font-weight:400;font-size:11px;">[${sc} ▾]</span></th><th>제품군</th><th>내용</th><th>단계</th><th>등록일</th><th>완료 목표</th><th>완료일</th><th>최근 활동</th><th class="tk-tl-h" style="padding:0;">${tkHeadHtml(R,null)}</th></tr>`;
   let h='', prev=null; const dt=x=>esc(x?x.slice(2).replace(/-/g,'.'):'');
   list.forEach((p,ix)=>{
     const g=p.grp||'신규개발', t=ts[ix], last=dvProjLast(p);
@@ -3330,7 +3334,7 @@ function renderDvMasterGantt(){
 function renderDvMaster(){
   { const vs=document.getElementById('dvMsView'); if(vs&&vs.value!==dvMsView) vs.value=dvMsView; }
   if(dvMsView==='gantt') return renderDvMasterGantt();
-  document.getElementById('dvMsHead').innerHTML='<tr><th class="fx">No</th><th class="fx fx2">메이커 / 거래처</th><th>제품군</th><th>PART NO</th><th>공급구분</th><th>내용</th><th>연간매출</th><th>등록일</th><th>완료 목표</th><th>완료일</th>'
+  document.getElementById('dvMsHead').innerHTML='<tr>'+dvMsSeqTh('fx')+'<th class="fx fx2">메이커 / 거래처</th><th>제품군</th><th>PART NO</th><th>공급구분</th><th>내용</th><th>연간매출</th><th>등록일</th><th>완료 목표</th><th>완료일</th>'
     +DV_STAGES.map((s,ix)=>`<th>${DV_NUM[ix]}<br>${s}</th>`).join('')+'<th>기타</th><th>최근 활동</th><th>비고</th><th>처리</th></tr>';
   const list=dvProjList(); let h='', prev=null; const dt=x=>esc(/^\d{4}-\d\d-\d\d$/.test(x||'')?x.slice(2).replace(/-/g,'.'):(x||''));
   list.forEach((p,ix)=>{
