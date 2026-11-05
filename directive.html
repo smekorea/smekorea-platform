@@ -1213,7 +1213,10 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <span class="fb-label">기간</span>
       <div class="ms-wrap" id="plSelWrap"><button type="button" class="ms-btn" id="plSelBtn" onclick="plToggleSel(event)" title="월이나 주를 여러 개 골라 함께 볼 수 있습니다. 고른 뒤 조회를 누르세요">전체 기간</button><div class="ms-dd" id="plSelDD" onclick="event.stopPropagation()"></div></div>
       <span class="fb-label" style="margin-left:6px;">기록</span><select id="plRec" title="진척현황에 기록했는지"><option value="">전체</option><option value="no">미기록</option><option value="yes">기록됨</option></select>
+      <span class="fb-label" style="margin-left:6px;">담당</span><select id="plWhoF" title="담당자로 거르기"><option value="">전체 담당</option></select>
+      <input type="text" id="plKw" placeholder="내용 검색" style="width:140px;" onkeydown="if(event.key==='Enter'){plCloseSel();renderDvPlan();}">
       <button class="btn btn-primary" onclick="plCloseSel();renderDvPlan()">🔍 조회</button>
+      <button class="btn btn-outline" onclick="plResetF()">초기화</button>
       <span class="cnt-badge" id="dvPlanCnt"></span>
     </div>
     <div class="qk-box dv-edit" id="dvPlanAdd" style="display:flex;gap:6px;align-items:center;margin-bottom:10px;padding:8px 10px;border:1px solid var(--point);border-left:4px solid var(--point);background:var(--point-bg);">
@@ -1221,10 +1224,11 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <input type="date" id="dvPlDate" title="계획 일자 — 이 날짜가 든 주의 계획으로 들어갑니다">
       <input type="text" id="dvPlVendor" list="dvVendorList" placeholder="업체명 (없으면 새로 입력)" title="목록에서 고르거나, 목록에 없는 업체는 이름을 그대로 입력하면 새로 등록됩니다" style="width:180px;">
       <input type="text" id="dvPlKind" list="dvKindList" placeholder="업무구분" style="width:110px;"><datalist id="dvKindList"></datalist>
+      <input type="text" id="dvPlWho" list="plWhoList" placeholder="담당" title="담당자 — 비우면 본인" style="width:90px;"><datalist id="plWhoList"></datalist>
       <input type="text" id="dvPlText" placeholder="업무내용 입력 후 Enter" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter')dvAddPlan()">
       <button class="btn btn-primary" onclick="dvAddPlan()">등록</button>
     </div>
-    <div class="tbl-wrap"><table class="dv-table" id="dvPlanTable"><thead><tr><th class="sortable" data-sk="date" onclick="tsClick('dvPlanTable','date')">일자<span class="sort-icon"></span></th><th class="sortable" data-sk="vendor" onclick="tsClick('dvPlanTable','vendor')">업체<span class="sort-icon"></span></th><th class="sortable" data-sk="kind" onclick="tsClick('dvPlanTable','kind')">업무구분<span class="sort-icon"></span></th><th class="sortable" data-sk="content" onclick="tsClick('dvPlanTable','content')">업무내용<span class="sort-icon"></span></th><th class="sortable" data-sk="result" onclick="tsClick('dvPlanTable','result')">결과 (세부 진척현황에 기록된 내용)<span class="sort-icon"></span></th><th>처리</th></tr></thead><tbody id="dvPlanBody"></tbody></table></div>
+    <div class="tbl-wrap"><table class="dv-table" id="dvPlanTable"><thead><tr><th class="sortable" data-sk="date" onclick="tsClick('dvPlanTable','date')">일자<span class="sort-icon"></span></th><th class="sortable" data-sk="vendor" onclick="tsClick('dvPlanTable','vendor')">업체<span class="sort-icon"></span></th><th class="sortable" data-sk="kind" onclick="tsClick('dvPlanTable','kind')">업무구분<span class="sort-icon"></span></th><th class="sortable" data-sk="who" onclick="tsClick('dvPlanTable','who')">담당<span class="sort-icon"></span></th><th class="sortable" data-sk="content" onclick="tsClick('dvPlanTable','content')">업무내용<span class="sort-icon"></span></th><th class="sortable" data-sk="result" onclick="tsClick('dvPlanTable','result')">결과 (세부 진척현황에 기록된 내용)<span class="sort-icon"></span></th><th>처리</th></tr></thead><tbody id="dvPlanBody"></tbody></table></div>
   </div>
 </div>
 <!-- 금주계획 수정 (v3.24) -->
@@ -1236,6 +1240,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <div class="form-row"><label class="form-label">업체<span>*</span></label><input class="form-input" id="plFmVendor" list="dvVendorList" placeholder="업체명 (없으면 새로 입력)"></div>
       <div class="form-row"><label class="form-label">업무구분</label><input class="form-input" id="plFmKind" list="dvKindList"></div>
     </div>
+    <div class="form-row"><label class="form-label">담당</label><input class="form-input" id="plFmWho" list="plWhoList" placeholder="담당자" style="max-width:200px;"></div>
     <div class="form-row"><label class="form-label">업무내용<span>*</span></label><textarea class="form-textarea" id="plFmText" style="min-height:110px;"></textarea></div>
   </div>
   <div class="modal-ft"><button class="btn btn-outline" onclick="plClose()">취소</button><button class="btn btn-primary" id="plFmSave" onclick="plSave()">저장</button></div>
@@ -1369,6 +1374,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.71 (2026-11-05) — 금주계획 담당(dev_plans.assignee): 계획 등록 줄(비우면 본인)·수정 창·표 「담당」 열·브리핑창, 조회줄에 담당 선택·내용 검색·초기화 (열 너비 키 v3)
    directive.html v3.70 (2026-11-05) — 거래처·메이커 자동완성(vmFillList/rpFillVendors/dvVendors/dvFillFilters)이 메이커관리(makers)만 보던 것을 dvMakerList()로 통합해 동일메이커관리(maker_alias) 표준명도 포함
    directive.html v3.69 (2026-11-02) — 추진과제 마스터 세부과제 줄에 ↑↓(같은 분야 안 순서 변경·저장, 세부진척현황 순서 같이) — 과제 수정 권한자·분야 담당, 필터·정렬 중 숨김 / v3.68 분야 줄 ↑↓ 삭제 / 처리 칸 폭 넓힘
    directive.html v3.58 (2026-10-23) — 일정 막대 두께 20% 키움(14→17px), 완료된 세부과제·분야는 막대 전체 초록(시작 → 완료일), 초록을 밝게(#4CCB6E)
@@ -3496,34 +3502,48 @@ document.addEventListener('click',plCloseSel);
 function plInSel(p){ if(!plSel.length) return true; const k=plKey(p); return plSel.indexOf(k.m)>=0||plSel.indexOf(k.m+'-'+k.w)>=0; }
 // 저장한 날짜가 고른 기간 밖이면 그 주를 함께 고른다
 function plShow(date){ const w=rpWeekOf(date), m=w.y+'-'+p2(w.m); if(plSel.length&&plSel.indexOf(m)<0&&plSel.indexOf(m+'-'+w.w)<0){ plSel.push(m+'-'+w.w); plSel.sort().reverse(); plRenderSel(); } }
+// v3.71: 금주계획 담당(dev_plans.assignee) — 담당 선택 목록·담당자 자동완성 채우기
+function plFillWho(){
+  const sel=document.getElementById('plWhoF'), keep=sel.value, names=[];
+  dvPlans.forEach(p=>{ const n=(p.assignee||'').trim(); if(n&&names.indexOf(n)<0) names.push(n); });
+  names.sort((a,b)=>a.localeCompare(b,'ko'));
+  sel.innerHTML='<option value="">전체 담당</option><option value="-">(담당 없음)</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if(keep&&(keep==='-'||names.indexOf(keep)>=0)) sel.value=keep;
+  const d=dvNewDept(), all=dvCur()==='전체';
+  document.getElementById('plWhoList').innerHTML=(emps||[]).filter(e=>e.entity===HQ&&(all||e.dept===d)).map(e=>`<option value="${esc(e.name)}">`).join('');
+}
+function plResetF(){ ['plRec','plWhoF','plKw'].forEach(id=>{document.getElementById(id).value='';}); plCloseSel(); renderDvPlan(); }
 function renderDvPlan(){
   const ed=dvCanEdit();
-  const rec=document.getElementById('plRec').value;
-  const list=dvPlans.filter(p=>p.week_date&&plInSel(p)&&(!rec||(rec==='yes')===!!p.log_id)).sort((a,b)=>{ const x=dvWeekStart(a.week_date), y=dvWeekStart(b.week_date); return x<y?1:x>y?-1:(a.week_date<b.week_date?-1:a.week_date>b.week_date?1:a.id-b.id); });
+  plFillWho();
+  const rec=document.getElementById('plRec').value, who=document.getElementById('plWhoF').value, kw=document.getElementById('plKw').value.trim();
+  const list=dvPlans.filter(p=>p.week_date&&plInSel(p)&&(!rec||(rec==='yes')===!!p.log_id)
+      &&(!who||(who==='-'?!(p.assignee||'').trim():(p.assignee||'').trim()===who))
+      &&(!kw||kwHit([p.vendor,p.kind,p.content,p.assignee].join(' '),kw))).sort((a,b)=>{ const x=dvWeekStart(a.week_date), y=dvWeekStart(b.week_date); return x<y?1:x>y?-1:(a.week_date<b.week_date?-1:a.week_date>b.week_date?1:a.id-b.id); });
   const grp={}; list.forEach(p=>{const k=dvWeekStart(p.week_date);(grp[k]=grp[k]||[]).push(p);});
   const lgOf=p=>p.log_id?dvLogs.find(l=>l.id===p.log_id):null;
-  const rows=tsSort(list,'dvPlanTable',{date:p=>p.week_date,vendor:p=>p.vendor,kind:p=>p.kind,content:p=>p.content,result:p=>{const l=lgOf(p);return l?(l.log_date||''):'';}});
+  const rows=tsSort(list,'dvPlanTable',{date:p=>p.week_date,vendor:p=>p.vendor,kind:p=>p.kind,who:p=>p.assignee||'',content:p=>p.content,result:p=>{const l=lgOf(p);return l?(l.log_date||''):'';}});
   const wkOn=tsGroupOn('dvPlanTable','date');
   let h='', prev=null;
   rows.forEach(p=>{
     const wk=dvWeekStart(p.week_date);
     if(wkOn&&wk!==prev){ prev=wk; const k=plKey(p), g=grp[wk];
-      h+=`<tr class="rp-wk"><td colspan="6"><span>${k.y}년 ${k.mo}월 ${k.w}주차 (${rpRangeOf(k.y,k.mo,k.w)}) · 계획 ${g.length} · 기록됨 ${g.filter(x=>x.log_id).length}</span></td></tr>`; }
+      h+=`<tr class="rp-wk"><td colspan="7"><span>${k.y}년 ${k.mo}월 ${k.w}주차 (${rpRangeOf(k.y,k.mo,k.w)}) · 계획 ${g.length} · 기록됨 ${g.filter(x=>x.log_id).length}</span></td></tr>`; }
     const lg=p.log_id?dvLogs.find(l=>l.id===p.log_id):null;
-    h+=`<tr><td class="dv-d">${esc(rpMd(p.week_date))}</td><td class="dv-v" onclick="dvGoVendor('${esc(p.vendor||'').replace(/'/g,"\\'")}')">${esc(p.vendor||'')}</td><td>${esc(p.kind||'')}</td><td class="dv-c" onclick="bfPlan(${p.id})" title="눌러서 내용 보기">${esc(p.content||'')}</td>
+    h+=`<tr><td class="dv-d">${esc(rpMd(p.week_date))}</td><td class="dv-v" onclick="dvGoVendor('${esc(p.vendor||'').replace(/'/g,"\\'")}')">${esc(p.vendor||'')}</td><td>${esc(p.kind||'')}</td><td>${esc(p.assignee||'')}</td><td class="dv-c" onclick="bfPlan(${p.id})" title="눌러서 내용 보기">${esc(p.content||'')}</td>
       <td class="dv-c" onclick="bfPlan(${p.id})" title="눌러서 내용 보기">${lg?`<b style="color:var(--point);">${esc(lg.log_date||'')}</b> ${esc(lg.content||'')}`:'<span style="color:#9aa1ab;">아직 기록 없음</span>'}</td>
       <td>${ed?`<button class="btn btn-outline mt-btn" onclick="plOpen(${p.id})">수정</button>`+(lg?'':`<button class="btn btn-outline mt-btn" onclick="dvPlanToLog(${p.id})" title="실행한 내용을 세부 진척현황에 기록합니다">진척으로 기록</button>`)+`<button class="btn btn-red mt-btn" onclick="dvDelPlan(${p.id})">삭제</button>`:''}</td></tr>`;
   });
-  document.getElementById('dvPlanBody').innerHTML=h||'<tr><td colspan="6" class="mt-pick">해당하는 계획이 없습니다. 기간을 바꿔 보세요.</td></tr>';
+  document.getElementById('dvPlanBody').innerHTML=h||'<tr><td colspan="7" class="mt-pick">해당하는 계획이 없습니다. 기간·담당·검색어를 바꿔 보세요.</td></tr>';
   document.getElementById('dvPlanCnt').textContent='계획 '+list.length+'건 · 기록됨 '+list.filter(p=>p.log_id).length+'건';
-  applyResize('dvPlanTable','report_dvplan_col_v2',[70,150,100,440,480,230]); tsIcons('dvPlanTable');
+  applyResize('dvPlanTable','report_dvplan_col_v3',[70,150,100,80,440,480,230]); tsIcons('dvPlanTable');
 }
 /* 계획 수정 */
 function plOpen(id){
   const p=dvPlans.find(x=>x.id===id); if(!p) return;
   if(!dvCanEdit()){showToast('계획 수정은 개발기획팀·담당 부서와 사장님·상무님만 할 수 있습니다','err');return;}
   plEdit=p; const g=k=>document.getElementById(k);
-  g('plFmDate').value=p.week_date||''; g('plFmVendor').value=p.vendor||''; g('plFmKind').value=p.kind||''; g('plFmText').value=p.content||''; plFmHint();
+  g('plFmDate').value=p.week_date||''; g('plFmVendor').value=p.vendor||''; g('plFmKind').value=p.kind||''; g('plFmWho').value=p.assignee||''; g('plFmText').value=p.content||''; plFmHint();
   g('plOv').classList.add('open'); g('plFmText').focus();
 }
 function plClose(){document.getElementById('plOv').classList.remove('open');plEdit=null;}
@@ -3536,7 +3556,7 @@ async function plSave(){
   if(vendor!==(plEdit.vendor||'')&&!dvKnownVendor(vendor)&&!confirm('「'+vendor+'」은(는) 목록에 없는 업체입니다.\n새 업체로 등록할까요?')) return;
   const btn=document.getElementById('plFmSave'); btn.disabled=true;
   try{
-    await sbPatch('dev_plans',plEdit.id,{week_date:date,vendor:vendor,kind:g('plFmKind')||null,content:text,updated_at:new Date().toISOString()});
+    await sbPatch('dev_plans',plEdit.id,{week_date:date,vendor:vendor,kind:g('plFmKind')||null,assignee:g('plFmWho')||null,content:text,updated_at:new Date().toISOString()});
     showToast('저장되었습니다','ok'); plClose(); await dvLoad(); plShow(date); renderCur();
   }catch(e){showToast('오류: '+e.message,'err');}
   btn.disabled=false;
@@ -3548,7 +3568,7 @@ async function dvAddPlan(){
   // 목록에 없는 이름이면 오타가 아닌지 한 번 묻고 새 업체로 받는다
   if(!dvKnownVendor(vendor)&&!confirm('「'+vendor+'」은(는) 목록에 없는 업체입니다.\n새 업체로 등록할까요?')) return;
   try{
-    await sbPost('dev_plans',{week_date:date,vendor:vendor,kind:document.getElementById('dvPlKind').value.trim()||null,content:text,owner_dept:dvNewDept(),employee_id:me.id,emp_name:me.name});
+    await sbPost('dev_plans',{week_date:date,vendor:vendor,kind:document.getElementById('dvPlKind').value.trim()||null,assignee:document.getElementById('dvPlWho').value.trim()||me.name,content:text,owner_dept:dvNewDept(),employee_id:me.id,emp_name:me.name});
     document.getElementById('dvPlText').value=''; showToast('등록되었습니다','ok');
     await dvLoad(); plShow(date); renderDvPlan(); document.getElementById('dvPlVendor').focus();
   }catch(e){showToast('오류: '+e.message,'err');}
@@ -4987,7 +5007,7 @@ function bfPlan(id){
   const w=p.week_date?rpWeekOf(p.week_date):null, lg=p.log_id?bfFindLog(p.log_id):null;
   bfShow({head:w?`${w.y}년 ${w.m}월 ${w.w}주차`:'금주계획',sub:w?w.range:'',pills:['금주계획',lg?'기록됨':'미기록'],
     title:p.content,
-    cells:[['일자',esc(bfDay(p.week_date))],['구분',esc(p.kind||'')],['거래처',esc(p.vendor||'')],['담당부서',esc(p.owner_dept||'')],['작성자',esc(p.emp_name||'')],['상태',esc(p.status||'')]],
+    cells:[['일자',esc(bfDay(p.week_date))],['구분',esc(p.kind||'')],['거래처',esc(p.vendor||'')],['담당부서',esc(p.owner_dept||'')],['담당',esc(p.assignee||'')],['작성자',esc(p.emp_name||'')],['상태',esc(p.status||'')]],
     boxes:[['기록된 진척 활동',lg?`<div class="bf-log"><b>${esc(rpMd(lg.log_date))}</b>${esc(lg.content||'')}</div>`:'<div class="bf-content" style="color:#9ca3af;font-size:13px;">아직 세부 진척현황에 기록되지 않았습니다.</div>']],
     who:p.emp_name?'작성 · '+esc(p.emp_name):'',
     edit:dvCanEdit()?()=>plOpen(p.id):null});
