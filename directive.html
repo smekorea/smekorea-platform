@@ -2871,7 +2871,7 @@ async function dvRefresh(){ await dvLoad(); renderCur(); }
 // v3.19: 프로젝트·마스터의 묶음 이름 = 메이커, 메이커가 없으면 거래처(과제). 예전 자료(메이커 칸이 빈 건)는 거래처 칸의 이름이 그대로 묶음 이름이 된다
 function dvG(x){return (x&&(x.maker||x.vendor||(x.kind==='추진과제'?x.program:'')))||'';}   // v3.49: 추진과제 세부과제는 분야로 묶음
 function dvUsedVendors(){const s=[];dvI.forEach(i=>{const n=dvG(i);if(n&&s.indexOf(n)<0)s.push(n);});dvP.forEach(p=>{const n=dvG(p);if(n&&s.indexOf(n)<0)s.push(n);});dvPlans.forEach(p=>{if(p.vendor&&s.indexOf(p.vendor)<0)s.push(p.vendor);});return s.sort((a,b)=>a.localeCompare(b));}
-function dvVendors(){const used=dvUsedVendors(), keys={};used.forEach(v=>{dvKeys(v).forEach(k=>{keys[k]=1;});});return used.concat(dvMakers.concat(dvPartners).filter(n=>!dvKeys(n).some(k=>keys[k])));}
+function dvVendors(){const used=dvUsedVendors(), keys={};used.forEach(v=>{dvKeys(v).forEach(k=>{keys[k]=1;});});return used.concat(dvMakerList().concat(dvPartners).filter(n=>!dvKeys(n).some(k=>keys[k])));}
 function dvKnownVendor(v){return dvVendors().some(x=>dvSame(x,v));}
 function dvFillFilters(){
   document.getElementById('dvVendorList').innerHTML=dvVendors().map(v=>`<option value="${esc(v)}">`).join('');
@@ -2879,7 +2879,7 @@ function dvFillFilters(){
   { const uniq=a=>{const seen={},o=[];a.forEach(n=>{n=(n||'').trim();const k=n&&dvKeys(n)[0];if(n&&!seen[k]){seen[k]=1;o.push(n);}});return o;};
     const uv=uniq(dvI.map(i=>i.vendor)).sort((a,b)=>a.localeCompare(b,'ko')), um=uniq(dvI.map(i=>i.maker)).sort((a,b)=>a.localeCompare(b,'ko'));
     document.getElementById('dvVOnlyList').innerHTML=uniq(uv.concat(dvPartners)).map(v=>`<option value="${esc(v)}">`).join('');
-    document.getElementById('dvMOnlyList').innerHTML=uniq(um.concat(dvMakers)).map(v=>`<option value="${esc(v)}">`).join(''); }
+    document.getElementById('dvMOnlyList').innerHTML=uniq(um.concat(dvMakerList())).map(v=>`<option value="${esc(v)}">`).join(''); }
   { const seen={}, names=[]; dvI.forEach(i=>{const n=(i.title||'').trim(); if(n&&!seen[n]){seen[n]=1;names.push(n);}}); names.sort((x,y)=>x.localeCompare(y,'ko')); document.getElementById('dvItemList').innerHTML=names.map(n=>`<option value="${esc(n)}">`).join(''); }
   const kinds=[];dvPlans.forEach(p=>{if(p.kind&&kinds.indexOf(p.kind)<0)kinds.push(p.kind);});
   ['신규개발','신규거래','견적제출','단가협의','납기협의','업체내방','회의참석','4M','HSMS'].forEach(k=>{if(kinds.indexOf(k)<0)kinds.push(k);});
@@ -4485,9 +4485,16 @@ async function cpExcel(){
    ① 프로젝트 활동(세부 진척현황) ② 주간업무 줄 ③ 지시사항(연결 프로젝트 또는 제목·내용에 이름) ④ 연동 안 된 업무일지(본인·공유 건)
    업무일지에서 연동된 기록은 ①~③에 「일지」 표시로 이미 들어 있으므로 ④에는 넣지 않는다. */
 let vmRows=[], vmLastQ='';
+// v3.49: 메이커관리(makers)에 아직 없어도 동일메이커관리(maker_alias)에 표준명이 등록돼 있으면 자동완성에 포함시킨다
+function dvMakerList(){
+  const seen={}, out=[];
+  (dvMakers||[]).forEach(n=>{ const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
+  (dvMakerAlias||[]).forEach(x=>{ const n=x&&x.standard_name; if(!n) return; const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
+  return out;
+}
 function vmFillList(){
   const el=document.getElementById('vmList'); if(el.options.length) return;
-  const seen={}, out=[]; (dvMakers||[]).concat(dvPartners||[]).forEach(n=>{ const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
+  const seen={}, out=[]; dvMakerList().concat(dvPartners||[]).forEach(n=>{ const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
   el.innerHTML=out.map(n=>`<option value="${esc(n)}">`).join('');
 }
 function vmKeysOf(q){
@@ -4575,7 +4582,7 @@ function rpKnownPartner(v){ const ks=dvKeys(v); return dvPartnerAll.some(p=>[p.n
 function rpFillVendors(){
   const srt=a=>a.slice().sort((x,y)=>x.localeCompare(y,'ko')), opt=a=>srt(a).map(v=>`<option value="${esc(v)}">`).join('');
   document.getElementById('rpVendorList').innerHTML=opt(dvPartners);
-  document.getElementById('rpMakerList').innerHTML=opt(dvMakers);
+  document.getElementById('rpMakerList').innerHTML=opt(dvMakerList());
 }
 // 메이커 칸 확인: 메이커관리에 있으면 표준명으로, 없으면 「관리자설정에서 등록하라」고 알리고 적은 대로 둘지 묻는다. 반환: 저장할 이름 / '' / false(취소)
 function rpCheckMaker(v,prev){
