@@ -2536,7 +2536,8 @@ let _dataMinYM='',_dataMaxYM=''; // (v15.46) 실제 데이터 전체 범위 — 
     //  [수정] ① 뷰(sales_data_v) → 원본 테이블(sales_data) : 조인 제거
     //         ② count:'exact' → select('id').limit(1) : 존재 확인만. 실측 3.7ms (약 400배)
     //         ③ 실패(error)를 '없음'으로 삼키지 않고 구분해, 하나라도 실패하면 고정 범위로 폴백
-    const candYears=['20','21','22','23','24','25','26'];
+    // v2026-11-09 — 연도 후보를 2020년~올해로 자동 생성 (예전엔 26년까지 고정이라 27년 이후 자료를 못 잡음)
+    const candYears=[];for(let y=20;y<=new Date().getFullYear()-2000;y++)candYears.push(String(y));
     const candMonths=['01','02','03','04','05','06','07','08','09','10','11','12'];
     // 존재 확인 1건 — 있으면 true, 없으면 false, 조회 실패면 null(=판정 불가)
     const hasRows=async(y,m)=>{
@@ -2590,6 +2591,8 @@ let _dataMinYM='',_dataMaxYM=''; // (v15.46) 실제 데이터 전체 범위 — 
   }catch(e){console.error('기간 기본값 자동설정 실패',e);}
   // (v15.46) 저장된 탭별 기간이 있으면 복원(없으면 위에서 세팅한 전체기간이 기본)
   loadPeriods();
+  // v2026-11-09 — 공급현황분석 탭은 처음 열 때 항상 등록된 시작월 ~ 최종 등록월로 시작 (저장된 예전 기간은 복원하지 않음, A안)
+  if(_dataMinYM&&_dataMaxYM) setFT('trade',_dataMinYM,_dataMaxYM);
   Object.keys(P_PFX).forEach(sc=>{syncQBtn(sc);clearDirty(sc);});
   // ── (v15.46) 집계 폐기 → 원본 전체로드 1경로 ──
   //  키셋 페이징으로 10초대에 끝나므로 진행 오버레이를 띄우고 완료 후 한 번에 렌더한다.
