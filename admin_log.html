@@ -1415,6 +1415,7 @@ td.center .al-pline{justify-content:center;}
       </div>
     </div>
     <div class="up-stat" id="tradePreviewStat"></div>
+    <div id="tradeNewPartner"></div>
     <div id="tradeGroupSummary"></div>
     <div class="up-preview"><table id="trade-preview-table" class="up-table"><thead id="tradePreviewHead"></thead><tbody id="tradePreviewBody"></tbody></table></div>
   </div>
@@ -3126,10 +3127,26 @@ function _getPartnersStmtForm(){
 }
 function closePartnersModal(){document.getElementById('partnersModal').classList.remove('show');}
 
+// v2026-11-09 — 거래처 저장 실패 시 DB 영문 에러를 화면 항목 이름으로 안내
+const PM_COL_LABEL={name:'이름',alias1:'별칭1',alias2:'별칭2',type:'구분',country:'국가',closing_basis:'마감방식',payment_terms:'결제조건',
+  supply_mode:'공급방식',sales_manager:'담당자',entity:'법인',currency:'거래 통화',biz_no:'사업자번호',ceo:'대표자',stmt_cols:'명세서 표시 항목',is_active:'사용 여부'};
+function partnerSaveErrMsg(error){
+  const m=String(error&&error.message||'');
+  let r=m.match(/null value in column "([^"]+)"/);
+  if(r) return '저장 실패: 「'+(PM_COL_LABEL[r[1]]||r[1])+'」 항목이 비어 있어 저장할 수 없습니다.\n해당 항목을 입력(선택)한 뒤 다시 저장해 주세요.';
+  r=m.match(/duplicate key value[^\n]*\(([^)]+)\)=/);
+  if(r||/duplicate key/.test(m)) return '저장 실패: 같은 '+(r?r[1].split(',').map(c=>PM_COL_LABEL[c.trim()]||c.trim()).join('·'):'값')+'의 거래처가 이미 있습니다.';
+  r=m.match(/value too long[^\n]*/);
+  if(r) return '저장 실패: 입력한 글자 수가 너무 깁니다. 긴 항목을 줄여 주세요.';
+  r=m.match(/invalid input syntax for type (\w+)/);
+  if(r) return '저장 실패: 숫자·날짜 형식이 맞지 않는 항목이 있습니다. ('+r[1]+')';
+  return '저장 실패: '+m;
+}
 async function savePartnersModal() {
   const id=document.getElementById('pm-id').value;
   const name=document.getElementById('pm-name').value.trim();
-  if(!name){alert('이름은 필수입니다.');return;}
+  { const miss=[]; if(!name) miss.push('이름'); if(!document.getElementById('pm-type').value) miss.push('구분');
+    if(miss.length){alert('다음 항목을 입력해 주세요: '+miss.join(', '));return;} }
   const termSel=document.getElementById('pm-c-term').value;
   const contractTerm=termSel==='__etc'?(document.getElementById('pm-c-term-etc').value.trim()||null):(termSel||null);
   const payload={
@@ -3152,6 +3169,8 @@ async function savePartnersModal() {
   };
   Object.assign(payload,_getPartnersStmtForm());
   if(PARTNER_ONLY&&MY_ENTITY!=='KOREA') payload.entity=MY_ENTITY;
+  // v2026-11-09 — 통화 「(법인 기본)」이면 법인 기본 통화로 저장 (DB에서 통화 빈칸 불가)
+  if(!payload.currency) payload.currency=((typeof _entInfo!=='undefined'&&_entInfo||[]).find(x=>x.entity===(payload.entity||'KOREA'))||{}).default_currency||'KRW';
   // 중복 확인: 같은 법인 안에 이름 또는 사업자번호가 같은 거래처
   const nm=name.replace(/\s/g,'').toLowerCase(), bz=String(payload.biz_no||'').replace(/[^0-9A-Za-z]/g,'').toUpperCase();
   const dup=_partnersData.filter(x=>String(x.id)!==String(id)&&(x.entity||'KOREA')===(payload.entity||'KOREA')&&
@@ -3161,7 +3180,7 @@ async function savePartnersModal() {
   let error;
   if(id){ ({error}=await sb.from('partners').update(payload).eq('id',id)); }
   else { payload.created_by=MY_NAME||null; ({error}=await sb.from('partners').insert(payload)); }
-  if(error){alert('저장 실패: '+error.message);return;}
+  if(error){alert(partnerSaveErrMsg(error));return;}
   closePartnersModal(); _partnersData=[]; await loadPartnersData();
   // 매입매출관리 「신규 거래처 등록」으로 열린 창이면 안내 후 닫기 (돌아가면 자동 선택)
   if(!id&&new URLSearchParams(location.search).has('add')&&window.opener){alert('등록했습니다. 매입매출관리 화면으로 돌아갑니다.');window.close();}
@@ -3862,6 +3881,49 @@ function finishTradeParse(staged, errors, sourceLabel) {
   document.getElementById('tradePasteText').value = '';
   // ── 처음 등장하는 브랜드명 감지 (미리보기는 유지한 채 경고) ──
   checkNewBrands();
+  checkTradeNewPartners();
+}
+
+// ══════════════════════════════════════════
+//  신규 거래처 감지 + 등록 바로가기 (v2026-11-09 — 경고만, 등록은 허용: A안)
+// ══════════════════════════════════════════
+async function checkTradeNewPartners(){
+  const box=document.getElementById('tradeNewPartner'); if(!box) return;
+  box.innerHTML='';
+  const need={}; // 정규화키 → {name, p, s}
+  [['purchase','supplier'],['sales','customer']].forEach(([tp,col])=>{
+    (_tradePending[tp]||[]).forEach(r=>{
+      const nm=String(r[col]||'').trim(); if(!nm) return;
+      const k=normBrand(nm); if(!k) return;
+      if(!need[k]) need[k]={name:nm,p:false,s:false};
+      need[k][tp==='purchase'?'p':'s']=true;
+    });
+  });
+  if(!Object.keys(need).length) return;
+  let rows;
+  try{ rows=await fetchAllCol('partners','name,alias1,alias2'); }
+  catch(e){ console.warn('거래처 목록 확인 실패',e); return; }
+  const known=new Set();
+  rows.forEach(x=>[x.name,x.alias1,x.alias2].forEach(v=>{const k=normBrand(v); if(k) known.add(k);}));
+  const list=Object.values(need).filter(v=>!known.has(normBrand(v.name))).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  if(!list.length) return;
+  const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  box.innerHTML=`<div style="border:1.5px solid #FAC775;background:#FFF8EC;padding:10px 12px;margin:8px 0 12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+      <div style="font-size:13px;font-weight:700;color:#633806;">⚠ 거래처 정보에 없는 신규 거래처 ${list.length}곳 — 등록하지 않아도 매입·매출 등록은 됩니다</div>
+      <button class="up-btn" onclick="checkTradeNewPartners()">↻ 다시 확인</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">${list.map(v=>{
+      const pt=v.p&&v.s?'매입매출처':(v.p?'매입처':'매출처');
+      return `<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid #F5DDB0;background:#fff;padding:3px 4px 3px 8px;font-size:12.5px;color:#111827;">${esc(v.name)} <span style="color:#854F0B;font-size:11px;">${pt}</span>
+        <button class="up-btn up-btn-primary" style="padding:2px 8px;font-size:11.5px;" data-nm="${esc(v.name)}" data-pt="${pt}" onclick="openTradePartnerAdd(this)">등록 바로가기</button></span>`;
+    }).join('')}</div>
+  </div>`;
+}
+function openTradePartnerAdd(btn){
+  const url='admin_log.html?tab=partners&add='+encodeURIComponent(btn.dataset.nm)+'&ptype='+encodeURIComponent(btn.dataset.pt)+'&entity=KOREA';
+  const w=window.open(url,'_blank');
+  if(!w) alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.');
 }
 
 // ══════════════════════════════════════════
@@ -4089,6 +4151,7 @@ function renderTradePreview() {
 function clearTradePreview() {
   _tradePending = {purchase:[], sales:[]};
   _newBrandList = [];
+  const npBox=document.getElementById('tradeNewPartner'); if(npBox) npBox.innerHTML='';
   document.getElementById('tradePreviewSection').style.display = 'none';
   document.getElementById('tradeErrorSection').style.display = 'none';
 }
