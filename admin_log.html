@@ -3142,6 +3142,77 @@ function partnerSaveErrMsg(error){
   if(r) return '저장 실패: 숫자·날짜 형식이 맞지 않는 항목이 있습니다. ('+r[1]+')';
   return '저장 실패: '+m;
 }
+// ══ v2026-11-09 — 신규 거래처 등록 직후 그 거래처의 신규 품목 일괄 등록 (B안) ══
+function _tradeItemsFor(nm){ try{ const o=JSON.parse(localStorage.getItem(TRADE_NEWITEM_LSKEY)||'{}'); return o[nm]||[]; }catch(e){ return []; } }
+function _tradeItemsClear(nm){ try{ const o=JSON.parse(localStorage.getItem(TRADE_NEWITEM_LSKEY)||'{}'); delete o[nm]; localStorage.setItem(TRADE_NEWITEM_LSKEY,JSON.stringify(o)); }catch(e){} }
+async function afterTradePartnerSaved(nm){
+  const items=_tradeItemsFor(nm);
+  if(items.length&&confirm('거래처를 등록했습니다.\n\n이 거래처의 신규 품목 '+items.length+'건도 품목마스터에 등록하시겠습니까?')){ openTradeItemBulk(nm,items); return; }
+  finishTradeHandoff(nm,'거래처를 등록했습니다.');
+}
+function finishTradeHandoff(nm,msg){
+  _tradeItemsClear(nm);
+  try{ if(window.opener&&window.opener.checkTradeNewPartners) window.opener.checkTradeNewPartners(); }catch(e){}
+  if(window.opener){ alert(msg+'\n매입·매출 화면으로 돌아갑니다.'); window.close(); } else alert(msg);
+}
+function _guessLgPn(desc){ const m=String(desc||'').trim().match(/^([A-Z]{3}\d{8}[A-Z0-9]{0,2})(?=\s|$)/); return m?m[1]:''; }
+let _tradeBulkNm='';
+function openTradeItemBulk(nm,items){
+  _tradeBulkNm=nm;
+  let ov=document.getElementById('tradeItemBulkModal');
+  if(!ov){ ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='tradeItemBulkModal'; document.body.appendChild(ov); }
+  const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const cols='110px 1fr 150px 130px 150px';
+  const hd=['품목코드','품명','브랜드 *','LG PN','메이커품번'].map(h=>`<div style="padding:6px 8px;font-size:12px;font-weight:700;color:#fff;">${h}</div>`).join('');
+  const rows=items.map((it,i)=>`<div class="tib-row" data-i="${i}" style="display:grid;grid-template-columns:${cols};border-bottom:1px solid #e8edf5;align-items:center;">
+      <div style="padding:6px 8px;font-size:12.5px;color:#111827;border-right:1px solid #e8edf5;">${esc(it.item_code)}</div>
+      <div style="padding:6px 8px;font-size:12px;color:#111827;border-right:1px solid #e8edf5;word-break:break-all;">${esc(it.description)}</div>
+      <div style="padding:4px;border-right:1px solid #e8edf5;"><input class="tib-brand" value="${esc(it.brand)}" style="width:100%;box-sizing:border-box;"></div>
+      <div style="padding:4px;border-right:1px solid #e8edf5;"><input class="tib-lg" value="${esc(_guessLgPn(it.description))}" style="width:100%;box-sizing:border-box;"></div>
+      <div style="padding:4px;"><input class="tib-mk" placeholder="비우면 품목코드 사용" style="width:100%;box-sizing:border-box;"></div>
+    </div>`).join('');
+  ov.innerHTML=`<div class="modal-box" style="width:900px;">
+    <div class="modal-hdr"><div class="modal-title">신규 품목 일괄 등록 — ${esc(nm)} (${items.length}건)</div><button class="modal-close" onclick="skipTradeItemBulk()">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);">메이커품번을 확인해 입력하세요. 비워두면 품목코드를 메이커품번으로 저장합니다. 같은 브랜드·메이커품번이 이미 있으면 새로 만들지 않고 품목코드만 연결합니다.</div>
+      <div style="border:1px solid var(--border);max-height:55vh;overflow:auto;">
+        <div style="display:grid;grid-template-columns:${cols};background:var(--point);position:sticky;top:0;">${hd}</div>${rows}
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="up-btn" onclick="skipTradeItemBulk()">건너뛰기</button>
+        <button class="up-btn up-btn-primary" id="tibSaveBtn" onclick="saveTradeItemBulk()">일괄 등록</button>
+      </div>
+    </div></div>`;
+  ov._items=items; ov.classList.add('show');
+}
+function skipTradeItemBulk(){ const ov=document.getElementById('tradeItemBulkModal'); if(ov) ov.classList.remove('show'); finishTradeHandoff(_tradeBulkNm,'거래처를 등록했습니다. (품목 등록은 건너뜀)'); }
+async function saveTradeItemBulk(){
+  const ov=document.getElementById('tradeItemBulkModal'); const items=ov._items||[];
+  const rows=[...ov.querySelectorAll('.tib-row')].map(el=>{const it=items[+el.dataset.i];return {item_code:it.item_code,description:it.description||null,
+    brand:el.querySelector('.tib-brand').value.trim(),lg:el.querySelector('.tib-lg').value.trim(),mk:el.querySelector('.tib-mk').value.trim()||it.item_code};});
+  const miss=rows.filter(r=>!r.brand).map(r=>r.item_code);
+  if(miss.length){ alert('다음 품목의 브랜드를 입력해 주세요: '+miss.join(', ')); return; }
+  const btn=document.getElementById('tibSaveBtn'); btn.disabled=true; btn.textContent='등록 중...';
+  let ok=0; const fails=[];
+  for(const r of rows){
+    try{
+      let mid;
+      const {data:ex,error:e1}=await sb.from('maker_pn_master').select('id').eq('brand',r.brand).eq('maker_pn',r.mk).limit(1);
+      if(e1) throw e1;
+      if(ex&&ex.length) mid=ex[0].id;
+      else{ const {data,error}=await sb.from('maker_pn_master').insert({brand:r.brand,maker_pn:r.mk,description:r.description}).select('id'); if(error) throw error; mid=data[0].id; }
+      const {data:icx}=await sb.from('maker_pn_itemcode_map').select('id').eq('item_code',r.item_code).limit(1);
+      if(!icx||!icx.length){ const {error}=await sb.from('maker_pn_itemcode_map').insert({maker_pn_id:mid,item_code:r.item_code}); if(error) throw error; }
+      if(r.lg){ const {data:lgx}=await sb.from('maker_pn_lgpn_map').select('id').eq('maker_pn_id',mid).eq('lg_pn',r.lg).limit(1);
+        if(!lgx||!lgx.length){ const {error}=await sb.from('maker_pn_lgpn_map').insert({maker_pn_id:mid,lg_pn:r.lg}); if(error) throw error; } }
+      ok++;
+    }catch(e){ fails.push(r.item_code+': '+(e.message||e)); }
+  }
+  btn.disabled=false; btn.textContent='일괄 등록';
+  if(fails.length){ alert('품목 '+ok+'건 등록, '+fails.length+'건 실패\n\n'+fails.join('\n')+'\n\n실패한 품목은 품목 마스터 탭에서 직접 등록해 주세요.'); }
+  ov.classList.remove('show');
+  finishTradeHandoff(_tradeBulkNm,'거래처와 품목 '+ok+'건을 등록했습니다.');
+}
 async function savePartnersModal() {
   const id=document.getElementById('pm-id').value;
   const name=document.getElementById('pm-name').value.trim();
@@ -3182,6 +3253,8 @@ async function savePartnersModal() {
   else { payload.created_by=MY_NAME||null; ({error}=await sb.from('partners').insert(payload)); }
   if(error){alert(partnerSaveErrMsg(error));return;}
   closePartnersModal(); _partnersData=[]; await loadPartnersData();
+  // v2026-11-09 — 매입·매출 업로드 「등록 바로가기」로 열린 창이면 신규 품목 등록으로 이어감
+  if(!id&&new URLSearchParams(location.search).get('from')==='trade'){ await afterTradePartnerSaved(new URLSearchParams(location.search).get('add')||name); return; }
   // 매입매출관리 「신규 거래처 등록」으로 열린 창이면 안내 후 닫기 (돌아가면 자동 선택)
   if(!id&&new URLSearchParams(location.search).has('add')&&window.opener){alert('등록했습니다. 매입매출관리 화면으로 돌아갑니다.');window.close();}
 }
@@ -3907,21 +3980,43 @@ async function checkTradeNewPartners(){
   rows.forEach(x=>[x.name,x.alias1,x.alias2].forEach(v=>{const k=normBrand(v); if(k) known.add(k);}));
   const list=Object.values(need).filter(v=>!known.has(normBrand(v.name))).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   if(!list.length) return;
+  // v2026-11-09 — 신규 거래처의 품목 중 품목마스터(품목코드 연결)에 없는 것 = 신규 품목 (B안·A범위: 신규 거래처 품목만)
+  const newKeys=new Set(list.map(v=>normBrand(v.name))), byKey={};
+  [['purchase','supplier'],['sales','customer']].forEach(([tp,col])=>{
+    (_tradePending[tp]||[]).forEach(r=>{
+      const k=normBrand(r[col]); const ic=String(r.item_code||'').trim();
+      if(!newKeys.has(k)||!ic) return;
+      byKey[k]=byKey[k]||{};
+      if(!byKey[k][ic]) byKey[k][ic]={item_code:ic,description:r.description||'',brand:String(r.brand||r[col]||'').trim()};
+    });
+  });
+  const codes=[...new Set(Object.values(byKey).flatMap(o=>Object.keys(o)))], mapped=new Set();
+  try{
+    for(let i=0;i<codes.length;i+=150){
+      (await fetchAllCol('maker_pn_itemcode_map','item_code','item_code',codes.slice(i,i+150))).forEach(x=>mapped.add(String(x.item_code).trim()));
+    }
+  }catch(e){ console.warn('품목마스터 확인 실패',e); }
+  list.forEach(v=>{ v.items=Object.values(byKey[normBrand(v.name)]||{}).filter(x=>!mapped.has(x.item_code)); });
+  _tradeNewPartnerList=list;
   const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   box.innerHTML=`<div style="border:1.5px solid #FAC775;background:#FFF8EC;padding:10px 12px;margin:8px 0 12px;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
       <div style="font-size:13px;font-weight:700;color:#633806;">⚠ 거래처 정보에 없는 신규 거래처 ${list.length}곳 — 등록하지 않아도 매입·매출 등록은 됩니다</div>
       <button class="up-btn" onclick="checkTradeNewPartners()">↻ 다시 확인</button>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">${list.map(v=>{
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">${list.map((v,vi)=>{
       const pt=v.p&&v.s?'매입매출처':(v.p?'매입처':'매출처');
-      return `<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid #F5DDB0;background:#fff;padding:3px 4px 3px 8px;font-size:12.5px;color:#111827;">${esc(v.name)} <span style="color:#854F0B;font-size:11px;">${pt}</span>
-        <button class="up-btn up-btn-primary" style="padding:2px 8px;font-size:11.5px;" data-nm="${esc(v.name)}" data-pt="${pt}" onclick="openTradePartnerAdd(this)">등록 바로가기</button></span>`;
+      return `<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid #F5DDB0;background:#fff;padding:3px 4px 3px 8px;font-size:12.5px;color:#111827;">${esc(v.name)} <span style="color:#854F0B;font-size:11px;">${pt}${v.items&&v.items.length?' · 신규 품목 '+v.items.length+'건':''}</span>
+        <button class="up-btn up-btn-primary" style="padding:2px 8px;font-size:11.5px;" data-idx="${vi}" data-pt="${pt}" onclick="openTradePartnerAdd(this)">등록 바로가기</button></span>`;
     }).join('')}</div>
   </div>`;
 }
+let _tradeNewPartnerList=[];
+const TRADE_NEWITEM_LSKEY='sme_trade_new_items';
 function openTradePartnerAdd(btn){
-  const url='admin_log.html?tab=partners&add='+encodeURIComponent(btn.dataset.nm)+'&ptype='+encodeURIComponent(btn.dataset.pt)+'&entity=KOREA';
+  const v=_tradeNewPartnerList[+btn.dataset.idx]; if(!v) return;
+  try{ const o=JSON.parse(localStorage.getItem(TRADE_NEWITEM_LSKEY)||'{}'); o[v.name]=v.items||[]; localStorage.setItem(TRADE_NEWITEM_LSKEY,JSON.stringify(o)); }catch(e){}
+  const url='admin_log.html?tab=partners&add='+encodeURIComponent(v.name)+'&ptype='+encodeURIComponent(btn.dataset.pt)+'&entity=KOREA&from=trade';
   const w=window.open(url,'_blank');
   if(!w) alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.');
 }
