@@ -480,7 +480,7 @@
   <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-bottom:14px;">
     <div><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">법인</div>
       <select id="h-entity" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:2px;font-size:13px;font-family:'Noto Sans KR',sans-serif;">
-        <option value="">전체</option><option value="SMECN">SMECN</option><option value="GSMEIN">GSMEIN</option><option value="SMEGLOBAL">SMEGLOBAL</option></select></div>
+        <option value="">전체</option><option value="SMECN">SMECN</option><option value="GSMEIN">GSMEIN</option><option value="SMEGLOBAL">SMETH</option></select></div>
     <div><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">구분</div>
       <select id="h-action" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:2px;font-size:13px;font-family:'Noto Sans KR',sans-serif;">
         <option value="">전체</option><option value="수정">수정</option><option value="취소">취소</option></select></div>
@@ -527,7 +527,7 @@
       <select id="s-entity">
         <option value="">전체</option>
         <option value="GSMEIN">GSMEIN (인도)</option>
-        <option value="SMEGLOBAL">SMEGLOBAL (태국)</option>
+        <option value="SMEGLOBAL">SMETH (태국)</option>
         <option value="SMECN">SME Tianjin (중국)</option>
       </select>
     </div>
@@ -808,6 +808,8 @@
   if (sessionStorage.getItem('po_auth') !== '1') { window.location.href = 'po_hub.html'; }
 
   // 법인별 운송기간 맵 (entities 테이블)
+  // 법인 표시명 (DB entity 값은 유지, 화면만 SMETH)
+  const entLabel = e => e==='SMEGLOBAL' ? 'SMETH' : e;
   let entityTransitMap = {};
   async function loadEntityTransit(){
     if(Object.keys(entityTransitMap).length) return;
@@ -1120,7 +1122,7 @@
       const remain = (r.qty||0) - (r.shipped||0);
       const remainCls = remain <= 0 ? 'remain-zero' : 'remain-pos';
       const entityColor = r.entity==='GSMEIN'?'var(--accent)':r.entity==='SMECN'?'var(--accent3)':'var(--point)';
-      const entityBadge = `<span style="font-weight:700;color:${entityColor};font-size:14px;">${r.entity}</span>`;
+      const entityBadge = `<span style="font-weight:700;color:${entityColor};font-size:14px;">${entLabel(r.entity)}</span>`;
       const typeBadge = r.action_type==='수정'
         ? `<span class="badge b-mod">수정</span>`
         : r.action_type==='취소'
@@ -1199,7 +1201,7 @@
     const remain = (r.qty||0) - (r.shipped||0);
 
     document.getElementById('panelPono').textContent  = `${r.pono} · ${r.mkpn}`;
-    document.getElementById('p-entity').textContent   = r.entity;
+    document.getElementById('p-entity').textContent   = entLabel(r.entity);
     // 편집 가능 필드
     document.getElementById('p-lgpn').value           = r.lgpn || '';
     document.getElementById('p-mkpn').value           = r.mkpn || '';
@@ -1475,7 +1477,7 @@
                     '주문수량','출하수량','잔량','판매단가(KRW)','ETD요청일','운송','상태',
                     '출하수량(입력)','운송구분(입력)','인보이스No.(입력)','출하일(입력)','비고'];
     const rows = allData.map(r => [
-      r.action_type||'신규', r.entity, r.date, r.pono, r.lgpn, r.mkpn, r.erp||'', r.maker,
+      r.action_type||'신규', entLabel(r.entity), r.date, r.pono, r.lgpn, r.mkpn, r.erp||'', r.maker,
       r.qty, r.shipped, (r.qty||0)-(r.shipped||0),
       '', // 판매단가(KRW) - 수동 입력란
       r.etd, r.mode, r.resp==='complete'?'출하완료':r.resp==='pending'?'잔량대기':'본사미발주',
@@ -1641,7 +1643,7 @@
 
       hqData = dataRows.map((r, idx) => ({
         row:        idx + 1,
-        entity:     String(_gv(r, ci.entity)||'').trim().toUpperCase(),
+        entity:     String(_gv(r, ci.entity)||'').trim().toUpperCase().replace(/^SMETH$/,'SMEGLOBAL'),
         mkpn:       String(_gv(r, ci.mkpn)||'').trim(),
         lgpn:       String(_gv(r, ci.lgpn)||'').trim(),
         shipqty:    Number(_gv(r, ci.shipqty))||0,
@@ -2020,7 +2022,7 @@
       const etdCell=isC?be:`${be} → ${ae}`;
       const TD='padding:8px;color:var(--text);border-right:1px solid var(--bg-sub);overflow:hidden;text-overflow:ellipsis;';
       return `<tr style="border-bottom:1px solid var(--bg-sub);">
-        <td style="${TD}font-weight:600;white-space:nowrap;">${esc(r.entity)}</td>
+        <td style="${TD}font-weight:600;white-space:nowrap;">${esc(entLabel(r.entity))}</td>
         <td style="${TD}text-align:center;">${badge}</td>
         <td style="${TD}white-space:nowrap;">${fmtDt(r.created_at)}</td>
         <td style="${TD}white-space:nowrap;">${esc(r.po_no)||'—'}</td>
