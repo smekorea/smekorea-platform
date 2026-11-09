@@ -9,7 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.7 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   org_chart.html v1.8 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   ── v1.8: SMEKR 조직도 연결선을 엑셀 원본과 동일하게 — 대표→[연구소·상무·CFO], 연구소·상무→부서 가로선, CFO→재경팀
    ── v1.7: 메뉴명 「글로벌 조직도」→「조직도」, 탭 [🌐 글로벌 조직도 | 🏢 SMEKR 조직도 | 📜 조직 이력]
             SMEKR 조직도: 대표이사 → 상무이사 → (연구소 · 상무 직속 · CFO) → 부서 (부서 기준 배치, reports_to 미사용)
             연구소 산하: 개발기획팀·영업팀 / CFO 산하: 재경팀 / 그 외 부서는 상무 직속 (KR_LAYOUT) · 엑셀 다운로드
@@ -117,6 +118,16 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 #chart:not(.no-ten) .unit.ov-unit{width:179px;}
 /* v1.7 SMEKR 조직도 */
 .kr-n{font-size:10.5px;color:#444;margin:0 0 1px 18px;min-height:13px;align-self:center;}
+.kr-canvas{position:relative;margin:24px auto 0;}
+.kr-l{position:absolute;background:var(--line);}
+.kr-num{position:absolute;font-size:10.5px;color:#444;line-height:1;}
+.kr-node{position:absolute;width:104px;display:flex;flex-direction:column;align-items:center;}
+.kr-node .cap{height:16px;margin:0;line-height:16px;white-space:nowrap;}
+.kr-row{position:absolute;left:0;right:0;}
+.kr-col{position:absolute;top:0;width:149px;}
+.kr-col .unit-hd{margin-top:6px;}
+#krChart .box{height:50px;box-sizing:border-box;}
+#krChart .members .box{height:auto;}
 .kr-pass{position:relative;display:flex;flex-direction:column;align-items:center;}
 .kr-pass > *{visibility:hidden;}
 .kr-pass::before{content:'';position:absolute;left:50%;top:0;bottom:0;border-left:1.5px solid var(--line);}
@@ -920,41 +931,93 @@ function buildKr(){
   krModel = { root, hq, cols: cols.filter(c=>c.head || c.units.length), rest, n };
 }
 const krUnitN = u => 1 + u.members.length + hcSum(u.hc);
+// v1.8 (2026-11-10) — 엑셀 원본(SMEKR조직도) 연결선: 대표이사 → 가로선 → [연구소 · 상무이사 · CFO]
+//   연구소·상무이사 → 같은 부서 가로선(연구소 부서 + 상무 직속 부서) / CFO → 재경팀 단독 세로선
+//   연구소·CFO 박스는 상무이사 박스보다 한 단 아래 / 대표이사는 상무이사 세로선 위
+const KR_W = 149, KR_G = 14, KR_CFO_GAP = 46, KR_BOX = 104;
+function krLayout(){
+  const M = krModel;
+  const lab = M.cols.find(c=>c.key==='lab'), hqc = M.cols.find(c=>c.key==='hq'), cfo = M.cols.find(c=>c.key==='cfo');
+  const labU = lab ? lab.units : [], hqU = hqc ? hqc.units : [], cfoU = cfo ? cfo.units : [];
+  const busU = [...labU, ...hqU];
+  const cx = i => i*(KR_W+KR_G) + KR_W/2;
+  const busN = Math.max(busU.length, 1);
+  const cfoX0 = busN*(KR_W+KR_G) - KR_G + KR_CFO_GAP;
+  const cfoCx = j => cfoX0 + j*(KR_W+KR_G) + KR_W/2;
+  const hqIdx = hqU.length ? labU.length + Math.floor((hqU.length-1)/2) : Math.floor((busN-1)/2);
+  return { lab, hqc, cfo, labU, hqU, cfoU, busU, cx, cfoCx, cfoX0, hqIdx,
+    labX: labU.length ? cx(0) : cx(0), hqX: cx(hqIdx), cfoX: cfoU.length ? cfoCx(0) : cfoX0 + KR_W/2,
+    width: (cfo && (cfo.head || cfoU.length)) ? cfoX0 + Math.max(cfoU.length,1)*(KR_W+KR_G) - KR_G : busN*(KR_W+KR_G) - KR_G };
+}
 function renderKr(){
   buildKr(); applyTenureUI();
   const M = krModel, el = document.getElementById('krChart');
   document.getElementById('krAsof').innerHTML = `기준일 ${new Date().toISOString().slice(0,10)}<br>SMEKR: ${M.n}명`;
   document.getElementById('krKpi').innerHTML = `<span>본사 인원<b>${M.n}</b></span>` + M.cols.map(c=>`<span>${esc(c.cap||'상무 직속')}<b>${c.n}</b></span>`).join('');
   if(!M.root){ el.innerHTML = '<div class="loading">대표이사(직책)가 지정된 본사 직원이 없습니다.</div>'; return; }
-  const nTag = v => `<div class="kr-n">${v||''}</div>`;
-  let h = `<div class="tree"><ul><li><div class="node">${nTag(M.n)}${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
-  const colsHtml = M.cols.map(c=>{
-    let x = `<li><div class="node">`;
-    if(c.head){
-      x += nTag(c.n) + `<div class="cap">${esc(c.cap)}</div>` + boxHtml(c.head, c.key==='cfo' ? (c.head.rank||'') : (c.head.title||c.head.rank), false);
-    } else {
-      // 연구소·CFO 박스와 높이를 맞추기 위한 보이지 않는 자리(세로선만 표시)
-      x += `<div class="kr-pass" title="${esc(c.cap||'상무이사 직속')}">${nTag('')}<div class="cap">&nbsp;</div><div class="box"><div class="bd">&nbsp;</div><div class="nm">&nbsp;</div></div></div>`;
-    }
-    x += `</div>`;
-    if(c.units.length) x += `<ul>${c.units.map(u=>`<li><div class="node">${nTag(krUnitN(u))}${unitHtml(u)}</div></li>`).join('')}</ul>`;
-    return x + `</li>`;
-  }).join('');
+  const Lo = krLayout();
+  const hasLab = !!(Lo.lab && Lo.lab.head), hasCfo = !!(Lo.cfo && Lo.cfo.head);
+  // 세로 위치(px)
+  const Y = { rootN:0, root:14, bus1:96, hq:122, sub:178, bus2:262, team:286 };
+  const BOXH = 50;
+  const parts = [];
+  const hl = (x1,x2,y) => parts.push(`<div class="kr-l" style="left:${Math.min(x1,x2)}px;top:${y}px;width:${Math.abs(x2-x1)+1.5}px;height:1.5px;"></div>`);
+  const vl = (x,y1,y2) => parts.push(`<div class="kr-l" style="left:${x}px;top:${y1}px;width:1.5px;height:${y2-y1}px;"></div>`);
+  const num = (x,y,v) => parts.push(`<div class="kr-num" style="left:${x+5}px;top:${y}px;">${v}</div>`);
+  const node = (x,y,cap,e,badge) => parts.push(`<div class="kr-node" style="left:${x-KR_BOX/2}px;top:${y}px;">${cap?`<div class="cap">${esc(cap)}</div>`:''}${boxHtml(e,badge,false)}</div>`);
+  // 대표이사
+  num(Lo.hqX, Y.rootN, M.n);
+  node(Lo.hqX, Y.root, '', M.root, M.root.title||M.root.rank);
+  // 대표 → 가로선(연구소 ~ CFO)
+  const tops = [Lo.hqX]; if(hasLab) tops.push(Lo.labX); if(hasCfo) tops.push(Lo.cfoX);
+  vl(Lo.hqX, Y.root+BOXH, Y.bus1);
+  if(tops.length>1) hl(Math.min(...tops), Math.max(...tops), Y.bus1);
+  // 상무이사
   if(M.hq){
-    h += `<ul><li><div class="node">${nTag(M.n-1)}<div class="cap">KOREA H.Q</div>${boxHtml(M.hq, M.hq.title||M.hq.rank, false)}</div>`;
-    if(colsHtml) h += `<ul>${colsHtml}</ul>`;
-    h += `</li></ul>`;
-  } else if(colsHtml){ h += `<ul>${colsHtml}</ul>`; }
-  h += `</li></ul></div>`;
+    num(Lo.hqX, Y.bus1+3, M.n-1);
+    vl(Lo.hqX, Y.bus1, Y.hq);
+    node(Lo.hqX, Y.hq, 'KOREA H.Q', M.hq, M.hq.title||M.hq.rank);
+    vl(Lo.hqX, Y.hq+16+BOXH, Y.bus2);
+  } else vl(Lo.hqX, Y.bus1, Y.bus2);
+  // 연구소
+  if(hasLab){
+    num(Lo.labX, Y.bus1+3, Lo.lab.n);
+    vl(Lo.labX, Y.bus1, Y.sub);
+    node(Lo.labX, Y.sub, Lo.lab.cap, Lo.lab.head, Lo.lab.head.title||Lo.lab.head.rank);
+    vl(Lo.labX, Y.sub+16+BOXH, Y.bus2);
+  }
+  // CFO
+  if(hasCfo){
+    num(Lo.cfoX, Y.bus1+3, Lo.cfo.n);
+    vl(Lo.cfoX, Y.bus1, Y.sub);
+    node(Lo.cfoX, Y.sub, Lo.cfo.cap, Lo.cfo.head, Lo.cfo.head.rank||'');
+    if(Lo.cfoU.length) vl(Lo.cfoX, Y.sub+16+BOXH, Y.team+6);
+  }
+  // 부서 가로선 (연구소 부서 + 상무 직속 부서)
+  if(Lo.busU.length){
+    const xs = Lo.busU.map((u,i)=>Lo.cx(i)).concat([Lo.hqX]).concat(hasLab?[Lo.labX]:[]);
+    hl(Math.min(...xs), Math.max(...xs), Y.bus2);
+    Lo.busU.forEach((u,i)=>{ vl(Lo.cx(i), Y.bus2, Y.team+6); num(Lo.cx(i), Y.bus2+3, krUnitN(u)); });
+  }
+  Lo.cfoU.forEach((u,j)=>{ if(j) vl(Lo.cfoCx(j), Y.sub+16+BOXH, Y.team+6); num(Lo.cfoCx(j), Y.bus2+3, krUnitN(u)); });
+  // 부서 줄
+  let row = `<div class="kr-row" style="top:${Y.team}px;">`;
+  Lo.busU.forEach((u,i)=>{ row += `<div class="kr-col" style="left:${i*(KR_W+KR_G)}px;">${unitHtml(u)}</div>`; });
+  Lo.cfoU.forEach((u,j)=>{ row += `<div class="kr-col" style="left:${Lo.cfoX0 + j*(KR_W+KR_G)}px;">${unitHtml(u)}</div>`; });
+  row += `</div>`;
+  const maxMembers = Math.max(0, ...Lo.busU.concat(Lo.cfoU).map(u=>u.members.length + u.hc.length));
+  const height = Y.team + 110 + maxMembers*26;
+  let h = `<div class="kr-canvas" style="width:${Lo.width+60}px;height:${height}px;">${parts.join('')}${row}</div>`;
   if(M.rest.length) h += `<div class="orphans">⚠ 부서에 배치되지 않은 본사 재직자 <b>${M.rest.length}명</b>: ${M.rest.map(e=>esc(`${dispName(e)} (${e.dept||'부서 없음'})`)).join(', ')} — 관리자 설정 › 직원 관리에서 부서를 확인해 주세요.</div>`;
   el.innerHTML = h;
 }
 
-/* ── v1.7 SMEKR 조직도 엑셀 다운로드 (조직도 + 본사 인원명단) ── */
+/* ── v1.8 SMEKR 조직도 엑셀 다운로드 (엑셀 원본과 같은 연결선) ── */
 async function downloadKrExcel(){
   if(!krModel || !krModel.root){ alert('조직도 데이터가 없습니다.'); return; }
   if(typeof ExcelJS==='undefined'){ alert('엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.'); return; }
-  const M = krModel;
+  const M = krModel, Lo = krLayout();
+  const hasLab = !!(Lo.lab && Lo.lab.head), hasCfo = !!(Lo.cfo && Lo.cfo.head);
   const wb = new ExcelJS.Workbook(); wb.creator = 'SMERP';
   const ws = wb.addWorksheet('SMEKR 조직도', {pageSetup:{orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9,
     margins:{left:0.3,right:0.3,top:0.4,bottom:0.4,header:0.2,footer:0.2}}, views:[{showGridLines:false}]});
@@ -962,10 +1025,10 @@ async function downloadKrExcel(){
   const LN={style:'thin',color:{argb:'FF000000'}}, BX={style:'thin',color:{argb:'FF777777'}};
   const font=(o={})=>({name:'Noto Sans KR', size:10, ...o});
   const today=new Date().toISOString().slice(0,10);
-  // 칸: 부서(또는 빈 3단) 단위마다 [L][R][간격]
-  const units=[], spans=[];
-  M.cols.forEach(c=>{ const s=units.length; if(c.units.length) c.units.forEach(u=>units.push(u)); else units.push(null); spans.push({c,s,e:units.length-1}); });
-  if(!units.length) units.push(null);
+  // 칸: [부서 가로선 부서들][빈 칸][CFO 산하 부서] — 단위마다 [L][R][간격]
+  const units=[...Lo.busU]; if(!units.length) units.push(null);
+  const cfoStart = units.length + 1; units.push(null);
+  if(Lo.cfoU.length) Lo.cfoU.forEach(u=>units.push(u)); else units.push(null);
   const L=i=>2+i*3, R=i=>3+i*3, lastCol=R(units.length-1)+1;
   ws.getColumn(1).width=1.5;
   for(let c=2;c<=lastCol;c++) ws.getColumn(c).width=((c-2)%3===2)?2.2:8.6;
@@ -980,8 +1043,8 @@ async function downloadKrExcel(){
   const badge=(r,i,txt)=>put(r,i,txt,{fill:RED,box:true,font:{bold:true,size:9,color:{argb:'FFFFFFFF'}}});
   const nameBox=(r,i,e)=>put(r,i,dispName(e)+(SHOW_TEN&&tenure(e)?' '+tenure(e):''),{box:true});
   const vline=(r,i)=>addB(r,L(i),'right');
-  const connect=(r,pi,kid)=>{ const lo=Math.min(pi,...kid), hi=Math.max(pi,...kid); vline(r,pi);
-    if(hi>lo){ for(let c=R(lo);c<=L(hi);c++) addB(r,c,'bottom'); } kid.forEach(k=>vline(r+1,k)); };
+  const vrun=(r1,r2,i)=>{ for(let r=r1;r<=r2;r++) vline(r,i); };
+  const bus=(r,lo,hi)=>{ if(hi>lo) for(let c=R(lo);c<=L(hi);c++) addB(r,c,'bottom'); };
   const cnt=(r,i,v)=>{ const x=cell(r,R(i)); x.value=v; x.font=font({size:8,color:{argb:'FF444444'}}); x.alignment={horizontal:'left',vertical:'bottom'}; };
 
   ws.mergeCells(1,1,1,lastCol);
@@ -990,24 +1053,31 @@ async function downloadKrExcel(){
   ws.mergeCells(2,2,2,lastCol);
   const a=cell(2,2); a.value=`기준일 ${today}   |   SMEKR: ${M.n}명`; a.font=font({size:9,color:{argb:'FF565C64'}}); a.alignment={horizontal:'right',vertical:'middle'};
 
-  const cC = spans.map(x=>Math.floor((x.s+x.e)/2));
-  const mid = cC.length ? Math.round((Math.min(...cC)+Math.max(...cC))/2) : 0;
-  cnt(3,mid,M.n); badge(4,mid,M.root.title||M.root.rank); nameBox(5,mid,M.root);
-  let r0 = 6;
-  if(M.hq){ vline(6,mid); vline(7,mid); cnt(7,mid,M.n-1); badge(8,mid,'KOREA H.Q · 상무이사'); nameBox(9,mid,M.hq); r0 = 10; }
-  if(cC.length) connect(r0,mid,cC);
-  const rC = r0+2;                       // 3단 행
-  spans.forEach((x,k)=>{
-    const c=x.c, i=cC[k];
-    if(c.head){ badge(rC,i,c.key==='cfo'?`CFO · ${c.head.rank||''}`:`${c.cap} · ${c.head.title||c.head.rank||''}`); nameBox(rC+1,i,c.head); cnt(rC-1,i,c.n); }
-    else { vline(rC,i); vline(rC+1,i); }
-    const kid=[]; for(let j=x.s;j<=x.e;j++) if(units[j]) kid.push(j);
-    if(kid.length) connect(rC+2,i,kid);
-  });
-  const rU = rC+4; let maxRow = rU;
+  const hqI = Lo.busU.length ? Lo.hqIdx : 0, labI = 0, cfoI = cfoStart;
+  // 대표이사 (상무 세로선 위)
+  cnt(3,hqI,M.n); badge(4,hqI,M.root.title||M.root.rank); nameBox(5,hqI,M.root);
+  // 6: 대표 세로선 + 가로선(연구소~CFO) / 7: 각 세로선 + 인원수
+  vline(6,hqI);
+  const topI=[hqI]; if(hasLab) topI.push(labI); if(hasCfo) topI.push(cfoI);
+  bus(6,Math.min(...topI),Math.max(...topI));
+  // 상무이사 8~10
+  vline(7,hqI); if(M.hq){ cnt(7,hqI,M.n-1); put(8,hqI,'KOREA H.Q',{font:{bold:true,size:9}}); badge(9,hqI,M.hq.title||M.hq.rank); nameBox(10,hqI,M.hq); } else vrun(8,10,hqI);
+  vrun(11,13,hqI);
+  // 연구소 · CFO 11~13 (상무보다 한 단 아래)
+  if(hasLab){ vrun(7,10,labI); cnt(7,labI,Lo.lab.n); put(11,labI,Lo.lab.cap,{font:{bold:true,size:9}}); badge(12,labI,Lo.lab.head.title||Lo.lab.head.rank); nameBox(13,labI,Lo.lab.head); }
+  if(hasCfo){ vrun(7,10,cfoI); cnt(7,cfoI,Lo.cfo.n); put(11,cfoI,Lo.cfo.cap,{font:{bold:true,size:9}}); badge(12,cfoI,Lo.cfo.head.rank||''); nameBox(13,cfoI,Lo.cfo.head); }
+  // 14: 부서 가로선 (연구소 + 상무 → 부서들) / CFO 세로선 / 15: 부서별 세로선
+  if(Lo.busU.length){
+    vline(14,hqI); if(hasLab) vline(14,labI);
+    bus(14,0,Math.max(hqI,Lo.busU.length-1));
+    Lo.busU.forEach((u,i)=>{ vline(15,i); cnt(15,i,krUnitN(u)); });
+  }
+  if(hasCfo && Lo.cfoU.length){ vrun(14,15,cfoI); }
+  Lo.cfoU.forEach((u,j)=>cnt(15,cfoStart+j,krUnitN(u)));
+  // 16~: 부서
+  const rU=16; let maxRow=rU;
   units.forEach((u,i)=>{
     if(!u) return; let r=rU;
-    cnt(r-1,i,krUnitN(u));
     put(r,i,u.dept,{font:{bold:true},under:true}); r++;
     badge(r,i,u.head.rank||u.head.title||''); r++; nameBox(r,i,u.head); r++;
     if(u.members.length){ vline(r,i); r++; u.members.forEach(m=>{ nameBox(r,i,m); r++; }); }
@@ -1015,7 +1085,7 @@ async function downloadKrExcel(){
     maxRow=Math.max(maxRow,r);
   });
   for(let r=3;r<=maxRow;r++) if(!ws.getRow(r).height) ws.getRow(r).height=17;
-  [6,7,r0,r0+1,rC+2,rC+3].forEach(r=>ws.getRow(r).height=10);
+  [6,7,14,15].forEach(r=>ws.getRow(r).height=11);
   if(M.rest.length){ const r=maxRow+1; ws.mergeCells(r,2,r,lastCol); const o=cell(r,2);
     o.value='※ 부서 미배치: '+M.rest.map(e=>`${dispName(e)} (${e.dept||'부서 없음'})`).join(', '); o.font=font({size:9,color:{argb:'FFC8001E'}}); }
 
