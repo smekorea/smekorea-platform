@@ -380,10 +380,19 @@ function cmpEmp(a,b){
     ((DEPT_ORDER.indexOf(a.dept)+1||99)-(DEPT_ORDER.indexOf(b.dept)+1||99)) ||
     ((a.emp_no||0)-(b.emp_no||0));
 }
+// v2026-11-09 — 부서 박스 안 인원 순서: 팀장 → 직급 높은 순 → 동일 직급은 입사일 빠른 순 → 사번 (정렬순번 sort_no는 쓰지 않음, A안 / 해외법인도 적용)
+const RANK_ORDER=['대표이사','부사장','전무','상무','이사','부장','차장','책임','과장','선임','대리','주임','사원'];
+function rankIdx(r){ const i=RANK_ORDER.indexOf(String(r||'').trim()); return i<0?99:i; }
+function cmpMember(a,b){
+  return ((a.title==='팀장'?0:1)-(b.title==='팀장'?0:1)) ||
+    (rankIdx(a.rank)-rankIdx(b.rank)) ||
+    String(a.join_date||'9999-12-31').localeCompare(String(b.join_date||'9999-12-31')) ||
+    ((a.emp_no||0)-(b.emp_no||0));
+}
 function descendants(id){
   const out=[]; const seen = new Set([id]);
   (function walk(list){
-    list.sort(cmpEmp).forEach(c=>{ if(seen.has(c.id)) return; seen.add(c.id); out.push(c); walk([...(kids[c.id]||[])]); });
+    list.sort(cmpMember).forEach(c=>{ if(seen.has(c.id)) return; seen.add(c.id); out.push(c); walk([...(kids[c.id]||[])]); });
   })([...(kids[id]||[])]);
   return out;
 }
@@ -404,7 +413,7 @@ function buildOverseas(ent){
   ];
   const secs = regs.map(d=>({ dept:d.dept, label:d.label||d.dept, rows:[] }));
   const misc = { dept:null, label:'미분류', rows:[], misc:true };
-  staff.sort((a,b)=>((a.title?0:1)-(b.title?0:1)) || cmpEmp(a,b))
+  staff.sort((a,b)=>((a.title?0:1)-(b.title?0:1)) || cmpMember(a,b))
        .forEach(e=>{ const s = secs.find(x=>x.dept===e.dept); (s||misc).rows.push({emp:e}); });
   HC.filter(h=>h.entity===ent).sort(byHcSort).forEach(h=>{
     const s = secs.find(x=>x.dept===(h.dept||''));
