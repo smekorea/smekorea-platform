@@ -101,16 +101,17 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .cap{font-size:11px;font-weight:700;margin-bottom:2px;letter-spacing:.3px;}
 
 /* 박스 */
-.box{width:116px;border:1px solid #777;background:#fff;text-align:center;}
+.box{width:104px;border:1px solid #777;background:#fff;text-align:center;}
 .box .bd{font-size:11px;font-weight:700;padding:3px 0;background:var(--hq);color:#fff;}
 .box.ov .bd{background:var(--ov);color:var(--ov-text);}
 .box .nm{font-size:12px;padding:4px 2px;color:#111;}
 .box .nm small{display:block;font-size:10px;color:var(--muted);}
 .box .sub{font-size:10px;color:var(--muted);padding-bottom:3px;margin-top:-3px;}
+.ten{font-size:10px;font-weight:400;color:var(--muted);margin-left:2px;white-space:nowrap;}
 
 /* 부서 컬럼 */
-.unit{width:132px;display:flex;flex-direction:column;align-items:center;}
-.unit-hd{width:116px;text-align:center;font-size:12.5px;font-weight:700;padding-bottom:3px;border-bottom:2px solid var(--hq);margin:6px 0 4px;}
+.unit{width:119px;display:flex;flex-direction:column;align-items:center;}
+.unit-hd{width:104px;text-align:center;font-size:12.5px;font-weight:700;padding-bottom:3px;border-bottom:2px solid var(--hq);margin:6px 0 4px;}
 .unit .ent{font-size:12px;font-weight:900;letter-spacing:.5px;}
 .unit .ent small{display:block;font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;}
 .members{display:flex;flex-direction:column;align-items:center;position:relative;padding-top:10px;gap:0;}
@@ -118,8 +119,8 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .members .box{margin-bottom:-1px;}
 .members .box.titled{margin-top:10px;}
 .members .gap{height:10px;}
-.ovbox{width:150px;border:1px solid #555;background:#fff;}
-.unit.ov-unit{width:166px;}
+.ovbox{width:135px;border:1px solid #555;background:#fff;}
+.unit.ov-unit{width:149px;}
 .ovhd{background:var(--ov);color:var(--ov-text);font-size:12px;font-weight:700;text-align:center;padding:4px 0;}
 .ovbox.misc .ovhd{background:var(--bg-sub);color:var(--muted);}
 .ovrow{font-size:12.5px;color:#111;text-align:center;padding:4px 2px;min-height:26px;border-top:1px solid #777;}
@@ -133,7 +134,7 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .hd-n{font-size:10.5px;font-weight:500;color:var(--muted);}
 .hc{font-size:11.5px;font-weight:700;align-self:flex-start;margin:4px 0 0 8px;}
 .vline{width:0;height:12px;border-left:1px solid #999;}
-.empty-unit{font-size:11px;color:var(--muted);border:1px dashed var(--line-dk);padding:8px 6px;width:116px;text-align:center;}
+.empty-unit{font-size:11px;color:var(--muted);border:1px dashed var(--line-dk);padding:8px 6px;width:104px;text-align:center;}
 .orphans{margin-top:22px;border-top:1px dashed var(--line-dk);padding-top:10px;font-size:12px;color:var(--muted);}
 .orphans b{color:var(--brand);}
 
@@ -334,6 +335,15 @@ let hSortKey = 'eff_date', hSortAsc = false;
 const esc = v => String(v==null?'':v).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const entLabel = e => ENT[e] ? `${ENT[e].code}` : (e||'');
 // DB 이름이 '사장님(곽선효)' 형태면 괄호 안 이름만 표시
+// v2026-11-09 — 근무기간 (입사일 ~ 오늘) 1Y3M 형식
+function tenure(e){
+  if(!e||!e.join_date) return '';
+  const j=new Date(String(e.join_date).slice(0,10)+'T00:00:00'); if(isNaN(j)) return '';
+  const n=new Date(); let m=(n.getFullYear()-j.getFullYear())*12+(n.getMonth()-j.getMonth());
+  if(n.getDate()<j.getDate()) m--;
+  return m<0 ? '' : Math.floor(m/12)+'Y'+(m%12)+'M';
+}
+const tenSpan = e => { const v=tenure(e); return v?` <span class="ten">${v}</span>`:''; };
 const dispName = r => { const m = String(r.name||'').match(/\(([^)]+)\)\s*$/); return m ? m[1] : (r.name||''); };
 
 async function sbGet(table, params){
@@ -474,10 +484,10 @@ const unitCount = u => u.ov ? u.n : (1 + u.members.length + hcSum(u.hc));
 /* ── 화면 그리기 ── */
 function boxHtml(e, badge, ov){
   if(!e) return '';
-  const sub = (e.title==='CFO' && e.rank) ? `<div class="sub">${esc(e.rank)}</div>` : '';
+  const sub = ''; // v2026-11-09 — CFO 직급은 상단 띠에 이미 표시되어 이름 아래 중복 표시 제거
   const loc = e.name_local ? `<small>${esc(e.name_local)}</small>` : '';
   return `<div class="box${ov?' ov':''}" title="${esc([e.rank,e.dept,e.join_date?('입사 '+e.join_date):''].filter(Boolean).join(' · '))}">
-    ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${loc}</div>${sub}</div>`;
+    ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${tenSpan(e)}${loc}</div>${sub}</div>`;
 }
 function unitHtml(u){
   let h = `<div class="unit${u.ov?' ov-unit':''}">`;
@@ -488,7 +498,7 @@ function unitHtml(u){
       if(ci) h += `<div class="vline"></div>`;
       const rows = c.rows.length ? c.rows : [{blank:true}];
       h += `<div class="ovbox${c.misc?' misc':''}"><div class="ovhd">${esc(c.label)}</div>` +
-        rows.map(r=>`<div class="ovrow${r.blank?' blank':''}"${r.blank&&r.label?` title="${esc(r.label)}"`:''}${r.emp?` title="${esc([r.emp.rank,r.emp.dept,r.emp.join_date?('입사 '+r.emp.join_date):''].filter(Boolean).join(' · '))}"`:''}>${esc(ovRowText(r))||'&nbsp;'}</div>`).join('') +
+        rows.map(r=>`<div class="ovrow${r.blank?' blank':''}"${r.blank&&r.label?` title="${esc(r.label)}"`:''}${r.emp?` title="${esc([r.emp.rank,r.emp.dept,r.emp.join_date?('입사 '+r.emp.join_date):''].filter(Boolean).join(' · '))}"`:''}>${esc(ovRowText(r))+(r.emp?tenSpan(r.emp):'')||'&nbsp;'}</div>`).join('') +
         `</div>`;
     });
   } else {
@@ -726,7 +736,7 @@ async function downloadExcel(){
     return x;
   };
   const badge=(r,i,txt,ov)=>put(r,i,txt,{fill:ov?OV:RED,box:true,font:{bold:true,size:9,color:{argb:ov?'FF5A2A00':'FFFFFFFF'}}});
-  const nameBox=(r,i,e)=>put(r,i,dispName(e)+(e.name_local?` (${e.name_local})`:''),{box:true});
+  const nameBox=(r,i,e)=>put(r,i,dispName(e)+(tenure(e)?' '+tenure(e):'')+(e.name_local?` (${e.name_local})`:''),{box:true});
   const vline=(r,i)=>addB(r,L(i),'right');                                  // 단위 i 중앙 세로선 1칸
   // 부모(중앙 pi) → 자식들(중앙 kids[]) : row r 에 부모 세로선 + 가로 버스, row r+1 에 자식별 세로선
   const connect=(r,pi,kidIdx)=>{
@@ -768,7 +778,7 @@ async function downloadExcel(){
         if(ci){ vline(r,i); r++; }
         put(r,i,c.label,{fill:c.misc?'FFEEF0F3':OV,box:true,font:{bold:true,size:9,color:{argb:'FF5A2A00'}}}); r++;
         const rows = c.rows.length ? c.rows : [{blank:true}];
-        rows.forEach(x=>{ put(r,i,ovRowText(x),{box:true}); r++; });
+        rows.forEach(x=>{ put(r,i,ovRowText(x)+(x.emp&&tenure(x.emp)?' '+tenure(x.emp):''),{box:true}); r++; });
       });
     } else {
       put(r,i,u.dept,{font:{bold:true},under:true}); r++;
