@@ -292,6 +292,11 @@ tbody tr:last-child td{border-bottom:none;}
 .dv-tbl tbody tr.dv-row{cursor:pointer;}
 .dv-tbl td.grp{font-weight:700;color:var(--point);vertical-align:top;cursor:default;}
 .dv-tbl td.c{text-align:center;}
+/* (2026-11-10) 최근 수정 칸 — 진척 기록 최근 3건 자동 표시 */
+.dv-tbl td.rl{white-space:normal;cursor:pointer;font-size:11.5px;line-height:1.45;padding-top:3px;padding-bottom:3px;}
+.dv-tbl td.rl:hover{background:#EDF1F7;}
+.rl-i{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rl-d{color:var(--point);font-weight:700;margin-right:4px;}
 .dv-tbl tbody tr:hover td{background:#F4F7FB;}
 .dv-tbl tbody tr:hover td.grp{background:#fff;}
 .dv-tbl td.fx,.dv-tbl th.fx{position:sticky;z-index:3;background:#fff;}
@@ -484,9 +489,10 @@ tbody tr:last-child td{border-bottom:none;}
           <th class="sortable" data-k="use_n">활용도 (최근 30일)<span class="sort-icon"></span><div class="col-resizer"></div></th>
           <th class="sortable" data-k="version">버전<span class="sort-icon"></span><div class="col-resizer"></div></th>
           <th>비고<div class="col-resizer"></div></th>
+          <th class="sortable" data-k="last_log">최근 수정<span class="sort-icon"></span><div class="col-resizer"></div></th>
           <th class="c-act">처리<div class="col-resizer"></div></th>
         </tr></thead>
-        <tbody id="mBody"><tr><td colspan="13" class="loading">로딩중...</td></tr></tbody>
+        <tbody id="mBody"><tr><td colspan="14" class="loading">로딩중...</td></tr></tbody>
       </table>
     </div>
     <div class="legend no-print">
@@ -1210,7 +1216,7 @@ function renderMaster(){
   renderSummary();
   tlRange=calcRange(); renderTlHead();
   let data=mods.filter(m=>(!mFilter.cat||m.category===mFilter.cat)&&(!mFilter.st||modStatus(m)===mFilter.st)&&(!mFilter.mod||(m.module_name||'').toLowerCase().includes(mFilter.mod)));
-  const val=(m,k)=>k==='status'?modStatus(m):k==='use_n'?(useMap[m.id]?useMap[m.id].n:-1):m[k];
+  const val=(m,k)=>k==='status'?modStatus(m):k==='use_n'?(useMap[m.id]?useMap[m.id].n:-1):k==='last_log'?((recentLogs(m.id)[0]||{}).log_date||''):m[k];
   data.sort((a,b)=>{
     let av=val(a,mSortKey), bv=val(b,mSortKey);
     if(av===null||av===undefined||av==='') av=mSortAsc?'￿':''; if(bv===null||bv===undefined||bv==='') bv=mSortAsc?'￿':'';
@@ -1221,7 +1227,7 @@ function renderMaster(){
   document.getElementById('mCnt').textContent=data.length+'건';
   const grouped=(mSortKey==='sort_no');
   const tb=document.getElementById('mBody');
-  if(!data.length){ tb.innerHTML='<tr><td colspan="13" class="empty" style="padding:40px;"><div class="empty-msg">조회된 모듈이 없습니다</div></td></tr>'; return; }
+  if(!data.length){ tb.innerHTML='<tr><td colspan="14" class="empty" style="padding:40px;"><div class="empty-msg">조회된 모듈이 없습니다</div></td></tr>'; return; }
   tb.innerHTML=data.map((m,ix)=>{
     const first=!grouped||ix===0||data[ix-1].category!==m.category;
     let span=1; if(grouped&&first){ while(data[ix+span]&&data[ix+span].category===m.category) span++; }
@@ -1242,10 +1248,20 @@ function renderMaster(){
       <td>${useHtml}</td>
       <td>${esc(m.version||'')}</td>
       <td title="${esc(m.note||'')}">${esc(m.note||'')}</td>
+      <td class="rl" onclick="event.stopPropagation();goLog(${m.id})" title="누르면 세부 진척현황으로 이동">${recentHtml(m.id)}</td>
       <td class="c c-act" onclick="event.stopPropagation()"><button class="mini-btn" onclick="openLog(null,${m.id})">＋진척</button> <button class="mini-btn" onclick="goLog(${m.id})">이력</button></td>
     </tr>`;
   }).join('');
   fixLeft('mTable');
+}
+
+// (2026-11-10) 최근 수정 — smerp_module_log 최근 3건 (일자 내림차순, 같은 날은 나중 기록 먼저)
+function recentLogs(id){ return logs.filter(l=>l.module_id===id).sort((a,b)=>String(b.log_date||'').localeCompare(String(a.log_date||''))||(b.id-a.id)).slice(0,3); }
+function recentHtml(id){
+  const r=recentLogs(id);
+  if(!r.length) return '<span style="color:var(--muted);">-</span>';
+  return r.map(l=>{ const d=String(l.log_date||'').slice(5,10).replace('-','/');
+    return `<span class="rl-i" title="${esc((l.log_date||'')+' '+(l.version||'')+' '+(l.title||'')+(l.content?'\n'+l.content:''))}"><span class="rl-d">${esc(d)}</span>${esc(l.title||'')}</span>`; }).join('');
 }
 
 /* ── 세부 진척현황 ── */
@@ -1458,7 +1474,7 @@ function initResize(tableId,key,defs){
 
 function dvInit(){
   document.querySelectorAll('#mTable thead th.sortable').forEach(th=>th.addEventListener('click',()=>masterSort(th.dataset.k)));
-  initResize('mTable','collab_master_col_v5',[100,190,108,74,110,98,98,86,280,146,64,140,130]);
+  initResize('mTable','collab_master_col_v6',[100,190,108,74,110,98,98,86,280,146,64,140,260,130]);
   initResize('lTable','collab_log_col_v2',[200,86,80,104,380,690,80]);
   bindAc('mfMod','mfModAc',dvQuery);
   bindAc('lfMod','lfModAc',lgQuery);

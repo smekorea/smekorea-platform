@@ -9,7 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.8 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   org_chart.html v1.9 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   ── v1.9: 글로벌 조직도 본사도 부서 기준(대표→[연구소·상무·CFO], 연구소·CFO 한 단 아래) / SMEKR 선 1.5px 테두리·숫자 삭제·근무연수 표시에 따라 칸 너비
    ── v1.8: SMEKR 조직도 연결선을 엑셀 원본과 동일하게 — 대표→[연구소·상무·CFO], 연구소·상무→부서 가로선, CFO→재경팀
    ── v1.7: 메뉴명 「글로벌 조직도」→「조직도」, 탭 [🌐 글로벌 조직도 | 🏢 SMEKR 조직도 | 📜 조직 이력]
             SMEKR 조직도: 대표이사 → 상무이사 → (연구소 · 상무 직속 · CFO) → 부서 (부서 기준 배치, reports_to 미사용)
@@ -116,15 +117,18 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 #chart.no-ten .ten,#krChart.no-ten .ten{display:none;}
 #chart:not(.no-ten) .unit,#krChart:not(.no-ten) .unit{width:149px;}
 #chart:not(.no-ten) .unit.ov-unit{width:179px;}
+/* v1.9 글로벌 조직도 — 연구소·CFO 한 단 아래용 세로선 칸 */
+.g-drop{width:0;height:66px;border-left:1.5px solid var(--line);}
 /* v1.7 SMEKR 조직도 */
 .kr-n{font-size:10.5px;color:#444;margin:0 0 1px 18px;min-height:13px;align-self:center;}
 .kr-canvas{position:relative;margin:24px auto 0;}
-.kr-l{position:absolute;background:var(--line);}
-.kr-num{position:absolute;font-size:10.5px;color:#444;line-height:1;}
+.kr-l{position:absolute;width:0;height:0;}
+.kr-l.h{border-top:1.5px solid var(--line);}
+.kr-l.v{border-left:1.5px solid var(--line);}
 .kr-node{position:absolute;width:104px;display:flex;flex-direction:column;align-items:center;}
 .kr-node .cap{height:16px;margin:0;line-height:16px;white-space:nowrap;}
 .kr-row{position:absolute;left:0;right:0;}
-.kr-col{position:absolute;top:0;width:149px;}
+.kr-col{position:absolute;top:0;}
 .kr-col .unit-hd{margin-top:6px;}
 #krChart .box{height:50px;box-sizing:border-box;}
 #krChart .members .box{height:auto;}
@@ -483,34 +487,30 @@ function buildOverseas(ent){
 const ovRowText = r => r.blank ? '' : (dispName(r.emp) + (r.withRank && r.emp.rank ? ' '+r.emp.rank : '') + (r.emp.name_local ? ` (${r.emp.name_local})` : ''));
 
 function buildModel(){
+  // v1.9 (2026-11-10) — 본사는 SMEKR 조직도와 같은 부서 기준(KR_LAYOUT): 대표 → [연구소 · 상무이사 · CFO]
+  //   연구소 → 개발기획팀·영업팀 / 상무이사 → 해외법인 3곳 + 상무 직속 부서 / CFO → 재경팀 (reports_to 미사용)
   byId = {}; kids = {};
   EMPS.forEach(e=>{ byId[e.id]=e; });
   EMPS.forEach(e=>{ if(e.reports_to && byId[e.reports_to]) (kids[e.reports_to]=kids[e.reports_to]||[]).push(e); });
-  const root = EMPS.find(e=>e.title==='대표이사') || EMPS.find(e=>!e.reports_to && e.entity==='KOREA');
+  buildKr();
+  const K = krModel, root = K.root;
   const placed = new Set();
   const groups = [];
   if(root){
-    placed.add(root.id);
-    const lv2 = [...(kids[root.id]||[])].filter(p=>p.entity==='KOREA').sort(cmpEmp);
-    lv2.forEach(p=>{
-      placed.add(p.id);
-      const units = [];
-      (kids[p.id]||[]).filter(h=>h.entity==='KOREA').forEach(h=>{
-        const members = descendants(h.id);
-        placed.add(h.id); members.forEach(m=>placed.add(m.id));
-        units.push({ ov:false, entity:'KOREA', dept:h.dept, head:h, members,
-          hc: HC.filter(x=>x.entity==='KOREA' && (x.dept||'')===h.dept).sort(byHcSort) });
-      });
-      units.sort((a,b)=>cmpEmp(a.head,b.head));
-      groups.push({ person:p, units });
-    });
-    // 해외법인은 법인장이 연결된 임원(엑셀 기준 상무) 아래 왼쪽에 세로 1열씩
-    const ovHeadBoss = EMPS.find(e=>e.entity!=='KOREA' && e.title==='법인장' && e.reports_to && byId[e.reports_to]);
-    const ovGroup = (ovHeadBoss && groups.find(g=>g.person.id===ovHeadBoss.reports_to)) || groups.find(g=>g.person.title==='상무이사') || groups[0];
-    if(ovGroup){
-      const ovUnits = OVERSEAS_ORDER.map(buildOverseas);
-      ovUnits.forEach(u=>u.people.forEach(e=>placed.add(e.id)));
-      ovGroup.units = ovUnits.concat(ovGroup.units);
+    EMPS.filter(e=>e.entity==='KOREA').forEach(e=>{ if(!K.rest.includes(e)) placed.add(e.id); });
+    const colOf = key => K.cols.find(c=>c.key===key);
+    const lab = colOf('lab'), hqc = colOf('hq'), cfo = colOf('cfo');
+    if(lab && lab.head) groups.push({ pos:'lab', cap:lab.cap, person:lab.head, badge:lab.head.title||lab.head.rank, units:lab.units });
+    const ovUnits = OVERSEAS_ORDER.map(buildOverseas);
+    ovUnits.forEach(u=>u.people.forEach(e=>placed.add(e.id)));
+    if(K.hq) groups.push({ pos:'hq', cap:'KOREA H.Q', person:K.hq, badge:K.hq.title||K.hq.rank, units: ovUnits.concat(hqc?hqc.units:[]) });
+    if(cfo && cfo.head) groups.push({ pos:'cfo', cap:cfo.cap, person:cfo.head, badge:cfo.head.rank||'', units:cfo.units });
+    // 상무가 없거나 연구소·CFO 머리가 없으면 그 부서는 상무 묶음(또는 첫 묶음)으로
+    const hqG = groups.find(g=>g.pos==='hq') || groups[0];
+    if(hqG){
+      if(!(lab && lab.head) && lab) hqG.units = hqG.units.concat(lab.units);
+      if(!(cfo && cfo.head) && cfo) hqG.units = hqG.units.concat(cfo.units);
+      if(!K.hq && hqc) hqG.units = hqG.units.concat(hqc.units);
     }
   }
   const orphans = EMPS.filter(e=>!placed.has(e.id));
@@ -560,7 +560,7 @@ function applyTenureUI(){
   ['chart','krChart'].forEach(id=>{ const c=document.getElementById(id); if(c) c.classList.toggle('no-ten',!SHOW_TEN); });
   ['tenBtn','tenBtnKr'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); } });
 }
-function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); }
+function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); if(krModel) renderKr(); }
 function renderChart(){
   applyTenureUI();
   const M = model;
@@ -574,8 +574,9 @@ function renderChart(){
   if(M.groups.length){
     h += `<ul>`;
     M.groups.forEach(g=>{
-      const cap = g.person.title==='상무이사' ? 'KOREA H.Q' : (g.person.title||'');
-      h += `<li><div class="node"><div class="cap">${esc(cap)}</div>${boxHtml(g.person, g.person.title==='CFO' ? (g.person.rank||'') : (g.person.title||g.person.rank), false)}</div>`;
+      // v1.9 — 연구소·CFO는 상무이사보다 한 단 아래: 위에 세로선 칸, 상무는 아래에 같은 높이 세로선 칸
+      const low = g.pos!=='hq';
+      h += `<li><div class="node">${low?'<div class="g-drop"></div>':''}<div class="cap">${esc(g.cap)}</div>${boxHtml(g.person, g.badge, false)}${low?'':'<div class="g-drop"></div>'}</div>`;
       if(g.units.length){ h += `<ul>${g.units.map(u=>`<li><div class="node">${unitHtml(u)}</div></li>`).join('')}</ul>`; }
       h += `</li>`;
     });
@@ -586,6 +587,11 @@ function renderChart(){
     h += `<div class="orphans">⚠ 조직도에 연결되지 않은 재직자 <b>${M.orphans.length}명</b>: ${M.orphans.map(e=>esc(`[${entLabel(e.entity)}] ${dispName(e)}`)).join(', ')} — 관리자 설정 › 직원 관리에서 「상위자」를 지정해 주세요.</div>`;
   }
   document.getElementById('chart').innerHTML = h;
+  // v1.9 — 세로선 칸 높이 = 상무이사(직책 + 박스) 높이
+  const hqNode = document.querySelector('#chart .tree > ul > li > ul > li > .node .g-drop:last-child');
+  if(hqNode){ const nd=hqNode.parentElement; const cap=nd.querySelector('.cap'), bx=nd.querySelector('.box');
+    const hgt = (cap?cap.offsetHeight+2:0) + (bx?bx.offsetHeight:0);
+    document.querySelectorAll('#chart .g-drop').forEach(d=>d.style.height=hgt+'px'); }
   // 좁은 화면: 가로 스크롤을 대표이사 박스 중앙에 맞춤
   const sc = document.querySelector('.sheet-scroll'), rb = document.querySelector('.tree > ul > li > .node');
   if(sc && rb && sc.scrollWidth > sc.clientWidth){
@@ -812,18 +818,21 @@ async function downloadExcel(){
   const rootI = Math.round((Math.min(...gC)+Math.max(...gC))/2);
   badge(4,rootI,model.root.title||model.root.rank,false); nameBox(5,rootI,model.root);
   connect(6,rootI,gC);
+  // v1.9 — 상무이사 8~9 → 세로선 10~11 / 연구소·CFO 세로선 8~9 → 10~11 (한 단 아래) / 부서 연결 12~13 / 단위 14~
   gspan.forEach((x,k)=>{
-    const p=x.g.person, i=gC[k];
-    badge(8,i,p.title==='상무이사'?'KOREA H.Q · 상무이사':(p.title==='CFO'?`CFO · ${p.rank||''}`:(p.title||p.rank)),false);
-    nameBox(9,i,p);
+    const g=x.g, p=g.person, i=gC[k], low=g.pos!=='hq';
+    const r0 = low ? 10 : 8;
+    if(low){ vline(8,i); vline(9,i); } else { vline(10,i); vline(11,i); }
+    badge(r0,i,`${g.cap} · ${g.badge||''}`,false);
+    nameBox(r0+1,i,p);
     const kidIdx=[]; for(let j=x.s;j<=x.e;j++) if(units[j]) kidIdx.push(j);
-    if(kidIdx.length) connect(10,i,kidIdx);
+    if(kidIdx.length) connect(12,i,kidIdx);
   });
 
-  let maxRow=12;
+  let maxRow=14;
   units.forEach((u,i)=>{
     if(!u) return;
-    let r=12;
+    let r=14;
     if(u.ov){
       const E=ENT[u.entity]||{code:u.entity,country:''};
       put(r,i,`${E.code} (${E.country})`,{font:{bold:true}}); r++;
@@ -843,7 +852,7 @@ async function downloadExcel(){
     maxRow=Math.max(maxRow,r);
   });
   for(let r=3;r<=maxRow;r++) if(!ws.getRow(r).height) ws.getRow(r).height = 17;
-  [3,6,7,10,11].forEach(r=>ws.getRow(r).height=10);
+  [3,6,7,12,13].forEach(r=>ws.getRow(r).height=10);
   if(model.orphans.length){
     const r=maxRow+1; ws.mergeCells(r,2,r,lastCol);
     const o=cell(r,2); o.value='※ 조직도 미연결: '+model.orphans.map(e=>`[${entLabel(e.entity)}] ${dispName(e)}`).join(', ');
@@ -934,8 +943,11 @@ const krUnitN = u => 1 + u.members.length + hcSum(u.hc);
 // v1.8 (2026-11-10) — 엑셀 원본(SMEKR조직도) 연결선: 대표이사 → 가로선 → [연구소 · 상무이사 · CFO]
 //   연구소·상무이사 → 같은 부서 가로선(연구소 부서 + 상무 직속 부서) / CFO → 재경팀 단독 세로선
 //   연구소·CFO 박스는 상무이사 박스보다 한 단 아래 / 대표이사는 상무이사 세로선 위
-const KR_W = 149, KR_G = 14, KR_CFO_GAP = 46, KR_BOX = 104;
+// v1.9 — 칸 너비는 근무연수 표시 여부를 따름(글로벌과 동일: 표시 149 / 숨김 119)
+const KR_G = 14, KR_CFO_GAP = 46, KR_BOX = 104;
+let KR_W = 149;
 function krLayout(){
+  KR_W = SHOW_TEN ? 149 : 119;
   const M = krModel;
   const lab = M.cols.find(c=>c.key==='lab'), hqc = M.cols.find(c=>c.key==='hq'), cfo = M.cols.find(c=>c.key==='cfo');
   const labU = lab ? lab.units : [], hqU = hqc ? hqc.units : [], cfoU = cfo ? cfo.units : [];
@@ -961,10 +973,12 @@ function renderKr(){
   const Y = { rootN:0, root:14, bus1:96, hq:122, sub:178, bus2:262, team:286 };
   const BOXH = 50;
   const parts = [];
-  const hl = (x1,x2,y) => parts.push(`<div class="kr-l" style="left:${Math.min(x1,x2)}px;top:${y}px;width:${Math.abs(x2-x1)+1.5}px;height:1.5px;"></div>`);
-  const vl = (x,y1,y2) => parts.push(`<div class="kr-l" style="left:${x}px;top:${y1}px;width:1.5px;height:${y2-y1}px;"></div>`);
-  const num = (x,y,v) => parts.push(`<div class="kr-num" style="left:${x+5}px;top:${y}px;">${v}</div>`);
-  const node = (x,y,cap,e,badge) => parts.push(`<div class="kr-node" style="left:${x-KR_BOX/2}px;top:${y}px;">${cap?`<div class="cap">${esc(cap)}</div>`:''}${boxHtml(e,badge,false)}</div>`);
+  // v1.9 — 선은 글로벌 조직도와 같은 1.5px 테두리, 좌표는 정수 / 인원수 숫자 표시 삭제
+  const R = v => Math.round(v);
+  const hl = (x1,x2,y) => parts.push(`<div class="kr-l h" style="left:${R(Math.min(x1,x2))}px;top:${R(y)}px;width:${R(Math.abs(x2-x1))+1}px;"></div>`);
+  const vl = (x,y1,y2) => parts.push(`<div class="kr-l v" style="left:${R(x)}px;top:${R(y1)}px;height:${R(y2-y1)}px;"></div>`);
+  const num = () => {};
+  const node = (x,y,cap,e,badge) => parts.push(`<div class="kr-node" style="left:${R(x-KR_BOX/2)}px;top:${y}px;">${cap?`<div class="cap">${esc(cap)}</div>`:''}${boxHtml(e,badge,false)}</div>`);
   // 대표이사
   num(Lo.hqX, Y.rootN, M.n);
   node(Lo.hqX, Y.root, '', M.root, M.root.title||M.root.rank);
@@ -1002,8 +1016,8 @@ function renderKr(){
   Lo.cfoU.forEach((u,j)=>{ if(j) vl(Lo.cfoCx(j), Y.sub+16+BOXH, Y.team+6); num(Lo.cfoCx(j), Y.bus2+3, krUnitN(u)); });
   // 부서 줄
   let row = `<div class="kr-row" style="top:${Y.team}px;">`;
-  Lo.busU.forEach((u,i)=>{ row += `<div class="kr-col" style="left:${i*(KR_W+KR_G)}px;">${unitHtml(u)}</div>`; });
-  Lo.cfoU.forEach((u,j)=>{ row += `<div class="kr-col" style="left:${Lo.cfoX0 + j*(KR_W+KR_G)}px;">${unitHtml(u)}</div>`; });
+  Lo.busU.forEach((u,i)=>{ row += `<div class="kr-col" style="left:${i*(KR_W+KR_G)}px;width:${KR_W}px;">${unitHtml(u)}</div>`; });
+  Lo.cfoU.forEach((u,j)=>{ row += `<div class="kr-col" style="left:${Lo.cfoX0 + j*(KR_W+KR_G)}px;width:${KR_W}px;">${unitHtml(u)}</div>`; });
   row += `</div>`;
   const maxMembers = Math.max(0, ...Lo.busU.concat(Lo.cfoU).map(u=>u.members.length + u.hc.length));
   const height = Y.team + 110 + maxMembers*26;
@@ -1045,7 +1059,7 @@ async function downloadKrExcel(){
   const vline=(r,i)=>addB(r,L(i),'right');
   const vrun=(r1,r2,i)=>{ for(let r=r1;r<=r2;r++) vline(r,i); };
   const bus=(r,lo,hi)=>{ if(hi>lo) for(let c=R(lo);c<=L(hi);c++) addB(r,c,'bottom'); };
-  const cnt=(r,i,v)=>{ const x=cell(r,R(i)); x.value=v; x.font=font({size:8,color:{argb:'FF444444'}}); x.alignment={horizontal:'left',vertical:'bottom'}; };
+  const cnt=()=>{};   // v1.9 — 인원수 숫자 표시 삭제
 
   ws.mergeCells(1,1,1,lastCol);
   const t1=cell(1,1); t1.value='SME KOREA 조직도'; t1.font=font({bold:true,size:18,color:{argb:'FFFFFFFF'}});
