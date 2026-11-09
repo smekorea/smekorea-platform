@@ -924,9 +924,9 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
         <thead><tr>
           <th style="padding:7px 2px;text-align:center;"><input type="checkbox" id="mtAll" title="화면의 미완료 건 전체 선택" onchange="pickAll(this.checked)"></th>
           <th class="sortable" onclick="mtSort('meeting_date')">지시일<span class="sort-icon" id="msort-meeting_date">↓</span><div class="col-resizer"></div></th>
-          <th class="sortable" onclick="mtSort('owner_dept')">부서 · 담당자<span class="sort-icon" id="msort-owner_dept"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('issuer_name')">지시자<span class="sort-icon" id="msort-issuer_name"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('title')">지시 내용<span class="sort-icon" id="msort-title"></span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="mtSort('owner_dept')">담당부서 · 담당자<span class="sort-icon" id="msort-owner_dept"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('due_date')">기한<span class="sort-icon" id="msort-due_date"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('_done')">완료일<span class="sort-icon" id="msort-_done"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('status')">상태<span class="sort-icon" id="msort-status"></span><div class="col-resizer"></div></th>
@@ -1374,6 +1374,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.73 (2026-11-09) — 주간회의 표: 담당부서·담당자 열을 기한 앞으로 이동, 「부서 / 담당자」 한 줄 표기
    directive.html v3.72 (2026-11-09) — 담당부서 선택에 「박정용 상무」 추가(사장님→상무 지시, 저장값 상무이사, 활동 담당자 선택 가능, 부서별 평가 제외)
    directive.html v3.71 (2026-11-05) — 금주계획 담당(dev_plans.assignee): 계획 등록 줄(비우면 본인)·수정 창·표 「담당」 열·브리핑창, 조회줄에 담당 선택·내용 검색·초기화 (열 너비 키 v3)
    directive.html v3.70 (2026-11-05) — 거래처·메이커 자동완성(vmFillList/rpFillVendors/dvVendors/dvFillFilters)이 메이커관리(makers)만 보던 것을 dvMakerList()로 통합해 동일메이커관리(maker_alias) 표준명도 포함
@@ -1595,6 +1596,8 @@ function ddayHtml(d){
 function realUpdates(d){return (updMap[d.id]||[]).filter(u=>u.type!=='공지확인');}
 function lastUpd(d){const arr=realUpdates(d).filter(u=>u.content);return arr.length?arr[arr.length-1]:null;}
 function asgNames(d){return (asgMap[d.id]||[]).map(a=>a.emp_name).join(', ');}
+// v3.73: 주간회의 표 담당부서 · 담당자 한 줄 표기 (상무 본인 건은 이름 중복 생략)
+function ownerLine(d){const n=asgNames(d), l=deptLabel(d); return (!n||(d.owner_dept===EXEC_OWNER&&EXEC_OWNER_LABEL.indexOf(n)===0))?l:l+' / '+n;}
 function deptLabel(d){return (d.entity&&d.entity!=='KOREA'?d.entity+' ':'')+deptName(d.owner_dept||'');}
 
 /* ── 안건(이어지는 지시 묶음) ── */
@@ -1944,9 +1947,9 @@ function meetRow(d,L,mgr){
   if(mng) ctl+=`<button class="btn btn-outline mt-btn" onclick="openForm(${d.id})" title="지시 내용을 수정합니다">수정</button><button class="btn btn-red mt-btn" onclick="delDirectives([${d.id}])" title="중복 등록 등 잘못 올린 지시를 DB에서 삭제합니다(복구 불가)">삭제</button>`;
   return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&isTask(d)?'row-done':''}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
-    <td>${esc(md(d.meeting_date))}</td><td>${esc(deptLabel(d))}${asgNames(d)?`<div class="th-meta" title="담당자">${esc(asgNames(d))}</div>`:''}</td><td>${esc(d.issuer_name||'-')}</td>
+    <td>${esc(md(d.meeting_date))}</td><td>${esc(d.issuer_name||'-')}</td>
     <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
-    <td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${stHtml}</td>
+    <td>${esc(ownerLine(d))}</td><td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${stHtml}</td>
     <td>${actHtml}</td>
     <td class="mt-ctl">${ctl}</td></tr>`;
 }
@@ -2780,7 +2783,7 @@ function applyResize(tableId,KEY,def){
 }
 function initColResize(){
   applyResize('listTable','directive_col_v3',[44,92,76,78,72,104,110,340,150,66,104,300]);
-  applyResize('mtTable','directive_meet_col_v7',[32,70,112,72,400,132,70,150,440,250]);
+  applyResize('mtTable','directive_meet_col_v8',[32,70,72,400,150,132,70,150,440,250]);
 }
 
 let toastTimer;
