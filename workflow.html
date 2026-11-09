@@ -1240,6 +1240,7 @@ body.m-legend-on #cat-legend{display:flex;}
         <label class="lk-chk"><input type="checkbox" id="dm-lk-wk" onchange="onLinkChk('wk')"> <span id="dm-lk-wk-lab">주간보고</span></label>
         <label class="lk-chk"><input type="checkbox" id="dm-lk-pj" onchange="onLinkChk('pj')"> 프로젝트 (세부진척현황)</label>
         <label class="lk-chk" id="dm-lk-ms-wrap" title="프로젝트를 체크해야 선택할 수 있습니다 — 프로젝트의 단계 상태를 마스터에 표시"><input type="checkbox" id="dm-lk-ms" onchange="onLinkChk('ms')"> 부품개발 마스터</label>
+        <label class="lk-chk" title="상태가 「일정」인 건을 그 주 금주계획에 올립니다 — 연동하지 않으려면 체크를 해제하세요"><input type="checkbox" id="dm-lk-plan" onchange="this.dataset.touched='1'"> 금주계획</label>
         <select id="dm-link-type" class="dm-input" style="display:none;" onchange="onLinkTypeChange()">
           <option value="">연동 안 함</option>
           <option value="directive">지시사항</option>
@@ -3239,7 +3240,7 @@ var UP_FIELDS={category:['업무유형',function(){return upAllowed('category');
   status:['상태',function(){return UP_STATUS;}],importance:['중요도',function(){return UP_IMP;}]};
 function upInitRow(obj,i){
   var r={i:i,obj:obj,inc:true,vIn:obj.partner||'',mIn:obj.maker||'',vSel:'',mSel:'',vCands:[],mCands:[],bad:{},dup:false,
-    lk:{dir:false,wk:false,pj:false,ms:false,dirId:'',pjId:'',stage:'',msSt:'',wkDept:LINK_DEPTS.indexOf(wfSession.dept)>=0?wfSession.dept:LINK_DEPTS[0],wkCat:'영업'}};
+    lk:{plan:obj.status==='일정'&&obj.category!=='개인업무',dir:false,wk:false,pj:false,ms:false,dirId:'',pjId:'',stage:'',msSt:'',wkDept:LINK_DEPTS.indexOf(wfSession.dept)>=0?wfSession.dept:LINK_DEPTS[0],wkCat:'영업'}};
   // 메이커 먼저(거래처 칸의 메이커 이름을 옮길 수 있게)
   if(r.mIn){ var ms=vmMakerStd(r.mIn); if(ms){ r.mSel='c:'+ms; } else { r.mCands=upMakerCands(r.mIn); r.mSel='raw'; } }
   if(r.vIn){
@@ -3341,7 +3342,7 @@ function upLinkCell(r){
   var L=r.lk, i=r.i, it=upItem(L.pjId);
   var cb=function(k,label,on,dis,title){ return '<label style="display:inline-flex;align-items:center;gap:3px;white-space:nowrap;cursor:pointer;'+(dis?'opacity:.5;':'')+'"'+(title?' title="'+escapeHtml(title)+'"':'')+'><input type="checkbox"'+(on?' checked':'')+(dis?' disabled':'')+' onchange="upSet('+i+',\'lk.'+k+'\',this.checked)">'+label+'</label>'; };
   var h='<div style="display:flex;flex-wrap:wrap;gap:2px 10px;">'+cb('dir','지시사항',L.dir)+cb('wk',L.pj?'주간보고(신규개발 줄)':'주간보고',L.wk||L.pj,L.pj)
-    +cb('pj','프로젝트',L.pj)+cb('ms','마스터',L.ms,!L.pj,'프로젝트를 체크해야 선택할 수 있습니다')+'</div>';
+    +cb('pj','프로젝트',L.pj)+cb('ms','마스터',L.ms,!L.pj,'프로젝트를 체크해야 선택할 수 있습니다')+(r.obj.status==='일정'?cb('plan','금주계획',L.plan):'')+'</div>';
   var sub='';
   if(L.dir) sub+=upSel(i,'lk.dirId','<option value="">지시사항 선택 ('+upCtx.dirs.length+'건)</option>'+upCtx.dirs.map(function(d){ return upOpt(d.id,linkDirLabel(d),L.dirId); }).join(''),270);
   if(L.wk&&!L.pj) sub+=upSel(i,'lk.wkDept',LINK_DEPTS.map(function(d){ return upOpt(d,d,L.wkDept); }).join(''),100)+upSel(i,'lk.wkCat',LINK_CATS.map(function(c){ return upOpt(c,c,L.wkCat); }).join(''),70)+'<span class="up-mut">주간업무 새 줄</span>';
@@ -3455,6 +3456,7 @@ async function confirmDiaryUpload(){
     var nLink=0, nOk=0; linkQuiet=[];
     for(var k=0;k<rows.length;k++){
       var r=rows[k], d=saved[k], sel=upLinkSel(r,upVM(r));
+      if(d&&r.lk.plan&&r.obj.status==='일정'&&String(d.date).slice(0,10)===String(r.obj.date)) await applyPlanLink(d.id,true);
       if(!sel||!d) continue;
       if(String(d.date).slice(0,10)!==String(r.obj.date)||String(d.title||'')!==String(r.obj.title||'')){ linkQuiet.push('「'+(r.obj.title||'')+'」 연동 대상 짝이 맞지 않아 연동하지 않았습니다.'); continue; }
       nLink++; await applyDiaryLink(d.id,sel);
@@ -4459,6 +4461,7 @@ function updateLinkHint(){
 }
 // 창을 열 때: 연동 칸을 비우거나(신규) 그 일지에 걸려 있는 연동을 다시 보여준다
 function resetLinkUI(r){
+  (function(){ var pc=document.getElementById('dm-lk-plan'); if(!pc) return; delete pc.dataset.touched; pc.dataset.isnew=r?'':'1'; pc.checked=r?!!r.link_plan:true; setTimeout(planChkByCat,0); })();
   linkPreset=(r&&r.link_type&&r.link_ref_id)?{type:r.link_type,refId:r.link_ref_id,stage:r.link_stage||''}:null;
   var mkEl=document.getElementById('dm-maker'); if(mkEl&&!r) mkEl.value='';
   linkData.dirs=linkData.items=linkData.weekly=null;
@@ -4579,6 +4582,15 @@ function readLinkSel(obj){
   }
   obj.partner=vendor; obj.maker=maker||null;
   return {type:type,refId:null,stage:null,wkNew:{kind:isSched?'계획':'실적',dept:document.getElementById('dm-link-wk-dept').value,category:document.getElementById('dm-link-wk-cat').value,vendor:vendor,maker:maker,addPartner:addPartner}};
+}
+// 금주계획 연동(v1.28): 개인업무 외 항상 체크, 해제하면 미연동. 기간·반복은 시작일 1건만
+function planChkByCat(){ var pc=document.getElementById('dm-lk-plan'), c=document.getElementById('dm-cat'); if(!pc||!c||pc.dataset.isnew!=='1'||pc.dataset.touched) return; pc.checked=c.value!=='개인업무'; }
+document.addEventListener('change',function(ev){ if(ev.target&&ev.target.id==='dm-cat') planChkByCat(); });
+async function applyPlanLink(id,on){
+  if(!SB||!id) return;
+  var rec=diaryRecords.find(function(x){ return String(x.id)===String(id); }); if(rec&&!!rec.link_plan===!!on) return;
+  try{ var u=await SB.from('work_diary').update({link_plan:!!on}).eq('id',id).select().single(); if(u.error) throw u.error; if(rec) Object.assign(rec,u.data); }
+  catch(e){ console.warn('[Link] plan:',e); linkWarn('업무일지는 저장됐지만 금주계획 연동에 실패했습니다: '+(e.message||e)); }
 }
 // 일지 저장이 끝난 뒤 연동 정보를 그 일지 1건에 저장한다(실제 반영은 DB 트리거)
 async function applyDiaryLink(id,sel){
@@ -5260,6 +5272,7 @@ async function saveDiary(){
     todos.push(tobj);
   }
   await applyDiaryLink(linkRowId,linkSel);   // 업무보고 연동 저장
+  { var pcb=document.getElementById('dm-lk-plan'); await applyPlanLink(linkRowId,!!(pcb&&pcb.checked&&obj.category!=='개인업무')); }
   diaryCopyOrigin=null;
   closeDiaryModal();
   renderDiary();
