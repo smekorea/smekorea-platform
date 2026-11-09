@@ -1476,6 +1476,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 /* ══════════════════════════════════════════════════════════════
    directive.html v3.73 (2026-11-09) — 주간회의 표: 담당부서·담당자 열을 기한 앞으로 이동, 「부서 / 담당자」 한 줄 표기
    directive.html v3.72 (2026-11-09) — 담당부서 선택에 「박정용 상무」 추가(사장님→상무 지시, 저장값 상무이사, 활동 담당자 선택 가능, 부서별 평가 제외)
+   directive.html v3.78 (2026-11-09) — 거래처관계관리: 한 칸 여러 건을 한 줄로 표시, 누르면 목록
    directive.html v3.77 (2026-11-09) — 거래처관계관리: 거래처·메이커 칸을 거래처 정보·메이커관리 기준 자동완성, 미등록 이름 등록 안내
    directive.html v3.76 (2026-11-09) — 거래처관계관리: 구분(매입처·매출처·매입매출처)·메이커(복수) 열, LG전자 외 거래처별 한 줄로 묶음, 구분·메이커 조회
    directive.html v3.75 (2026-11-09) — 거래처관계관리로 이름 변경, 전용 로그인 허용 명단만 표시, 실행 색 #00FF00, 보기 위치 조회 오른쪽, 부서명 팀까지, 일·주·월 머리글을 추진과제처럼 월(연) 묶음 표시
@@ -3715,6 +3716,12 @@ function vcSubSet(s){vcSub=s;vcG('vcS-visit').classList.toggle('on',s==='visit')
 async function renderVc(){ if(!vcLoaded) await vcLoad(); vcFillAc(); if(!vcG('vcFrom').value) vcDefaultPeriod(); if(vcSub==='visit') renderVcVisit(); else renderVcTarget(); }
 function vcReset(){['vcType','vcFMk','vcKind','vcSt','vcFVen','vcFWho','vcKw'].forEach(i=>{vcG(i).value='';});vcG('vcScale').value='week';vcDefaultPeriod();renderVcVisit();}
 function vcChip(v){const st=vcState(v),nm=(v.cust_contact||v.partner||'').split(',')[0].trim()||v.partner;return `<div class="vc-c vc-${st}" onclick="event.stopPropagation();bfVc(${v.id})" title="${esc((v.visit_kind||'')+' · '+st+(v.cust_contact?' · '+v.cust_contact:''))}">${v.visit_kind==='관계관리'?'<b>관</b> ':''}${esc(nm)}</div>`;}
+// 한 칸에 여러 건이면 한 줄로 — 색은 미실행 > 계획 > 실행 순, 누르면 목록
+function vcChipMulti(a,ix,k){
+  const sts=a.map(vcState), st=sts.indexOf('미실행')>=0?'미실행':sts.indexOf('계획')>=0?'계획':'실행';
+  const nm=a.map(v=>(v.cust_contact||v.partner||'').split(',')[0].trim()||v.partner).join(', ');
+  return `<div class="vc-c vc-${st}" onclick="event.stopPropagation();vcCellList(${ix},'${k}')" title="${esc(a.length+'건 · '+nm)}">${a.some(v=>v.visit_kind==='관계관리')?'<b>관</b> ':''}${esc(nm)}</div>`;
+}
 function renderVcVisit(){
   vcFillWho();
   const sc=vcG('vcScale').value, cols=vcCols(); vcKeys=cols.map(c=>c.k);
@@ -3735,6 +3742,7 @@ function renderVcVisit(){
     cols.forEach((c,j)=>{
       const a=by[c.k]||[]; let inner='';
       if(a.length&&sc==='month'){ const d=a.filter(v=>vcState(v)==='실행').length, un=a.some(v=>vcState(v)==='미실행'); inner=`<div class="vc-c vc-${un?'미실행':d===a.length?'실행':'계획'}" style="text-align:center;" onclick="event.stopPropagation();vcCellList(${ix},'${c.k}')">${d}/${a.length}</div>`; }
+      else if(a.length>1) inner=vcChipMulti(a,ix,c.k);
       else inner=a.map(vcChip).join('');
       h+=`<td class="vc-cell${c.now?' vc-now':''}"${ed&&sc!=='month'?` onclick="vcNew(${ix},'${c.k}')"`:''}>${inner}</td>`;
     });
