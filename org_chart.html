@@ -107,7 +107,11 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .box .nm{font-size:12px;padding:4px 2px;color:#111;}
 .box .nm small{display:block;font-size:10px;color:var(--muted);}
 .box .sub{font-size:10px;color:var(--muted);padding-bottom:3px;margin-top:-3px;}
-.ten{font-size:10px;font-weight:400;color:var(--muted);margin-left:2px;white-space:nowrap;}
+.ten{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:3px;font-size:10px;font-weight:400;color:var(--muted);white-space:nowrap;text-align:left;}
+.box,.ovrow{position:relative;}
+#chart.no-ten .ten{display:none;}
+#chart:not(.no-ten) .unit{width:149px;}
+#chart:not(.no-ten) .unit.ov-unit{width:179px;}
 
 /* 부서 컬럼 */
 .unit{width:119px;display:flex;flex-direction:column;align-items:center;}
@@ -223,6 +227,7 @@ td.tw{white-space:normal;word-break:keep-all;}
     <div class="toolbar">
       <div class="kpi" id="kpi"></div>
       <div class="tb-right">
+        <button class="btn" id="tenBtn" onclick="toggleTenure()" title="이름 옆 근무연수(1Y3M) 표시/숨김">근무연수 표시</button>
         <button class="btn" onclick="loadAll()">🔄 새로고침</button>
         <button class="btn btn-green" onclick="downloadExcel()">⬇ 엑셀 다운로드</button>
       </div>
@@ -487,7 +492,7 @@ function boxHtml(e, badge, ov){
   const sub = ''; // v2026-11-09 — CFO 직급은 상단 띠에 이미 표시되어 이름 아래 중복 표시 제거
   const loc = e.name_local ? `<small>${esc(e.name_local)}</small>` : '';
   return `<div class="box${ov?' ov':''}" title="${esc([e.rank,e.dept,e.join_date?('입사 '+e.join_date):''].filter(Boolean).join(' · '))}">
-    ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${tenSpan(e)}${loc}</div>${sub}</div>`;
+    ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${loc}</div>${sub}${tenSpan(e)}</div>`;
 }
 function unitHtml(u){
   let h = `<div class="unit${u.ov?' ov-unit':''}">`;
@@ -509,7 +514,15 @@ function unitHtml(u){
   }
   return h + `</div>`;
 }
+// v2026-11-09 — 근무연수 표시 선택 (브라우저에 기억, 기본 표시) · 엑셀 다운로드도 같은 선택을 따름
+let SHOW_TEN = (()=>{ try{ return localStorage.getItem('org_show_tenure')!=='0'; }catch(e){ return true; } })();
+function applyTenureUI(){
+  const c=document.getElementById('chart'); if(c) c.classList.toggle('no-ten',!SHOW_TEN);
+  const b=document.getElementById('tenBtn'); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); }
+}
+function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); }
 function renderChart(){
+  applyTenureUI();
   const M = model;
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('asof').innerHTML = `기준일 ${today}<br>${esc(entCountText(' · '))}`;
@@ -736,7 +749,7 @@ async function downloadExcel(){
     return x;
   };
   const badge=(r,i,txt,ov)=>put(r,i,txt,{fill:ov?OV:RED,box:true,font:{bold:true,size:9,color:{argb:ov?'FF5A2A00':'FFFFFFFF'}}});
-  const nameBox=(r,i,e)=>put(r,i,dispName(e)+(tenure(e)?' '+tenure(e):'')+(e.name_local?` (${e.name_local})`:''),{box:true});
+  const nameBox=(r,i,e)=>put(r,i,dispName(e)+(SHOW_TEN&&tenure(e)?' '+tenure(e):'')+(e.name_local?` (${e.name_local})`:''),{box:true});
   const vline=(r,i)=>addB(r,L(i),'right');                                  // 단위 i 중앙 세로선 1칸
   // 부모(중앙 pi) → 자식들(중앙 kids[]) : row r 에 부모 세로선 + 가로 버스, row r+1 에 자식별 세로선
   const connect=(r,pi,kidIdx)=>{
@@ -778,7 +791,7 @@ async function downloadExcel(){
         if(ci){ vline(r,i); r++; }
         put(r,i,c.label,{fill:c.misc?'FFEEF0F3':OV,box:true,font:{bold:true,size:9,color:{argb:'FF5A2A00'}}}); r++;
         const rows = c.rows.length ? c.rows : [{blank:true}];
-        rows.forEach(x=>{ put(r,i,ovRowText(x)+(x.emp&&tenure(x.emp)?' '+tenure(x.emp):''),{box:true}); r++; });
+        rows.forEach(x=>{ put(r,i,ovRowText(x)+(SHOW_TEN&&x.emp&&tenure(x.emp)?' '+tenure(x.emp):''),{box:true}); r++; });
       });
     } else {
       put(r,i,u.dept,{font:{bold:true},under:true}); r++;
