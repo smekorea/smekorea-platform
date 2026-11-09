@@ -1374,6 +1374,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 
 <script>
 /* ══════════════════════════════════════════════════════════════
+   directive.html v3.72 (2026-11-09) — 담당부서 선택에 「박정용 상무」 추가(사장님→상무 지시, 저장값 상무이사, 활동 담당자 선택 가능, 부서별 평가 제외)
    directive.html v3.71 (2026-11-05) — 금주계획 담당(dev_plans.assignee): 계획 등록 줄(비우면 본인)·수정 창·표 「담당」 열·브리핑창, 조회줄에 담당 선택·내용 검색·초기화 (열 너비 키 v3)
    directive.html v3.70 (2026-11-05) — 거래처·메이커 자동완성(vmFillList/rpFillVendors/dvVendors/dvFillFilters)이 메이커관리(makers)만 보던 것을 dvMakerList()로 통합해 동일메이커관리(maker_alias) 표준명도 포함
    directive.html v3.69 (2026-11-02) — 추진과제 마스터 세부과제 줄에 ↑↓(같은 분야 안 순서 변경·저장, 세부진척현황 순서 같이) — 과제 수정 권한자·분야 담당, 필터·정렬 중 숨김 / v3.68 분야 줄 ↑↓ 삭제 / 처리 칸 폭 넓힘
@@ -1414,6 +1415,8 @@ const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
 const ADMIN_ID=2;                       // 박정용 상무 — 전체 관리 권한
 const EXEC_DEPTS=['대표이사','상무이사']; // 지시하는 쪽 — 담당부서·평가 대상에서 제외
+const EXEC_OWNER='상무이사', EXEC_OWNER_LABEL='박정용 상무'; // v3.72: 사장님→상무 지시의 담당 (평가 제외)
+function deptName(k){return k===EXEC_OWNER?EXEC_OWNER_LABEL:k;}
 const SOURCE_DEFAULTS=['주간회의','법인회의','수시','검토'];
 // 법인회의 지시 대상(v3.0): 담당부서 자리에 법인을 고른다. owner_dept 에 이 이름이 그대로 들어간다
 // v3.45 (2026-10-21): 법인 표시 이름은 SMEIN(N)·SMECN·SMETH, 거래처 칸은 정식명 3종 — 둘은 CORP_PARTNER 로 매핑
@@ -1592,7 +1595,7 @@ function ddayHtml(d){
 function realUpdates(d){return (updMap[d.id]||[]).filter(u=>u.type!=='공지확인');}
 function lastUpd(d){const arr=realUpdates(d).filter(u=>u.content);return arr.length?arr[arr.length-1]:null;}
 function asgNames(d){return (asgMap[d.id]||[]).map(a=>a.emp_name).join(', ');}
-function deptLabel(d){return (d.entity&&d.entity!=='KOREA'?d.entity+' ':'')+(d.owner_dept||'');}
+function deptLabel(d){return (d.entity&&d.entity!=='KOREA'?d.entity+' ':'')+deptName(d.owner_dept||'');}
 
 /* ── 안건(이어지는 지시 묶음) ── */
 function buildThreads(){
@@ -1684,7 +1687,7 @@ function entities(){const s=[];emps.forEach(e=>{if(e.entity&&s.indexOf(e.entity)
 // 평가·필터용 부서 키: 본사는 부서명, 해외법인은 법인 단위로 묶음
 function groupKey(d){return d.entity&&d.entity!=='KOREA'?(ENTITY_CORP[d.entity]||d.entity):(d.owner_dept||'(미지정)');}
 function groupKeys(){
-  const keys=deptsOf('KOREA',false);
+  const keys=deptsOf('KOREA',false).concat(EXEC_OWNER);
   CORP_DEPTS.forEach(k=>keys.push(k));
   allD.forEach(d=>{const k=groupKey(d);if(isTask(d)&&keys.indexOf(k)<0)keys.push(k);});
   return keys;
@@ -1692,11 +1695,11 @@ function groupKeys(){
 function fillFilters(){
   const keys=groupKeys();
   const keep=id=>document.getElementById(id).value;
-  const opt=sel=>keys.map(k=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(k)}</option>`).join('');
+  const opt=sel=>keys.map(k=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(deptName(k))}</option>`).join('');
   const fd=keep('fDept'), mdp=keep('mtDept'), fi=keep('fIssuer'), ml=keep('evLast'), qd=keep('qk-dept'), qs=keep('qk-src');
   document.getElementById('fDept').innerHTML='<option value="">전체 부서</option>'+opt(fd);
   document.getElementById('mtDept').innerHTML='<option value="">전체 부서</option>'+opt(mdp);
-  document.getElementById('qk-dept').innerHTML='<option value="">담당부서</option>'+deptsOf(HQ,false).map(k=>`<option${k===(qd||mdp)?' selected':''}>${esc(k)}</option>`).join('')+`<option value="전체"${qd==='전체'?' selected':''}>전체 (전 부서)</option>`+corpOptions(qd);
+  document.getElementById('qk-dept').innerHTML='<option value="">담당부서</option>'+deptsOf(HQ,false).concat(EXEC_OWNER).map(k=>`<option value="${esc(k)}"${k===(qd||mdp)?' selected':''}>${esc(deptName(k))}</option>`).join('')+`<option value="전체"${qd==='전체'?' selected':''}>전체 (전 부서)</option>`+corpOptions(qd);
   document.getElementById('qk-src').innerHTML=sourceList().map(x=>`<option${x===(qs||srcDefault())?' selected':''}>${esc(x)}</option>`).join('');
   if(!document.getElementById('qk-due').value) document.getElementById('qk-due').value=nextMonday(todayStr());
   const iss=[];allD.forEach(d=>{if(d.issuer_name&&iss.indexOf(d.issuer_name)<0)iss.push(d.issuer_name);});
@@ -1967,7 +1970,7 @@ function openAct(id,mode){
   // 아직 아무도 없으면 지금 입력하는 사람이 그 부서 소속일 때 본인을 미리 체크한다
   document.getElementById('actAsgRow').style.display=(isC||reply)?'none':'';
   const cur=(asgMap[id]||[]).map(a=>a.employee_id);
-  const pool=isCorpDept(d.owner_dept)?corpMembers(d.owner_dept):emps.filter(e=>e.entity===HQ&&EXEC_DEPTS.indexOf(e.dept)<0&&(d.owner_dept==='전체'||e.dept===d.owner_dept||cur.indexOf(e.id)>=0));
+  const pool=isCorpDept(d.owner_dept)?corpMembers(d.owner_dept):emps.filter(e=>e.entity===HQ&&(EXEC_DEPTS.indexOf(e.dept)<0||e.dept===d.owner_dept)&&(d.owner_dept==='전체'||e.dept===d.owner_dept||cur.indexOf(e.id)>=0));
   const pre=cur.length?cur:(pool.some(e=>e.id===me.id)&&d.owner_dept!=='전체'?[me.id]:[]);
   document.getElementById('actAsg').innerHTML=pool.length?pool.map(e=>`<label><input type="checkbox" value="${e.id}"${pre.indexOf(e.id)>=0?' checked':''}>${esc(e.name)} ${esc(e.rank||'')}${d.owner_dept==='전체'?' <span style="color:var(--muted);">'+esc(e.dept||'')+'</span>':''}</label>`).join(''):'<span style="color:var(--muted);">이 부서에 등록된 직원이 없습니다</span>';
   document.getElementById('actState').value='진행';
@@ -2540,9 +2543,9 @@ function onDueTypeChange(keep){
 function checked(boxId){return [...document.querySelectorAll('#'+boxId+' input:checked')].map(i=>i.value);}
 function fillDepts(selDept,selAsg,selCoop){
   const en=HQ;
-  const depts=deptsOf(en,false);
+  const depts=deptsOf(en,false).concat(EXEC_OWNER);
   const cur=typeof selDept==='string'?selDept:'';
-  let opts='<option value="">선택하세요</option>'+depts.map(x=>`<option${x===cur?' selected':''}>${esc(x)}</option>`).join('')
+  let opts='<option value="">선택하세요</option>'+depts.map(x=>`<option value="${esc(x)}"${x===cur?' selected':''}>${esc(deptName(x))}</option>`).join('')
     +`<option value="전체"${cur==='전체'?' selected':''}>전체 (전 부서)</option>`+corpOptions(cur);
   if(cur&&cur!=='전체'&&!isCorpDept(cur)&&depts.indexOf(cur)<0) opts+=`<option selected>${esc(cur)}</option>`;   // 부서명이 바뀐 과거 건
   document.getElementById('fmDept').innerHTML=opts;
@@ -2626,7 +2629,7 @@ function evState(d){
   if(d.status==='지시됨'||d.status==='이관-확인필요') return 'none';
   return 'doing';
 }
-function evTarget(d){return d.kind==='지시'&&!isInfo(d)&&!d.is_internal&&catOf(d)!=='정기보고'&&catOf(d)!=='행사일정'&&d.status!=='보류'&&d.meeting_date;}
+function evTarget(d){return d.kind==='지시'&&d.owner_dept!==EXEC_OWNER&&!isInfo(d)&&!d.is_internal&&catOf(d)!=='정기보고'&&catOf(d)!=='행사일정'&&d.status!=='보류'&&d.meeting_date;}
 let evCells={};
 function renderEval(){
   const pSel=document.getElementById('evPeriod'), today=todayStr();
