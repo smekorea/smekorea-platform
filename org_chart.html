@@ -4,12 +4,15 @@
 <meta charset="UTF-8">
 <script src="smerp-auth.js?v=1" data-screen="orgchart"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>글로벌 조직도 · SME Korea</title>
+<title>조직도 · SME Korea</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.6 (2026-10-20) — 글로벌 조직도
+   org_chart.html v1.7 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   ── v1.7: 메뉴명 「글로벌 조직도」→「조직도」, 탭 [🌐 글로벌 조직도 | 🏢 SMEKR 조직도 | 📜 조직 이력]
+            SMEKR 조직도: 대표이사 → 상무이사 → (연구소 · 상무 직속 · CFO) → 부서 (부서 기준 배치, reports_to 미사용)
+            연구소 산하: 개발기획팀·영업팀 / CFO 산하: 재경팀 / 그 외 부서는 상무 직속 (KR_LAYOUT) · 엑셀 다운로드
    ── v1.6: 상단 [⧉ 새창열기] 추가 (현재 화면 유지 + 메인을 새 탭)
    ── v1.5: 비상연락망 개인 메일 삭제(대표메일만), 조직 이력 탭에 등록·수정·삭제(경영 전용 인증)
    ── v1.3: 부서·이름 위 숫자 제거, 우측 상단 법인별 인원
@@ -109,9 +112,15 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .box .sub{font-size:10px;color:var(--muted);padding-bottom:3px;margin-top:-3px;}
 .ten{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:3px;font-size:10px;font-weight:400;color:var(--muted);white-space:nowrap;text-align:left;}
 .box,.ovrow{position:relative;}
-#chart.no-ten .ten{display:none;}
-#chart:not(.no-ten) .unit{width:149px;}
+#chart.no-ten .ten,#krChart.no-ten .ten{display:none;}
+#chart:not(.no-ten) .unit,#krChart:not(.no-ten) .unit{width:149px;}
 #chart:not(.no-ten) .unit.ov-unit{width:179px;}
+/* v1.7 SMEKR 조직도 */
+.kr-n{font-size:10.5px;color:#444;margin:0 0 1px 18px;min-height:13px;align-self:center;}
+.kr-pass{position:relative;display:flex;flex-direction:column;align-items:center;}
+.kr-pass > *{visibility:hidden;}
+.kr-pass::before{content:'';position:absolute;left:50%;top:0;bottom:0;border-left:1.5px solid var(--line);}
+.tree li:only-child > .node > .kr-pass{margin-top:0;}
 
 /* 부서 컬럼 */
 .unit{width:119px;display:flex;flex-direction:column;align-items:center;}
@@ -205,7 +214,7 @@ td.tw{white-space:normal;word-break:keep-all;}
   <div class="brand">
     <span class="brand-tag">SME</span>
     <div class="brand-id"><div class="brand-co">SMEKOREA</div><div class="brand-file">org_chart</div></div>
-    <span class="brand-name">글로벌 조직도</span>
+    <span class="brand-name">조직도</span>
   </div>
   <div class="tb-spacer"></div>
   <span class="tb-user" id="tbUser"></span>
@@ -217,7 +226,8 @@ td.tw{white-space:normal;word-break:keep-all;}
 </div>
 
 <div class="tab-bar">
-  <button class="tab-btn active" id="tabbtn-chart" onclick="switchTab('chart')">🏢 조직도</button>
+  <button class="tab-btn active" id="tabbtn-chart" onclick="switchTab('chart')">🌐 글로벌 조직도</button>
+  <button class="tab-btn" id="tabbtn-kr" onclick="switchTab('kr')">🏢 SMEKR 조직도</button>
   <button class="tab-btn" id="tabbtn-hist" onclick="switchTab('hist')">📜 조직 이력</button>
 </div>
 
@@ -249,6 +259,25 @@ td.tw{white-space:normal;word-break:keep-all;}
       </div>
     </div>
     <div class="note">💡 인원 추가·이동·조직도 연결(상위자/직책/표시순서)은 관리자 설정 › 직원 관리, 해외법인 부서·이름 없는 인원수·조직 이력은 관리자 설정 › 조직 이력에서 관리합니다. 해외법인은 등록된 부서 순서대로 세로 한 줄로 표시됩니다.</div>
+  </div>
+
+  <!-- v1.7 SMEKR 조직도 -->
+  <div id="tab-kr" style="display:none;">
+    <div class="toolbar">
+      <div class="kpi" id="krKpi"></div>
+      <div class="tb-right">
+        <button class="btn" id="tenBtnKr" onclick="toggleTenure()" title="이름 옆 근무연수(1Y3M) 표시/숨김">근무연수 표시</button>
+        <button class="btn" onclick="loadAll()">🔄 새로고침</button>
+        <button class="btn btn-green" onclick="downloadKrExcel()">⬇ 엑셀 다운로드</button>
+      </div>
+    </div>
+    <div class="sheet-scroll" id="krScroll">
+      <div class="sheet">
+        <div class="sheet-title">SME KOREA 조직도<div class="asof" id="krAsof"></div></div>
+        <div id="krChart"><div class="loading">조직도를 불러오는 중...</div></div>
+      </div>
+    </div>
+    <div class="note">💡 본사 인원은 관리자 설정 › 직원 관리의 「부서」 기준으로 배치됩니다. 연구소 산하: 개발기획팀·영업팀 / CFO 산하: 재경팀 / 그 외 부서는 상무이사 직속으로 표시됩니다. 부서 안 순서는 팀장 → 직급 → 입사일 순입니다.</div>
   </div>
 
   <!-- 조직 이력 -->
@@ -363,7 +392,7 @@ async function sbGet(table, params){
 }
 
 function switchTab(k){
-  ['chart','hist'].forEach(x=>{
+  ['chart','kr','hist'].forEach(x=>{
     document.getElementById('tab-'+x).style.display = x===k ? '' : 'none';
     document.getElementById('tabbtn-'+x).classList.toggle('active', x===k);
   });
@@ -383,7 +412,7 @@ async function loadAll(){
     document.getElementById('chart').innerHTML = `<div class="loading" style="color:var(--brand);">불러오기 실패: ${esc(e.message)}</div>`;
     return;
   }
-  buildModel(); renderChart(); renderContacts(); fillHistFilters();
+  buildModel(); renderChart(); renderContacts(); renderKr(); fillHistFilters();
   if(document.getElementById('tab-hist').style.display!=='none') renderHist();
 }
 
@@ -517,8 +546,8 @@ function unitHtml(u){
 // v2026-11-09 — 근무연수 표시 선택 (브라우저에 기억, 기본 표시) · 엑셀 다운로드도 같은 선택을 따름
 let SHOW_TEN = (()=>{ try{ return localStorage.getItem('org_show_tenure')!=='0'; }catch(e){ return true; } })();
 function applyTenureUI(){
-  const c=document.getElementById('chart'); if(c) c.classList.toggle('no-ten',!SHOW_TEN);
-  const b=document.getElementById('tenBtn'); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); }
+  ['chart','krChart'].forEach(id=>{ const c=document.getElementById(id); if(c) c.classList.toggle('no-ten',!SHOW_TEN); });
+  ['tenBtn','tenBtnKr'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); } });
 }
 function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); }
 function renderChart(){
@@ -850,6 +879,160 @@ async function downloadExcel(){
   const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const dl = document.createElement('a'); dl.href = URL.createObjectURL(blob);
   dl.download = `SME_글로벌조직도_${today}.xlsx`; document.body.appendChild(dl); dl.click();
+  setTimeout(()=>{ URL.revokeObjectURL(dl.href); dl.remove(); }, 1000);
+}
+
+/* ══ v1.7 SMEKR 조직도 (부서 기준 배치) ══ */
+// 3단: 연구소(소장) · 상무 직속(박스 없이 선만) · CFO — 각 아래 부서. 목록에 없는 본사 부서는 상무 직속으로 자동 배치
+const KR_LAYOUT = [
+  { key:'lab', cap:'연구소', pick:e=>e.dept==='연구소',   depts:['개발기획팀','영업팀'] },
+  { key:'hq',  cap:'',       pick:null,                  depts:['개발구매팀','자재구매팀','제조팀','출하팀'] },
+  { key:'cfo', cap:'CFO',    pick:e=>e.title==='CFO',    depts:['재경팀'] }
+];
+const KR_TOP_DEPTS = ['대표이사','상무이사','연구소'];
+let krModel = null;
+function buildKr(){
+  const kr = EMPS.filter(e=>e.entity==='KOREA');
+  const root = kr.find(e=>e.title==='대표이사') || null;
+  const hq = kr.find(e=>e.title==='상무이사') || null;
+  const used = new Set([root,hq].filter(Boolean).map(e=>e.id));
+  const cols = KR_LAYOUT.map(c=>{
+    const head = c.pick ? (kr.filter(c.pick).sort(cmpMember)[0] || null) : null;
+    if(head) used.add(head.id);
+    return { key:c.key, cap:c.cap, head, depts:[...c.depts], units:[] };
+  });
+  const hqCol = cols.find(c=>c.key==='hq');
+  const regDepts = DEPTS.filter(d=>d.entity==='KOREA').sort((a,b)=>(a.sort_no??99)-(b.sort_no??99)).map(d=>d.dept);
+  [...new Set([...regDepts, ...kr.map(e=>e.dept)])].filter(d=>d && !KR_TOP_DEPTS.includes(d)).forEach(d=>{
+    if(!cols.some(c=>c.depts.includes(d))) hqCol.depts.push(d);
+  });
+  cols.forEach(c=>{
+    c.units = c.depts.map(d=>{
+      const ppl = kr.filter(e=>e.dept===d && !used.has(e.id)).sort(cmpMember);
+      ppl.forEach(p=>used.add(p.id));
+      const hc = HC.filter(x=>x.entity==='KOREA' && (x.dept||'')===d).sort(byHcSort);
+      return { ov:false, entity:'KOREA', dept:d, head:ppl[0]||null, members:ppl.slice(1), hc };
+    }).filter(u=>u.head);
+    c.n = (c.head?1:0) + c.units.reduce((s,u)=>s+1+u.members.length+hcSum(u.hc),0);
+  });
+  const rest = kr.filter(e=>!used.has(e.id));   // 연구소 소장 외 연구소 소속 등 — 미배치 인원
+  const n = kr.length + hcSum(HC.filter(h=>h.entity==='KOREA'));
+  krModel = { root, hq, cols: cols.filter(c=>c.head || c.units.length), rest, n };
+}
+const krUnitN = u => 1 + u.members.length + hcSum(u.hc);
+function renderKr(){
+  buildKr(); applyTenureUI();
+  const M = krModel, el = document.getElementById('krChart');
+  document.getElementById('krAsof').innerHTML = `기준일 ${new Date().toISOString().slice(0,10)}<br>SMEKR: ${M.n}명`;
+  document.getElementById('krKpi').innerHTML = `<span>본사 인원<b>${M.n}</b></span>` + M.cols.map(c=>`<span>${esc(c.cap||'상무 직속')}<b>${c.n}</b></span>`).join('');
+  if(!M.root){ el.innerHTML = '<div class="loading">대표이사(직책)가 지정된 본사 직원이 없습니다.</div>'; return; }
+  const nTag = v => `<div class="kr-n">${v||''}</div>`;
+  let h = `<div class="tree"><ul><li><div class="node">${nTag(M.n)}${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
+  const colsHtml = M.cols.map(c=>{
+    let x = `<li><div class="node">`;
+    if(c.head){
+      x += nTag(c.n) + `<div class="cap">${esc(c.cap)}</div>` + boxHtml(c.head, c.key==='cfo' ? (c.head.rank||'') : (c.head.title||c.head.rank), false);
+    } else {
+      // 연구소·CFO 박스와 높이를 맞추기 위한 보이지 않는 자리(세로선만 표시)
+      x += `<div class="kr-pass" title="${esc(c.cap||'상무이사 직속')}">${nTag('')}<div class="cap">&nbsp;</div><div class="box"><div class="bd">&nbsp;</div><div class="nm">&nbsp;</div></div></div>`;
+    }
+    x += `</div>`;
+    if(c.units.length) x += `<ul>${c.units.map(u=>`<li><div class="node">${nTag(krUnitN(u))}${unitHtml(u)}</div></li>`).join('')}</ul>`;
+    return x + `</li>`;
+  }).join('');
+  if(M.hq){
+    h += `<ul><li><div class="node">${nTag(M.n-1)}<div class="cap">KOREA H.Q</div>${boxHtml(M.hq, M.hq.title||M.hq.rank, false)}</div>`;
+    if(colsHtml) h += `<ul>${colsHtml}</ul>`;
+    h += `</li></ul>`;
+  } else if(colsHtml){ h += `<ul>${colsHtml}</ul>`; }
+  h += `</li></ul></div>`;
+  if(M.rest.length) h += `<div class="orphans">⚠ 부서에 배치되지 않은 본사 재직자 <b>${M.rest.length}명</b>: ${M.rest.map(e=>esc(`${dispName(e)} (${e.dept||'부서 없음'})`)).join(', ')} — 관리자 설정 › 직원 관리에서 부서를 확인해 주세요.</div>`;
+  el.innerHTML = h;
+}
+
+/* ── v1.7 SMEKR 조직도 엑셀 다운로드 (조직도 + 본사 인원명단) ── */
+async function downloadKrExcel(){
+  if(!krModel || !krModel.root){ alert('조직도 데이터가 없습니다.'); return; }
+  if(typeof ExcelJS==='undefined'){ alert('엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.'); return; }
+  const M = krModel;
+  const wb = new ExcelJS.Workbook(); wb.creator = 'SMERP';
+  const ws = wb.addWorksheet('SMEKR 조직도', {pageSetup:{orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9,
+    margins:{left:0.3,right:0.3,top:0.4,bottom:0.4,header:0.2,footer:0.2}}, views:[{showGridLines:false}]});
+  const RED='FFE60012';
+  const LN={style:'thin',color:{argb:'FF000000'}}, BX={style:'thin',color:{argb:'FF777777'}};
+  const font=(o={})=>({name:'Noto Sans KR', size:10, ...o});
+  const today=new Date().toISOString().slice(0,10);
+  // 칸: 부서(또는 빈 3단) 단위마다 [L][R][간격]
+  const units=[], spans=[];
+  M.cols.forEach(c=>{ const s=units.length; if(c.units.length) c.units.forEach(u=>units.push(u)); else units.push(null); spans.push({c,s,e:units.length-1}); });
+  if(!units.length) units.push(null);
+  const L=i=>2+i*3, R=i=>3+i*3, lastCol=R(units.length-1)+1;
+  ws.getColumn(1).width=1.5;
+  for(let c=2;c<=lastCol;c++) ws.getColumn(c).width=((c-2)%3===2)?2.2:8.6;
+  const cell=(r,c)=>ws.getCell(r,c);
+  const addB=(r,c,side)=>{ const x=cell(r,c); x.border={...(x.border||{}),[side]:LN}; };
+  const put=(r,i,v,opt={})=>{ ws.mergeCells(r,L(i),r,R(i)); const x=cell(r,L(i)); x.value=v; x.font=font(opt.font||{});
+    x.alignment={horizontal:opt.align||'center',vertical:'middle',wrapText:true};
+    if(opt.fill) x.fill={type:'pattern',pattern:'solid',fgColor:{argb:opt.fill}};
+    if(opt.box) x.border={top:BX,left:BX,bottom:BX,right:BX};
+    if(opt.under) x.border={bottom:{style:'medium',color:{argb:RED}}};
+    return x; };
+  const badge=(r,i,txt)=>put(r,i,txt,{fill:RED,box:true,font:{bold:true,size:9,color:{argb:'FFFFFFFF'}}});
+  const nameBox=(r,i,e)=>put(r,i,dispName(e)+(SHOW_TEN&&tenure(e)?' '+tenure(e):''),{box:true});
+  const vline=(r,i)=>addB(r,L(i),'right');
+  const connect=(r,pi,kid)=>{ const lo=Math.min(pi,...kid), hi=Math.max(pi,...kid); vline(r,pi);
+    if(hi>lo){ for(let c=R(lo);c<=L(hi);c++) addB(r,c,'bottom'); } kid.forEach(k=>vline(r+1,k)); };
+  const cnt=(r,i,v)=>{ const x=cell(r,R(i)); x.value=v; x.font=font({size:8,color:{argb:'FF444444'}}); x.alignment={horizontal:'left',vertical:'bottom'}; };
+
+  ws.mergeCells(1,1,1,lastCol);
+  const t1=cell(1,1); t1.value='SME KOREA 조직도'; t1.font=font({bold:true,size:18,color:{argb:'FFFFFFFF'}});
+  t1.alignment={horizontal:'center',vertical:'middle'}; t1.fill={type:'pattern',pattern:'solid',fgColor:{argb:RED}}; ws.getRow(1).height=34;
+  ws.mergeCells(2,2,2,lastCol);
+  const a=cell(2,2); a.value=`기준일 ${today}   |   SMEKR: ${M.n}명`; a.font=font({size:9,color:{argb:'FF565C64'}}); a.alignment={horizontal:'right',vertical:'middle'};
+
+  const cC = spans.map(x=>Math.floor((x.s+x.e)/2));
+  const mid = cC.length ? Math.round((Math.min(...cC)+Math.max(...cC))/2) : 0;
+  cnt(3,mid,M.n); badge(4,mid,M.root.title||M.root.rank); nameBox(5,mid,M.root);
+  let r0 = 6;
+  if(M.hq){ vline(6,mid); vline(7,mid); cnt(7,mid,M.n-1); badge(8,mid,'KOREA H.Q · 상무이사'); nameBox(9,mid,M.hq); r0 = 10; }
+  if(cC.length) connect(r0,mid,cC);
+  const rC = r0+2;                       // 3단 행
+  spans.forEach((x,k)=>{
+    const c=x.c, i=cC[k];
+    if(c.head){ badge(rC,i,c.key==='cfo'?`CFO · ${c.head.rank||''}`:`${c.cap} · ${c.head.title||c.head.rank||''}`); nameBox(rC+1,i,c.head); cnt(rC-1,i,c.n); }
+    else { vline(rC,i); vline(rC+1,i); }
+    const kid=[]; for(let j=x.s;j<=x.e;j++) if(units[j]) kid.push(j);
+    if(kid.length) connect(rC+2,i,kid);
+  });
+  const rU = rC+4; let maxRow = rU;
+  units.forEach((u,i)=>{
+    if(!u) return; let r=rU;
+    cnt(r-1,i,krUnitN(u));
+    put(r,i,u.dept,{font:{bold:true},under:true}); r++;
+    badge(r,i,u.head.rank||u.head.title||''); r++; nameBox(r,i,u.head); r++;
+    if(u.members.length){ vline(r,i); r++; u.members.forEach(m=>{ nameBox(r,i,m); r++; }); }
+    u.hc.forEach(x=>{ put(r,i,`${x.label} ${x.cnt}명`,{font:{bold:true,size:9},align:'left'}); r++; });
+    maxRow=Math.max(maxRow,r);
+  });
+  for(let r=3;r<=maxRow;r++) if(!ws.getRow(r).height) ws.getRow(r).height=17;
+  [6,7,r0,r0+1,rC+2,rC+3].forEach(r=>ws.getRow(r).height=10);
+  if(M.rest.length){ const r=maxRow+1; ws.mergeCells(r,2,r,lastCol); const o=cell(r,2);
+    o.value='※ 부서 미배치: '+M.rest.map(e=>`${dispName(e)} (${e.dept||'부서 없음'})`).join(', '); o.font=font({size:9,color:{argb:'FFC8001E'}}); }
+
+  // 본사 인원명단
+  const ws2 = wb.addWorksheet('인원명단');
+  ws2.columns=[{header:'사번',key:'no',width:8},{header:'부서',key:'dept',width:14},{header:'직책',key:'title',width:12},{header:'직급',key:'rank',width:10},
+    {header:'성명',key:'name',width:14},{header:'입사일',key:'join',width:12},{header:'근무기간',key:'ten',width:10}];
+  EMPS.filter(e=>e.entity==='KOREA').sort((x,y)=>(x.emp_no||0)-(y.emp_no||0)).forEach(e=>ws2.addRow({no:e.emp_no,dept:e.dept||'',title:e.title||'',rank:e.rank||'',
+    name:dispName(e),join:e.join_date||'',ten:tenure(e)}));
+  const box={top:BX,left:BX,bottom:BX,right:BX};
+  ws2.getRow(1).eachCell(c=>{c.font=font({bold:true,color:{argb:'FFFFFFFF'}}); c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};});
+  ws2.eachRow((row,i)=>{ row.eachCell(c=>{ if(i>1) c.font=font(); c.border=box; c.alignment={horizontal:'center',vertical:'middle'}; }); });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const dl = document.createElement('a'); dl.href = URL.createObjectURL(blob);
+  dl.download = `SME_SMEKR조직도_${today}.xlsx`; document.body.appendChild(dl); dl.click();
   setTimeout(()=>{ URL.revokeObjectURL(dl.href); dl.remove(); }, 1000);
 }
 
