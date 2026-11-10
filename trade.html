@@ -19,6 +19,7 @@
    ── v1.12: 개인 계정 권한 적용(smerp-auth.js), 전표 저장·삭제 시 수정자(updated_by)·이력(trade_slip_log) 기록 — 다른 부서 전표 수정은 이력으로 확인
    ── v1.11: 거래명세서 주소(공급자·공급받는자) 글자 축소, 신규 거래처 등록은 실무진도 가능(관리자설정 거래처 정보 화면)
    ── v1.10: 미확정 미리보기에도 직인 표시(「미리보기 · 미확정」 워터마크 강화로 구분)
+   ── v2.0: 거래명세서 페이지당 13행(줄 높이·글자·상단·절취선 축소), 직접입력 엑셀 양식 개편(순번·품목명·과세구분, 부서 제거, 제목줄 자동 인식 — 이카운트 구매·판매 엑셀 그대로 업로드/붙여넣기)
    ── v1.9: 직접입력 엑셀(양식·여러 전표 업로드·붙여넣기, 오류 시 전체 중단)·목록 엑셀 다운로드, 거래처 정보 표시·신규 거래처 등록 바로가기, 부서→담당자 자동 선택, 모든 창 제목줄 끌어 이동
    ── v1.8: 거래명세서 공급받는자용 테두리 연한 적색(공급자용 남색과 구분)
    ── v1.7: 회사정보·직인 입력은 관리자설정 → 거래처 정보 → 법인 정보로 이동(⑤ 설정은 안내만)
@@ -204,7 +205,7 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
 
 <!-- ② 직접 입력 -->
 <div class="wrap" id="tab-new" style="display:none">
-  <div class="info">자동으로 만들어지지 않는 건을 직접 입력합니다 — <b>매출</b>: LOT 품목이 없는 출하·제조·사급·기타 수기 건 / <b>매입</b>: 스마트전자 입고(자동) 외 <b>모든 매입</b>. 여러 전표는 「양식 다운로드」 양식으로 <b>엑셀 업로드</b> 또는 <b>붙여넣기</b> 하면 일자·구분·거래처별로 전표가 나뉘어 작성중으로 저장됩니다. 거래처·품목이 없는 행이 하나라도 있으면 전체를 저장하지 않고 알려드립니다.</div>
+  <div class="info">자동으로 만들어지지 않는 건을 직접 입력합니다 — <b>매출</b>: LOT 품목이 없는 출하·제조·사급·기타 수기 건 / <b>매입</b>: 스마트전자 입고(자동) 외 <b>모든 매입</b>. 여러 전표는 「양식 다운로드」 양식으로 <b>엑셀 업로드</b> 또는 <b>붙여넣기</b> 하면 일자·순번·구분·거래처별로 전표가 나뉘어 작성중으로 저장됩니다. <b>이카운트 구매·판매 엑셀도 그대로</b> 올릴 수 있습니다. 거래처·품목이 없는 행이 하나라도 있으면 전체를 저장하지 않고 알려드립니다.</div>
   <div class="toolbar">
     <button class="btn btn-p" onclick="openNewSlip('매출')">＋ 새 매출 전표</button>
     <button class="btn btn-p" onclick="openNewSlip('매입')">＋ 새 매입 전표</button>
@@ -315,7 +316,7 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
 <!-- 여러 전표 붙여넣기 -->
 <div class="ov" id="bulkOv"><div class="md sm" style="width:760px">
   <div class="md-h">여러 전표 붙여넣기<span class="x" onclick="document.getElementById('bulkOv').classList.remove('on')">×</span></div>
-  <div class="md-b"><div class="note" style="margin-bottom:6px">양식 순서대로 복사해 붙여넣으세요(제목줄 포함 가능):<br><b>일자 · 구분(매출/매입) · 거래처 · 품목코드 · 수량 · 단가 · 공급구분 · 부서 · 담당자 · 비고</b><br>단가가 비면 단가표 → 최근 단가 순으로 들어갑니다. 공급구분이 비면 직거래, 부서·담당자가 비면 본인 기준입니다.</div>
+  <div class="md-b"><div class="note" style="margin-bottom:6px">제목줄을 포함해 복사해 붙여넣으세요 — 제목줄로 열을 찾습니다(이카운트 구매·판매 양식도 가능):<br><b>일자 · 순번 · 구분(매출/매입) · 거래처 · 품목코드 · 품목명 · 수량 · 단가 · 과세구분 · 공급구분 · 담당자 · 비고</b><br>단가가 비면 단가표 → 최근 단가, 과세구분이 비면 과세, 공급구분이 비면 직거래, 담당자가 비면 본인입니다. 순번은 같은 일자·거래처를 여러 전표로 나눌 때만 적습니다.</div>
     <textarea class="inp" id="bulkTxt" style="height:220px"></textarea></div>
   <div class="md-f"><span class="tb-spacer"></span><button class="btn" onclick="document.getElementById('bulkOv').classList.remove('on')">닫기</button><button class="btn btn-p" onclick="bulkFromPaste()">확인 후 저장</button></div>
 </div></div>
@@ -551,8 +552,15 @@ window.addEventListener('focus',async()=>{
   else toast('거래처 목록을 새로 불러왔습니다.');
 });
 
-/* ── v1.9: 엑셀 — 양식·여러 전표 업로드/붙여넣기·목록 다운로드 ── */
-const BULK_HEAD=['일자','구분','거래처','품목코드','수량','단가','공급구분','부서','담당자','비고'];
+/* ── v1.9 / v2.0: 엑셀 — 양식·여러 전표 업로드/붙여넣기·목록 다운로드 ──
+   v2.0: 이카운트 양식 참조 — 순번(전표 나누기)·품목명(참고)·과세구분 추가, 부서 칸 제거(담당자 기준 자동),
+         제목줄로 열 자동 인식 → 이카운트 구매·판매 엑셀(일자·순번·거래처코드·…·거래유형·적요)도 그대로 업로드/붙여넣기 */
+const BULK_HEAD=['일자','순번','구분','거래처','품목코드','품목명','수량','단가','과세구분','공급구분','담당자','비고'];
+// 제목줄 이름 → 내부 키 (우리 양식 + 이카운트 양식 + 이전 v1.9 양식)
+const BULK_ALIAS={date:['일자'],seq:['순번'],tp:['구분'],pcode:['거래처코드'],pname:['거래처','거래처명'],item:['품목코드'],
+  qty:['수량'],price:['단가'],vat:['과세구분'],ectype:['거래유형'],kind:['공급구분'],dept:['부서'],mgr:['담당자'],note:['비고','적요'],
+  inWh:['입고창고'],outWh:['출하창고']};
+const BULK_OLD=['일자','구분','거래처','품목코드','수량','단가','공급구분','부서','담당자','비고'];  // 제목줄 없는 v1.9 붙여넣기 호환용
 function needXlsx(){if(window.XLSX)return true;alert('엑셀 기능을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.');return false;}
 function xlsxSave(sheets,fname){
   if(!needXlsx())return;const wb=XLSX.utils.book_new();
@@ -560,20 +568,24 @@ function xlsxSave(sheets,fname){
   XLSX.writeFile(wb,fname);
 }
 function downloadTemplate(){
-  xlsxSave([{name:'입력',aoa:[BULK_HEAD],cols:[12,8,26,22,10,12,10,12,10,24]},
-    {name:'작성방법',cols:[12,60,16],aoa:[['항목','설명','예'],
-      ['일자','YYYY-MM-DD (엑셀 날짜 형식도 가능)','2026-11-02'],
-      ['구분','매출 또는 매입','매출'],
-      ['거래처','관리자설정 거래처 정보의 거래처명·별칭·코드·사업자번호 중 하나',''],
-      ['품목코드','품번·메이커품번·LG품번 중 하나',''],
-      ['수량','숫자 (0 제외)','100'],
-      ['단가','비우면 단가표 → 최근 단가 순으로 자동',''],
+  xlsxSave([{name:'입력',aoa:[BULK_HEAD],cols:[12,6,8,24,16,28,10,12,10,10,10,24]},
+    {name:'작성방법',cols:[12,64,16],aoa:[['항목','설명','예'],
+      ['일자','YYYY-MM-DD 또는 YYYYMMDD (엑셀 날짜 형식도 가능)','2026-11-02'],
+      ['순번','같은 일자·거래처를 여러 전표로 나눌 때만 1, 2, 3… (비우면 하나로 묶음)',''],
+      ['구분','매출 또는 매입','매입'],
+      ['거래처','거래처 코드·거래처명·별칭·사업자번호 중 하나 (이카운트 거래처코드와 같음)','1053'],
+      ['품목코드','품번·메이커품번·LG품번 중 하나','3000-2046'],
+      ['품목명','참고용 — 저장은 품목 마스터 기준 (비워도 됨)',''],
+      ['수량','숫자 (0 제외)','50000'],
+      ['단가','비우면 단가표 → 최근 단가 순으로 자동','1.23'],
+      ['과세구분','과세 / 영세 / 면세 (비우면 과세). 이카운트 거래유형 11·21 = 과세, 12·22 = 영세','과세'],
       ['공급구분','직거래 또는 LG사급 (비우면 직거래, LG사급은 수량만)','직거래'],
-      ['부서','비우면 담당자 부서 → 본인 부서',''],
-      ['담당자','비우면 부서 기준 자동(본인 우선)',''],
-      ['비고','전표 비고',''],
+      ['담당자','이름 (비우면 올린 사람). 부서는 담당자 기준 자동',''],
+      ['비고','선적번호 등 메모 — 품목 줄과 전표 비고에 함께 저장','SME261106(VSL)'],
       ['',''],
-      ['전표 나누기','일자·구분·거래처·공급구분·부서·담당자가 같은 행은 한 전표로 묶입니다.',''],
+      ['공급가액·부가세','적지 않습니다 — 수량×단가, 과세구분으로 자동 계산',''],
+      ['이카운트 양식','이카운트 구매입력·판매입력 엑셀을 그대로 올려도 제목줄로 열을 찾아 읽습니다 (입고창고 = 매입, 출하창고 = 매출). 첫 번째 시트만 읽습니다.',''],
+      ['전표 나누기','일자·순번·구분·거래처·과세구분·공급구분·담당자가 같은 행은 한 전표로 묶입니다.',''],
       ['오류','거래처·품목이 없거나 형식이 틀린 행이 하나라도 있으면 전체를 저장하지 않습니다.','']]}],
     '매입매출_직접입력_양식.xlsx');
 }
@@ -593,44 +605,73 @@ function bulkFromFile(inp){
 function cellDate(v){
   if(v==null||v==='')return '';
   if(typeof v==='number'){if(v>20000&&v<80000){const d=new Date(Math.round((v-25569)*864e5));return d.toISOString().slice(0,10);}return null;}
-  const sv=String(v).trim().replace(/[./]/g,'-');let m=sv.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)||sv.match(/^(\d{4})(\d{2})(\d{2})$/);
+  const sv=String(v).trim().replace(/\s.*$/,'').replace(/[./]/g,'-');let m=sv.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)||sv.match(/^(\d{4})(\d{2})(\d{2})$/);
   if(!m)return null;const ds=m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
   const d=new Date(ds+'T00:00:00');return (isNaN(d)||d.getDate()!==+m[3])?null:ds;
 }
 function findPartnerAny(v){
-  v=String(v||'').trim();if(!v)return null;
+  v=String(v==null?'':v).trim();if(!v)return null;
   const act=PARTNERS.filter(p=>p.is_active!==false);const dg=v.replace(/\D/g,'');
-  return act.find(p=>p.name===v)||act.find(p=>p.alias1===v||p.alias2===v)||act.find(p=>p.partner_code===v)
+  return act.find(p=>p.name===v)||act.find(p=>p.alias1===v||p.alias2===v)||act.find(p=>String(p.partner_code||'')===v)
     ||(dg.length===10?act.find(p=>(p.biz_no||'').replace(/\D/g,'')===dg):null)||null;
 }
 function cellNum(v){const sv=String(v==null?'':v).replace(/,/g,'').trim();if(sv==='')return '';const n=Number(sv);return isFinite(n)?n:null;}
+// 제목줄 찾기: 「품목코드」가 있는 첫 줄. 없으면 열 순서로 판단(12열 = v2.0 양식, 그 외 = v1.9 양식)
+function bulkHeader(raw){
+  for(let i=0;i<Math.min(raw.length,10);i++){
+    const h=(raw[i]||[]).map(x=>String(x==null?'':x).replace(/\s/g,''));
+    if(h.includes('품목코드')){const map={};
+      Object.entries(BULK_ALIAS).forEach(([k,names])=>{const j=h.findIndex(x=>names.includes(x));if(j>=0)map[k]=j;});
+      return {map,start:i+1,ecount:map.ectype!=null||map.pcode!=null};}
+  }
+  const first=(raw.find(c=>(c||[]).some(x=>String(x).trim()!==''))||[]);
+  const cols=first.length>=12?BULK_HEAD:BULK_OLD;const map={};
+  cols.forEach((nm,j)=>{const k=Object.keys(BULK_ALIAS).find(k=>BULK_ALIAS[k].includes(nm));if(k&&map[k]==null)map[k]=j;});
+  return {map,start:0,ecount:false};
+}
+function vatFromCell(v,ec){
+  const s=String(v==null?'':v).replace(/\s/g,'');
+  if(ec!=null&&String(ec).trim()!==''){const e=String(ec).trim();if(e==='11'||e==='21')return '과세';if(e==='12'||e==='22')return '영세';return null;}
+  if(!s)return '과세';return ['과세','영세','면세'].includes(s)?s:null;
+}
 async function bulkProcess(raw,src){
   const errs=[],rows=[],missP=new Set();const depts=new Set(EMPS.map(e=>e.dept).filter(Boolean));
+  const H=bulkHeader(raw);const M=H.map;
+  if(M.item==null){alert('품목코드 열을 찾지 못했습니다. 양식의 제목줄을 확인하세요.');return;}
+  const fixedTp=M.tp==null?(M.inWh!=null?'매입':(M.outWh!=null?'매출':'')):'';
   raw.forEach((c,idx)=>{
-    c=Array.from({length:10},(_,i)=>{const x=(c||[])[i];return x==null?'':x;});
-    if(!c.some(x=>String(x).trim()!==''))return;
-    if(String(c[0]).trim()==='일자'||String(c[3]).trim()==='품목코드')return;
+    if(idx<H.start)return;c=c||[];
+    const g=k=>{if(M[k]==null)return '';const x=c[M[k]];return x==null?'':x;};
+    if(!c.some(x=>String(x==null?'':x).trim()!==''))return;
+    if(String(g('item')).replace(/\s/g,'')==='품목코드')return;
     const rn=idx+1;const er=m=>errs.push({rn,msg:m});
-    const date=cellDate(c[0]);if(!date)er('일자 형식 오류 「'+c[0]+'」');
-    const tp=String(c[1]).trim();if(tp!=='매출'&&tp!=='매입')er('구분은 매출/매입 「'+tp+'」');
-    const p=findPartnerAny(c[2]);if(!String(c[2]).trim())er('거래처 없음');else if(!p){er('등록되지 않은 거래처 「'+String(c[2]).trim()+'」');missP.add(String(c[2]).trim()+'|'+(tp==='매출'?'매출처':'매입처'));}
-    const it=resolveItem(c[3]);if(!String(c[3]).trim())er('품목코드 없음');else if(!it)er('품목을 찾을 수 없음 「'+String(c[3]).trim()+'」');
-    const q=cellNum(c[4]);if(q===''||q===null||q===0)er('수량 오류 「'+c[4]+'」');
-    const pr=cellNum(c[5]);if(pr===null)er('단가 형식 오류 「'+c[5]+'」');
-    let kd=String(c[6]).replace(/\s/g,'');if(!kd)kd='직거래';if(kd!=='직거래'&&kd!=='LG사급')er('공급구분은 직거래/LG사급 「'+c[6]+'」');
-    let dept=String(c[7]).trim(),mgr=String(c[8]).trim();
+    const date=cellDate(g('date'));if(!date)er('일자 형식 오류 「'+g('date')+'」');
+    const tp=fixedTp||String(g('tp')).trim();if(tp!=='매출'&&tp!=='매입')er('구분은 매출/매입 「'+tp+'」');
+    const pv=String(g('pcode')).trim()||String(g('pname')).trim();
+    const p=findPartnerAny(g('pcode'))||findPartnerAny(g('pname'));
+    if(!pv)er('거래처 없음');else if(!p){er('등록되지 않은 거래처 「'+pv+'」');missP.add((String(g('pname')).trim()||pv)+'|'+(tp==='매출'?'매출처':'매입처'));}
+    const ic=String(g('item')).trim();const it=resolveItem(ic);if(!ic)er('품목코드 없음');else if(!it)er('품목을 찾을 수 없음 「'+ic+'」');
+    const q=cellNum(g('qty'));if(q===''||q===null||q===0)er('수량 오류 「'+g('qty')+'」');
+    const pr=cellNum(g('price'));if(pr===null)er('단가 형식 오류 「'+g('price')+'」');
+    const vt=vatFromCell(g('vat'),M.ectype!=null?g('ectype'):null);if(!vt)er('과세구분은 과세/영세/면세 「'+(M.ectype!=null?g('ectype'):g('vat'))+'」');
+    let kd=String(g('kind')).replace(/\s/g,'');if(!kd)kd='직거래';if(kd!=='직거래'&&kd!=='LG사급')er('공급구분은 직거래/LG사급 「'+g('kind')+'」');
+    let dept=String(g('dept')).trim(),mgr=String(g('mgr')).trim();
+    // 담당자: 이름만 사용. 숫자만 있는 값(이카운트 담당자 코드)은 무시하고 올린 사람으로
+    if(/^\d+$/.test(mgr))mgr='';
     if(mgr&&!EMPS.some(e=>e.name===mgr))er('담당자를 찾을 수 없음 「'+mgr+'」');
     if(dept&&!depts.has(dept))er('부서를 찾을 수 없음 「'+dept+'」');
+    if(!mgr&&!dept)mgr=curUser;
     if(!dept)dept=mgr?empDept(mgr):(myDept()||'');
     if(!mgr)mgr=autoManager(dept);
-    rows.push({rn,date,tp,p,it,q,pr:pr===''?null:pr,kd,dept,mgr,note:String(c[9]||'').trim()});
+    rows.push({rn,date,seq:String(g('seq')).trim(),tp,p,it,q,pr:pr===''?null:pr,vt,kd,dept,mgr,note:String(g('note')).trim()});
   });
   if(!rows.length&&!errs.length){alert('입력된 행이 없습니다.');return;}
   if(errs.length){showBulkErrors(errs,missP,src);return;}
   const groups={};
-  rows.forEach(r=>{const k=[r.date,r.tp,r.p.id,r.kd,r.dept,r.mgr].join('|');(groups[k]=groups[k]||[]).push(r);});
+  rows.forEach(r=>{const k=[r.date,r.seq,r.tp,r.p.id,r.vt,r.kd,r.dept,r.mgr].join('|');(groups[k]=groups[k]||[]).push(r);});
   const gl=Object.values(groups);
-  if(!confirm(`전표 ${gl.length}건 · 품목 ${rows.length}행을 작성중 전표로 저장합니다.`))return;
+  const tag=H.ecount?' (이카운트 양식으로 인식)':'';
+  if(!confirm(`전표 ${gl.length}건 · 품목 ${rows.length}행을 작성중 전표로 저장합니다.${tag}`))return;
   let ok=0;
   try{for(const g of gl){await saveBulkGroup(g);ok++;}}
   catch(e){alert(`${ok}건 저장 후 오류로 중단했습니다: ${e.message}\n저장된 전표는 작성중 목록에서 확인하세요.`);loadNew();return;}
@@ -650,7 +691,7 @@ function showBulkErrors(errs,missP,src){
 }
 async function saveBulkGroup(g){
   const r0=g[0];const p=r0.p;const isSale=r0.tp==='매출';const dl=r0.kd==='LG사급';
-  const cur=SETTING.default_currency||'KRW';const k=cur==='KRW'?1:100;const vp=vatPct('과세');
+  const cur=SETTING.default_currency||'KRW';const k=cur==='KRW'?1:100;const vt=r0.vt||'과세';const vp=vatPct(vt);
   const need=[...new Set(g.filter(r=>r.pr==null).map(r=>r.it.item_code))];const price={};
   if(need.length&&!dl){
     const rule=await ruleMap(isSale?p.id:null,need,r0.date);
@@ -661,11 +702,11 @@ async function saveBulkGroup(g){
   const lines=g.map((r,i)=>{const it=r.it;const up=r.pr!=null?r.pr:(price[it.item_code]||0);
     const sup=dl?0:Math.round(r.q*up*k)/k;const vat=dl?0:Math.round(sup*vp/100*k)/k;
     return {line_no:i+1,item_code:it.item_code,description:it.description||'',spec:it.spec||null,brand:it.brand||null,maker_pn:it.maker_pn||null,lg_pn:it.lg_pn||null,
-      qty:r.q,unit_price:up,supply_amt:sup,vat_amt:vat,note:null};});
+      qty:r.q,unit_price:up,supply_amt:sup,vat_amt:vat,note:r.note||null};});
   const sup=lines.reduce((a,b)=>a+b.supply_amt,0),vat=lines.reduce((a,b)=>a+b.vat_amt,0);
-  const note=(g.find(r=>r.note)||{}).note||null;
+  const note=[...new Set(g.map(r=>r.note).filter(Boolean))].join(', ').slice(0,200)||null;
   const head={entity:curEntity,slip_type:r0.tp,slip_date:r0.date,partner_id:p.id,partner_name:p.name,dept:r0.dept||null,manager:r0.mgr||null,emp_no:empNo(r0.mgr),
-    location_id:isSale?partnerLocation(p.id):((LOCS[0]&&LOCS[0].id)||null),currency:cur,fx_rate:1,vat_type:'과세',status:'작성중',source_type:'직접',
+    location_id:isSale?partnerLocation(p.id):((LOCS[0]&&LOCS[0].id)||null),currency:cur,fx_rate:1,vat_type:vt,status:'작성중',source_type:'직접',
     supply_kind:r0.kd,supply_total:sup,vat_total:vat,total:sup+vat,note,created_by:curUser};
   const r=await post('trade_slip',head);const id=r[0].id;
   try{await post('trade_slip_line',lines.map(l=>Object.assign({slip_id:id},l)));}
@@ -1286,7 +1327,8 @@ function renderList(){
 }
 function printChecked(){const ids=[...document.querySelectorAll('.prChk:checked')].map(x=>+x.value);if(!ids.length){alert('출력할 전표를 선택하세요.');return;}printSlips(ids);}
 
-/* ── 거래명세서 출력 (이카운트 양식: 공급자용/공급받는자용, 페이지당 11행) ── */
+/* ── 거래명세서 출력 (이카운트 양식: 공급자용/공급받는자용, 페이지당 13행 — v2.0에서 11→13) ── */
+const STMT_ROWS=13;
 const PL={
   ko:{title:'거래명세서',sup:'공급자용',buy:'공급받는자용',sp:'공급자',no:'일련번호',biz:'사업자등록번호',tel:'TEL',ceo:'성명',name:'상호',mgr:'담당자',addr:'주소',amt:'금 액',won:'정',
       date:'일자',code:'품목코드',mpn:'메이커품번',lgpn:'LG품번',item:'품목명[규격]',qty:'수량(단위포함)',price:'단가',supply:'공급가액',brand:'브랜드명',tq:'수량',vat:'VAT',total:'합계',recv:'인수',sign:'인',hon:'貴 中'},
@@ -1371,7 +1413,7 @@ async function saveStmtCols(){
 function pvPrint(){const fr=document.getElementById('pvFrame');try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){alert('인쇄 실패: '+e.message);}}
 function closePreview(){document.getElementById('pvOv').classList.remove('on');document.getElementById('pvFrame').srcdoc='';}
 function statementHtml(slips,lines,lang,draft,costs,cols){
-  const per=11;const pages=[];costs=costs||{};cols=cols||stmtColsFor(slips);
+  const per=STMT_ROWS;const pages=[];costs=costs||{};cols=cols||stmtColsFor(slips);
   slips.forEach(s=>{
     const ls=lines.filter(l=>l.slip_id===s.id);const n=Math.max(1,Math.ceil(ls.length/per));
     for(let i=0;i<n;i++)pages.push({s,ls:ls.slice(i*per,(i+1)*per),pg:i+1,pn:n,all:ls});
@@ -1385,20 +1427,20 @@ function statementHtml(slips,lines,lang,draft,costs,cols){
 body{font-family:'Noto Sans KR',sans-serif;color:#1E2225;background:#e9ecf1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .page{position:relative;width:210mm;min-height:297mm;margin:10px auto;background:#fff;padding:9mm 10mm;page-break-after:always;box-shadow:0 1px 4px rgba(0,0,0,.15)}
 .wm{position:absolute;left:0;right:0;top:45%;text-align:center;font-size:64px;font-weight:700;color:rgba(200,0,30,.16);z-index:5;transform:rotate(-24deg);pointer-events:none;letter-spacing:6px}
-.cut{position:relative;border-top:1px dashed #9aa3af;margin:5mm 0 5mm}
+.cut{position:relative;border-top:1px dashed #9aa3af;margin:3mm 0 3mm}
 .cut span{position:absolute;left:-2mm;top:-9px;font-size:12px;color:#9aa3af;background:#fff;padding-right:2px}
-.cp{height:133mm;display:flex;flex-direction:column}
-.band{height:4px;background:#1B3A6B;margin-bottom:5px}
+.cp{height:135mm;display:flex;flex-direction:column}
+.band{height:4px;background:#1B3A6B;margin-bottom:4px}
 .top{display:flex;gap:5mm;align-items:stretch}
 .lt{flex:1;display:flex;flex-direction:column}
-.ttl{display:flex;align-items:baseline;gap:7px;margin-bottom:5px;white-space:nowrap}
-.ttl h1{white-space:nowrap;font-size:23px;letter-spacing:9px;font-weight:700;color:#1B3A6B}
+.ttl{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;white-space:nowrap}
+.ttl h1{white-space:nowrap;font-size:19px;letter-spacing:8px;font-weight:700;color:#1B3A6B}
 .chip{white-space:nowrap;font-size:10.5px;font-weight:700;color:#1B3A6B;border:1px solid #1B3A6B;padding:1px 7px;letter-spacing:1px}
 .chip.buy{color:#fff;background:#1B3A6B}
 .chip.lg{color:#8A6116;border-color:#8A6116;background:#FFF8EC}
 .brand{margin-left:auto;font-size:10px;color:#565C64;letter-spacing:.5px}
 .brand b{display:inline-block;background:#C8001E;color:#fff;padding:0 5px;margin-right:4px;font-size:9.5px;letter-spacing:.5px}
-.cust{flex:1;border:1.5px solid #1B3A6B;border-left-width:5px;padding:6px 10px;font-size:11.5px;line-height:1.6;display:flex;flex-direction:column;justify-content:center}
+.cust{flex:1;border:1.5px solid #1B3A6B;border-left-width:5px;padding:4px 10px;font-size:11px;line-height:1.5;display:flex;flex-direction:column;justify-content:center}
 .cust .nm{font-size:15px;font-weight:700;color:#111827}
 .cust .nm small{font-size:11px;font-weight:500;color:#565C64;margin-left:4px}
 .cust .sub{color:#374151}
@@ -1406,25 +1448,25 @@ body{font-family:'Noto Sans KR',sans-serif;color:#1E2225;background:#e9ecf1;-web
 .spt td.ad{font-size:8.5px;line-height:1.3}
 table{border-collapse:collapse;width:100%}
 .spt{width:38%;flex:0 0 38%}
-.spt td{border:1px solid #9aa3af;font-size:10px;padding:2px 6px;height:20px;line-height:1.35;vertical-align:middle;word-break:keep-all}
+.spt td{border:1px solid #9aa3af;font-size:9.5px;padding:1px 6px;height:17px;line-height:1.25;vertical-align:middle;word-break:keep-all}
 .spt .vl{width:18px;text-align:center;background:#1B3A6B;color:#fff;font-weight:700;font-size:10px;line-height:1.3;border-color:#1B3A6B}
 .spt .k{background:#EDF1F7;color:#1B3A6B;text-align:center;width:29%;white-space:nowrap;font-weight:500}
 .spt .no{font-weight:700;color:#111827}
 .spt .no.dr{color:#C8001E}
 .stamp-img{position:relative;display:inline-block;width:15px;height:15px;margin-left:3px;vertical-align:middle}
-.stamp-img img{position:absolute;left:calc(50% + 13mm);top:calc(50% - 10px);width:11.7mm;height:11.7mm;transform:translate(-50%,-50%);opacity:.92;pointer-events:none}
+.stamp-img img{position:absolute;left:calc(50% + 13mm);top:calc(50% - 8.5px);width:11.7mm;height:11.7mm;transform:translate(-50%,-50%);opacity:.92;pointer-events:none}
 .stamp{display:inline-block;color:#C8001E;border:1.2px solid #C8001E;border-radius:50%;width:15px;height:15px;line-height:12px;text-align:center;font-size:9px;margin-left:3px;vertical-align:middle}
-.amt{display:flex;align-items:center;margin:5px 0;border:1.5px solid #1B3A6B;font-size:13px}
-.amt .lb{background:#1B3A6B;color:#fff;padding:4px 12px;font-weight:700;letter-spacing:3px}
-.amt .kr{padding:4px 12px;flex:1}
-.amt .no{padding:4px 12px;font-weight:700;font-size:15px;color:#1B3A6B}
+.amt{display:flex;align-items:center;margin:3px 0;border:1.5px solid #1B3A6B;font-size:12px}
+.amt .lb{background:#1B3A6B;color:#fff;padding:2px 12px;font-weight:700;letter-spacing:3px}
+.amt .kr{padding:2px 12px;flex:1}
+.amt .no{padding:2px 12px;font-weight:700;font-size:14px;color:#1B3A6B}
 .lt2{border:1.2px solid #1B3A6B}
-.lt2 th,.lt2 td{border:1px solid #c7ccd4;font-size:10px;padding:1px 4px;height:18.5px}
+.lt2 th,.lt2 td{border:1px solid #c7ccd4;font-size:9.5px;padding:0 4px;height:16.5px;line-height:1.2}
 .lt2 th{background:#EDF1F7;color:#1B3A6B;font-weight:700;border-color:#9aa3af}
 .lt2 tbody tr:nth-child(even) td{background:#FAFBFC}
 .r{text-align:right}.c{text-align:center}
 .ft{margin-top:4px;border:1.2px solid #1B3A6B}
-.ft td{border:1px solid #9aa3af;font-size:10.5px;padding:3px 5px}
+.ft td{border:1px solid #9aa3af;font-size:10px;padding:2px 5px}
 .ft .k{background:#EDF1F7;color:#1B3A6B;text-align:center;font-weight:700;white-space:nowrap}
 .ft .tot{font-weight:700;color:#1B3A6B}
 .mg{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:3px;font-size:10.5px;color:#1B3A6B}
@@ -1473,7 +1515,7 @@ function copyHtml(pg,kind,lang,draft,costs,cols){
   if(cols.includes('brand'))C.push({k:'brand',w:9,h:L.brand,v:l=>esc(l.brand||'')});
   const dw=C.find(x=>x.k==='description');dw.w=Math.max(16,100-C.reduce((a,b)=>a+b.w,0));
   let rows=pg.ls.map(l=>'<tr>'+C.map(x=>`<td${x.c?` class="${x.c}"`:''}>${x.v(l)}</td>`).join('')+'</tr>').join('');
-  for(let i=pg.ls.length;i<11;i++)rows+='<tr>'+C.map((x,j)=>`<td>${j?'':'&nbsp;'}</td>`).join('')+'</tr>';
+  for(let i=pg.ls.length;i<STMT_ROWS;i++)rows+='<tr>'+C.map((x,j)=>`<td>${j?'':'&nbsp;'}</td>`).join('')+'</tr>';
   const last=pg.pg===pg.pn;
   // 마진은 거래명세서에 표시하지 않음(고객 서명 시 노출) — 거래명세서 목록 마진금액·마진율로 이동 (2026-11-03)
   return `<div class="cp${kind==='buy'?' buy':''}">
