@@ -9,7 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.10 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   org_chart.html v1.11 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   ── v1.11: 해외법인 선 직선 교차(반원 삭제), 해외법인 머리줄 본사와 같은 줄·연주황 밑줄, 해외법인 칸 폭 = 본사, SMEKR 부서 간격 24px
    ── v1.10: 글로벌 조직도 위치 계산 방식 — 해외법인(왼쪽) → 연구소 부서 → 본사 부서 → CFO, 개발기획·영업팀은 본사 부서 가로선(연구소·상무 공유),
             해외법인은 상무이사 박스 왼쪽에서 별도 선(연구소 세로선과 겹치는 곳 넘어가기 표시 .kr-jump) · 엑셀 동일
    ── v1.9: 글로벌 조직도 본사도 부서 기준(대표→[연구소·상무·CFO], 연구소·CFO 한 단 아래) / SMEKR 선 1.5px 테두리·숫자 삭제·근무연수 표시에 따라 칸 너비
@@ -118,7 +119,7 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .box,.ovrow{position:relative;}
 #chart.no-ten .ten,#krChart.no-ten .ten{display:none;}
 #chart:not(.no-ten) .unit,#krChart:not(.no-ten) .unit{width:149px;}
-#chart:not(.no-ten) .unit.ov-unit{width:179px;}
+#chart:not(.no-ten) .unit.ov-unit{width:149px;}
 /* v1.9 글로벌 조직도 — 연구소·CFO 한 단 아래용 세로선 칸 */
 .g-drop{width:0;height:66px;border-left:1.5px solid var(--line);}
 /* v1.7 SMEKR 조직도 */
@@ -150,11 +151,14 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .members .box{margin-bottom:-1px;}
 .members .box.titled{margin-top:10px;}
 .members .gap{height:10px;}
-.ovbox{width:135px;border:1px solid #555;background:#fff;}
-.unit.ov-unit{width:149px;}
-.ovhd{background:var(--ov);color:var(--ov-text);font-size:12px;font-weight:700;text-align:center;padding:4px 0;}
+.ovbox{width:104px;border:1px solid #555;background:#fff;}
+.unit.ov-unit{width:119px;}
+.ovhd{background:var(--ov);color:var(--ov-text);font-size:11px;font-weight:700;text-align:center;padding:3px 0;}
+/* v1.11 — 해외법인 법인명 머리줄: 본사 부서 머리줄과 같은 위치·밑줄, 색은 해외법인 색 */
+.unit-hd.ent-hd{border-bottom-color:var(--ov);}
+.unit-hd.ent-hd small{font-size:10.5px;font-weight:700;color:var(--text);}
 .ovbox.misc .ovhd{background:var(--bg-sub);color:var(--muted);}
-.ovrow{font-size:12.5px;color:#111;text-align:center;padding:4px 2px;min-height:26px;border-top:1px solid #777;}
+.ovrow{font-size:12px;color:#111;text-align:center;padding:4px 2px;min-height:25px;border-top:1px solid #777;word-break:keep-all;}
 .unit .ent{font-size:12.5px;}
 .unit .ent small{display:inline;font-size:11px;font-weight:700;color:var(--text);}
 .ent-n{font-weight:700;margin-left:4px;}
@@ -541,7 +545,7 @@ function unitHtml(u){
   let h = `<div class="unit${u.ov?' ov-unit':''}">`;
   if(u.ov){
     const E = ENT[u.entity]||{code:u.entity,country:''};
-    h += `<div class="cap ent">${esc(E.code)} <small>(${esc(E.country)})</small></div>`;
+    h += `<div class="unit-hd ent-hd">${esc(E.code)} <small>(${esc(E.country)})</small></div>`;   // v1.11 — 본사 부서 머리줄과 같은 줄·밑줄(연주황)
     u.cats.forEach((c,ci)=>{
       if(ci) h += `<div class="vline"></div>`;
       const rows = c.rows.length ? c.rows : [{blank:true}];
@@ -593,8 +597,7 @@ function renderChart(){
   if(L.ovCols.length && L.hq){
     const ox1=L.ovCols[0].cx, ox2=L.ovCols[L.ovCols.length-1].cx, om=(ox1+ox2)/2, by=Y.hq+16+BOXH/2, hxL=L.hqX-KR_BOX/2;
     hl(ox1, ox2, Y.bus2); vl(om, by, Y.bus2);
-    if(L.lab){ const j=L.labX; hl(om, j-7, by); hl(j+7, hxL, by); parts.push(`<div class="kr-jump" style="left:${Rd(j-7)}px;top:${Rd(by-7)}px;"></div>`); }
-    else hl(om, hxL, by);
+    hl(om, hxL, by);   // v1.11 — 연구소 세로선과는 직선으로 교차 (넘어가기 반원 삭제)
   }
   L.bus.forEach(b=>vl(b.cx, Y.bus2, Y.team+6));
   let row=`<div class="kr-row" style="top:${Y.team}px;">`;
@@ -622,7 +625,7 @@ function glLayout(){
   const lab=gp('lab'), hq=gp('hq'), cfo=gp('cfo');
   const ovU = hq ? hq.units.filter(u=>u.ov) : [], hqU = hq ? hq.units.filter(u=>!u.ov) : [];
   const labU = lab ? lab.units : [], cfoU = cfo ? cfo.units : [];
-  const wOf = u => u.ov ? (SHOW_TEN?179:149) : (SHOW_TEN?149:119);
+  const wOf = () => (SHOW_TEN?149:119);   // v1.11 — 해외법인 칸도 본사와 같은 폭
   let x=0; const bus=[];
   ovU.concat(labU).concat(hqU).forEach(u=>{ const w=wOf(u); bus.push({u,x,w,cx:x+w/2}); x+=w+G; });
   const busEnd = bus.length ? x-G : 0;
@@ -885,7 +888,8 @@ async function downloadExcel(){
     let r=14;
     if(u.ov){
       const E=ENT[u.entity]||{code:u.entity,country:''};
-      put(r,i,`${E.code} (${E.country})`,{font:{bold:true}}); r++;
+      put(r,i,`${E.code} (${E.country})`,{font:{bold:true}}).border={bottom:{style:'medium',color:{argb:OV}}}; r++;
+      vline(r,i); r++;   // v1.11 — 본사 부서(머리줄 → 세로선 → 박스)와 행 맞춤
       u.cats.forEach((c,ci)=>{
         if(ci){ vline(r,i); r++; }
         put(r,i,c.label,{fill:c.misc?'FFEEF0F3':OV,box:true,font:{bold:true,size:9,color:{argb:'FF5A2A00'}}}); r++;
@@ -994,7 +998,7 @@ const krUnitN = u => 1 + u.members.length + hcSum(u.hc);
 //   연구소·상무이사 → 같은 부서 가로선(연구소 부서 + 상무 직속 부서) / CFO → 재경팀 단독 세로선
 //   연구소·CFO 박스는 상무이사 박스보다 한 단 아래 / 대표이사는 상무이사 세로선 위
 // v1.9 — 칸 너비는 근무연수 표시 여부를 따름(글로벌과 동일: 표시 149 / 숨김 119)
-const KR_G = 14, KR_CFO_GAP = 46, KR_BOX = 104;
+const KR_G = 24, KR_CFO_GAP = 46, KR_BOX = 104;   // v1.11 — 부서 간격 14 → 24 (SMEKR 조직도만)
 let KR_W = 149;
 function krLayout(){
   KR_W = SHOW_TEN ? 149 : 119;
