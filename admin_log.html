@@ -417,6 +417,7 @@ td.center .al-pline{justify-content:center;}
 .mpm-type{font-size:11.5px;color:var(--muted);white-space:nowrap;}
 .mpm-act{font-size:11.5px;font-weight:700;color:var(--point);white-space:nowrap;}
 .al-add-btn:hover{border-color:var(--point);color:var(--point);background:var(--point-bg);}
+#emp-table td.emp-note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;font-size:12px;color:#111827;}
 </style>
 </head>
 <body>
@@ -1572,7 +1573,7 @@ td.center .al-pline{justify-content:center;}
     <select id="emp-f-active" onchange="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 10px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;">
       <option value="true">재직중</option><option value="">전체</option><option value="false">퇴직자</option>
     </select>
-    <input type="text" id="emp-f-search" placeholder="이름 검색..." oninput="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 12px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;width:140px;">
+    <input type="text" id="emp-f-search" placeholder="이름·비고 검색..." oninput="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 12px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;width:140px;">
     <div style="margin-left:auto;display:flex;gap:8px;">
       <button class="up-btn up-btn-green" onclick="downloadEmpExcel()">⬇ 엑셀</button>
       <button class="up-btn up-btn-primary" onclick="openEmpModal()">+ 직원 등록</button>
@@ -1595,9 +1596,10 @@ td.center .al-pline{justify-content:center;}
         <th style="width:100px;">입사일</th>
         <th style="width:100px;">퇴직일</th>
         <th style="width:100px;">근속</th>
+        <th style="width:220px;">비고</th>
         <th class="center" style="width:80px;">관리</th>
       </tr></thead>
-      <tbody id="emp-tbody"><tr><td colspan="15"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+      <tbody id="emp-tbody"><tr><td colspan="16"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
     </table>
   </div>
   <div class="up-info" style="margin-top:8px;">💡 직원 등록/수정 시 employees 테이블에 저장됩니다. 입사·퇴사·이동·직급·직책 변경은 조직 이력에 자동 기록됩니다(조직 이력 조회·입력: 메인 › 커뮤니케이션 › 조직도).</div>
@@ -1683,6 +1685,8 @@ td.center .al-pline{justify-content:center;}
         <div class="form-group" id="emp-active-group" style="display:none;"><label>재직 상태</label><select id="emp-in-active" onchange="toggleRetireDateField()"><option value="true">재직중</option><option value="false">퇴직</option></select></div>
         <div class="form-group" id="emp-retire-group" style="display:none;"><label>퇴직일자 <span class="req">*</span></label><input type="date" id="emp-in-retiredate"></div>
       </div>
+      <!-- (2026-11-10) 비고 — 이력 코멘트 -->
+      <div class="form-group" style="margin-top:4px;"><label>비고 <span style="font-size:10px;color:var(--muted);font-weight:400;">(이력 코멘트 — 예: 2026-11-10 승진 면담)</span></label><textarea id="emp-in-note" rows="4" style="width:100%;resize:vertical;border:1.5px solid var(--border);border-radius:2px;padding:8px 10px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;line-height:1.5;"></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeEmpModal()">취소</button>
@@ -5751,9 +5755,9 @@ let _empData = [], _empEditId = null;
 
 async function loadEmpData() {
   const tbody = document.getElementById('emp-tbody');
-  tbody.innerHTML = '<tr><td colspan="15"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="16"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr>';
   const {data, error} = await sb.from('employees').select('*').order('emp_no');
-  if(error){tbody.innerHTML=`<tr><td colspan="15" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
+  if(error){tbody.innerHTML=`<tr><td colspan="16" style="text-align:center;color:red;padding:20px;">${error.message}</td></tr>`;return;}
   _empData = data || [];
   updateEmpKpi();
   renderEmpTable();
@@ -5785,6 +5789,10 @@ function calcTenure(joinDate) {
   return y>0 ? `${y}년 ${m}개월` : `${m}개월`;
 }
 
+// (2026-11-10) 직원 비고 — 이력 코멘트(employees.note). 목록은 한 줄 요약, 마우스를 올리면 전체
+function _empNoteEsc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _empNoteAttr(v){return _empNoteEsc(v);}
+function _empNoteCell(v){const s=String(v||'').trim();return s?_empNoteEsc(s.replace(/\s*\n\s*/g,' / ')):'';}
 function _empRowHtml(r, noLabel, isRetired) {
   const EB = {KOREA:'b-green',SMECN:'b-red',SMEGLOBAL:'b-amber',GSMEIN:'b-purple'};
   const trStyle  = isRetired ? 'style="opacity:0.5;background:var(--bg-sub);"' : '';
@@ -5815,6 +5823,7 @@ function _empRowHtml(r, noLabel, isRetired) {
     <td class="mono">${r.join_date||''}</td>
     <td class="mono">${retireCell}</td>
     <td class="mono">${tenureCell}</td>
+    <td class="emp-note" title="${_empNoteAttr(r.note)}">${_empNoteCell(r.note)}</td>
     <td class="center">${manageCell}</td>
   </tr>`;
 }
@@ -5825,12 +5834,12 @@ function renderEmpTable() {
   const activeF = document.getElementById('emp-f-active').value;
   const search  = document.getElementById('emp-f-search').value.trim().toLowerCase();
   const tbody   = document.getElementById('emp-tbody');
-  const EMPTY13 = '<tr><td colspan="15"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';
+  const EMPTY13 = '<tr><td colspan="16"><div class="empty-state">직원 데이터가 없습니다.</div></td></tr>';
 
   function base(r) {
     if(entity && r.entity!==entity) return false;
     if(dept   && r.dept!==dept)     return false;
-    if(search && !(r.name||'').toLowerCase().includes(search)) return false;
+    if(search && !((r.name||'')+' '+(r.note||'')).toLowerCase().includes(search)) return false;
     return true;
   }
   const sorted      = [..._empData].sort((a,b)=>(a.emp_no||0)-(b.emp_no||0));
@@ -5842,18 +5851,18 @@ function renderEmpTable() {
     if(!activeRows.length){ tbody.innerHTML=EMPTY13; return; }
     html = activeRows.map((r,i)=>_empRowHtml(r, i+1, false)).join('');
   } else if(activeF === 'false') {
-    if(!retiredRows.length){ tbody.innerHTML='<tr><td colspan="15"><div class="empty-state">퇴직자 데이터가 없습니다.</div></td></tr>'; return; }
+    if(!retiredRows.length){ tbody.innerHTML='<tr><td colspan="16"><div class="empty-state">퇴직자 데이터가 없습니다.</div></td></tr>'; return; }
     html = retiredRows.map((r,i)=>_empRowHtml(r, `\ud1f4${i+1}`, true)).join('');
   } else {
     if(!activeRows.length && !retiredRows.length){ tbody.innerHTML=EMPTY13; return; }
     html = activeRows.map((r,i)=>_empRowHtml(r, i+1, false)).join('');
     if(retiredRows.length){
-      html += `<tr><td colspan="15" style="background:var(--bg-sub);padding:7px 14px;font-size:11px;color:var(--muted);font-weight:700;border-top:2px solid var(--border);">\ud1f4\uc9c1\uc774\ub825 (${retiredRows.length}\uba85)</td></tr>`;
+      html += `<tr><td colspan="16" style="background:var(--bg-sub);padding:7px 14px;font-size:11px;color:var(--muted);font-weight:700;border-top:2px solid var(--border);">\ud1f4\uc9c1\uc774\ub825 (${retiredRows.length}\uba85)</td></tr>`;
       html += retiredRows.map((r,i)=>_empRowHtml(r, `\ud1f4${i+1}`, true)).join('');
     }
   }
   tbody.innerHTML = html;
-  setTimeout(()=>initColResize('emp-table','al_emp_v5'),50); // v5: 직책·상위자 컬럼 추가(2026-10-20)
+  setTimeout(()=>initColResize('emp-table','al_emp_v6'),50); // v6: 비고 컬럼 추가(2026-11-10) / v5: 직책·상위자(2026-10-20)
 }
 function openEmpModal(id) {
   _empEditId = id || null;
@@ -5874,6 +5883,7 @@ function openEmpModal(id) {
   document.getElementById('emp-in-title').value     = r?.title      || '';
   document.getElementById('emp-in-sort').value      = r?.sort_no    ?? '';
   document.getElementById('emp-in-namelocal').value = r?.name_local || '';
+  document.getElementById('emp-in-note').value      = r?.note       || '';
   const rsel = document.getElementById('emp-in-reports');
   const cand = _empData.filter(x=>x.active!==false && x.id!==(r?.id))
     .sort((a,b)=>(a.emp_no||0)-(b.emp_no||0));
@@ -5933,6 +5943,7 @@ async function saveEmp() {
     reports_to: document.getElementById('emp-in-reports').value ? Number(document.getElementById('emp-in-reports').value) : null,
     sort_no:    document.getElementById('emp-in-sort').value!=='' ? Number(document.getElementById('emp-in-sort').value) : null,
     name_local: document.getElementById('emp-in-namelocal').value.trim()||null,
+    note:       document.getElementById('emp-in-note').value.trim()||null,
     updated_at: new Date().toISOString(),
   };
   const wfpw = document.getElementById('emp-in-wfpw').value.trim();
