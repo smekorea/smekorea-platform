@@ -9,7 +9,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.9 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   org_chart.html v1.10 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   ── v1.10: 글로벌 조직도 위치 계산 방식 — 해외법인(왼쪽) → 연구소 부서 → 본사 부서 → CFO, 개발기획·영업팀은 본사 부서 가로선(연구소·상무 공유),
+            해외법인은 상무이사 박스 왼쪽에서 별도 선(연구소 세로선과 겹치는 곳 넘어가기 표시 .kr-jump) · 엑셀 동일
    ── v1.9: 글로벌 조직도 본사도 부서 기준(대표→[연구소·상무·CFO], 연구소·CFO 한 단 아래) / SMEKR 선 1.5px 테두리·숫자 삭제·근무연수 표시에 따라 칸 너비
    ── v1.8: SMEKR 조직도 연결선을 엑셀 원본과 동일하게 — 대표→[연구소·상무·CFO], 연구소·상무→부서 가로선, CFO→재경팀
    ── v1.7: 메뉴명 「글로벌 조직도」→「조직도」, 탭 [🌐 글로벌 조직도 | 🏢 SMEKR 조직도 | 📜 조직 이력]
@@ -125,6 +127,7 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:v
 .kr-l{position:absolute;width:0;height:0;}
 .kr-l.h{border-top:1.5px solid var(--line);}
 .kr-l.v{border-left:1.5px solid var(--line);}
+.kr-jump{position:absolute;width:15px;height:8px;border:1.5px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;box-sizing:border-box;}
 .kr-node{position:absolute;width:104px;display:flex;flex-direction:column;align-items:center;}
 .kr-node .cap{height:16px;margin:0;line-height:16px;white-space:nowrap;}
 .kr-row{position:absolute;left:0;right:0;}
@@ -560,7 +563,7 @@ function applyTenureUI(){
   ['chart','krChart'].forEach(id=>{ const c=document.getElementById(id); if(c) c.classList.toggle('no-ten',!SHOW_TEN); });
   ['tenBtn','tenBtnKr'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); } });
 }
-function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); if(krModel) renderKr(); }
+function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); if(krModel) renderKr(); if(model) renderChart(); }
 function renderChart(){
   applyTenureUI();
   const M = model;
@@ -570,36 +573,69 @@ function renderChart(){
     `<span>전체<b>${EMPS.length}</b></span><span>본사<b>${M.hqN}</b></span><span>해외법인<b>${M.ovN}</b></span>` +
     (M.hcN?`<span>인원수 표시<b>${M.hcN}</b></span>`:'');
   if(!M.root){ document.getElementById('chart').innerHTML = '<div class="loading">대표이사(직책)가 지정된 직원이 없습니다. 관리자 설정 › 직원 관리에서 직책을 지정해 주세요.</div>'; return; }
-  let h = `<div class="tree"><ul><li><div class="node">${boxHtml(M.root, M.root.title||M.root.rank, false)}</div>`;
-  if(M.groups.length){
-    h += `<ul>`;
-    M.groups.forEach(g=>{
-      // v1.9 — 연구소·CFO는 상무이사보다 한 단 아래: 위에 세로선 칸, 상무는 아래에 같은 높이 세로선 칸
-      const low = g.pos!=='hq';
-      h += `<li><div class="node">${low?'<div class="g-drop"></div>':''}<div class="cap">${esc(g.cap)}</div>${boxHtml(g.person, g.badge, false)}${low?'':'<div class="g-drop"></div>'}</div>`;
-      if(g.units.length){ h += `<ul>${g.units.map(u=>`<li><div class="node">${unitHtml(u)}</div></li>`).join('')}</ul>`; }
-      h += `</li>`;
-    });
-    h += `</ul>`;
+  // v1.10 미리보기 — 해외법인 → 연구소(개발기획·영업) → 본사 부서 → CFO, 연구소·CFO 한 단 아래, 연구소·상무 → 같은 부서 가로선
+  const L = glLayout();
+  const Y = { root:0, bus1:82, hq:108, sub:164, bus2:248, team:272 }, BOXH = 50;
+  const parts = [], Rd = v => Math.round(v);
+  const hl = (x1,x2,y) => parts.push(`<div class="kr-l h" style="left:${Rd(Math.min(x1,x2))}px;top:${Rd(y)}px;width:${Rd(Math.abs(x2-x1))+1}px;"></div>`);
+  const vl = (x,y1,y2) => parts.push(`<div class="kr-l v" style="left:${Rd(x)}px;top:${Rd(y1)}px;height:${Rd(y2-y1)}px;"></div>`);
+  const node = (x,y,cap,e,badge) => parts.push(`<div class="kr-node" style="left:${Rd(x-KR_BOX/2)}px;top:${y}px;">${cap?`<div class="cap">${esc(cap)}</div>`:''}${boxHtml(e,badge,false)}</div>`);
+  node(L.hqX, Y.root, '', M.root, M.root.title||M.root.rank);
+  const tops=[L.hqX]; if(L.lab) tops.push(L.labX); if(L.cfo) tops.push(L.cfoX);
+  vl(L.hqX, Y.root+BOXH, Y.bus1); if(tops.length>1) hl(Math.min(...tops), Math.max(...tops), Y.bus1);
+  if(L.hq){ vl(L.hqX, Y.bus1, Y.hq); node(L.hqX, Y.hq, L.hq.cap, L.hq.person, L.hq.badge); vl(L.hqX, Y.hq+16+BOXH, Y.bus2); }
+  if(L.lab){ vl(L.labX, Y.bus1, Y.sub); node(L.labX, Y.sub, L.lab.cap, L.lab.person, L.lab.badge); vl(L.labX, Y.sub+16+BOXH, Y.bus2); }
+  if(L.cfo){ vl(L.cfoX, Y.bus1, Y.sub); node(L.cfoX, Y.sub, L.cfo.cap, L.cfo.person, L.cfo.badge); if(L.cfoU.length) vl(L.cfoX, Y.sub+16+BOXH, Y.team+6); }
+  // 본사 부서 가로선: 연구소 부서 + 상무 직속 부서 (연구소·상무 공유)
+  const hqTeams = L.labCols.concat(L.hqCols);
+  if(hqTeams.length){ const xs=hqTeams.map(b=>b.cx).concat([L.hqX]).concat(L.lab?[L.labX]:[]); hl(Math.min(...xs), Math.max(...xs), Y.bus2); }
+  // 해외법인: 별도 가로선 + 상무이사 박스 왼쪽에서 나온 선 (연구소 세로선과 겹치는 곳은 넘어가기 표시)
+  if(L.ovCols.length && L.hq){
+    const ox1=L.ovCols[0].cx, ox2=L.ovCols[L.ovCols.length-1].cx, om=(ox1+ox2)/2, by=Y.hq+16+BOXH/2, hxL=L.hqX-KR_BOX/2;
+    hl(ox1, ox2, Y.bus2); vl(om, by, Y.bus2);
+    if(L.lab){ const j=L.labX; hl(om, j-7, by); hl(j+7, hxL, by); parts.push(`<div class="kr-jump" style="left:${Rd(j-7)}px;top:${Rd(by-7)}px;"></div>`); }
+    else hl(om, hxL, by);
   }
-  h += `</li></ul></div>`;
+  L.bus.forEach(b=>vl(b.cx, Y.bus2, Y.team+6));
+  let row=`<div class="kr-row" style="top:${Y.team}px;">`;
+  L.bus.concat(L.cfoCols).forEach(b=>{ row += `<div class="kr-col" style="left:${b.x}px;width:${b.w}px;">${unitHtml(b.u)}</div>`; });
+  row += `</div>`;
+  const maxRows = Math.max(0, ...L.bus.concat(L.cfoCols).map(b=> b.u.ov ? b.u.cats.reduce((s,c)=>s+1+Math.max(c.rows.length,1),0)*1.15 : (b.u.members.length + b.u.hc.length)));
+  let h = `<div class="kr-canvas" style="width:${L.width+60}px;height:${Y.team+110+maxRows*26}px;">${parts.join('')}${row}</div>`;
   if(M.orphans.length){
     h += `<div class="orphans">⚠ 조직도에 연결되지 않은 재직자 <b>${M.orphans.length}명</b>: ${M.orphans.map(e=>esc(`[${entLabel(e.entity)}] ${dispName(e)}`)).join(', ')} — 관리자 설정 › 직원 관리에서 「상위자」를 지정해 주세요.</div>`;
   }
   document.getElementById('chart').innerHTML = h;
-  // v1.9 — 세로선 칸 높이 = 상무이사(직책 + 박스) 높이
-  const hqNode = document.querySelector('#chart .tree > ul > li > ul > li > .node .g-drop:last-child');
-  if(hqNode){ const nd=hqNode.parentElement; const cap=nd.querySelector('.cap'), bx=nd.querySelector('.box');
-    const hgt = (cap?cap.offsetHeight+2:0) + (bx?bx.offsetHeight:0);
-    document.querySelectorAll('#chart .g-drop').forEach(d=>d.style.height=hgt+'px'); }
   // 좁은 화면: 가로 스크롤을 대표이사 박스 중앙에 맞춤
-  const sc = document.querySelector('.sheet-scroll'), rb = document.querySelector('.tree > ul > li > .node');
+  const sc = document.querySelector('.sheet-scroll'), rb = document.querySelector('#chart .kr-node');
   if(sc && rb && sc.scrollWidth > sc.clientWidth){
     const x = rb.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft + rb.offsetWidth/2;
     sc.scrollLeft = Math.max(0, x - sc.clientWidth/2);
   }
 }
 
+
+// v1.10 — 글로벌 조직도 좌표: 단위 폭(해외법인 179/149, 본사 부서 149/119 — 근무연수 표시 여부)
+function glLayout(){
+  const G=14, GAP=46, M=model;
+  const gp = k => M.groups.find(g=>g.pos===k);
+  const lab=gp('lab'), hq=gp('hq'), cfo=gp('cfo');
+  const ovU = hq ? hq.units.filter(u=>u.ov) : [], hqU = hq ? hq.units.filter(u=>!u.ov) : [];
+  const labU = lab ? lab.units : [], cfoU = cfo ? cfo.units : [];
+  const wOf = u => u.ov ? (SHOW_TEN?179:149) : (SHOW_TEN?149:119);
+  let x=0; const bus=[];
+  ovU.concat(labU).concat(hqU).forEach(u=>{ const w=wOf(u); bus.push({u,x,w,cx:x+w/2}); x+=w+G; });
+  const busEnd = bus.length ? x-G : 0;
+  let cx0 = busEnd + GAP; const cfoCols=[];
+  cfoU.forEach(u=>{ const w=wOf(u); cfoCols.push({u,x:cx0,w,cx:cx0+w/2}); cx0+=w+G; });
+  const hqCols = bus.filter(b=>hqU.includes(b.u)), labCols = bus.filter(b=>labU.includes(b.u));
+  const ovCols = bus.filter(b=>ovU.includes(b.u)); const hqAll = hqCols.concat(ovCols);
+  const hqX = hqCols.length ? hqCols[Math.floor((hqCols.length-1)/2)].cx : (bus.length? bus[Math.floor((bus.length-1)/2)].cx : 60);
+  const labX = labCols.length ? (labCols[0].cx + labCols[labCols.length-1].cx)/2 : hqX-170;
+  const cfoX = cfoCols.length ? cfoCols[0].cx : busEnd+GAP+60;
+  const width = cfoCols.length ? cx0-G : (cfo ? busEnd+GAP+120 : busEnd);
+  return { lab, hq, cfo, bus, cfoCols, cfoU, hqX, labX, cfoX, width, labCols, hqCols, ovCols };
+}
 /* ── 비상연락망 (부서장 이상: 직책 기준) ── */
 const CT_TITLES = ['대표이사','상무이사','CFO','법인장','부총경리','팀장','매니저'];
 const CT_ENT_ORDER = ['KOREA','SMECN','SMEGLOBAL','GSMEIN'];
@@ -774,9 +810,13 @@ async function downloadExcel(){
   const font=(o={})=>({name:'Noto Sans KR', size:10, ...o});
   const today=new Date().toISOString().slice(0,10);
 
-  // 칸 구성: 단위(부서/법인)마다 [왼쪽 반칸 L][오른쪽 반칸 R][간격] — 세로 연결선 = L칸 오른쪽 테두리(정중앙)
-  const units=[]; const gspan=[];
-  model.groups.forEach(g=>{ const s=units.length; if(g.units.length) g.units.forEach(u=>units.push(u)); else units.push(null); gspan.push({g,s,e:units.length-1}); });
+  // v1.10 칸 구성: [해외법인][연구소 부서][상무 직속 부서][빈칸][CFO 부서] — 단위마다 [L][R][간격], 세로선 = L칸 오른쪽 테두리
+  const GL = glLayout();
+  const ovN=GL.ovCols.length, labN=GL.labCols.length, hqN=GL.hqCols.length;
+  const units = GL.ovCols.concat(GL.labCols).concat(GL.hqCols).map(b=>b.u);
+  if(!units.length) units.push(null);
+  const cfoStart = units.length + 1; units.push(null);
+  if(GL.cfoCols.length) GL.cfoCols.forEach(b=>units.push(b.u)); else units.push(null);
   const L = i => 2+i*3, R = i => 3+i*3;
   const lastCol = R(units.length-1)+1;
   ws.getColumn(1).width = 1.5;
@@ -789,21 +829,15 @@ async function downloadExcel(){
     const x = opt.noMerge ? cell(r,L(i)) : mergeLR(r,i);
     x.value=v; x.font=font(opt.font||{}); x.alignment={horizontal:opt.align||'center',vertical:'middle',wrapText:true};
     if(opt.fill) x.fill={type:'pattern',pattern:'solid',fgColor:{argb:opt.fill}};
-    // ExcelJS: 병합된 오른쪽 칸에 서식을 주면 병합 전체 서식을 덮어써 왼쪽 테두리가 사라짐 → 대표칸에만 4변 지정
     if(opt.box) x.border={top:BX,left:BX,bottom:BX,right:BX};
     if(opt.under) x.border={bottom:{style:'medium',color:{argb:RED}}};
     return x;
   };
   const badge=(r,i,txt,ov)=>put(r,i,txt,{fill:ov?OV:RED,box:true,font:{bold:true,size:9,color:{argb:ov?'FF5A2A00':'FFFFFFFF'}}});
   const nameBox=(r,i,e)=>put(r,i,dispName(e)+(SHOW_TEN&&tenure(e)?' '+tenure(e):'')+(e.name_local?` (${e.name_local})`:''),{box:true});
-  const vline=(r,i)=>addB(r,L(i),'right');                                  // 단위 i 중앙 세로선 1칸
-  // 부모(중앙 pi) → 자식들(중앙 kids[]) : row r 에 부모 세로선 + 가로 버스, row r+1 에 자식별 세로선
-  const connect=(r,pi,kidIdx)=>{
-    const lo=Math.min(pi,...kidIdx), hi=Math.max(pi,...kidIdx);
-    vline(r,pi);
-    if(hi>lo){ for(let c=R(lo); c<=L(hi); c++) addB(r,c,'bottom'); }
-    kidIdx.forEach(k=>vline(r+1,k));
-  };
+  const vline=(r,i)=>addB(r,L(i),'right');
+  const vrun=(r1,r2,i)=>{ for(let r=r1;r<=r2;r++) vline(r,i); };
+  const bus=(r,lo,hi)=>{ if(hi>lo){ for(let c=R(lo); c<=L(hi); c++) addB(r,c,'bottom'); } };
 
   // 제목
   ws.mergeCells(1,1,1,lastCol);
@@ -813,21 +847,37 @@ async function downloadExcel(){
   const a=cell(2,2); a.value=`기준일 ${today}   |   ${entCountText('  ·  ')}`;
   a.font=font({size:9,color:{argb:'FF565C64'}}); a.alignment={horizontal:'right',vertical:'middle'};
 
-  // 대표 → 2단계(상무/CFO) → 단위
-  const gC = gspan.map(x=>Math.floor((x.s+x.e)/2));
-  const rootI = Math.round((Math.min(...gC)+Math.max(...gC))/2);
-  badge(4,rootI,model.root.title||model.root.rank,false); nameBox(5,rootI,model.root);
-  connect(6,rootI,gC);
-  // v1.9 — 상무이사 8~9 → 세로선 10~11 / 연구소·CFO 세로선 8~9 → 10~11 (한 단 아래) / 부서 연결 12~13 / 단위 14~
-  gspan.forEach((x,k)=>{
-    const g=x.g, p=g.person, i=gC[k], low=g.pos!=='hq';
-    const r0 = low ? 10 : 8;
-    if(low){ vline(8,i); vline(9,i); } else { vline(10,i); vline(11,i); }
-    badge(r0,i,`${g.cap} · ${g.badge||''}`,false);
-    nameBox(r0+1,i,p);
-    const kidIdx=[]; for(let j=x.s;j<=x.e;j++) if(units[j]) kidIdx.push(j);
-    if(kidIdx.length) connect(12,i,kidIdx);
-  });
+  // 위치: 상무 = 상무 직속 부서 가운데, 연구소 = 연구소 부서 가운데(왼쪽), CFO = CFO 부서
+  const hqI = hqN ? ovN+labN+Math.floor((hqN-1)/2) : Math.max(0,Math.floor((units.length-3)/2));
+  const labI = labN ? ovN+Math.floor((labN-1)/2) : null;
+  const cfoI = cfoStart;
+  const hasLab = !!GL.lab && labI!==null, hasCfo = !!GL.cfo;
+  // 대표이사 4~5 → 6 가로선(연구소~CFO) → 7 세로선
+  badge(4,hqI,model.root.title||model.root.rank,false); nameBox(5,hqI,model.root);
+  vline(6,hqI);
+  const topI=[hqI]; if(hasLab) topI.push(labI); if(hasCfo) topI.push(cfoI);
+  bus(6,Math.min(...topI),Math.max(...topI));
+  vline(7,hqI); if(hasLab) vline(7,labI); if(hasCfo) vline(7,cfoI);
+  // 상무이사 8~9 (→ 10~11 세로선) / 연구소·CFO 8~9 세로선 → 10~11 박스 (한 단 아래)
+  if(GL.hq){ badge(8,hqI,`${GL.hq.cap} · ${GL.hq.badge||''}`,false); nameBox(9,hqI,GL.hq.person); }
+  vrun(10,11,hqI);
+  if(hasLab){ vrun(8,9,labI); badge(10,labI,`${GL.lab.cap} · ${GL.lab.badge||''}`,false); nameBox(11,labI,GL.lab.person); }
+  if(hasCfo){ vrun(8,9,cfoI); badge(10,cfoI,`${GL.cfo.cap} · ${GL.cfo.badge||''}`,false); nameBox(11,cfoI,GL.cfo.person); }
+  // 12: 본사 부서 가로선(연구소 부서 + 상무 직속, 연구소·상무 공유) / 13: 부서별 세로선
+  if(labN+hqN){
+    vline(12,hqI); if(hasLab) vline(12,labI);
+    bus(12, ovN, Math.max(hqI, ovN+labN+hqN-1));
+    for(let k=ovN;k<ovN+labN+hqN;k++) vline(13,k);
+  }
+  if(hasCfo && GL.cfoCols.length) vrun(12,13,cfoI);
+  // 해외법인: 상무이사 박스 왼쪽(8행 아래)에서 별도 선 → 해외법인 가운데 세로선 → 12행 해외법인 가로선 → 13행 세로선
+  if(ovN && GL.hq){
+    const ovMid = Math.floor((ovN-1)/2);
+    for(let c=R(ovMid); c<L(hqI); c++) addB(8,c,'bottom');
+    vrun(9,12,ovMid);
+    bus(12,0,ovN-1);
+    for(let k=0;k<ovN;k++) vline(13,k);
+  }
 
   let maxRow=14;
   units.forEach((u,i)=>{
