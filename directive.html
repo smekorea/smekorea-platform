@@ -3191,10 +3191,23 @@ function dvPjPrepare(){
   if(!g('dvPjTitle')){ showToast('프로젝트 정보: 프로젝트명을 입력해주세요','err'); return false; }
   const pc=g('dvPjKind')==='법인과제'?{name:v,isNew:false}:rpCheckPartner(v,old.vendor); if(pc===false) return false;
   const mkn=rpCheckMaker(g('dvPjMaker'),old.maker); if(mkn===false) return false;
-  return {id:dvPjFor,newPartner:pc.isNew?v:'',patch:{maker:mkn||null,vendor:v||null,kind:g('dvPjKind'),title:g('dvPjTitle'),supply_type:g('dvPjSup')||null,remark:g('dvPjRemark')||null,
+  const out={id:dvPjFor,newPartner:pc.isNew?v:'',patch:{maker:mkn||null,vendor:v||null,kind:g('dvPjKind'),title:g('dvPjTitle'),supply_type:g('dvPjSup')||null,remark:g('dvPjRemark')||null,
     owner_dept:g('dvPjDept'),project_id:+g('dvPjProj')||null,corp:g('dvPjCorp')||null,program:(g('dvPjCorp')&&g('dvPjProg'))||null,updated_at:new Date().toISOString()}};
+  // 같은 프로젝트가 이미 있으면 합칠지 묻는다 (확인 = 지금 프로젝트의 활동·연동을 그 프로젝트로 옮기고 지금 프로젝트는 삭제 처리)
+  const dup=out.patch.kind!==TK_KIND?dvFindDupItem(out.patch.title,out.patch.vendor,out.patch.maker,dvPjFor):null;
+  if(dup&&confirm(dvDupMsg(dup)+'\n\n확인: 지금 프로젝트의 활동을 그 프로젝트로 합칩니다\n취소: 합치지 않고 그대로 저장합니다')) out.mergeTo=dup.id;
+  return out;
 }
-async function dvPjCommit(x){ if(!x) return; if(x.newPartner) await rpAddPartner(x.newPartner); await sbPatch('dev_items',x.id,x.patch); }
+async function dvPjCommit(x){ if(!x) return; if(x.newPartner) await rpAddPartner(x.newPartner); await sbPatch('dev_items',x.id,x.patch);
+  if(x.mergeTo){ const r=await sbRpc('merge_dev_items',{p_from:x.id,p_to:x.mergeTo,p_by:me?me.name:null}); showToast('프로젝트를 합쳤습니다 (활동 '+((r&&r.logs)||0)+'건 이동)','ok'); x.id=x.mergeTo; } }
+// v2026-11-13 — 같은 이름·거래처·메이커 프로젝트 찾기 (이름은 띄어쓰기·마침표·대소문자 무시, 거래처·메이커는 dvKeys 기준)
+function dvNormTitle(v){ return String(v||'').toUpperCase().replace(/[\s.·,\-_]/g,''); }
+function dvFindDupItem(title,vendor,maker,exceptId){
+  const tt=dvNormTitle(title); if(!tt) return null;
+  const vk=dvKeys(vendor).join('|'), mk=dvKeys(maker).join('|');
+  return dvAllI.find(i=>!i.is_deleted&&i.id!==exceptId&&i.kind!==TK_KIND&&dvNormTitle(i.title)===tt&&dvKeys(i.vendor).join('|')===vk&&dvKeys(i.maker).join('|')===mk)||null;
+}
+function dvDupMsg(d){ const n=(dvLogsBy[d.id]||[]).length; return '같은 이름·거래처·메이커의 프로젝트가 이미 있습니다.\n\n['+(d.title||'')+'] '+(d.vendor||'')+' / '+(d.maker||'')+' — 활동 '+n+'건'; }
 // 프로젝트 [수정]: 그 프로젝트를 고른 수정창을 연다. 세부내용을 비워 두면 프로젝트 정보만 저장된다
 function dvEditItem(id){
   const it=dvIById[id]; if(!it) return;
@@ -3307,24 +3320,29 @@ async function dvSaveLog(){
   if(!text.trim()){
     if(dvPjOnly&&!dvEditLog){
       if(!pjX){ showToast('바뀐 내용이 없습니다 (활동도 추가하려면 세부내용을 입력하세요)','err'); return; }
-      try{ await dvPjCommit(pjX); showToast('프로젝트 정보를 저장했습니다','ok'); const pid=pjX.id; dvCloseLog(); await dvRefresh(); bfItem(pid); }
+      try{ await dvPjCommit(pjX); if(!pjX.mergeTo) showToast('프로젝트 정보를 저장했습니다','ok'); const pid=pjX.id; dvCloseLog(); await dvRefresh(); bfItem(pid); }
       catch(e){ showToast('오류: '+e.message,'err'); }
       return;
     }
     showToast('세부내용을 입력해주세요','err');return;
   }
-  let newMaker='', newVendor='', newPc=null;
+  let newMaker='', newVendor='', newPc=null, newDup=null;
   if(itemSel==='new'){
     newVendor=document.getElementById('dvLgNewVendor').value.trim();
     if(!newVendor&&!document.getElementById('dvLgNewMaker').value.trim()){showToast('새 프로젝트의 거래처와 메이커 중 하나는 입력해주세요','err');return;}
     newPc=document.getElementById('dvLgNewKind').value==='법인과제'?{isNew:false}:rpCheckPartner(newVendor); if(newPc===false) return;
     newMaker=rpCheckMaker(document.getElementById('dvLgNewMaker').value); if(newMaker===false) return;
+    if(document.getElementById('dvLgNewKind').value!==TK_KIND){
+      const d=dvFindDupItem(document.getElementById('dvLgNewTitle').value,newVendor,newMaker||document.getElementById('dvLgNewMaker').value,null);
+      if(d){ if(confirm(dvDupMsg(d)+'\n\n확인: 새로 만들지 않고 그 프로젝트에 활동을 입력합니다\n취소: 그래도 새 프로젝트로 만듭니다')) newDup=d; }
+    }
   }
   const btn=document.getElementById('rpFmSave'); btn.disabled=true;
   try{
     let itemId=+itemSel||null;
-    if(pjX&&pjX.id===itemId) await dvPjCommit(pjX);
-    if(itemSel==='new'){
+    if(pjX&&pjX.id===itemId){ await dvPjCommit(pjX); itemId=pjX.id; }
+    if(itemSel==='new'&&newDup){ itemId=newDup.id; }
+    else if(itemSel==='new'){
       const maxSort=dvAllI.reduce((m,i)=>Math.max(m,i.sort_no||0),0);
       if(newPc&&newPc.isNew) await rpAddPartner(newVendor);
       const res=await sbPost('dev_items',{vendor:newVendor||null,kind:document.getElementById('dvLgNewKind').value,title:document.getElementById('dvLgNewTitle').value.trim(),supply_type:document.getElementById('dvLgNewSup').value.trim()||null,maker:newMaker||null,owner_dept:dvNewDept(),sort_no:maxSort+1,
