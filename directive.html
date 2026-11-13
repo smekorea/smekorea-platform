@@ -4814,11 +4814,27 @@ function dvMakerList(){
   (dvMakerAlias||[]).forEach(x=>{ const n=x&&x.standard_name; if(!n) return; const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
   return out;
 }
+// v2026-11-13 — 탭을 열 때마다 다시 채움 + 마스터 미등록이라도 부품개발·주간업무에 실제 쓰인 거래처·메이커 이름 포함
 function vmFillList(){
-  const el=document.getElementById('vmList'); if(el.options.length) return;
-  const seen={}, out=[]; dvMakerList().concat(dvPartners||[]).forEach(n=>{ const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
+  const el=document.getElementById('vmList'); if(!el) return;
+  const used=[];
+  const add=v=>String(v||'').split(/[\/,]/).forEach(x=>{ x=x.trim(); if(x) used.push(x); });
+  (dvAllI||[]).forEach(i=>{ if(!i.is_deleted){ add(i.vendor); add(i.maker); } });
+  (dvAllP||[]).forEach(p=>{ add(p.vendor); add(p.maker); });
+  (rpAll||[]).forEach(r=>{ add(r.vendor); add(r.maker); });
+  const seen={}, out=[]; dvMakerList().concat(dvPartners||[], used).forEach(n=>{ const k=dvKeys(n)[0]; if(k&&!seen[k]){ seen[k]=1; out.push(n); } });
+  if(el.options.length===out.length) return;
   el.innerHTML=out.map(n=>`<option value="${esc(n)}">`).join('');
 }
+// 거래처·메이커 입력칸 영문 대문자 자동 (2026-11-13) — 한글 입력 중(조합)에는 건드리지 않음
+(function(){
+  const LISTS=new Set(['rpVendorList','rpMakerList','dvVendorList','vmList','rpFVendorList','rpFMakerList','vcMakerList','vcPartnerList']);
+  const IDS=new Set(['dvVendor','dvMaker','dvPlVendor','plFmVendor','vcFVen','vcFMk','dvPf-vendor','dvPf-maker','dvLgVendor','dvLgNewVendor','dvLgNewMaker','dvPjVendor','dvPjMaker','rpFmVendor','rpFmMaker','rpFVendor','rpFMaker','vmQ']);
+  const hit=el=>el&&el.tagName==='INPUT'&&(IDS.has(el.id)||LISTS.has(el.getAttribute('list')||''));
+  const up=el=>{ const v=el.value, u=v.toUpperCase(); if(v===u) return; const a=el.selectionStart,b=el.selectionEnd; el.value=u; try{el.setSelectionRange(a,b);}catch(_){} };
+  document.addEventListener('input',e=>{ if(hit(e.target)&&!e.isComposing) up(e.target); },true);
+  document.addEventListener('compositionend',e=>{ if(hit(e.target)) up(e.target); },true);
+})();
 function vmKeysOf(q){
   const ks=dvKeys(q).slice();
   // 거래처 별칭으로 적었으면 정식 이름의 키도 함께 찾는다

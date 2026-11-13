@@ -5708,7 +5708,7 @@ async function saveAlias(id) {
 }
 
 async function addAlias() {
-  const std = document.getElementById('alias-new-std').value.trim();
+  const std = document.getElementById('alias-new-std').value.trim().toUpperCase();
   const val = document.getElementById('alias-new-val').value.trim();
   if(!std) { alert('기준명을 입력해주세요.'); return; }
   const {error} = await sb.from('maker_alias').insert({standard_name:std, alias:val||null});
@@ -5889,7 +5889,7 @@ async function saveMaker(id) {
 }
 
 async function addMaker() {
-  const name = document.getElementById('mk-new-name').value.trim();
+  const name = document.getElementById('mk-new-name').value.trim().toUpperCase();
   if(!name) { alert('메이커명을 입력해주세요.'); return; }
   const {error} = await sb.from('makers').insert({
     maker_name: name,
@@ -6563,7 +6563,7 @@ function uploadAliasExcel(e){
     const ws=wb.Sheets[wb.SheetNames[0]];
     const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
     _aliasUpRows=raw.map(r=>({
-      standard_name:String(r['기준명']||r['standard_name']||'').trim(),
+      standard_name:String(r['기준명']||r['standard_name']||'').trim().toUpperCase(),
       alias:String(r['alias']||r['메이커명']||'').trim()||null,
     })).filter(r=>r.standard_name);
     if(!_aliasUpRows.length){alert('데이터가 없습니다.');return;}
@@ -6608,7 +6608,7 @@ function openAliasAddModal(){
 function closeAliasModal(){document.getElementById('aliasModal').classList.remove('show');}
 async function saveAliasModal(){
   const id=document.getElementById('am-id').value;
-  const std=document.getElementById('am-std').value.trim();
+  const std=document.getElementById('am-std').value.trim().toUpperCase();   // 메이커명 영문 대문자 (2026-11-13)
   if(!std){alert('대표 메이커명은 필수입니다.');return;}
   let alv=document.getElementById('am-alias').value.trim();
   if(alv===std) alv='';   // 대표명과 같은 표기는 등록할 필요 없음
@@ -6641,7 +6641,7 @@ function uploadMakerExcel(e){
     const ws=wb.Sheets[wb.SheetNames[0]];
     const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
     _makerUpRows=raw.map(r=>({
-      maker_name:String(r['메이커명']||r['maker_name']||'').trim(),
+      maker_name:String(r['메이커명']||r['maker_name']||'').trim().toUpperCase(),
       lead_days:parseInt(r['납기(일)']||r['lead_days'])||null,
       lead_weeks:parseInt(r['납기(주)']||r['lead_weeks'])||null,
       default_transport:String(r['기본운송']||r['default_transport']||'').trim()||null,
@@ -6681,7 +6681,7 @@ function openMakerAddModal(){
 function closeMakerModal(){document.getElementById('makerModal').classList.remove('show');}
 async function saveMakerModal(){
   const id=document.getElementById('mm-id').value;
-  const name=document.getElementById('mm-name').value.trim();
+  const name=document.getElementById('mm-name').value.trim().toUpperCase();
   if(!name){alert('메이커명은 필수입니다.');return;}
   const oday=parseInt(document.getElementById('mm-oday').value);
   if(document.getElementById('mm-oday').value.trim() && !(Number.isFinite(oday)&&oday>=1&&oday<=31)){
@@ -6781,6 +6781,13 @@ function initColResize(tableId, storageKey) {
   });
 }
 
+// 메이커명 입력칸 영문 대문자 자동 (2026-11-13) — 한글 입력 중(조합)에는 건드리지 않음. 표기(alias) 칸은 원본 표기 그대로라 제외
+(function(){
+  const IDS=new Set(['am-std','alias-new-std','mk-new-name','mm-name']);
+  const up=el=>{ const v=el.value, u=v.toUpperCase(); if(v===u) return; const a=el.selectionStart,b=el.selectionEnd; el.value=u; try{el.setSelectionRange(a,b);}catch(_){} };
+  document.addEventListener('input',e=>{ const el=e.target; if(el&&IDS.has(el.id)&&!e.isComposing) up(el); },true);
+  document.addEventListener('compositionend',e=>{ const el=e.target; if(el&&IDS.has(el.id)) up(el); },true);
+})();
 /* 표 높이를 화면 아래 끝에 맞춤 — 페이지·표 이중 스크롤 줄이고 머리줄 고정이 화면 안에서 보이게 */
 function fitWraps(){
   const top=(document.querySelector('.topbar')||{}).offsetHeight||58;
