@@ -5310,12 +5310,14 @@ function bfDone(r){ return r.done_date?esc(rpMd(r.done_date))+(r.done_state?' ·
 function bfWk(id){
   const r=rpById[id]; if(!r) return;
   const logs=rpLogsOf(r), rg=r.week_range||rpRangeOf(r.rpt_year,r.rpt_month,r.week_no);
+  // v16.57: 업무일지 브리핑창처럼 첫 줄 = 제목, 둘째 줄부터 = 아래 「업무 내용」 상자
+  const ct=String(r.content||'').replace(/\r/g,''), nl=ct.indexOf('\n'), ttl=nl<0?ct:ct.slice(0,nl), body=nl<0?'':ct.slice(nl+1).replace(/^\s*\n/,'').replace(/\s+$/,'');
   bfShow({head:`${r.rpt_year}년 ${r.rpt_month}월 ${r.week_no||'-'}주차`,sub:rg,pills:[r.kind,r.done_state],
-    title:r.content,
+    title:ttl.trim()||body,
     cells:[['부서',esc(r.dept||'')],['담당',esc(r.assignee||'')],['대분류',esc(r.category||'')],['중분류',esc(r.sub_category||'')],
       ['거래처',esc(r.vendor||'')],['메이커',esc(r.maker||'')],['작성일자',esc(rpDueText(r))],['목표일정',esc(rpMd(r.target_date))],
       ['완료일정',bfDone(r)],['첨부',bfAtt(r)]],
-    boxes:[['일자별 활동 ('+logs.length+')',logs.length?logs.map(l=>`<div class="bf-log"><b>${esc(rpMd(l.log_date))}</b>${esc(rpLogText(r,l)||'(제목과 같음)')}${l.emp_name&&l.emp_name!==r.assignee?`<i>${esc(l.emp_name)}</i>`:''}</div>`).join(''):''],
+    boxes:[['업무 내용',ttl.trim()?bfTxt(body):''],['일자별 활동 ('+logs.length+')',logs.length?logs.map(l=>`<div class="bf-log"><b>${esc(rpMd(l.log_date))}</b>${esc(rpLogText(r,l)||'(제목과 같음)')}${l.emp_name&&l.emp_name!==r.assignee?`<i>${esc(l.emp_name)}</i>`:''}</div>`).join(''):''],
       ['연동',bfLk(lkWk(r))]],
     who:r.emp_name?'작성 · '+esc(r.emp_name):'',
     edit:rpCanEdit(r.dept)?()=>rpOpen(r.id):null});
