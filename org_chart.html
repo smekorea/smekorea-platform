@@ -1363,6 +1363,13 @@ function dutyMe(){
          kr.find(e=>dispName(e)===curUser || e.name===curUser) || null;
 }
 const isBoss = me => !!me && ['대표이사','상무이사'].includes(me.title);
+// 2026-11-17 상무이사 업무분장은 본인·대표이사(사장님)만 조회
+const DUTY_PRIVATE_DEPTS = ['상무이사'];
+function dutyCanView(e){
+  if(!e || !DUTY_PRIVATE_DEPTS.includes(e.dept)) return true;
+  const me=dutyMe(); return !!me && (me.id===e.id || me.title==='대표이사' || me.dept==='대표이사');
+}
+const dutyCanViewDept = d => !DUTY_PRIVATE_DEPTS.includes(d) || EMPS.some(e=>e.entity===DUTY_ENT && e.dept===d && dutyCanView(e));
 function canEditEmp(emp){
   if(hasHq()) return true;
   const me=dutyMe(); if(!me||!emp) return false;
@@ -1375,12 +1382,12 @@ function dutyDeptList(){
   const lay = ['상무이사', '연구소', ...KR_LAYOUT.flatMap(c=>c.depts)];
   const fromMaster = DEPTS.filter(d=>d.entity===DUTY_ENT).sort((a,b)=>(a.sort_no??99)-(b.sort_no??99)).map(d=>d.dept);
   const used = EMPS.filter(e=>e.entity===DUTY_ENT).map(e=>e.dept);
-  const all = [...new Set([...fromMaster, ...used])].filter(d=>d && !DUTY_SKIP_DEPTS.includes(d));
+  const all = [...new Set([...fromMaster, ...used])].filter(d=>d && !DUTY_SKIP_DEPTS.includes(d) && dutyCanViewDept(d));
   const ix = d => { const i=lay.indexOf(d); return i<0 ? 100+fromMaster.indexOf(d) : i; };
   return all.sort((a,b)=>ix(a)-ix(b));
 }
 const dutyEmpsOf = dept => { const dl=dutyDeptList();
-  return EMPS.filter(e=>e.entity===DUTY_ENT && (!dept || e.dept===dept) && !DUTY_SKIP_DEPTS.includes(e.dept))
+  return EMPS.filter(e=>e.entity===DUTY_ENT && (!dept || e.dept===dept) && !DUTY_SKIP_DEPTS.includes(e.dept) && dutyCanView(e))
     .sort((a,b)=>(dl.indexOf(a.dept)-dl.indexOf(b.dept)) || cmpMember(a,b)); };
 const empById = id => EMPS.find(e=>e.id===id);
 const empLabel = e => e ? `${dispName(e)} ${e.rank||''}`.trim() : '';
@@ -1412,6 +1419,7 @@ function fillDutySelects(){
 function dutyDeptChange(){ document.getElementById('dtEmp').value=''; fillDutySelects(); renderDuty(); }
 function openDutyFor(empId, dept){
   const e = empId ? empById(empId) : null;
+  if((e && !dutyCanView(e)) || (!e && dept && !dutyCanViewDept(dept))){ alert('조회 권한이 없습니다.'); return; }
   switchTab('duty');
   const go = ()=>{ fillDutySelects();
     document.getElementById('dtDept').value = e ? (e.dept||'') : (dept||'');
@@ -1519,7 +1527,7 @@ async function renderDuty(){
   if(!picked){
     const all = dutyEmpsOf(''), has = new Set(DUTY.items.map(i=>i.emp_id));
     const done = all.filter(e=>has.has(e.id)).length;
-    h += `<div class="dt-guide">👆 법인·부서·이름을 선택하면 업무분장표가 표시됩니다 <span>작성 현황 <b>${done}</b> / ${all.length}명 · 업무 ${DUTY.items.length}건</span></div>`;
+    h += `<div class="dt-guide">👆 법인·부서·이름을 선택하면 업무분장표가 표시됩니다 <span>작성 현황 <b>${done}</b> / ${all.length}명 · 업무 ${DUTY.items.filter(i=>all.some(e=>e.id===i.emp_id)).length}건</span></div>`;
     h += dutyFormHtml(null, 0);
     body.innerHTML = h;
     initColResize('dt-form-0','duty_form_v2'); initColResize('dt-fmp-0','duty_fmp_v1'); initColResize('dt-fmh-0','duty_fmh_v1');
