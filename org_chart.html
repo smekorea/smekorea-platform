@@ -9,7 +9,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
-   org_chart.html v1.11 (2026-11-10) — 조직도 (글로벌 조직도 + SMEKR 조직도 + 조직 이력)
+   org_chart.html v2.0 (2026-11-17) — 조직도 (법인 버튼: 글로벌·SMEKR·SMECN·SMETH·SMEIN) + 업무분장 + 조직 이력
+   ── v2.0: 상단 탭 [조직도 | 업무분장 | 조직 이력], 조직도 안 법인 선택 버튼, 해외법인 단독 조직도,
+            업무분장(부서·이름 선택 한 화면: R&R·업무분장·담당 거래처·월간 달력·변경점, 엑셀 SM-MP05-200-02) — duty_* 테이블
    ── v1.11: 해외법인 선 직선 교차(반원 삭제), 해외법인 머리줄 본사와 같은 줄·연주황 밑줄, 해외법인 칸 폭 = 본사, SMEKR 부서 간격 24px
    ── v1.10: 글로벌 조직도 위치 계산 방식 — 해외법인(왼쪽) → 연구소 부서 → 본사 부서 → CFO, 개발기획·영업팀은 본사 부서 가로선(연구소·상무 공유),
             해외법인은 상무이사 박스 왼쪽에서 별도 선(연구소 세로선과 겹치는 곳 넘어가기 표시 .kr-jump) · 엑셀 동일
@@ -212,6 +214,39 @@ td.tw{white-space:normal;word-break:keep-all;}
 .ov-bd input,.ov-bd select,.ov-bd textarea{height:34px;border:1.5px solid var(--border);border-radius:2px;padding:0 9px;font-size:13px;color:var(--text);font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);min-width:0;}
 .ov-bd textarea{height:auto;padding:8px 9px;resize:vertical;}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+/* v2.0 법인 선택 버튼 · 업무분장 */
+.seg{display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap;}
+.seg button{height:32px;padding:0 16px;border:1.5px solid var(--border);background:#fff;border-radius:16px;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.seg button:hover{border-color:var(--point);color:var(--point);}
+.seg button.on{background:var(--point);border-color:var(--point);color:#fff;}
+.duty-sel{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.duty-sel label{font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;}
+.duty-sel select{height:32px;border:1.5px solid var(--border);border-radius:2px;padding:0 8px;font-size:13px;font-family:'Noto Sans KR',sans-serif;min-width:120px;color:var(--text);}
+.dt-me{font-size:11.5px;color:var(--muted);margin-right:6px;}
+.dt-sec{margin:0 0 18px;}
+.dt-h{font-size:14px;font-weight:700;color:var(--point);margin:4px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.dt-h small{font-size:11.5px;font-weight:500;color:var(--muted);}
+.dt-opt{display:flex;gap:12px;align-items:center;margin-left:auto;font-size:12px;font-weight:500;color:var(--text);}
+.dt-opt input[type=text],.dt-opt input:not([type]){height:28px;border:1.5px solid var(--border);border-radius:2px;padding:0 8px;font-size:12px;width:170px;font-family:'Noto Sans KR',sans-serif;}
+.dt-wrap{max-height:520px;}
+.dt-wrap thead th{position:sticky;top:0;z-index:2;}
+tr.dt-click{cursor:pointer;} tr.dt-click:hover td{background:#F4F7FB;}
+.rr-card{background:#fff;border:1px solid var(--border);border-left:4px solid var(--hq);padding:10px 14px;}
+.rr-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:14px;}
+.rr-grid{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:14px;}
+.rr-grid span{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;}
+.rr-grid p{margin:0;font-size:12.5px;color:#111827;line-height:1.55;} .rr-grid i{color:#aaa;font-style:normal;}
+.cy{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700;background:#eef1f5;color:#334;}
+.cy-0{background:#E8EEF8;color:#1B3A6B;} .cy-1{background:#FDE8E8;color:#B4141E;} .cy-2{background:#FFF1DC;color:#8A4B00;}
+.cy-3{background:#E5F5EA;color:#17663A;} .cy-4{background:#EFE8F8;color:#5A2D91;} .cy-5{background:#EEF0F2;color:#4B5563;}
+.calt{font-size:11px;color:var(--point);margin-top:2px;}
+td.day{padding:2px 0;} .dd{display:block;height:14px;margin:0 2px;background:var(--point);border-radius:2px;}
+.ac{font-size:11px;font-weight:700;padding:1px 7px;border-radius:9px;background:#eef1f5;}
+.ac-추가{background:#E5F5EA;color:#17663A;} .ac-삭제{background:#FDE8E8;color:#B4141E;} .ac-수정{background:#FFF1DC;color:#8A4B00;}
+.rbtn.del{color:var(--brand);}
+.mute{color:#aaa;}
+#krChart .box[data-eid], #krChart .unit-hd[data-dept]{cursor:pointer;}
+#krChart .box[data-eid]:hover{outline:2px solid var(--point);} #krChart .unit-hd[data-dept]:hover{color:var(--point);}
 .fr2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .ov-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);}
 @media (max-width:640px){ .fr3,.fr2{grid-template-columns:1fr;} }
@@ -248,12 +283,20 @@ td.tw{white-space:normal;word-break:keep-all;}
 </div>
 
 <div class="tab-bar">
-  <button class="tab-btn active" id="tabbtn-chart" onclick="switchTab('chart')">🌐 글로벌 조직도</button>
-  <button class="tab-btn" id="tabbtn-kr" onclick="switchTab('kr')">🏢 SMEKR 조직도</button>
+  <button class="tab-btn active" id="tabbtn-org" onclick="switchTab('org')">🏢 조직도</button>
+  <button class="tab-btn" id="tabbtn-duty" onclick="switchTab('duty')">📋 업무분장</button>
   <button class="tab-btn" id="tabbtn-hist" onclick="switchTab('hist')">📜 조직 이력</button>
 </div>
 
 <div class="wrap">
+  <!-- v2.0 조직도 법인 선택 버튼 -->
+  <div class="seg" id="orgSeg">
+    <button data-v="global" onclick="orgView('global')">🌐 글로벌</button>
+    <button data-v="KOREA" onclick="orgView('KOREA')">SMEKR</button>
+    <button data-v="SMECN" onclick="orgView('SMECN')">SMECN</button>
+    <button data-v="SMEGLOBAL" onclick="orgView('SMEGLOBAL')">SMETH</button>
+    <button data-v="GSMEIN" onclick="orgView('GSMEIN')">SMEIN</button>
+  </div>
   <!-- 조직도 -->
   <div id="tab-chart">
     <div class="toolbar">
@@ -300,6 +343,39 @@ td.tw{white-space:normal;word-break:keep-all;}
       </div>
     </div>
     <div class="note">💡 본사 인원은 관리자 설정 › 직원 관리의 「부서」 기준으로 배치됩니다. 연구소 산하: 개발기획팀·영업팀 / CFO 산하: 재경팀 / 그 외 부서는 상무이사 직속으로 표시됩니다. 부서 안 순서는 팀장 → 직급 → 입사일 순입니다.</div>
+  </div>
+
+  <!-- v2.0 해외법인 단독 조직도 -->
+  <div id="tab-ov" style="display:none;">
+    <div class="toolbar">
+      <div class="kpi" id="ovKpi"></div>
+      <div class="tb-right">
+        <button class="btn" id="tenBtnOv" onclick="toggleTenure()" title="이름 옆 근무연수(1Y3M) 표시/숨김">근무연수 표시</button>
+        <button class="btn" onclick="loadAll()">🔄 새로고침</button>
+        <button class="btn btn-green" onclick="downloadExcel()" title="해외법인이 포함된 글로벌 조직도 엑셀">⬇ 엑셀 다운로드</button>
+      </div>
+    </div>
+    <div class="sheet-scroll"><div class="sheet"><div class="sheet-title" id="ovTitle">해외법인 조직도</div><div id="ovChart"></div></div></div>
+    <div class="note">💡 해외법인 인원·부서는 관리자 설정 › 직원 관리와 조직도 설정에서 관리합니다.</div>
+  </div>
+
+  <!-- v2.0 업무분장 -->
+  <div id="tab-duty" style="display:none;">
+    <div class="toolbar">
+      <div class="duty-sel">
+        <label>법인 <select id="dtEnt" disabled title="해외법인은 권한 체계 적용 후 열립니다"><option>SMEKR</option></select></label>
+        <label>부서 <select id="dtDept" onchange="dutyDeptChange()"><option value="">전체</option></select></label>
+        <label>이름 <select id="dtEmp" onchange="renderDuty()"><option value="">전체</option></select></label>
+      </div>
+      <div class="tb-right">
+        <span class="dt-me" id="dtMe"></span>
+        <button class="btn" onclick="loadDuty(true).then(renderDuty)">🔄 새로고침</button>
+        <button class="btn btn-primary" id="dtAddBtn" onclick="openDutyItem()">＋ 업무 추가</button>
+        <button class="btn btn-green" onclick="downloadDutyExcel()">⬇ 엑셀 다운로드</button>
+      </div>
+    </div>
+    <div id="dutyBody"><div class="loading">업무분장을 불러오는 중...</div></div>
+    <div class="note">💡 부서·이름을 고르면 R&amp;R·업무분장·담당 거래처·월간 달력·변경점을 한 화면에서 봅니다. SMEKR 조직도에서 부서명·이름을 누르면 바로 이동합니다. 수정은 본인·같은 부서 팀장·대표/상무가 할 수 있습니다.</div>
   </div>
 
   <!-- 조직 이력 -->
@@ -352,6 +428,60 @@ td.tw{white-space:normal;word-break:keep-all;}
       <label class="full">내용<textarea id="hi-content" rows="3"></textarea></label>
     </div>
     <div class="ov-ft"><button class="btn" onclick="closeHistForm()">취소</button><button class="btn btn-primary" id="histSaveBtn" onclick="saveHist()">등록</button></div>
+  </div>
+</div>
+<!-- v2.0 업무 등록·수정 -->
+<div class="mov" id="dutyOv">
+  <div class="ov-box" style="width:720px;">
+    <div class="ov-hd"><span id="diTitleHd">📋 업무 추가</span><button class="ov-x" onclick="closeDutyItem()">✕</button></div>
+    <div class="ov-bd">
+      <div class="fr3">
+        <label><span>담당 <b>*</b></span><select id="di-emp"></select></label>
+        <label><span>주기 <b>*</b></span><select id="di-cycle"></select></label>
+        <label>구분<select id="di-cat"></select></label>
+      </div>
+      <div class="fr3">
+        <label>일자 / 시간<input id="di-timing" placeholder="예: 08:20~ · 월요일 · 4주차 · 매월 25일~5일"></label>
+        <label>달력 표시 시작일<input type="number" id="di-from" min="1" max="31" placeholder="1~31 (월간 달력)"></label>
+        <label>달력 표시 끝일<input type="number" id="di-to" min="1" max="31" placeholder="비우면 하루 (25→5 가능)"></label>
+      </div>
+      <label class="full"><span>업무분장 <b>*</b></span><input id="di-title" placeholder="예: 매입·매출 마감업무"></label>
+      <label class="full">업무내용<textarea id="di-content" rows="3" placeholder="예: 마감금액 확인 → 세금계산서 발행"></textarea></label>
+      <div class="fr3">
+        <label>관련 거래처<input id="di-partners" list="di-plist" placeholder="거래처명 (여러 곳은 쉼표)"><datalist id="di-plist"></datalist></label>
+        <label>관련 문서<input id="di-docs" placeholder="예: 발주서, PSI"></label>
+        <label>마감 / 비고<input id="di-note"></label>
+      </div>
+      <div class="fr3"><label>순서<input type="number" id="di-sort" placeholder="같은 주기 안 순서"></label></div>
+    </div>
+    <div class="ov-ft"><button class="btn" onclick="closeDutyItem()">취소</button><button class="btn btn-primary" id="diSaveBtn" onclick="saveDutyItem()">저장</button></div>
+  </div>
+</div>
+<!-- v2.0 부서 R&R -->
+<div class="mov" id="deptOv">
+  <div class="ov-box" style="width:640px;">
+    <div class="ov-hd"><span id="drHd">🏷 부서 R&amp;R</span><button class="ov-x" onclick="closeDeptForm()">✕</button></div>
+    <div class="ov-bd">
+      <label class="full">한 줄 정의<input id="dr-mission" placeholder="예: LG 사급 공급과 품질 대응"></label>
+      <label class="full">주업무 (줄마다 1개)<textarea id="dr-tasks" rows="5"></textarea></label>
+      <label class="full">산출물 (줄마다 1개)<textarea id="dr-outputs" rows="3"></textarea></label>
+    </div>
+    <div class="ov-ft"><button class="btn" onclick="closeDeptForm()">취소</button><button class="btn btn-primary" onclick="saveDeptForm()">저장</button></div>
+  </div>
+</div>
+<!-- v2.0 거래처 담당 지정 -->
+<div class="mov" id="ownerOv">
+  <div class="ov-box" style="width:560px;">
+    <div class="ov-hd"><span id="poHd">🤝 거래처 담당 지정</span><button class="ov-x" onclick="closeOwnerForm()">✕</button></div>
+    <div class="ov-bd">
+      <div class="fr3">
+        <label>담당부서<select id="po-dept" onchange="poDeptChange()"></select></label>
+        <label>정 담당<select id="po-main"></select></label>
+        <label>부 담당<select id="po-sub"></select></label>
+      </div>
+      <label class="full">비고<input id="po-note" placeholder="예: 발주 주기, 마감 특이사항"></label>
+    </div>
+    <div class="ov-ft"><button class="btn" onclick="closeOwnerForm()">취소</button><button class="btn btn-primary" onclick="saveOwnerForm()">저장</button></div>
   </div>
 </div>
 <!-- 경영 전용 인증 창 (이력 입력 권한) -->
@@ -413,13 +543,27 @@ async function sbGet(table, params){
   return out;
 }
 
+// v2.0 — 상단 탭: 조직도 / 업무분장 / 조직 이력, 조직도 안은 법인 버튼(글로벌·SMEKR·SMECN·SMETH·SMEIN)
+let curTab = 'org';
+let ORG_VIEW = (()=>{ try{ return localStorage.getItem('org_view')||'global'; }catch(e){ return 'global'; } })();
 function switchTab(k){
-  ['chart','kr','hist'].forEach(x=>{
-    document.getElementById('tab-'+x).style.display = x===k ? '' : 'none';
-    document.getElementById('tabbtn-'+x).classList.toggle('active', x===k);
-  });
+  if(k==='chart'){ ORG_VIEW='global'; k='org'; } else if(k==='kr'){ ORG_VIEW='KOREA'; k='org'; }
+  curTab = k;
+  ['org','duty','hist'].forEach(x=>document.getElementById('tabbtn-'+x).classList.toggle('active', x===k));
+  const ov = OVERSEAS_ORDER.includes(ORG_VIEW);
+  document.getElementById('orgSeg').style.display = k==='org' ? '' : 'none';
+  document.getElementById('tab-chart').style.display = (k==='org' && ORG_VIEW==='global') ? '' : 'none';
+  document.getElementById('tab-kr').style.display = (k==='org' && ORG_VIEW==='KOREA') ? '' : 'none';
+  document.getElementById('tab-ov').style.display = (k==='org' && ov) ? '' : 'none';
+  document.getElementById('tab-duty').style.display = k==='duty' ? '' : 'none';
+  document.getElementById('tab-hist').style.display = k==='hist' ? '' : 'none';
+  document.querySelectorAll('#orgSeg button').forEach(b=>b.classList.toggle('on', b.dataset.v===ORG_VIEW));
+  try{ localStorage.setItem('org_tab', k); }catch(e){}
+  if(k==='org' && ov && EMPS.length) renderOvOne(ORG_VIEW);
+  if(k==='duty' && EMPS.length) renderDuty();
   if(k==='hist') renderHist();
 }
+function orgView(v){ ORG_VIEW=v; try{ localStorage.setItem('org_view',v); }catch(e){} switchTab('org'); }
 
 async function loadAll(){
   try{
@@ -435,7 +579,7 @@ async function loadAll(){
     return;
   }
   buildModel(); renderChart(); renderContacts(); renderKr(); fillHistFilters();
-  if(document.getElementById('tab-hist').style.display!=='none') renderHist();
+  switchTab(curTab);
 }
 
 /* ── 구조 만들기 ── */
@@ -538,7 +682,7 @@ function boxHtml(e, badge, ov){
   if(!e) return '';
   const sub = ''; // v2026-11-09 — CFO 직급은 상단 띠에 이미 표시되어 이름 아래 중복 표시 제거
   const loc = e.name_local ? `<small>${esc(e.name_local)}</small>` : '';
-  return `<div class="box${ov?' ov':''}" title="${esc([e.rank,e.dept,e.join_date?('입사 '+e.join_date):''].filter(Boolean).join(' · '))}">
+  return `<div class="box${ov?' ov':''}"${e.entity==='KOREA'?` data-eid="${e.id}"`:''} title=""${esc([e.rank,e.dept,e.join_date?('입사 '+e.join_date):''].filter(Boolean).join(' · '))}">
     ${badge?`<div class="bd">${esc(badge)}</div>`:''}<div class="nm">${esc(dispName(e))}${loc}</div>${sub}${tenSpan(e)}</div>`;
 }
 function unitHtml(u){
@@ -554,7 +698,7 @@ function unitHtml(u){
         `</div>`;
     });
   } else {
-    h += `<div class="unit-hd">${esc(u.dept)}</div>`;
+    h += `<div class="unit-hd"${u.entity==='KOREA'||!u.entity?` data-dept="${esc(u.dept)}"`:''}>${esc(u.dept)}</div>`;
     h += boxHtml(u.head, u.head.rank||u.head.title, false);
     if(u.members.length){ h += `<div class="members">${u.members.map(m=>boxHtml(m,'',false)).join('')}</div>`; }
     u.hc.forEach(x=>{ h += `<div class="hc">${esc(x.label)} ${esc(x.cnt)}명</div>`; });
@@ -565,9 +709,9 @@ function unitHtml(u){
 let SHOW_TEN = (()=>{ try{ return localStorage.getItem('org_show_tenure')!=='0'; }catch(e){ return true; } })();
 function applyTenureUI(){
   ['chart','krChart'].forEach(id=>{ const c=document.getElementById(id); if(c) c.classList.toggle('no-ten',!SHOW_TEN); });
-  ['tenBtn','tenBtnKr'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); } });
+  ['tenBtn','tenBtnKr','tenBtnOv'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.textContent=SHOW_TEN?'✔ 근무연수 표시':'근무연수 표시'; b.classList.toggle('btn-primary',SHOW_TEN); } });
 }
-function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); if(krModel) renderKr(); if(model) renderChart(); }
+function toggleTenure(){ SHOW_TEN=!SHOW_TEN; try{ localStorage.setItem('org_show_tenure',SHOW_TEN?'1':'0'); }catch(e){} applyTenureUI(); if(krModel) renderKr(); if(model) renderChart(); if(curTab==='org' && OVERSEAS_ORDER.includes(ORG_VIEW)) renderOvOne(ORG_VIEW); }
 function renderChart(){
   applyTenureUI();
   const M = model;
@@ -1174,10 +1318,483 @@ async function downloadKrExcel(){
   setTimeout(()=>{ URL.revokeObjectURL(dl.href); dl.remove(); }, 1000);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   v2.0 (2026-11-17) 업무분장 — 부서·이름 선택 한 화면
+   ① 부서 R&R ② 업무분장(기본/일별/주별/월별/정기/수시) ③ 담당 거래처 ④ 월간 달력 ⑤ 변경점
+   테이블: duty_dept · duty_item · duty_history · partner_owner (+ 뷰 partner_recent_v)
+   편집: 본인 · 같은 부서 팀장 · 대표/상무 · 경영 인증(sme_hq_auth)
+   ══════════════════════════════════════════════════════════════ */
+const DUTY_CYCLES = ['기본','일별','주별','월별','정기','수시'];
+const CYCLE_LABEL = {기본:'기본 / 직무', 일별:'일별', 주별:'주별', 월별:'월별', 정기:'정기', 수시:'수시'};
+const DUTY_CATS = ['영업','구매','품질','재고','마감','사내','기타'];
+const DUTY_ENT = 'KOREA';
+const DUTY_SKIP_DEPTS = ['대표이사','상무이사'];
+let DUTY = { loaded:false, depts:[], items:[], hist:[], owners:[], partners:null };
+let dutyEditId = null, deptEditName = null, ownerEditPid = null;
+const DT_SORT = {};
+
+function dutyMe(){
+  let no=null; try{ no=localStorage.getItem('sme_emp_no'); }catch(e){}
+  const kr = EMPS.filter(e=>e.entity===DUTY_ENT);
+  return (no && kr.find(e=>String(e.emp_no)===String(no).replace(/^[A-Z]+/,'').replace(/^0+/,''))) ||
+         kr.find(e=>dispName(e)===curUser || e.name===curUser) || null;
+}
+const isBoss = me => !!me && ['대표이사','상무이사'].includes(me.title);
+function canEditEmp(emp){
+  if(hasHq()) return true;
+  const me=dutyMe(); if(!me||!emp) return false;
+  return isBoss(me) || me.id===emp.id || (me.title==='팀장' && me.dept===emp.dept);
+}
+function canEditDept(dept){ if(hasHq()) return true; const me=dutyMe(); return !!me && (isBoss(me) || (me.title==='팀장' && me.dept===dept)); }
+function canEditOwner(){ if(hasHq()) return true; const me=dutyMe(); return !!me && (isBoss(me) || me.title==='팀장'); }
+
+// 부서 순서 = 조직도 순서 (연구소 → 연구소 부서 → 상무 직속 → CFO 부서 → 그 외)
+function dutyDeptList(){
+  const lay = ['연구소', ...KR_LAYOUT.flatMap(c=>c.depts)];
+  const fromMaster = DEPTS.filter(d=>d.entity===DUTY_ENT).sort((a,b)=>(a.sort_no??99)-(b.sort_no??99)).map(d=>d.dept);
+  const used = EMPS.filter(e=>e.entity===DUTY_ENT).map(e=>e.dept);
+  const all = [...new Set([...fromMaster, ...used])].filter(d=>d && !DUTY_SKIP_DEPTS.includes(d));
+  const ix = d => { const i=lay.indexOf(d); return i<0 ? 100+fromMaster.indexOf(d) : i; };
+  return all.sort((a,b)=>ix(a)-ix(b));
+}
+const dutyEmpsOf = dept => { const dl=dutyDeptList();
+  return EMPS.filter(e=>e.entity===DUTY_ENT && (!dept || e.dept===dept) && !DUTY_SKIP_DEPTS.includes(e.dept))
+    .sort((a,b)=>(dl.indexOf(a.dept)-dl.indexOf(b.dept)) || cmpMember(a,b)); };
+const empById = id => EMPS.find(e=>e.id===id);
+const empLabel = e => e ? `${dispName(e)} ${e.rank||''}`.trim() : '';
+
+async function loadDuty(force){
+  if(DUTY.loaded && !force) return;
+  const [d,i,h,o] = await Promise.all([
+    sbGet('duty_dept', `select=*&entity=eq.${DUTY_ENT}`),
+    sbGet('duty_item', `select=*&entity=eq.${DUTY_ENT}&is_deleted=eq.false&order=sort_no,id`),
+    sbGet('duty_history', `select=*&entity=eq.${DUTY_ENT}&order=changed_at.desc&limit=500`),
+    sbGet('partner_owner', 'select=*')
+  ]);
+  DUTY.depts=d; DUTY.items=i; DUTY.hist=h; DUTY.owners=o; DUTY.loaded=true;
+  if(!DUTY.partners){
+    sbGet('partner_recent_v','select=id,name,type,entity,last_sale,last_buy&order=name')
+      .then(p=>{ DUTY.partners=p; if(curTab==='duty') renderDuty(); })
+      .catch(()=>{ DUTY.partners=[]; });
+  }
+}
+
+function fillDutySelects(){
+  const ds=document.getElementById('dtDept'), es=document.getElementById('dtEmp');
+  const curD=ds.value, curE=es.value;
+  ds.innerHTML = `<option value="">전체</option>` + dutyDeptList().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  if([...ds.options].some(o=>o.value===curD)) ds.value=curD;
+  es.innerHTML = `<option value="">전체</option>` + dutyEmpsOf(ds.value).map(e=>`<option value="${e.id}">${esc(empLabel(e))}</option>`).join('');
+  if([...es.options].some(o=>o.value===curE)) es.value=curE;
+}
+function dutyDeptChange(){ document.getElementById('dtEmp').value=''; fillDutySelects(); renderDuty(); }
+function openDutyFor(empId, dept){
+  const e = empId ? empById(empId) : null;
+  switchTab('duty');
+  const go = ()=>{ fillDutySelects();
+    document.getElementById('dtDept').value = e ? (e.dept||'') : (dept||'');
+    fillDutySelects();
+    document.getElementById('dtEmp').value = e ? String(e.id) : '';
+    renderDuty(); };
+  if(DUTY.loaded) go(); else setTimeout(go, 400);
+}
+
+/* ── 표 공통 (정렬·리사이즈 표준) ── */
+function dtTbl(id, cols, rows, opt={}){
+  const st=DT_SORT[id]||{};
+  let rs=rows.slice();
+  if(st.k){ const c=cols.find(x=>x.k===st.k)||{}; const val=c.val||(r=>r[st.k]);
+    rs.sort((a,b)=>{ let x=val(a), y=val(b); x=x==null?'':x; y=y==null?'':y;
+      const r = (typeof x==='number'&&typeof y==='number') ? x-y : String(x).localeCompare(String(y),'ko');
+      return st.asc?r:-r; }); }
+  const head = cols.map(c=>c.nosort ? `<th style="width:${c.w}px;">${c.label}</th>` :
+    `<th class="sortable" style="width:${c.w}px;" onclick="dtSort('${id}','${c.k}')">${c.label}<span class="sort-icon">${st.k===c.k?(st.asc?'↑':'↓'):''}</span></th>`).join('');
+  const body = rs.length ? rs.map(r=>`<tr${opt.rowAttr?opt.rowAttr(r):''}>${cols.map(c=>`<td class="${c.cls||''}"${c.td?c.td(r):''}>${c.fmt?c.fmt(r):esc(r[c.k]??'')}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cols.length}" class="c" style="color:var(--muted);padding:14px;">${opt.empty||'등록된 내용이 없습니다'}</td></tr>`;
+  return `<div class="tbl-wrap dt-wrap"><table id="${id}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function dtSort(id,k){ const s=DT_SORT[id]||{}; DT_SORT[id] = s.k===k ? {k,asc:!s.asc} : {k,asc:true}; renderDuty(); }
+// UTC 저장값 → 한국시간 표시
+function kstTime(v){ if(!v) return ''; const d=new Date(v); if(isNaN(d)) return String(v); const k=new Date(d.getTime()+9*3600*1000); return k.toISOString().slice(0,16).replace('T',' '); }
+const cycIdx = c => { const i=DUTY_CYCLES.indexOf(c); return i<0?9:i; };
+const empOrd = id => { const e=empById(id); if(!e) return 9999; const all=dutyEmpsOf(''); const i=all.indexOf(e); return i<0?9999:i; };
+const brText = v => esc(v||'').replace(/\n/g,'<br>');
+function calText(r){ if(!r.cal_from) return ''; return r.cal_to && r.cal_to!==r.cal_from ? `${r.cal_from}~${r.cal_to}일` : `${r.cal_from}일`; }
+
+/* ── 화면 ── */
+async function renderDuty(){
+  const body=document.getElementById('dutyBody');
+  if(!DUTY.loaded){ body.innerHTML='<div class="loading">업무분장을 불러오는 중...</div>';
+    try{ await loadDuty(); }catch(e){ body.innerHTML=`<div class="loading" style="color:var(--brand);">불러오기 실패: ${esc(e.message)}</div>`; return; } }
+  fillDutySelects();
+  const dept=document.getElementById('dtDept').value, empId=+document.getElementById('dtEmp').value||null;
+  const emp = empId ? empById(empId) : null;
+  const me=dutyMe();
+  document.getElementById('dtMe').textContent = me ? `편집 권한: ${empLabel(me)}${isBoss(me)?' (전체)':(me.title==='팀장'?' (부서)':' (본인)')}` : (hasHq()?'편집 권한: 경영 인증':'조회 전용');
+  const scopeEmps = emp ? [emp] : dutyEmpsOf(dept);
+  const scopeIds = new Set(scopeEmps.map(e=>e.id));
+  const items = DUTY.items.filter(i=>scopeIds.has(i.emp_id));
+  const addOk = emp ? canEditEmp(emp) : scopeEmps.some(canEditEmp);
+  document.getElementById('dtAddBtn').style.display = addOk ? '' : 'none';
+  let h='';
+
+  // ① 부서 R&R
+  h += `<div class="dt-sec"><div class="dt-h">① 부서 R&amp;R</div>`;
+  const deptsShown = dept ? [dept] : (emp ? [emp.dept] : dutyDeptList());
+  if(!dept && !emp){
+    h += dtTbl('dt-rr', [
+      {k:'dept',label:'부서',w:110,cls:'c'},
+      {k:'mission',label:'한 줄 정의',w:260,cls:'tw'},
+      {k:'main_tasks',label:'주업무',w:360,cls:'tw',fmt:r=>brText(r.main_tasks)},
+      {k:'outputs',label:'산출물',w:220,cls:'tw',fmt:r=>brText(r.outputs)},
+      {k:'n',label:'인원',w:56,cls:'c',val:r=>r.n},
+      {k:'items',label:'업무 건수',w:76,cls:'c',val:r=>r.items},
+      {k:'act',label:'관리',w:70,cls:'c',nosort:true,fmt:r=>canEditDept(r.dept)?`<button class="rbtn" onclick="openDeptForm('${esc(r.dept)}')">수정</button>`:''}
+    ], deptsShown.map(d=>{ const x=DUTY.depts.find(v=>v.dept===d)||{}; const ids=new Set(dutyEmpsOf(d).map(e=>e.id));
+      return {dept:d, mission:x.mission||'', main_tasks:x.main_tasks||'', outputs:x.outputs||'', n:ids.size, items:DUTY.items.filter(i=>ids.has(i.emp_id)).length}; }),
+      {rowAttr:r=>` class="dt-click" ondblclick="openDutyFor(null,'${esc(r.dept)}')" title="두 번 누르면 이 부서로 이동"`});
+  } else {
+    const d=deptsShown[0]; const x=DUTY.depts.find(v=>v.dept===d)||{};
+    h += `<div class="rr-card"><div class="rr-top"><b>${esc(d)}</b>${canEditDept(d)?`<button class="rbtn" onclick="openDeptForm('${esc(d)}')">수정</button>`:''}</div>
+      <div class="rr-grid"><div><span>한 줄 정의</span><p>${brText(x.mission)||'<i>미작성</i>'}</p></div>
+      <div><span>주업무</span><p>${brText(x.main_tasks)||'<i>미작성</i>'}</p></div>
+      <div><span>산출물</span><p>${brText(x.outputs)||'<i>미작성</i>'}</p></div></div></div>`;
+  }
+  h += `</div>`;
+
+  // ② 업무분장
+  h += `<div class="dt-sec"><div class="dt-h">② 업무분장 <small>${emp?esc(empLabel(emp)):(dept?esc(dept)+' 전체':'전체 인원 요약')}</small></div>`;
+  if(!dept && !emp){
+    h += dtTbl('dt-sum', [
+      {k:'dept',label:'부서',w:100,cls:'c'},{k:'name',label:'이름',w:110,cls:'c'},
+      ...DUTY_CYCLES.map(c=>({k:c,label:c,w:56,cls:'c',val:r=>r[c]})),
+      {k:'total',label:'합계',w:60,cls:'c',val:r=>r.total},{k:'last',label:'최근 수정',w:100,cls:'c'}
+    ], dutyEmpsOf('').map(e=>{ const its=DUTY.items.filter(i=>i.emp_id===e.id); const r={id:e.id,dept:e.dept,name:empLabel(e),total:its.length,
+        last:(its.map(i=>String(i.updated_at||'').slice(0,10)).sort().pop()||'')};
+      DUTY_CYCLES.forEach(c=>r[c]=its.filter(i=>i.cycle===c).length); return r; }),
+      {rowAttr:r=>` class="dt-click" onclick="openDutyFor(${r.id})" title="누르면 이 사람 업무분장으로 이동"`});
+  } else {
+    const showWho = !emp;
+    h += dtTbl('dt-items', [
+      ...(showWho?[{k:'who',label:'담당',w:96,cls:'c',val:r=>empOrd(r.emp_id),fmt:r=>esc(empLabel(empById(r.emp_id)))}]:[]),
+      {k:'cycle',label:'주기',w:92,cls:'c',val:r=>cycIdx(r.cycle)*1000+(r.sort_no||0),fmt:r=>`<span class="cy cy-${cycIdx(r.cycle)}">${esc(CYCLE_LABEL[r.cycle]||r.cycle)}</span>`},
+      {k:'timing',label:'일자 / 시간',w:120,cls:'tw',fmt:r=>esc(r.timing||'')+(r.cal_from?`<div class="calt">📅 ${calText(r)}</div>`:'')},
+      {k:'category',label:'구분',w:60,cls:'c'},
+      {k:'title',label:'업무분장',w:180,cls:'tw'},
+      {k:'content',label:'업무내용',w:300,cls:'tw',fmt:r=>brText(r.content)},
+      {k:'partners',label:'관련 거래처',w:150,cls:'tw'},
+      {k:'docs',label:'관련 문서',w:140,cls:'tw'},
+      {k:'note',label:'마감 / 비고',w:130,cls:'tw'},
+      {k:'act',label:'관리',w:110,cls:'c',nosort:true,fmt:r=>canEditEmp(empById(r.emp_id))?`<button class="rbtn" onclick="openDutyItem(${r.id})">수정</button> <button class="rbtn del" onclick="delDutyItem(${r.id})">삭제</button>`:''}
+    ], DT_SORT['dt-items'] ? items : items.slice().sort((a,b)=>(showWho?empOrd(a.emp_id)-empOrd(b.emp_id):0)||cycIdx(a.cycle)-cycIdx(b.cycle)||(a.sort_no||0)-(b.sort_no||0)||a.id-b.id),
+      {empty: addOk?'등록된 업무가 없습니다 — 「＋ 업무 추가」로 등록하세요':'등록된 업무가 없습니다'});
+  }
+  h += `</div>`;
+
+  // ③ 담당 거래처
+  h += `<div class="dt-sec"><div class="dt-h">③ 담당 거래처 <small>${emp?'정·부 담당으로 지정된 거래처':(dept?'이 부서가 담당하는 거래처':'최근 1년 거래 거래처 기준')}</small>
+    ${(!dept&&!emp)?`<span class="dt-opt"><label><input type="checkbox" id="dtAllP" ${window._dtAllP?'checked':''} onchange="window._dtAllP=this.checked;renderDuty()"> 거래 없는 거래처 포함</label>
+      <label><input type="checkbox" id="dtNoOwn" ${window._dtNoOwn?'checked':''} onchange="window._dtNoOwn=this.checked;renderDuty()"> 담당 미지정만</label>
+      <input id="dtPq" placeholder="거래처 검색..." value="${esc(window._dtPq||'')}" oninput="window._dtPq=this.value;clearTimeout(window._dtPqT);window._dtPqT=setTimeout(()=>{renderDuty();const q=document.getElementById('dtPq');if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}},300)"></span>`:''}</div>`;
+  if(DUTY.partners===null){ h += `<div class="loading">거래처 거래 실적을 불러오는 중...</div>`; }
+  else {
+    const own = id => DUTY.owners.find(o=>o.partner_id===id) || {};
+    let ps = DUTY.partners.filter(p=>!p.entity || p.entity===DUTY_ENT);
+    if(emp) ps = ps.filter(p=>{ const o=own(p.id); return o.main_emp_id===emp.id || o.sub_emp_id===emp.id; });
+    else if(dept) ps = ps.filter(p=>own(p.id).dept===dept);
+    else {
+      if(!window._dtAllP) ps = ps.filter(p=>p.last_sale||p.last_buy);
+      if(window._dtNoOwn) ps = ps.filter(p=>!own(p.id).dept && !own(p.id).main_emp_id);
+      const q=(window._dtPq||'').trim().toUpperCase(); if(q) ps = ps.filter(p=>String(p.name||'').toUpperCase().includes(q));
+    }
+    const kind = p => p.last_sale&&p.last_buy ? '매입매출처' : (p.last_sale?'매출처':(p.last_buy?'매입처':(p.type||'')));
+    const ok=canEditOwner();
+    h += dtTbl('dt-partner', [
+      {k:'name',label:'거래처',w:200,cls:'tw'},
+      {k:'kind',label:'구분',w:86,cls:'c',val:p=>kind(p),fmt:p=>esc(kind(p))},
+      {k:'dept',label:'담당부서',w:100,cls:'c',val:p=>own(p.id).dept||'',fmt:p=>esc(own(p.id).dept||'')||'<span class="mute">미지정</span>'},
+      {k:'main',label:'정 담당',w:100,cls:'c',val:p=>empLabel(empById(own(p.id).main_emp_id)),fmt:p=>esc(empLabel(empById(own(p.id).main_emp_id)))},
+      {k:'sub',label:'부 담당',w:100,cls:'c',val:p=>empLabel(empById(own(p.id).sub_emp_id)),fmt:p=>esc(empLabel(empById(own(p.id).sub_emp_id)))},
+      {k:'last_sale',label:'최근 매출',w:96,cls:'c'},{k:'last_buy',label:'최근 매입',w:96,cls:'c'},
+      {k:'note',label:'비고',w:180,cls:'tw',val:p=>own(p.id).note||'',fmt:p=>esc(own(p.id).note||'')},
+      {k:'act',label:'관리',w:70,cls:'c',nosort:true,fmt:p=>ok?`<button class="rbtn" onclick="openOwnerForm(${p.id})">지정</button>`:''}
+    ], ps, {empty: emp||dept ? '지정된 담당 거래처가 없습니다 — 부서를 「전체」로 두고 거래처별로 담당을 지정하세요' : '조건에 맞는 거래처가 없습니다'});
+  }
+  h += `</div>`;
+
+  // ④ 월간 달력
+  const calItems = items.filter(i=>i.cal_from);
+  h += `<div class="dt-sec"><div class="dt-h">④ 월간 업무 달력 <small>업무 등록 시 「달력 표시 일자」를 넣은 업무 (예: 마감 25~5일)</small></div>`;
+  const inDay = (r,d) => { const f=r.cal_from, t=r.cal_to||r.cal_from; return f<=t ? (d>=f&&d<=t) : (d>=f||d<=t); };
+  h += dtTbl('dt-cal', [
+    {k:'who',label:'담당',w:96,cls:'c',val:r=>empOrd(r.emp_id),fmt:r=>esc(empLabel(empById(r.emp_id)))},
+    {k:'title',label:'업무',w:200,cls:'tw',fmt:r=>`<span class="cy cy-${cycIdx(r.cycle)}">${esc(r.cycle)}</span> ${esc(r.title)}`},
+    {k:'cal',label:'일자',w:76,cls:'c',val:r=>r.cal_from,fmt:r=>calText(r)},
+    ...Array.from({length:31},(_,i)=>({k:'d'+(i+1),label:String(i+1),w:26,cls:'c day',nosort:true,fmt:r=>inDay(r,i+1)?'<span class="dd"></span>':''}))
+  ], DT_SORT['dt-cal'] ? calItems : calItems.slice().sort((a,b)=>a.cal_from-b.cal_from||empOrd(a.emp_id)-empOrd(b.emp_id)), {empty:'달력 표시 일자가 입력된 업무가 없습니다'});
+  h += `</div>`;
+
+  // ⑤ 변경점
+  const hs = DUTY.hist.filter(x=> emp ? x.emp_id===emp.id : (dept ? (x.dept===dept) : true)).slice(0,100);
+  h += `<div class="dt-sec"><div class="dt-h">⑤ 변경점 관리 <small>업무 추가·수정·삭제와 부서 R&amp;R 수정이 자동으로 기록됩니다 (최근 100건)</small></div>`;
+  h += dtTbl('dt-hist', [
+    {k:'changed_at',label:'일자',w:130,cls:'c',fmt:x=>esc(kstTime(x.changed_at))},
+    {k:'dept',label:'부서',w:100,cls:'c'},
+    {k:'who',label:'담당',w:100,cls:'c',val:x=>empLabel(empById(x.emp_id)),fmt:x=>esc(empLabel(empById(x.emp_id)))},
+    {k:'action',label:'구분',w:76,cls:'c',fmt:x=>`<span class="ac ac-${esc(x.action)}">${esc(x.action)}</span>`},
+    {k:'summary',label:'내용',w:460,cls:'tw'},
+    {k:'changed_by',label:'변경자',w:90,cls:'c'}
+  ], DT_SORT['dt-hist'] ? hs : hs, {empty:'변경 기록이 없습니다'});
+  h += `</div>`;
+
+  body.innerHTML = h;
+  ['dt-rr','dt-sum','dt-items','dt-partner','dt-cal','dt-hist'].forEach(id=>{ if(document.getElementById(id)) initColResize(id, 'duty_'+id+(id==='dt-items'&&!emp?'_d':'')+'_v1'); });
+}
+
+/* ── 업무 등록·수정 ── */
+function openDutyItem(id){
+  const r = id ? DUTY.items.find(x=>x.id===id) : null;
+  const dept=document.getElementById('dtDept').value, empId=+document.getElementById('dtEmp').value||null;
+  const cand = dutyEmpsOf(r ? '' : (empId ? '' : dept)).filter(canEditEmp);
+  if(!cand.length){ alert('업무를 등록할 권한이 있는 인원이 없습니다.'); return; }
+  dutyEditId = id || null;
+  document.getElementById('diTitleHd').textContent = r ? '📋 업무 수정' : '📋 업무 추가';
+  document.getElementById('di-emp').innerHTML = cand.map(e=>`<option value="${e.id}">${esc(e.dept)} · ${esc(empLabel(e))}</option>`).join('');
+  document.getElementById('di-emp').value = String(r ? r.emp_id : (empId && cand.some(e=>e.id===empId) ? empId : cand[0].id));
+  document.getElementById('di-cycle').innerHTML = DUTY_CYCLES.map(c=>`<option value="${c}">${CYCLE_LABEL[c]}</option>`).join('');
+  document.getElementById('di-cat').innerHTML = `<option value="">—</option>`+DUTY_CATS.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const v=(k,d='')=> r&&r[k]!=null ? r[k] : d;
+  document.getElementById('di-cycle').value = v('cycle','일별');
+  document.getElementById('di-timing').value = v('timing');
+  document.getElementById('di-from').value = v('cal_from');
+  document.getElementById('di-to').value = v('cal_to');
+  document.getElementById('di-cat').value = v('category');
+  document.getElementById('di-title').value = v('title');
+  document.getElementById('di-content').value = v('content');
+  document.getElementById('di-partners').value = v('partners');
+  document.getElementById('di-docs').value = v('docs');
+  document.getElementById('di-note').value = v('note');
+  document.getElementById('di-sort').value = v('sort_no', 0);
+  const pl = document.getElementById('di-plist'); if(pl && DUTY.partners) pl.innerHTML = DUTY.partners.map(p=>`<option value="${esc(p.name)}">`).join('');
+  document.getElementById('dutyOv').classList.add('show');
+  setTimeout(()=>document.getElementById('di-title').focus(),50);
+}
+function closeDutyItem(){ document.getElementById('dutyOv').classList.remove('show'); dutyEditId=null; }
+const DI_FIELDS = {cycle:'주기',timing:'일자/시간',cal_from:'달력 시작일',cal_to:'달력 끝일',category:'구분',title:'업무분장',content:'업무내용',partners:'관련 거래처',docs:'관련 문서',note:'비고',sort_no:'순서',emp_id:'담당'};
+async function sbSendRet(method, table, query, body){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${query?('?'+query):''}`,{ method,
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'}, body: JSON.stringify(body) });
+  if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.message||('HTTP '+r.status)); }
+  return r.json();
+}
+async function logDuty(action, item, emp, summary, before, after){
+  try{ await sbSend('POST','duty_history','',{ item_id:item?item.id:null, emp_id:emp?emp.id:null, entity:DUTY_ENT, dept:emp?emp.dept:(item&&item.dept)||null,
+    action, summary, before_val:before||null, after_val:after||null, changed_by:curUser, changed_at:new Date().toISOString() }); }catch(e){ console.warn('변경점 기록 실패', e); }
+}
+async function saveDutyItem(){
+  const num = id => { const x=parseInt(document.getElementById(id).value,10); return isNaN(x)?null:x; };
+  const emp = empById(+document.getElementById('di-emp').value);
+  const o = { entity:DUTY_ENT, emp_id:emp.id, dept:emp.dept,
+    cycle:document.getElementById('di-cycle').value, timing:document.getElementById('di-timing').value.trim()||null,
+    cal_from:num('di-from'), cal_to:num('di-to'), category:document.getElementById('di-cat').value||null,
+    title:document.getElementById('di-title').value.trim(), content:document.getElementById('di-content').value.trim()||null,
+    partners:document.getElementById('di-partners').value.trim()||null, docs:document.getElementById('di-docs').value.trim()||null,
+    note:document.getElementById('di-note').value.trim()||null, sort_no:num('di-sort')||0,
+    updated_by:curUser, updated_at:new Date().toISOString() };
+  if(!o.title){ alert('업무분장(업무명)을 입력해 주세요.'); return; }
+  if((o.cal_from && (o.cal_from<1||o.cal_from>31)) || (o.cal_to && (o.cal_to<1||o.cal_to>31))){ alert('달력 표시 일자는 1~31 사이로 입력해 주세요.'); return; }
+  if(o.cal_to && !o.cal_from){ o.cal_from=o.cal_to; }
+  if(!canEditEmp(emp)){ alert('이 인원의 업무를 수정할 권한이 없습니다.'); return; }
+  const btn=document.getElementById('diSaveBtn'); btn.disabled=true;
+  try{
+    if(dutyEditId){
+      const old = DUTY.items.find(x=>x.id===dutyEditId);
+      await sbSend('PATCH','duty_item',`id=eq.${dutyEditId}`,o);
+      const diff = Object.keys(DI_FIELDS).filter(k=>String(old[k]??'')!==String(o[k]??''));
+      const txt = diff.map(k=> k==='emp_id' ? `담당 ${empLabel(empById(old.emp_id))}→${empLabel(emp)}` : (['content'].includes(k)?`${DI_FIELDS[k]} 변경`:`${DI_FIELDS[k]} ${old[k]??'-'}→${o[k]??'-'}`)).join(', ');
+      if(diff.length) await logDuty('수정', {id:dutyEditId}, emp, `[${o.cycle}] ${o.title} — ${txt}`, old, o);
+    } else {
+      o.created_by=curUser;
+      const rows = await sbSendRet('POST','duty_item','',o);
+      await logDuty('추가', rows[0], emp, `[${o.cycle}] ${o.title}`, null, o);
+    }
+    closeDutyItem(); await loadDuty(true); renderDuty();
+  }catch(e){ alert('저장 실패: '+e.message); }
+  finally{ btn.disabled=false; }
+}
+async function delDutyItem(id){
+  const r = DUTY.items.find(x=>x.id===id); if(!r) return;
+  if(!canEditEmp(empById(r.emp_id))){ alert('삭제 권한이 없습니다.'); return; }
+  if(!confirm('정말 삭제하시겠습니까?')) return;
+  try{
+    await sbSend('PATCH','duty_item',`id=eq.${id}`,{is_deleted:true, updated_by:curUser, updated_at:new Date().toISOString()});
+    await logDuty('삭제', r, empById(r.emp_id), `[${r.cycle}] ${r.title}`, r, null);
+    await loadDuty(true); renderDuty();
+  }catch(e){ alert('삭제 실패: '+e.message); }
+}
+
+/* ── 부서 R&R ── */
+function openDeptForm(dept){
+  if(!canEditDept(dept)){ alert('이 부서의 R&R을 수정할 권한이 없습니다.'); return; }
+  deptEditName = dept; const x = DUTY.depts.find(v=>v.dept===dept)||{};
+  document.getElementById('drHd').textContent = `🏷 ${dept} R&R`;
+  document.getElementById('dr-mission').value = x.mission||'';
+  document.getElementById('dr-tasks').value = x.main_tasks||'';
+  document.getElementById('dr-outputs').value = x.outputs||'';
+  document.getElementById('deptOv').classList.add('show');
+}
+function closeDeptForm(){ document.getElementById('deptOv').classList.remove('show'); deptEditName=null; }
+async function saveDeptForm(){
+  const d=deptEditName, old = DUTY.depts.find(v=>v.dept===d);
+  const o = { entity:DUTY_ENT, dept:d, mission:document.getElementById('dr-mission').value.trim()||null,
+    main_tasks:document.getElementById('dr-tasks').value.trim()||null, outputs:document.getElementById('dr-outputs').value.trim()||null,
+    updated_by:curUser, updated_at:new Date().toISOString() };
+  try{
+    if(old) await sbSend('PATCH','duty_dept',`id=eq.${old.id}`,o); else await sbSend('POST','duty_dept','',o);
+    try{ await sbSend('POST','duty_history','',{ entity:DUTY_ENT, dept:d, action:'R&R', summary:`${d} R&R ${old?'수정':'등록'}`+(o.mission?` — ${o.mission}`:''),
+      before_val:old||null, after_val:o, changed_by:curUser, changed_at:new Date().toISOString() }); }catch(e){}
+    closeDeptForm(); await loadDuty(true); renderDuty();
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
+
+/* ── 거래처 담당 지정 ── */
+function openOwnerForm(pid){
+  if(!canEditOwner()){ alert('거래처 담당을 지정할 권한이 없습니다(팀장·상무).'); return; }
+  const p = (DUTY.partners||[]).find(x=>x.id===pid); if(!p) return;
+  ownerEditPid = pid; const o = DUTY.owners.find(x=>x.partner_id===pid)||{};
+  document.getElementById('poHd').textContent = `🤝 ${p.name} 담당 지정`;
+  const ds=document.getElementById('po-dept'); ds.innerHTML = `<option value="">—</option>`+dutyDeptList().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  ds.value = o.dept||'';
+  poDeptChange(o.main_emp_id, o.sub_emp_id);
+  document.getElementById('po-note').value = o.note||'';
+  document.getElementById('ownerOv').classList.add('show');
+}
+function poDeptChange(mainId, subId){
+  const d=document.getElementById('po-dept').value;
+  const list = dutyEmpsOf(d).concat(d?dutyEmpsOf('').filter(e=>e.dept!==d):[]);
+  const opts = `<option value="">—</option>`+list.map(e=>`<option value="${e.id}">${esc(e.dept)} · ${esc(empLabel(e))}</option>`).join('');
+  const m=document.getElementById('po-main'), s=document.getElementById('po-sub');
+  const mv = mainId!==undefined ? mainId : m.value, sv = subId!==undefined ? subId : s.value;
+  m.innerHTML=opts; s.innerHTML=opts; m.value = mv?String(mv):''; s.value = sv?String(sv):'';
+}
+function closeOwnerForm(){ document.getElementById('ownerOv').classList.remove('show'); ownerEditPid=null; }
+async function saveOwnerForm(){
+  const pid=ownerEditPid, old=DUTY.owners.find(x=>x.partner_id===pid), p=(DUTY.partners||[]).find(x=>x.id===pid)||{};
+  const o = { partner_id:pid, dept:document.getElementById('po-dept').value||null,
+    main_emp_id:+document.getElementById('po-main').value||null, sub_emp_id:+document.getElementById('po-sub').value||null,
+    note:document.getElementById('po-note').value.trim()||null, updated_by:curUser, updated_at:new Date().toISOString() };
+  try{
+    if(old) await sbSend('PATCH','partner_owner',`id=eq.${old.id}`,o); else await sbSend('POST','partner_owner','',o);
+    const main=empById(o.main_emp_id);
+    try{ await sbSend('POST','duty_history','',{ entity:DUTY_ENT, dept:o.dept, emp_id:o.main_emp_id, action:'거래처',
+      summary:`${p.name} 담당 ${o.dept||'-'} / 정 ${empLabel(main)||'-'} / 부 ${empLabel(empById(o.sub_emp_id))||'-'}`,
+      before_val:old||null, after_val:o, changed_by:curUser, changed_at:new Date().toISOString() }); }catch(e){}
+    closeOwnerForm(); await loadDuty(true); renderDuty();
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
+
+/* ── 엑셀 (개인: SM-MP05-200-02 양식 / 부서·전체: 시트별) ── */
+async function downloadDutyExcel(){
+  if(typeof ExcelJS==='undefined'){ alert('엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.'); return; }
+  if(!DUTY.loaded) await loadDuty();
+  const dept=document.getElementById('dtDept').value, empId=+document.getElementById('dtEmp').value||null;
+  const emp = empId ? empById(empId) : null;
+  const wb = new ExcelJS.Workbook(); wb.creator='SMERP';
+  const today=new Date().toISOString().slice(0,10);
+  const font=(o={})=>({name:'Noto Sans KR', size:9, ...o});
+  const BX={style:'thin',color:{argb:'FF555555'}}, box={top:BX,left:BX,bottom:BX,right:BX};
+  const HDF={type:'pattern',pattern:'solid',fgColor:{argb:'FFE7E6E6'}};
+
+  function personSheet(e){
+    const ws = wb.addWorksheet(String(dispName(e)).slice(0,28), {pageSetup:{paperSize:9, orientation:'portrait', fitToPage:true, fitToWidth:1, fitToHeight:0,
+      margins:{left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2}}, views:[{showGridLines:false}]});
+    ws.columns=[{width:10},{width:9},{width:13},{width:5},{width:7},{width:20},{width:34},{width:14},{width:14},{width:12}];
+    ws.mergeCells('A1:G3'); const ttl=ws.getCell('A1'); ttl.value='■ 업무분장표'; ttl.font=font({bold:true,size:18}); ttl.alignment={vertical:'middle'};
+    [['부  서',e.dept||''],['직  무',e.rank||''],['일  자',today]].forEach((p,i)=>{ const r=i+1;
+      ws.mergeCells(r,8,r,8); const a=ws.getCell(r,8); a.value=p[0]; a.font=font({bold:true}); a.fill=HDF; a.border=box; a.alignment={horizontal:'center'};
+      ws.mergeCells(r,9,r,10); const b=ws.getCell(r,9); b.value=p[1]; b.font=font(); b.border=box; b.alignment={horizontal:'center'}; });
+    const hdr=['담당','구분','일자 / 시간','No','구분','업무분장','업무내용','관련 거래처','관련 문서','마감/비고'];
+    const hr=5; hdr.forEach((h,i)=>{ const c=ws.getCell(hr,i+1); c.value=h; c.font=font({bold:true}); c.fill=HDF; c.border=box; c.alignment={horizontal:'center',vertical:'middle'}; });
+    let r=hr+1; const its=DUTY.items.filter(i=>i.emp_id===e.id);
+    const first=r;
+    DUTY_CYCLES.forEach(cy=>{
+      const list=its.filter(i=>i.cycle===cy).sort((a,b)=>(a.sort_no||0)-(b.sort_no||0)||a.id-b.id);
+      const rows = list.length ? list : [null];
+      const s=r;
+      rows.forEach((it,k)=>{
+        const vals=['', '', it?(it.timing||'')+(it.cal_from?` (${calText(it)})`:''):'', it?k+1:'', it?it.category||'':'', it?it.title:'', it?it.content||'':'', it?it.partners||'':'', it?it.docs||'':'', it?it.note||'':''];
+        vals.forEach((v,i)=>{ if(i<2) return; const c=ws.getCell(r,i+1); c.value=v; c.font=font(); c.border=box; c.alignment={vertical:'middle',wrapText:true,horizontal:[3,4].includes(i)?'center':'left'}; });
+        r++;
+      });
+      ws.mergeCells(s,2,r-1,2); const c=ws.getCell(s,2); c.value=CYCLE_LABEL[cy]; c.font=font({bold:true}); c.alignment={horizontal:'center',vertical:'middle',wrapText:true}; c.border=box;
+      for(let k=s;k<r;k++) ws.getCell(k,2).border=box;
+    });
+    ws.mergeCells(first,1,r-1,1); const a=ws.getCell(first,1); a.value=dispName(e); a.font=font({bold:true}); a.alignment={horizontal:'center',vertical:'middle'};
+    for(let k=first;k<r;k++) ws.getCell(k,1).border=box;
+    // 변경점관리
+    r++; ws.mergeCells(r,1,r,10); const v=ws.getCell(r,1); v.value='■ 변경점관리'; v.font=font({bold:true,size:11}); r++;
+    ['일자','구분','내용','','','','','','','변경자'].forEach((h,i)=>{ const c=ws.getCell(r,i+1); c.value=h; c.font=font({bold:true}); c.fill=HDF; c.border=box; c.alignment={horizontal:'center'}; });
+    ws.mergeCells(r,3,r,9); r++;
+    const hs=DUTY.hist.filter(x=>x.emp_id===e.id).slice(0,15);
+    (hs.length?hs:[null]).forEach(x=>{ const vals=[x?kstTime(x.changed_at).slice(0,10):'', x?x.action:'', x?x.summary:'(변경 기록 없음)']; 
+      vals.forEach((val,i)=>{ const c=ws.getCell(r,i+1); c.value=val; c.font=font(); c.border=box; c.alignment={wrapText:true,vertical:'middle',horizontal:i<2?'center':'left'}; });
+      ws.mergeCells(r,3,r,9); const z=ws.getCell(r,10); z.value=x?x.changed_by||'':''; z.font=font(); z.border=box; z.alignment={horizontal:'center'}; r++; });
+    r++; ws.getCell(r,1).value='SM-MP05-200-02'; ws.getCell(r,3).value='㈜에스엠이코리아'; ws.getCell(r,10).value='A4(210X297)';
+    [1,3,10].forEach(i=>ws.getCell(r,i).font=font({size:8,color:{argb:'FF666666'}}));
+  }
+  function tableSheet(name, head, rows, widths){
+    const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:1}]});
+    ws.columns=head.map((h,i)=>({header:h,width:widths[i]||12}));
+    rows.forEach(r=>ws.addRow(r));
+    ws.eachRow((row,i)=>row.eachCell({includeEmpty:true},c=>{ c.border=box; c.font=font(i===1?{bold:true}:{}); c.alignment={vertical:'middle',wrapText:true};
+      if(i===1){ c.fill=HDF; c.alignment={horizontal:'center',vertical:'middle'}; } }));
+    return ws;
+  }
+  const depts = emp ? [emp.dept] : (dept ? [dept] : dutyDeptList());
+  const emps = emp ? [emp] : dutyEmpsOf(dept);
+  if(!emp){
+    tableSheet('부서 R&R',['부서','한 줄 정의','주업무','산출물'], depts.map(d=>{ const x=DUTY.depts.find(v=>v.dept===d)||{}; return [d,x.mission||'',x.main_tasks||'',x.outputs||'']; }),[12,36,50,30]);
+  }
+  emps.forEach(personSheet);
+  const own = id => DUTY.owners.find(o=>o.partner_id===id)||{};
+  const ps = (DUTY.partners||[]).filter(p=>{ const o=own(p.id); return emp ? (o.main_emp_id===emp.id||o.sub_emp_id===emp.id) : (dept ? o.dept===dept : (p.last_sale||p.last_buy||o.dept)); });
+  tableSheet('담당 거래처',['거래처','담당부서','정 담당','부 담당','최근 매출','최근 매입','비고'],
+    ps.map(p=>{ const o=own(p.id); return [p.name,o.dept||'',empLabel(empById(o.main_emp_id)),empLabel(empById(o.sub_emp_id)),p.last_sale||'',p.last_buy||'',o.note||'']; }),[28,12,12,12,12,12,30]);
+  const ids=new Set(emps.map(e=>e.id)); const cal=DUTY.items.filter(i=>ids.has(i.emp_id)&&i.cal_from).sort((a,b)=>a.cal_from-b.cal_from);
+  const inDay=(r,d)=>{ const f=r.cal_from,t=r.cal_to||r.cal_from; return f<=t?(d>=f&&d<=t):(d>=f||d<=t); };
+  const cws=tableSheet('월간 달력',['담당','업무','일자',...Array.from({length:31},(_,i)=>String(i+1))],
+    cal.map(r=>[empLabel(empById(r.emp_id)),r.title,calText(r),...Array.from({length:31},(_,i)=>inDay(r,i+1)?'■':'')]),[12,30,9,...Array(31).fill(3.4)]);
+  cws.eachRow((row,i)=>{ if(i===1) return; for(let k=4;k<=34;k++){ const c=row.getCell(k); c.alignment={horizontal:'center'}; if(c.value==='■'){ c.value=''; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}}; } } });
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const dl = document.createElement('a'); dl.href = URL.createObjectURL(blob);
+  dl.download = `SME_업무분장_${emp?dispName(emp):(dept||'전체')}_${today}.xlsx`; document.body.appendChild(dl); dl.click();
+  setTimeout(()=>{ URL.revokeObjectURL(dl.href); dl.remove(); }, 1000);
+}
+
+/* ── 해외법인 단독 조직도 (조직도 › SMECN·SMETH·SMEIN 버튼) ── */
+function renderOvOne(ent){
+  applyTenureUI();
+  const E=ENT[ent]||{code:ent,country:''};
+  document.getElementById('ovTitle').textContent = `${E.code} (${E.country}) 조직도`;
+  const u = buildOverseas(ent);
+  const n = EMPS.filter(e=>e.entity===ent).length + hcSum(HC.filter(h=>h.entity===ent));
+  document.getElementById('ovKpi').innerHTML = `<span>${esc(E.code)} 인원<b>${n}</b></span>`;
+  document.getElementById('ovChart').innerHTML = `<div style="display:flex;justify-content:center;padding:24px 0 10px;"><div style="width:${SHOW_TEN?149:119}px;">${unitHtml(u)}</div></div>`;
+  document.getElementById('ovChart').classList.toggle('no-ten',!SHOW_TEN);
+}
+
 /* ── 초기화 ── */
 (function init(){
   if(!curUser){ alert('로그인이 필요합니다. 메인 화면에서 접근해주세요.'); location.href='index.html'; return; }
   document.getElementById('tbUser').textContent = curUser + ' 님';
+  try{ const t0=localStorage.getItem('org_tab'); if(['org','duty','hist'].includes(t0)) curTab=t0; }catch(e){}
+  switchTab(curTab);
+  // v2.0 — SMEKR 조직도에서 부서명·이름 누르면 업무분장으로
+  document.getElementById('krChart').addEventListener('click', ev=>{
+    const b=ev.target.closest('[data-eid]'); if(b){ openDutyFor(+b.dataset.eid); return; }
+    const d=ev.target.closest('[data-dept]'); if(d){ openDutyFor(null, d.dataset.dept); }
+  });
   loadAll();
 })();
 </script>
