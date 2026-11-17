@@ -214,6 +214,8 @@ td.tw{white-space:normal;word-break:keep-all;}
 .ov-bd input,.ov-bd select,.ov-bd textarea{height:34px;border:1.5px solid var(--border);border-radius:2px;padding:0 9px;font-size:13px;color:var(--text);font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);min-width:0;}
 .ov-bd textarea{height:auto;padding:8px 9px;resize:vertical;}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.di-wd{display:flex;gap:14px;padding:6px 0;} .di-wd label{display:flex;align-items:center;gap:4px;font-weight:500;color:#111827;}
+.di-hint small{font-size:11px;color:var(--muted);font-weight:500;padding-top:9px;display:block;}
 /* v2.0 법인 선택 버튼 · 업무분장 */
 .seg{display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap;}
 .seg button{height:32px;padding:0 16px;border:1.5px solid var(--border);background:#fff;border-radius:16px;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
@@ -457,14 +459,10 @@ a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underli
     <div class="ov-bd">
       <div class="fr3">
         <label><span>담당 <b>*</b></span><select id="di-emp"></select></label>
-        <label><span>주기 <b>*</b></span><select id="di-cycle"></select></label>
-        <label>구분<select id="di-cat"></select></label>
+        <label><span>주기 <b>*</b></span><select id="di-cycle" onchange="diWhenRender()"></select></label>
+        <label>구분<select id="di-cat" onchange="diCatChange()"></select></label>
       </div>
-      <div class="fr3">
-        <label>일자 / 시간<input id="di-timing" placeholder="예: 08:20~ · 월요일 · 4주차 · 매월 25일~5일"></label>
-        <label>달력 표시 시작일<input type="number" id="di-from" min="1" max="31" placeholder="1~31 (월간 달력)"></label>
-        <label>달력 표시 끝일<input type="number" id="di-to" min="1" max="31" placeholder="비우면 하루 (25→5 가능)"></label>
-      </div>
+      <div id="di-when"></div>
       <label class="full"><span>업무분장 <b>*</b></span><input id="di-title" placeholder="예: 매입·매출 마감업무"></label>
       <label class="full">업무내용<textarea id="di-content" rows="3" placeholder="예: 마감금액 확인 → 세금계산서 발행"></textarea></label>
       <div class="fr3">
@@ -1443,7 +1441,7 @@ function kstTime(v){ if(!v) return ''; const d=new Date(v); if(isNaN(d)) return 
 const cycIdx = c => { const i=DUTY_CYCLES.indexOf(c); return i<0?9:i; };
 const empOrd = id => { const e=empById(id); if(!e) return 9999; const all=dutyEmpsOf(''); const i=all.indexOf(e); return i<0?9999:i; };
 const brText = v => esc(v||'').replace(/\n/g,'<br>');
-function calText(r){ if(!r.cal_from) return ''; return r.cal_to && r.cal_to!==r.cal_from ? `${r.cal_from}~${r.cal_to}일` : `${r.cal_from}일`; }
+function calText(r){ if(!r.cal_from) return ''; const L=d=>d===31?'말일':d+'일'; return r.cal_to && r.cal_to!==r.cal_from ? `${L(r.cal_from)}~${L(r.cal_to)}` : L(r.cal_from); }
 
 /* ── 화면 (v2.1 2026-11-17: 선택 전 = 빈 양식 / 선택 후 = 업무분장표만) ── */
 const dtToday = () => kstTime(new Date().toISOString()).slice(0,10);
@@ -1461,7 +1459,7 @@ function dutyFormHtml(e, idx){
       if(first){ rows += `<td class="c fm-who" rowspan="${total}">${e?esc(dispName(e)):''}</td>`; first=false; }
       if(k===0) rows += `<td class="c fm-cy" rowspan="${rs.length}">${esc(CYCLE_LABEL[g.cy])}</td>`;
       rows += it
-        ? `<td class="tw">${esc(it.timing||'')}${it.cal_from?`<div class="calt">📅 ${calText(it)}</div>`:''}</td><td class="c">${k+1}</td><td class="c">${esc(it.category||'')}</td><td class="tw">${esc(it.title)}</td><td class="tw">${brText(it.content)}</td><td class="tw">${esc(it.docs||'')}</td><td class="tw">${esc(it.note||'')}</td>`
+        ? `<td class="tw">${esc(it.timing||'')}</td><td class="c">${k+1}</td><td class="c">${esc(it.category||'')}</td><td class="tw">${esc(it.title)}</td><td class="tw">${brText(it.content)}</td><td class="tw">${esc(it.docs||'')}</td><td class="tw">${esc(it.note||'')}</td>`
         : '<td class="fm-blank"></td>'.repeat(7);
       if(ed) rows += `<td class="c">${it ? `<button class="rbtn" onclick="openDutyItem(${it.id})">수정</button> <button class="rbtn del" onclick="delDutyItem(${it.id})">삭제</button>`
         : `<button class="rbtn" onclick="openDutyItem(null,${e.id},'${g.cy}')">＋ 추가</button>`}</td>`;
@@ -1545,13 +1543,13 @@ async function renderDuty(){
   // 월간 달력 (접힘)
   const calItems = items.filter(i=>i.cal_from);
   const inDay = (r,d) => { const f=r.cal_from, t=r.cal_to||r.cal_from; return f<=t ? (d>=f&&d<=t) : (d>=f||d<=t); };
-  h += `<details class="dt-fold" ${window._dtFoldC?'open':''} ontoggle="window._dtFoldC=this.open"><summary>📅 월간 업무 달력 <small>「달력 표시 일자」를 넣은 업무 ${calItems.length}건</small></summary><div class="dt-fold-in">`;
+  h += `<details class="dt-fold" ${window._dtFoldC?'open':''} ontoggle="window._dtFoldC=this.open"><summary>📅 월간 업무 달력 <small>월별 업무의 일자 기준 ${calItems.length}건</small></summary><div class="dt-fold-in">`;
   h += dtTbl('dt-cal', [
     {k:'who',label:'담당',w:96,cls:'c',val:r=>empOrd(r.emp_id),fmt:r=>esc(empLabel(empById(r.emp_id)))},
     {k:'title',label:'업무',w:200,cls:'tw',fmt:r=>`[${esc(r.cycle)}] ${esc(r.title)}`},
     {k:'cal',label:'일자',w:76,cls:'c',val:r=>r.cal_from,fmt:r=>calText(r)},
     ...Array.from({length:31},(_,i)=>({k:'d'+(i+1),label:String(i+1),w:26,cls:'c day',nosort:true,fmt:r=>inDay(r,i+1)?'<span class="dd"></span>':''}))
-  ], DT_SORT['dt-cal'] ? calItems : calItems.slice().sort((a,b)=>a.cal_from-b.cal_from||empOrd(a.emp_id)-empOrd(b.emp_id)), {empty:'달력 표시 일자가 입력된 업무가 없습니다'});
+  ], DT_SORT['dt-cal'] ? calItems : calItems.slice().sort((a,b)=>a.cal_from-b.cal_from||empOrd(a.emp_id)-empOrd(b.emp_id)), {empty:'월별 일자가 입력된 업무가 없습니다'});
   h += `</div></details>`;
 
   body.innerHTML = h;
@@ -1560,6 +1558,52 @@ async function renderDuty(){
 }
 
 /* ── 업무 등록·수정 ── */
+// v2.3 (2026-11-17) 주기별 일자/시간: 일별=시각(10분 단위) · 주별=요일 · 월별=일자(→ 월간 달력 자동) · 그 외 없음
+const DI_WD = ['월','화','수','목','금'];
+const DI_TIMES = Array.from({length:144},(_,i)=>`${String(Math.floor(i/6)).padStart(2,'0')}:${String(i%6*10).padStart(2,'0')}`);
+const dayLbl = d => d===31 ? '말일' : d+'일';
+let diWhenVal = {};
+function dutyCatList(){ return [...new Set([...DUTY_CATS, ...DUTY.items.map(i=>i.category).filter(Boolean)])]; }
+function diCatFill(sel){
+  const el=document.getElementById('di-cat');
+  const list=dutyCatList(); if(sel && !list.includes(sel)) list.push(sel);
+  el.innerHTML = `<option value="">—</option>`+list.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')+`<option value="__new">＋ 새 구분 추가…</option>`;
+  el.value = sel||''; el.dataset.prev = sel||'';
+}
+function diCatChange(){
+  const el=document.getElementById('di-cat');
+  if(el.value!=='__new'){ el.dataset.prev=el.value; return; }
+  const nm=(prompt('새 구분 이름을 입력하세요')||'').trim();
+  if(!nm){ el.value=el.dataset.prev||''; return; }
+  diCatFill(nm);
+}
+function diWhenRender(){
+  const cy=document.getElementById('di-cycle').value, w=diWhenVal, box=document.getElementById('di-when');
+  const opt=(arr,cur,blank)=>(blank?`<option value="">${blank}</option>`:'')+arr.map(x=>`<option value="${x[0]}"${String(x[0])===String(cur??'')?' selected':''}>${x[1]}</option>`).join('');
+  if(cy==='일별'){
+    const tt=DI_TIMES.map(x=>[x,x]);
+    box.innerHTML = `<div class="fr3"><label>시작 시각<select id="di-t1">${opt(tt,w.t1,'—')}</select></label><label>종료 시각<select id="di-t2">${opt(tt,w.t2,'—')}</select></label><label class="di-hint"><span>&nbsp;</span><small>10분 단위 · 비워두면 시간 없음</small></label></div>`;
+  } else if(cy==='주별'){
+    box.innerHTML = `<label class="full">요일<div class="di-wd">${DI_WD.map(d=>`<label><input type="checkbox" class="di-wdc" value="${d}"${(w.wd||[]).includes(d)?' checked':''}> ${d}</label>`).join('')}</div></label>`;
+  } else if(cy==='월별'){
+    const dd=Array.from({length:31},(_,i)=>[i+1,dayLbl(i+1)]);
+    box.innerHTML = `<div class="fr3"><label>시작 일자<select id="di-d1">${opt(dd,w.d1,'—')}</select></label><label>끝 일자<select id="di-d2">${opt(dd,w.d2,'— (하루)')}</select></label><label class="di-hint"><span>&nbsp;</span><small>예: 25일~5일 · 월간 달력에 자동 표시</small></label></div>`;
+  } else box.innerHTML='';
+}
+function diWhenRead(cy){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  if(cy==='일별'){ const a=g('di-t1'), b=g('di-t2');
+    if(!a && b) return {err:'시작 시각을 선택해 주세요.'};
+    if(a && b && b<=a) return {err:'종료 시각은 시작 시각보다 늦어야 합니다.'};
+    return {timing: a ? (b?`${a}~${b}`:`${a}~`) : null, cal_from:null, cal_to:null}; }
+  if(cy==='주별'){ const ds=[...document.querySelectorAll('.di-wdc:checked')].map(x=>x.value);
+    return {timing: ds.length?ds.join('·'):null, cal_from:null, cal_to:null}; }
+  if(cy==='월별'){ const a=+g('di-d1')||null, b=+g('di-d2')||null;
+    if(!a && b) return {err:'시작 일자를 선택해 주세요.'};
+    const to = b && b!==a ? b : null;
+    return {timing: a ? (to?`${dayLbl(a)}~${dayLbl(to)}`:dayLbl(a)) : null, cal_from:a, cal_to:to}; }
+  return {timing:null, cal_from:null, cal_to:null};
+}
 function openDutyItem(id, presetEmp, presetCycle){
   const r = id ? DUTY.items.find(x=>x.id===id) : null;
   const dept=document.getElementById('dtDept').value, empId=presetEmp || +document.getElementById('dtEmp').value||null;
@@ -1570,13 +1614,12 @@ function openDutyItem(id, presetEmp, presetCycle){
   document.getElementById('di-emp').innerHTML = cand.map(e=>`<option value="${e.id}">${esc(e.dept)} · ${esc(empLabel(e))}</option>`).join('');
   document.getElementById('di-emp').value = String(r ? r.emp_id : (empId && cand.some(e=>e.id===empId) ? empId : cand[0].id));
   document.getElementById('di-cycle').innerHTML = DUTY_CYCLES.map(c=>`<option value="${c}">${CYCLE_LABEL[c]}</option>`).join('');
-  document.getElementById('di-cat').innerHTML = `<option value="">—</option>`+DUTY_CATS.map(c=>`<option value="${c}">${c}</option>`).join('');
   const v=(k,d='')=> r&&r[k]!=null ? r[k] : d;
+  diCatFill(v('category'));
   document.getElementById('di-cycle').value = v('cycle', presetCycle||'일별');
-  document.getElementById('di-timing').value = v('timing');
-  document.getElementById('di-from').value = v('cal_from');
-  document.getElementById('di-to').value = v('cal_to');
-  document.getElementById('di-cat').value = v('category');
+  const tm=String(v('timing')), mt=tm.match(/(\d{2}:\d{2})~(\d{2}:\d{2})?/);
+  diWhenVal = { t1:mt?mt[1]:'', t2:mt&&mt[2]?mt[2]:'', wd:DI_WD.filter(d=>tm.split('·').includes(d)), d1:v('cal_from'), d2:v('cal_to') };
+  diWhenRender();
   document.getElementById('di-title').value = v('title');
   document.getElementById('di-content').value = v('content');
   document.getElementById('di-docs').value = v('docs');
@@ -1586,7 +1629,7 @@ function openDutyItem(id, presetEmp, presetCycle){
   setTimeout(()=>document.getElementById('di-title').focus(),50);
 }
 function closeDutyItem(){ document.getElementById('dutyOv').classList.remove('show'); dutyEditId=null; }
-const DI_FIELDS = {cycle:'주기',timing:'일자/시간',cal_from:'달력 시작일',cal_to:'달력 끝일',category:'구분',title:'업무분장',content:'업무내용',docs:'관련 문서',note:'비고',sort_no:'순서',emp_id:'담당'};
+const DI_FIELDS = {cycle:'주기',timing:'일자/시간',category:'구분',title:'업무분장',content:'업무내용',docs:'관련 문서',note:'비고',sort_no:'순서',emp_id:'담당'};
 async function sbSendRet(method, table, query, body){
   const r = await fetch(`${SB_URL}/rest/v1/${table}${query?('?'+query):''}`,{ method,
     headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'}, body: JSON.stringify(body) });
@@ -1601,15 +1644,14 @@ async function saveDutyItem(){
   const num = id => { const x=parseInt(document.getElementById(id).value,10); return isNaN(x)?null:x; };
   const emp = empById(+document.getElementById('di-emp').value);
   const o = { entity:DUTY_ENT, emp_id:emp.id, dept:emp.dept,
-    cycle:document.getElementById('di-cycle').value, timing:document.getElementById('di-timing').value.trim()||null,
-    cal_from:num('di-from'), cal_to:num('di-to'), category:document.getElementById('di-cat').value||null,
+    cycle:document.getElementById('di-cycle').value, category:(document.getElementById('di-cat').value.replace(/^__new$/,''))||null,
     title:document.getElementById('di-title').value.trim(), content:document.getElementById('di-content').value.trim()||null,
     docs:document.getElementById('di-docs').value.trim()||null,
     note:document.getElementById('di-note').value.trim()||null, sort_no:num('di-sort')||0,
     updated_by:curUser, updated_at:new Date().toISOString() };
   if(!o.title){ alert('업무분장(업무명)을 입력해 주세요.'); return; }
-  if((o.cal_from && (o.cal_from<1||o.cal_from>31)) || (o.cal_to && (o.cal_to<1||o.cal_to>31))){ alert('달력 표시 일자는 1~31 사이로 입력해 주세요.'); return; }
-  if(o.cal_to && !o.cal_from){ o.cal_from=o.cal_to; }
+  const wh = diWhenRead(o.cycle); if(wh.err){ alert(wh.err); return; }
+  o.timing=wh.timing; o.cal_from=wh.cal_from; o.cal_to=wh.cal_to;
   if(!canEditEmp(emp)){ alert('이 인원의 업무를 수정할 권한이 없습니다.'); return; }
   const btn=document.getElementById('diSaveBtn'); btn.disabled=true;
   try{
@@ -1794,7 +1836,7 @@ async function downloadDutyExcel(){
       const rows = list.length ? list : [null];
       const s=r;
       rows.forEach((it,k)=>{
-        const vals=['', '', it?(it.timing||'')+(it.cal_from?` (${calText(it)})`:''):'', it?k+1:'', it?it.category||'':'', it?it.title:'', it?it.content||'':'', '', it?it.docs||'':'', it?it.note||'':''];
+        const vals=['', '', it?(it.timing||''):'', it?k+1:'', it?it.category||'':'', it?it.title:'', it?it.content||'':'', '', it?it.docs||'':'', it?it.note||'':''];
         vals.forEach((v,i)=>{ if(i<2) return; const c=ws.getCell(r,i+1); c.value=v; c.font=font(); c.border=box; c.alignment={vertical:'middle',wrapText:true,horizontal:[3,4].includes(i)?'center':'left'}; });
         ws.mergeCells(r,7,r,8);
         r++;
