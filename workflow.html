@@ -1649,8 +1649,34 @@ const CATS=[
 ];
 const KR=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 const DAYS=['일','월','화','수','목','금','토'];
-const todayStr=(()=>{const d=new Date();return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;})();
+// 2026-11-17 — 오늘 날짜는 화면을 켜둔 채 자정이 지나면 갱신 (wfCheckDate). 처음 열 때만 계산하던 const → let
+const wfTodayNow=()=>{const d=new Date();return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;};
+let todayStr=wfTodayNow();
 let cur=new Date(),editId=null,currentTab='cal',todos=[];
+let wfDateBusy=false;
+// 1분마다 + 화면으로 돌아올 때 날짜 확인 → 바뀌었으면 오늘 갱신·자료 다시 읽기·다시 그리기 (입력 창이 열려 있으면 닫힌 뒤에)
+async function wfCheckDate(){
+  const now=wfTodayNow();
+  if(now===todayStr || wfDateBusy) return;
+  if(document.querySelector('.modal-overlay.open, .day-popup-overlay.open')) return;   // 입력·팝업 중이면 다음 확인 때 반영
+  wfDateBusy=true;
+  const old=todayStr; todayStr=now;
+  try{
+    // 보고 있던 달이 어제가 속한 달이면 오늘 달로 이동 (다른 달을 보고 있었으면 그대로)
+    if(cur.getFullYear()===+old.slice(0,4) && cur.getMonth()+1===+old.slice(5,7)) cur=new Date();
+    if(typeof SB!=='undefined' && SB){
+      await Promise.all([loadDiary(), loadSharedCalRecords(), loadDirectiveCalRecords(), loadCorpCalRecords()]
+        .map(function(p){ return Promise.resolve(p).catch(function(e){ console.warn('[날짜 갱신]', e); }); }));
+      if(typeof showLoading==='function') showLoading(false);
+    }
+    renderAll();
+    if(currentTab==='diary' && typeof renderDiary==='function') renderDiary();
+  }catch(e){ console.warn('[날짜 갱신]', e); }
+  finally{ wfDateBusy=false; }
+}
+setInterval(wfCheckDate, 60*1000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) wfCheckDate(); });
+window.addEventListener('focus', wfCheckDate);
 let diaryCopyOrigin=null; // 공유내용을 내 업무일지로 복사할 때 원본 출처 기록용
 let dpDate=null;
 let openMonthKeys=new Set();

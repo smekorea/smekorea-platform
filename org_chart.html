@@ -245,6 +245,7 @@ td.day{padding:2px 0;} .dd{display:block;height:14px;margin:0 2px;background:var
 .ac-추가{background:#E5F5EA;color:#17663A;} .ac-삭제{background:#FDE8E8;color:#B4141E;} .ac-수정{background:#FFF1DC;color:#8A4B00;}
 .rbtn.del{color:var(--brand);}
 .mute{color:#aaa;}
+a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underline-offset:2px;} a.dt-nm:hover{color:var(--brand);}
 #krChart .box[data-eid], #krChart .unit-hd[data-dept]{cursor:pointer;}
 #krChart .box[data-eid]:hover{outline:2px solid var(--point);} #krChart .unit-hd[data-dept]:hover{color:var(--point);}
 .fr2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -1463,16 +1464,22 @@ async function renderDuty(){
   h += `</div>`;
 
   // ② 업무분장
-  h += `<div class="dt-sec"><div class="dt-h">② 업무분장 <small>${emp?esc(empLabel(emp)):(dept?esc(dept)+' 전체':'전체 인원 요약')}</small></div>`;
+  h += `<div class="dt-sec"><div class="dt-h">② 업무분장 <small>${emp?esc(empLabel(emp)):(dept?esc(dept)+' 전체':'부서별 작성 현황 — 부서·이름을 누르면 이동')}</small></div>`;
   if(!dept && !emp){
+    // 2026-11-17 — 인원별 목록 대신 부서별 작성 현황 (누가 아직 안 썼는지)
     h += dtTbl('dt-sum', [
-      {k:'dept',label:'부서',w:100,cls:'c'},{k:'name',label:'이름',w:110,cls:'c'},
-      ...DUTY_CYCLES.map(c=>({k:c,label:c,w:56,cls:'c',val:r=>r[c]})),
-      {k:'total',label:'합계',w:60,cls:'c',val:r=>r.total},{k:'last',label:'최근 수정',w:100,cls:'c'}
-    ], dutyEmpsOf('').map(e=>{ const its=DUTY.items.filter(i=>i.emp_id===e.id); const r={id:e.id,dept:e.dept,name:empLabel(e),total:its.length,
-        last:(its.map(i=>String(i.updated_at||'').slice(0,10)).sort().pop()||'')};
-      DUTY_CYCLES.forEach(c=>r[c]=its.filter(i=>i.cycle===c).length); return r; }),
-      {rowAttr:r=>` class="dt-click" onclick="openDutyFor(${r.id})" title="누르면 이 사람 업무분장으로 이동"`});
+      {k:'dept',label:'부서',w:110,cls:'c'},
+      {k:'n',label:'인원',w:56,cls:'c',val:r=>r.n},
+      {k:'done',label:'작성',w:56,cls:'c',val:r=>r.done},
+      {k:'todo',label:'미작성 인원',w:360,cls:'tw',val:r=>r.todo.length,
+        fmt:r=>r.todo.length ? r.todo.map(e=>`<a class="dt-nm" onclick="event.stopPropagation();openDutyFor(${e.id})">${esc(empLabel(e))}</a>`).join(', ') : '<span class="mute">-</span>'},
+      {k:'items',label:'업무 건수',w:76,cls:'c',val:r=>r.items},
+      {k:'last',label:'최근 수정',w:100,cls:'c'}
+    ], dutyDeptList().map(d=>{ const es=dutyEmpsOf(d); const its=DUTY.items.filter(i=>es.some(e=>e.id===i.emp_id));
+        const has=new Set(its.map(i=>i.emp_id));
+        return {dept:d, n:es.length, done:es.filter(e=>has.has(e.id)).length, todo:es.filter(e=>!has.has(e.id)), items:its.length,
+          last:(its.map(i=>kstTime(i.updated_at).slice(0,10)).sort().pop()||'')}; }).filter(r=>r.n),
+      {rowAttr:r=>` class="dt-click" onclick="openDutyFor(null,'${esc(r.dept)}')" title="누르면 이 부서로 이동"`});
   } else {
     const showWho = !emp;
     h += dtTbl('dt-items', [
@@ -1548,7 +1555,7 @@ async function renderDuty(){
   h += `</div>`;
 
   body.innerHTML = h;
-  ['dt-rr','dt-sum','dt-items','dt-partner','dt-cal','dt-hist'].forEach(id=>{ if(document.getElementById(id)) initColResize(id, 'duty_'+id+(id==='dt-items'&&!emp?'_d':'')+'_v1'); });
+  ['dt-rr','dt-sum','dt-items','dt-partner','dt-cal','dt-hist'].forEach(id=>{ if(document.getElementById(id)) initColResize(id, 'duty_'+id+(id==='dt-items'&&!emp?'_d':'')+(id==='dt-sum'?'_v2':'_v1')); });
 }
 
 /* ── 업무 등록·수정 ── */
