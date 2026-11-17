@@ -111,6 +111,35 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 
 /* ── 범례 ── */
 .cat-legend{display:flex;gap:10px;flex-wrap:wrap;padding:7px 16px 4px;}
+/* ── 할 일(기한 없는 메모형) 줄 — 달력 위 (V20261118) ── */
+.ts-wrap{margin:8px 16px 2px;border:1px solid #d6dde8;border-radius:8px;background:#fff;}
+.ts-head{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:#1B3A6B;}
+.ts-head .ts-cnt{background:#1B3A6B;color:#fff;border-radius:10px;padding:0 8px;font-size:11px;line-height:18px;}
+.ts-head .ts-arrow{margin-left:auto;color:#6b7280;font-size:12px;}
+.ts-body{border-top:1px solid #e8edf5;padding:8px 12px 10px;}
+.ts-add{display:flex;gap:6px;margin-bottom:8px;}
+.ts-add input{flex:1;min-width:0;height:32px;border:1.5px solid var(--border);border-radius:6px;padding:0 10px;font-size:13px;font-family:'Noto Sans KR',sans-serif;}
+.ts-add select{height:32px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;padding:0 6px;background:#fff;font-family:'Noto Sans KR',sans-serif;}
+.ts-add button,.ts-note-add button{height:32px;border:none;border-radius:6px;background:#1B3A6B;color:#fff;font-size:12px;padding:0 12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.ts-list{max-height:320px;overflow-y:auto;}
+.ts-item{border-bottom:1px solid #eef1f6;padding:6px 0;}
+.ts-item:last-child{border-bottom:none;}
+.ts-row{display:flex;align-items:center;gap:6px;font-size:13px;color:#111827;}
+.ts-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
+.ts-meta{font-size:11px;color:#6b7280;white-space:nowrap;}
+.ts-link{font-size:11px;color:#1e7a45;white-space:nowrap;cursor:pointer;}
+.ts-btn{border:1px solid #d6dde8;background:#fff;border-radius:4px;font-size:11px;padding:2px 7px;cursor:pointer;white-space:nowrap;color:#1B3A6B;font-family:'Noto Sans KR',sans-serif;}
+.ts-btn.go{background:#1B3A6B;color:#fff;border-color:#1B3A6B;}
+.ts-btn.del{color:#c8001e;}
+.ts-notes{margin:6px 0 2px 26px;padding:6px 10px;background:#f7f9fc;border-radius:6px;}
+.ts-note{display:flex;gap:8px;font-size:12px;color:#111827;padding:2px 0;}
+.ts-note .ts-nd{color:#6b7280;white-space:nowrap;}
+.ts-note .ts-nt{flex:1;white-space:pre-wrap;word-break:break-all;}
+.ts-note .ts-nx{color:#9ca3af;cursor:pointer;}
+.ts-note-add{display:flex;gap:6px;margin-top:6px;}
+.ts-note-add input{flex:1;min-width:0;height:30px;border:1.5px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;font-family:'Noto Sans KR',sans-serif;}
+.ts-empty{text-align:center;color:var(--text3);font-size:12px;padding:10px 0;}
+@media (max-width:768px){.ts-wrap{margin:6px 8px 2px;}.ts-row{flex-wrap:wrap;}.ts-title{flex-basis:100%;white-space:normal;}.ts-notes{margin-left:0;}}
 .cat-item{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);}
 .cat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
@@ -767,6 +796,7 @@ body.m-legend-on #cat-legend{display:flex;}
   </div>
 
   <div id="cal-view">
+    <div class="ts-wrap" id="todo-strip"></div>
     <div class="cat-legend" id="cat-legend"></div>
     <div class="calendar-wrap">
       <div class="day-headers">
@@ -1632,10 +1662,14 @@ async function loadFromSb(){
   if(!SB)return;showLoading(true);
   try{
     // 일정(status='일정')은 work_diary에서 가져옴
-    const {data:td,error:tdErr}=await SB.from('cal_todos').select('*').order('created_at',{ascending:false});
+    // 할 일은 작성자 본인 것만 (V20261118 — 작성자 없는 기존 건은 표시 안 함)
+    const {data:td,error:tdErr}=(wfSession&&wfSession.empId)
+      ? await SB.from('cal_todos').select('*').eq('employee_id',wfSession.empId).order('created_at',{ascending:false})
+      : {data:[],error:null};
     if(tdErr) console.warn('[SB] todos error:',tdErr);
-    if(td) todos=td.map(r=>({id:r.id,text:r.text,cat:r.cat,pri:r.pri??1,status:r.status||(r.done?'done':'todo'),due:r.due||null,memo:r.memo||'',created_at:r.created_at||null}));
+    if(td) todos=td.map(r=>({id:r.id,text:r.text,cat:r.cat,pri:r.pri??1,status:r.status||(r.done?'done':'todo'),due:r.due||null,memo:r.memo||'',created_at:r.created_at||null,diary_id:r.diary_id||null}));
     saveLocal();
+    await loadTodoNotes();
   }catch(e){console.warn('[SB] exception:',e);}
   showLoading(false);
 }
@@ -2291,6 +2325,7 @@ function renderList(){
 
 /* ═══ 할 일 ═══ */
 function renderTodos(){
+  try{ renderTodoStrip(); }catch(e){ console.warn('[todo-strip]',e); }   // 달력 위 할 일 줄 동기화
   const el=document.getElementById('todo-list');
   // 완료되지 않은 항목만 화면에 표시
   const active=todos.filter(t=>t.status!=='done');
@@ -2357,6 +2392,7 @@ async function confirmCompleteTodo(id){
   saveLocal();renderTodos();
 }
 function renderAll(){
+  try{ renderTodoStrip(); }catch(e){ console.warn('[todo-strip]',e); }
   if(currentTab==='cal')renderCal();
   else if(currentTab==='list')renderList();
   else renderTodos();
@@ -2668,7 +2704,7 @@ async function addTodo(){
   const due=document.getElementById('todo-due').value||null;
   const memo=document.getElementById('todo-memo').value.trim();
   const createdAt=new Date().toISOString();
-  const obj={text,cat,pri,status:'todo',due,memo,created_at:createdAt};
+  const obj={text,cat,pri,status:'todo',due,memo,created_at:createdAt,employee_id:wfSession.empId||null};
   if(SB){
     try{
       const {data,error}=await SB.from('cal_todos').insert(obj).select().single();
@@ -2717,10 +2753,147 @@ async function delTodo(id){
   if(!confirm(t('정말 삭제하시겠습니까?'))) return;   // 삭제 확인창 표준 (2026-10-13)
   todos=todos.filter(x=>String(x.id)!==String(id));
   if(SB){
-    try{await SB.from('cal_todos').delete().eq('id',id);}
+    try{await SB.from('cal_todos').delete().eq('id',id); await SB.from('cal_todo_notes').delete().eq('todo_id',id);}
     catch(e){console.warn('[SB] delTodo error:',e);}
   }
   saveLocal();renderTodos();
+}
+
+/* ═══════════════════════════════════════
+   할 일 줄 (달력 위, 기한 없는 메모형) — V20261118
+   · 나만 보는 할 일, 진행 메모 이력(cal_todo_notes)
+   · 「업무일지로」 → 업무일지 작성 창(날짜·공유는 거기서) → 저장 시 diary_id 연결
+═══════════════════════════════════════ */
+let todoNotes={};            // todo_id → [{id,note,created_at}]
+let todoOpenNotes={};        // 메모 펼친 할 일
+let todoConvertId=null;      // 업무일지 전환 중인 할 일
+function todoStripOpen(){ try{ return localStorage.getItem('wf_todo_strip_open')!=='0'; }catch(e){ return true; } }
+function toggleTodoStrip(){
+  try{ localStorage.setItem('wf_todo_strip_open', todoStripOpen()?'0':'1'); }catch(e){}
+  renderTodoStrip(); setTimeout(fitMobDays,0);
+}
+async function loadTodoNotes(){
+  todoNotes={};
+  const ids=todos.filter(x=>x.status!=='done').map(x=>x.id).filter(x=>typeof x==='number'&&x<1e12);
+  if(!SB||!ids.length) return;
+  try{
+    const {data,error}=await SB.from('cal_todo_notes').select('*').in('todo_id',ids).order('created_at',{ascending:true});
+    if(error) throw error;
+    (data||[]).forEach(n=>{ (todoNotes[n.todo_id]=todoNotes[n.todo_id]||[]).push(n); });
+  }catch(e){ console.warn('[SB] loadTodoNotes error:',e); }
+}
+function fmtNoteDate(iso){ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; }
+function renderTodoStrip(){
+  const el=document.getElementById('todo-strip'); if(!el) return;
+  const PRI_LBL=['상','중','하'], PRI_CLS=['tt-pri-high','tt-pri-mid','tt-pri-low'];
+  const active=todos.filter(x=>x.status!=='done')
+    .sort((a,b)=>((a.pri??1)-(b.pri??1)) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const open=todoStripOpen();
+  let html=`<div class="ts-head" onclick="toggleTodoStrip()">📝 <span>${t('할 일')}</span><span class="ts-cnt">${active.length}</span><span class="ts-arrow">${open?'▲ '+t('접기'):'▼ '+t('펼치기')}</span></div>`;
+  if(open){
+    html+=`<div class="ts-body">
+      <div class="ts-add">
+        <input id="ts-new-text" type="text" placeholder="${escapeHtml(t('할 일을 입력하고 Enter'))}" onkeydown="if(event.key==='Enter'&&!event.isComposing)addStripTodo()">
+        <select id="ts-new-pri"><option value="0">${t('우선도: 상')}</option><option value="1" selected>${t('우선도: 중')}</option><option value="2">${t('우선도: 하')}</option></select>
+        <button onclick="addStripTodo()">${t('추가')}</button>
+      </div><div class="ts-list">`;
+    if(!active.length) html+=`<div class="ts-empty">${t('할 일이 없어요')} ✓</div>`;
+    active.forEach(td=>{
+      const id=String(td.id), notes=todoNotes[td.id]||[], isOpen=!!todoOpenNotes[id];
+      const pri=td.pri??1;
+      const reg=td.created_at?fmtNoteDate(td.created_at):'';
+      const last=notes.length?fmtNoteDate(notes[notes.length-1].created_at):'';
+      html+=`<div class="ts-item"><div class="ts-row">
+        <span class="tt-pri ${PRI_CLS[pri]||'tt-pri-mid'}">${t(PRI_LBL[pri]||'중')}</span>
+        <span class="ts-title" title="${escapeHtml(td.text)}" onclick="toggleTodoNotes('${id}')">${escapeHtml(td.text)}</span>
+        ${td.due?`<span class="ts-meta">⏰ ${td.due.slice(5).replace('-','/')}</span>`:''}
+        <span class="ts-meta">${t('등록')} ${reg}${last?' · '+t('최근 메모')+' '+last:''}</span>
+        ${td.diary_id?`<span class="ts-link" onclick="openTodoDiary('${id}')">🔗 ${t('업무일지 전환됨')}</span>`:''}
+        <button class="ts-btn" onclick="toggleTodoNotes('${id}')">📝 ${t('메모')} ${notes.length||''}</button>
+        <button class="ts-btn go" onclick="convertTodoToDiary('${id}')">→ ${t('업무일지로')}</button>
+        <button class="ts-btn" onclick="confirmCompleteTodo('${id}')">✓ ${t('완료')}</button>
+        <button class="ts-btn" onclick="editTodo('${id}')">✏</button>
+        <button class="ts-btn del" onclick="delTodo('${id}')">🗑</button>
+      </div>`;
+      if(isOpen){
+        html+=`<div class="ts-notes">`;
+        if(td.memo) html+=`<div class="ts-note"><span class="ts-nd">${t('내용')}</span><span class="ts-nt">${escapeHtml(td.memo)}</span></div>`;
+        notes.forEach(n=>{ html+=`<div class="ts-note"><span class="ts-nd">${fmtNoteDate(n.created_at)}</span><span class="ts-nt">${escapeHtml(n.note)}</span><span class="ts-nx" onclick="delTodoNote('${id}',${n.id})">×</span></div>`; });
+        if(!td.memo&&!notes.length) html+=`<div class="ts-note"><span class="ts-nt" style="color:#9ca3af">${t('진행 메모가 없습니다')}</span></div>`;
+        html+=`<div class="ts-note-add"><input id="ts-note-${id}" type="text" placeholder="${escapeHtml(t('진행 메모 입력 후 Enter (오늘 날짜로 기록)'))}" onkeydown="if(event.key==='Enter'&&!event.isComposing)addTodoNote('${id}')"><button onclick="addTodoNote('${id}')">${t('기록')}</button></div></div>`;
+      }
+      html+=`</div>`;
+    });
+    html+=`</div></div>`;
+  }
+  el.innerHTML=html;
+}
+async function addStripTodo(){
+  const inp=document.getElementById('ts-new-text'); if(!inp) return;
+  const text=inp.value.trim(); if(!text) return;
+  const pri=parseInt(document.getElementById('ts-new-pri').value);
+  const obj={text,cat:1,pri,status:'todo',due:null,memo:'',created_at:new Date().toISOString(),employee_id:wfSession.empId||null};
+  let newId=null;
+  if(SB){
+    try{ const {data,error}=await SB.from('cal_todos').insert(obj).select().single(); if(error) throw error; if(data) newId=data.id; }
+    catch(e){ console.warn('[SB] addStripTodo error:',e); alert(t('저장 실패')+': '+(e.message||e)); return; }
+  }
+  todos.unshift({id:newId||Date.now(),...obj,diary_id:null});
+  saveLocal(); renderTodoStrip(); setTimeout(fitMobDays,0);
+  const again=document.getElementById('ts-new-text'); if(again) again.focus();
+}
+function toggleTodoNotes(id){
+  todoOpenNotes[id]=!todoOpenNotes[id];
+  renderTodoStrip();
+  if(todoOpenNotes[id]){ const ni=document.getElementById('ts-note-'+id); if(ni) ni.focus(); }
+  setTimeout(fitMobDays,0);
+}
+async function addTodoNote(id){
+  const inp=document.getElementById('ts-note-'+id); if(!inp) return;
+  const note=inp.value.trim(); if(!note) return;
+  const rec={todo_id:Number(id),employee_id:wfSession.empId||null,note,created_at:new Date().toISOString()};
+  if(SB){
+    try{ const {data,error}=await SB.from('cal_todo_notes').insert(rec).select().single(); if(error) throw error; if(data) rec.id=data.id; }
+    catch(e){ console.warn('[SB] addTodoNote error:',e); alert(t('저장 실패')+': '+(e.message||e)); return; }
+  }
+  if(!rec.id) rec.id=Date.now();
+  (todoNotes[id]=todoNotes[id]||[]).push(rec);
+  todoOpenNotes[id]=true;
+  renderTodoStrip();
+  const ni=document.getElementById('ts-note-'+id); if(ni) ni.focus();
+}
+async function delTodoNote(id,noteId){
+  if(!confirm(t('정말 삭제하시겠습니까?'))) return;
+  if(SB){ try{ await SB.from('cal_todo_notes').delete().eq('id',noteId); }catch(e){ console.warn('[SB] delTodoNote error:',e); } }
+  todoNotes[id]=(todoNotes[id]||[]).filter(n=>String(n.id)!==String(noteId));
+  renderTodoStrip();
+}
+function convertTodoToDiary(id){
+  const td=todos.find(x=>String(x.id)===String(id)); if(!td) return;
+  openDiaryModal(todayStr);
+  todoConvertId=id;   // openDiaryModal 뒤에 설정 (저장하면 연결, 닫으면 해제)
+  document.getElementById('diary-modal-title').textContent=t('할 일 → 업무일지 전환');
+  document.getElementById('dm-title').value=td.text;
+  const lines=[];
+  if(td.memo) lines.push(td.memo);
+  (todoNotes[td.id]||[]).forEach(n=>lines.push(`${fmtNoteDate(n.created_at)} ${n.note}`));
+  document.getElementById('dm-content').value=lines.join('\n');
+  document.getElementById('dm-imp').value=['상','중','하'][td.pri??1]||'중';
+  document.getElementById('dm-status').value='진행중';
+  setTimeout(()=>document.getElementById('dm-date').focus(),120);
+}
+async function finishTodoConvert(diaryId){
+  const id=todoConvertId; todoConvertId=null;
+  const td=todos.find(x=>String(x.id)===String(id)); if(!td) return;
+  td.diary_id=diaryId;
+  if(SB){ try{ await SB.from('cal_todos').update({diary_id:diaryId}).eq('id',id); }catch(e){ console.warn('[SB] finishTodoConvert error:',e); } }
+  saveLocal();
+}
+function openTodoDiary(id){
+  const td=todos.find(x=>String(x.id)===String(id)); if(!td||!td.diary_id) return;
+  const r=diaryRecords.find(x=>String(x.id)===String(td.diary_id));
+  if(!r){ alert(t('연결된 업무일지를 찾을 수 없습니다 (삭제되었을 수 있음)')); return; }
+  if(typeof editDiary==='function') editDiary(r.id);
 }
 
 /* ═══════════════════════════════════════
@@ -4848,6 +5021,7 @@ function editDiary(id){
 }
 
 function closeDiaryModal(){
+  todoConvertId=null;   // 할 일 전환 중 취소하면 연결하지 않음
   document.getElementById('diary-modal-overlay').classList.remove('open');
   const box=document.getElementById('diary-modal-box');
   box.style.position='';box.style.left='';box.style.top='';box.style.margin='';
@@ -5291,14 +5465,16 @@ async function saveDiary(){
   if(obj.follow_up){
     const tobj={text:'['+(obj.partner||obj.category)+'] '+obj.follow_up,cat:1,pri:0,
       status:'todo',due:null,memo:'업무일지 후속: '+obj.date,
-      created_at:new Date().toISOString()};
+      created_at:new Date().toISOString(),employee_id:wfSession.empId||null};
     if(SB){
-      try{await SB.from('cal_todos').insert(tobj);}catch(e){console.warn(e);}
+      try{const {data:tdNew}=await SB.from('cal_todos').insert(tobj).select().single(); if(tdNew) tobj.id=tdNew.id;}catch(e){console.warn(e);}
     }
-    todos.push(tobj);
+    if(!tobj.id) tobj.id=Date.now();
+    todos.unshift(tobj);
   }
   await applyDiaryLink(linkRowId,linkSel);   // 업무보고 연동 저장
   { var pcb=document.getElementById('dm-lk-plan'); await applyPlanLink(linkRowId,!!(pcb&&pcb.checked&&obj.category!=='개인업무')); }
+  if(todoConvertId && linkRowId) await finishTodoConvert(linkRowId);   // 할 일 → 업무일지 전환 연결
   diaryCopyOrigin=null;
   closeDiaryModal();
   renderDiary();
@@ -5438,6 +5614,21 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"할 일":{zh:"待办",en:"To-do"},
+"접기":{zh:"收起",en:"Collapse"},
+"펼치기":{zh:"展开",en:"Expand"},
+"할 일을 입력하고 Enter":{zh:"输入待办后按Enter",en:"Type a to-do and press Enter"},
+"최근 메모":{zh:"最近备注",en:"Last note"},
+"업무일지 전환됨":{zh:"已转为工作日志",en:"Moved to work log"},
+"메모":{zh:"备注",en:"Notes"},
+"업무일지로":{zh:"转为工作日志",en:"To work log"},
+"내용":{zh:"内容",en:"Details"},
+"진행 메모가 없습니다":{zh:"暂无进展备注",en:"No progress notes yet"},
+"진행 메모 입력 후 Enter (오늘 날짜로 기록)":{zh:"输入进展备注后按Enter（按今天日期记录）",en:"Type a progress note and press Enter (dated today)"},
+"기록":{zh:"记录",en:"Log"},
+"저장 실패":{zh:"保存失败",en:"Save failed"},
+"할 일 → 업무일지 전환":{zh:"待办 → 转为工作日志",en:"To-do → Work log"},
+"연결된 업무일지를 찾을 수 없습니다 (삭제되었을 수 있음)":{zh:"找不到关联的工作日志（可能已删除）",en:"Linked work log not found (it may have been deleted)"},
 "기간 해제 (이 날짜만 남기기)":{zh:"取消期间（仅保留此日期）",en:"Clear period (keep this date only)"},
 "지금 연 날짜 1건만 남기고 나머지 날짜는 삭제합니다":{zh:"仅保留当前日期，删除其余日期",en:"Keeps only this date and deletes the other dates"},
 "업무보고에 연동된 날짜가 포함되어 있어 그 활동도 함께 삭제됩니다":{zh:"包含已关联工作报告的日期，相关活动也将一并删除",en:"Some dates are linked to work reports; those activities will also be deleted"},
@@ -5725,6 +5916,7 @@ function setWfLang(lang){
   try{ renderCal(); }catch(e){}
   try{ renderList(); }catch(e){}
   try{ renderTodos(); }catch(e){}
+  try{ renderTodoStrip(); }catch(e){}
   try{ renderDiary(); }catch(e){}
   try{ if(document.getElementById('share-view').style.display!=='none') loadShareView(); }catch(e){}
   try{ if(document.getElementById('wfsettings-view').style.display!=='none') initWfSettingsView(); }catch(e){}
