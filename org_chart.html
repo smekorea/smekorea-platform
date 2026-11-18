@@ -235,6 +235,10 @@ td.tw{white-space:normal;word-break:keep-all;}
 tr.dt-click{cursor:pointer;} tr.dt-click:hover td{background:#F4F7FB;}
 .rr-card{background:#fff;border:1px solid var(--border);border-left:4px solid var(--hq);padding:10px 14px;}
 .rr-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:14px;}
+.rr-tg{border:1px solid var(--border);background:#fff;width:22px;height:22px;padding:0;font-size:12px;line-height:20px;cursor:pointer;color:var(--point);border-radius:2px;}
+.rr-tg:hover{background:#F4F7FB;}
+.rr-card.rr-fold .rr-grid{display:none;} .rr-card.rr-fold .rr-top{margin-bottom:0;}
+.rr-sum{flex:1;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rr-grid{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:14px;}
 .rr-grid span{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;}
 .rr-grid p{margin:0;font-size:12.5px;color:#111827;line-height:1.55;} .rr-grid i{color:#aaa;font-style:normal;}
@@ -1513,6 +1517,7 @@ function dutyFormHtml(e, idx){
   </div>`;
 }
 
+function dutyRrToggle(){ try{ localStorage.setItem('duty_rr_fold', localStorage.getItem('duty_rr_fold')==='1'?'0':'1'); }catch(e){} renderDuty(); }
 async function renderDuty(){
   const body=document.getElementById('dutyBody');
   if(!DUTY.loaded){ body.innerHTML='<div class="loading">업무분장을 불러오는 중...</div>';
@@ -1542,7 +1547,8 @@ async function renderDuty(){
   // 부서 선택 — 부서 R&R + 부서원 업무분장표
   if(!emp){
     const x=DUTY.depts.find(v=>v.dept===dept)||{};
-    h += `<div class="rr-card"><div class="rr-top"><b>${esc(dept)} R&amp;R</b><span class="mute" style="font-size:12px;">인원 ${scopeEmps.length}명 · 업무 ${DUTY.items.filter(i=>scopeEmps.some(e=>e.id===i.emp_id)).length}건</span>${canEditDept(dept)?`<button class="rbtn" onclick="openDeptForm('${esc(dept)}')">수정</button>`:''}</div>
+    let rrFold=false; try{ rrFold = localStorage.getItem('duty_rr_fold')==='1'; }catch(e){}
+    h += `<div class="rr-card${rrFold?' rr-fold':''}"><div class="rr-top"><button class="rr-tg" onclick="dutyRrToggle()" title="${rrFold?'펼치기':'접기'}">${rrFold?'▸':'▾'}</button><b>${esc(dept)} R&amp;R</b><span class="mute" style="font-size:12px;">인원 ${scopeEmps.length}명 · 업무 ${DUTY.items.filter(i=>scopeEmps.some(e=>e.id===i.emp_id)).length}건</span>${canEditDept(dept)?`<button class="rbtn" onclick="openDeptForm('${esc(dept)}')">수정</button>`:''}${rrFold&&x.mission?`<span class="rr-sum">${esc(x.mission)}</span>`:''}</div>
       <div class="rr-grid"><div><span>한 줄 정의</span><p>${brText(x.mission)||'<i>미작성</i>'}</p></div>
       <div><span>주업무</span><p>${brText(x.main_tasks)||'<i>미작성</i>'}</p></div>
       <div><span>산출물</span><p>${brText(x.outputs)||'<i>미작성</i>'}</p></div></div></div>`;
