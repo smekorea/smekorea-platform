@@ -496,6 +496,21 @@ a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underli
     <div class="ov-ft"><button class="btn" onclick="closeDeptForm()">취소</button><button class="btn btn-primary" onclick="saveDeptForm()">저장</button></div>
   </div>
 </div>
+<!-- 2026-11-18 변경점 수정 -->
+<div class="mov" id="dhOv">
+  <div class="ov-box" style="width:600px;">
+    <div class="ov-hd"><span>📝 변경점 수정</span><button class="ov-x" onclick="closeHistForm()">✕</button></div>
+    <div class="ov-bd">
+      <div class="fr3">
+        <label><span>일자 <b>*</b></span><input type="datetime-local" id="dh-at"></label>
+        <label><span>구분 <b>*</b></span><input id="dh-act" list="dh-acts"><datalist id="dh-acts"><option value="추가"><option value="수정"><option value="삭제"><option value="R&amp;R"><option value="자동생성"></datalist></label>
+        <label>변경자<input id="dh-by" disabled></label>
+      </div>
+      <label class="full"><span>내용 <b>*</b></span><textarea id="dh-sum" rows="5"></textarea></label>
+    </div>
+    <div class="ov-ft"><button class="btn" onclick="closeHistForm()">취소</button><button class="btn btn-primary" id="dhSaveBtn" onclick="saveHistForm()">저장</button></div>
+  </div>
+</div>
 <!-- v2.2 거래처관리 (담당자별 매입처·매출처) -->
 <div class="mov" id="dpOv">
   <div class="ov-box" style="width:640px;">
@@ -1511,8 +1526,9 @@ function dutyFormHtml(e, idx){
     ${dtTbl('dt-fmh-'+idx, [
       {k:'changed_at',label:'일자',w:130,cls:'c',fmt:x=>esc(kstTime(x.changed_at))},
       {k:'action',label:'구분',w:76,cls:'c'},
-      {k:'summary',label:'내용',w:560,cls:'tw'},
-      {k:'changed_by',label:'변경자',w:90,cls:'c'}
+      {k:'summary',label:'내용',w:560,cls:'tw',fmt:x=>brText(x.summary)},
+      {k:'changed_by',label:'변경자',w:110,cls:'c'},
+      ...(ed?[{k:'act',label:'관리',w:70,cls:'c',nosort:true,fmt:x=>`<button class="rbtn" onclick="openHistForm(${x.id})">수정</button>`}]:[])
     ], hs, {empty: e?'변경 기록이 없습니다':'&nbsp;'})}
     <div class="fm-foot"><span>SM-MP05-200-02</span><span>㈜에스엠이코리아</span><span>A4(210X297)</span></div>
   </div>`;
@@ -1572,7 +1588,7 @@ async function renderDuty(){
   h += `</div></details>`;
 
   body.innerHTML = h;
-  scopeEmps.forEach((e,i)=>{ const ex=canEditEmp(e)?'_e':''; initColResize('dt-form-'+i, 'duty_form'+ex+'_v2'); initColResize('dt-fmp-'+i, 'duty_fmp'+ex+'_v1'); initColResize('dt-fmh-'+i,'duty_fmh_v1'); });
+  scopeEmps.forEach((e,i)=>{ const ex=canEditEmp(e)?'_e':''; initColResize('dt-form-'+i, 'duty_form'+ex+'_v2'); initColResize('dt-fmp-'+i, 'duty_fmp'+ex+'_v1'); initColResize('dt-fmh-'+i,'duty_fmh'+ex+'_v2'); });
   initColResize('dt-cal', 'duty_dt-cal_v1');
 }
 
@@ -1723,6 +1739,35 @@ async function saveDeptForm(){
       before_val:old||null, after_val:o, changed_by:curUser, changed_at:new Date().toISOString() }); }catch(e){}
     closeDeptForm(); await loadDuty(true); renderDuty();
   }catch(e){ alert('저장 실패: '+e.message); }
+}
+
+/* ── 3. 변경점 수정 (2026-11-18, 수정만 — 삭제 없음) ── */
+let dhEditId=null;
+function openHistForm(id){
+  const x=DUTY.hist.find(v=>v.id===id); if(!x) return;
+  const e=empById(x.emp_id);
+  if(!e || !canEditEmp(e)){ alert('이 변경점을 수정할 권한이 없습니다.'); return; }
+  dhEditId=id;
+  document.getElementById('dh-at').value = kstTime(x.changed_at).replace(' ','T');
+  document.getElementById('dh-act').value = x.action||'';
+  document.getElementById('dh-by').value = x.changed_by||'';
+  document.getElementById('dh-sum').value = x.summary||'';
+  document.getElementById('dhOv').classList.add('show');
+}
+function closeHistForm(){ document.getElementById('dhOv').classList.remove('show'); dhEditId=null; }
+async function saveHistForm(){
+  const x=DUTY.hist.find(v=>v.id===dhEditId); if(!x) return;
+  const at=document.getElementById('dh-at').value, act=document.getElementById('dh-act').value.trim(), sum=document.getElementById('dh-sum').value.trim();
+  if(!at || !act || !sum){ alert('일자·구분·내용을 입력해 주세요.'); return; }
+  const dt=new Date(at); if(isNaN(dt)){ alert('일자를 확인해 주세요.'); return; }
+  const base=String(x.changed_by||'').replace(/\(수정[^)]*\)$/,'');
+  const by = !base || base===curUser ? `${curUser}(수정)` : `${base}(수정: ${curUser})`;
+  const btn=document.getElementById('dhSaveBtn'); btn.disabled=true;
+  try{
+    await sbSend('PATCH','duty_history',`id=eq.${dhEditId}`,{ changed_at:dt.toISOString(), action:act, summary:sum, changed_by:by });
+    closeHistForm(); await loadDuty(true); renderDuty();
+  }catch(e){ alert('저장 실패: '+e.message); }
+  finally{ btn.disabled=false; }
 }
 
 /* ── 2. 거래처관리 (duty_partner, 담당자별) ── */
