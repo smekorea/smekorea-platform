@@ -6618,8 +6618,12 @@ async function wfChangePw() {
   // URL 파라미터 확인 (SMERP에서 넘어온 경우)
   var urlUser = new URLSearchParams(location.search).get('user');
 
-  // url에 user 파라미터 있으면 세션 무시 → 반드시 비번 입력
-  if (!urlUser && wfLoadSession()) {
+  // url에 user 파라미터가 있어도, 같은 사람의 유효한 세션이면 비번 없이 진입 (V20261118 — 새로고침마다 비번 입력 개선)
+  // 다른 사람 이름이거나 세션이 끝났으면 기존처럼 비번 입력
+  var sessOk = wfLoadSession() && (!urlUser || (wfSession.name||'').trim() === urlUser.trim());
+  if (!sessOk) wfSession = { empId:null, empNo:null, name:'', dept:'', rank:'', entity:'', sessH:8, expire:0 };   // 다른 사람 세션은 쓰지 않음
+  if (sessOk) {
+    if (urlUser) { try { var u=new URL(location.href); u.searchParams.delete('user'); history.replaceState(null,'',u.pathname+u.search+u.hash); } catch(e){} }
     await wfEnterMain();
   } else {
     // 로그인 화면 표시
