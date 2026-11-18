@@ -214,7 +214,7 @@ td.tw{white-space:normal;word-break:keep-all;}
 .ov-bd input,.ov-bd select,.ov-bd textarea{height:34px;border:1.5px solid var(--border);border-radius:2px;padding:0 9px;font-size:13px;color:var(--text);font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);min-width:0;}
 .ov-bd textarea{height:auto;padding:8px 9px;resize:vertical;}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-.di-wd{display:flex;gap:14px;padding:6px 0;} .di-wd label{display:flex;align-items:center;gap:4px;font-weight:500;color:#111827;}
+.di-wd{display:flex;gap:14px;padding:6px 0;} .ov-bd .di-wd label{display:flex;flex-direction:row;align-items:center;gap:4px;font-weight:500;color:#111827;}
 .di-hint small{font-size:11px;color:var(--muted);font-weight:500;padding-top:9px;display:block;}
 /* v2.0 법인 선택 버튼 · 업무분장 */
 .seg{display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap;}
@@ -489,8 +489,7 @@ a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underli
     <div class="ov-hd"><span id="drHd">🏷 부서 R&amp;R</span><button class="ov-x" onclick="closeDeptForm()">✕</button></div>
     <div class="ov-bd">
       <label class="full">한 줄 정의<input id="dr-mission" placeholder="예: LG 사급 공급과 품질 대응"></label>
-      <label class="full">주업무 (줄마다 1개)<textarea id="dr-tasks" rows="5"></textarea></label>
-      <label class="full">산출물 (줄마다 1개)<textarea id="dr-outputs" rows="3"></textarea></label>
+      <div style="font-size:11.5px;color:var(--muted);">주업무는 업무분장표 「기본 / 직무」 줄에, 산출물은 각 줄의 「관련 문서」에 적습니다.</div>
     </div>
     <div class="ov-ft"><button class="btn" onclick="closeDeptForm()">취소</button><button class="btn btn-primary" onclick="saveDeptForm()">저장</button></div>
   </div>
@@ -1545,14 +1544,14 @@ async function renderDuty(){
   }
 
   // 부서 선택 — 부서 R&R + 부서원 업무분장표
-  if(!emp){
-    const x=DUTY.depts.find(v=>v.dept===dept)||{};
+  {
+    const rdept = emp ? emp.dept : dept;
+    const x=DUTY.depts.find(v=>v.dept===rdept)||{};
+    const names = scopeEmps.map(e=>dispName(e)).join(', ');
     let rrFold=false; try{ rrFold = localStorage.getItem('duty_rr_fold')==='1'; }catch(e){}
-    h += `<div class="rr-card${rrFold?' rr-fold':''}"><div class="rr-top"><button class="rr-tg" onclick="dutyRrToggle()" title="${rrFold?'펼치기':'접기'}">${rrFold?'▸':'▾'}</button><b>${esc(dept)} R&amp;R</b><span class="mute" style="font-size:12px;">인원 ${scopeEmps.length}명 · 업무 ${DUTY.items.filter(i=>scopeEmps.some(e=>e.id===i.emp_id)).length}건</span>${canEditDept(dept)?`<button class="rbtn" onclick="openDeptForm('${esc(dept)}')">수정</button>`:''}${rrFold&&x.mission?`<span class="rr-sum">${esc(x.mission)}</span>`:''}</div>
-      <div class="rr-grid"><div><span>한 줄 정의</span><p>${brText(x.mission)||'<i>미작성</i>'}</p></div>
-      <div><span>주업무</span><p>${brText(x.main_tasks)||'<i>미작성</i>'}</p></div>
-      <div><span>산출물</span><p>${brText(x.outputs)||'<i>미작성</i>'}</p></div></div></div>`;
-    if(!scopeEmps.length) h += `<div class="loading">이 부서에 등록된 인원이 없습니다</div>`;
+    h += `<div class="rr-card${rrFold?' rr-fold':''}"><div class="rr-top"><button class="rr-tg" onclick="dutyRrToggle()" title="${rrFold?'펼치기':'접기'}">${rrFold?'▸':'▾'}</button><b>${esc(rdept)} R&amp;R</b><span class="mute" style="font-size:12px;">(역할과 책임)${names?' · '+esc(names):''} · 업무 ${DUTY.items.filter(i=>scopeEmps.some(e=>e.id===i.emp_id)).length}건</span>${canEditDept(rdept)?`<button class="rbtn" onclick="openDeptForm('${esc(rdept)}')">수정</button>`:''}${rrFold&&x.mission?`<span class="rr-sum">${esc(x.mission)}</span>`:''}</div>
+      <div class="rr-grid" style="grid-template-columns:1fr;"><div><span>한 줄 정의</span><p>${brText(x.mission)||'<i>미작성</i>'}</p></div></div></div>`;
+    if(!emp && !scopeEmps.length) h += `<div class="loading">이 부서에 등록된 인원이 없습니다</div>`;
   }
   scopeEmps.forEach((e,i)=>{ h += dutyFormHtml(e, i); });
 
@@ -1599,28 +1598,32 @@ function diCatChange(){
 function diWhenRender(){
   const cy=document.getElementById('di-cycle').value, w=diWhenVal, box=document.getElementById('di-when');
   const opt=(arr,cur,blank)=>(blank?`<option value="">${blank}</option>`:'')+arr.map(x=>`<option value="${x[0]}"${String(x[0])===String(cur??'')?' selected':''}>${x[1]}</option>`).join('');
+  const tt=DI_TIMES.map(x=>[x,x]);
+  const timeRow = `<div class="fr3"><label>시작 시각<select id="di-t1">${opt(tt,w.t1,'—')}</select></label><label>종료 시각<select id="di-t2">${opt(tt,w.t2,'—')}</select></label><label class="di-hint"><span>&nbsp;</span><small>10분 단위 · 비워두면 시간 없음</small></label></div>`;
   if(cy==='일별'){
-    const tt=DI_TIMES.map(x=>[x,x]);
-    box.innerHTML = `<div class="fr3"><label>시작 시각<select id="di-t1">${opt(tt,w.t1,'—')}</select></label><label>종료 시각<select id="di-t2">${opt(tt,w.t2,'—')}</select></label><label class="di-hint"><span>&nbsp;</span><small>10분 단위 · 비워두면 시간 없음</small></label></div>`;
+    box.innerHTML = timeRow;
   } else if(cy==='주별'){
-    box.innerHTML = `<label class="full">요일<div class="di-wd">${DI_WD.map(d=>`<label><input type="checkbox" class="di-wdc" value="${d}"${(w.wd||[]).includes(d)?' checked':''}> ${d}</label>`).join('')}</div></label>`;
+    box.innerHTML = `<label class="full">요일<div class="di-wd">${DI_WD.map(d=>`<label><input type="checkbox" class="di-wdc" value="${d}"${(w.wd||[]).includes(d)?' checked':''}> ${d}</label>`).join('')}</div></label>` + timeRow;
   } else if(cy==='월별'){
     const dd=Array.from({length:31},(_,i)=>[i+1,dayLbl(i+1)]);
-    box.innerHTML = `<div class="fr3"><label>시작 일자<select id="di-d1">${opt(dd,w.d1,'—')}</select></label><label>끝 일자<select id="di-d2">${opt(dd,w.d2,'— (하루)')}</select></label><label class="di-hint"><span>&nbsp;</span><small>예: 25일~5일 · 월간 달력에 자동 표시</small></label></div>`;
+    box.innerHTML = `<div class="fr3"><label>시작 일자<select id="di-d1">${opt(dd,w.d1,'—')}</select></label><label>끝 일자<select id="di-d2">${opt(dd,w.d2,'— (하루)')}</select></label><label class="di-hint"><span>&nbsp;</span><small>예: 25일~5일 · 월간 달력에 자동 표시</small></label></div>` + timeRow;
   } else box.innerHTML='';
 }
 function diWhenRead(cy){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  if(cy==='일별'){ const a=g('di-t1'), b=g('di-t2');
+  let tPart='';
+  if(['일별','주별','월별'].includes(cy)){ const a=g('di-t1'), b=g('di-t2');
     if(!a && b) return {err:'시작 시각을 선택해 주세요.'};
     if(a && b && b<=a) return {err:'종료 시각은 시작 시각보다 늦어야 합니다.'};
-    return {timing: a ? (b?`${a}~${b}`:`${a}~`) : null, cal_from:null, cal_to:null}; }
+    tPart = a ? (b?`${a}~${b}`:`${a}~`) : ''; }
+  const join = (x,y) => [x,y].filter(Boolean).join(' ') || null;
+  if(cy==='일별') return {timing: tPart||null, cal_from:null, cal_to:null};
   if(cy==='주별'){ const ds=[...document.querySelectorAll('.di-wdc:checked')].map(x=>x.value);
-    return {timing: ds.length?ds.join('·'):null, cal_from:null, cal_to:null}; }
+    return {timing: join(ds.join('·'), tPart), cal_from:null, cal_to:null}; }
   if(cy==='월별'){ const a=+g('di-d1')||null, b=+g('di-d2')||null;
     if(!a && b) return {err:'시작 일자를 선택해 주세요.'};
     const to = b && b!==a ? b : null;
-    return {timing: a ? (to?`${dayLbl(a)}~${dayLbl(to)}`:dayLbl(a)) : null, cal_from:a, cal_to:to}; }
+    return {timing: join(a ? (to?`${dayLbl(a)}~${dayLbl(to)}`:dayLbl(a)) : '', tPart), cal_from:a, cal_to:to}; }
   return {timing:null, cal_from:null, cal_to:null};
 }
 function openDutyItem(id, presetEmp, presetCycle){
@@ -1637,7 +1640,7 @@ function openDutyItem(id, presetEmp, presetCycle){
   diCatFill(v('category'));
   document.getElementById('di-cycle').value = v('cycle', presetCycle||'일별');
   const tm=String(v('timing')), mt=tm.match(/(\d{2}:\d{2})~(\d{2}:\d{2})?/);
-  diWhenVal = { t1:mt?mt[1]:'', t2:mt&&mt[2]?mt[2]:'', wd:DI_WD.filter(d=>tm.split('·').includes(d)), d1:v('cal_from'), d2:v('cal_to') };
+  diWhenVal = { t1:mt?mt[1]:'', t2:mt&&mt[2]?mt[2]:'', wd:DI_WD.filter(d=>tm.split(' ')[0].split('·').includes(d)), d1:v('cal_from'), d2:v('cal_to') };
   diWhenRender();
   document.getElementById('di-title').value = v('title');
   document.getElementById('di-content').value = v('content');
@@ -1706,15 +1709,12 @@ function openDeptForm(dept){
   deptEditName = dept; const x = DUTY.depts.find(v=>v.dept===dept)||{};
   document.getElementById('drHd').textContent = `🏷 ${dept} R&R`;
   document.getElementById('dr-mission').value = x.mission||'';
-  document.getElementById('dr-tasks').value = x.main_tasks||'';
-  document.getElementById('dr-outputs').value = x.outputs||'';
   document.getElementById('deptOv').classList.add('show');
 }
 function closeDeptForm(){ document.getElementById('deptOv').classList.remove('show'); deptEditName=null; }
 async function saveDeptForm(){
   const d=deptEditName, old = DUTY.depts.find(v=>v.dept===d);
   const o = { entity:DUTY_ENT, dept:d, mission:document.getElementById('dr-mission').value.trim()||null,
-    main_tasks:document.getElementById('dr-tasks').value.trim()||null, outputs:document.getElementById('dr-outputs').value.trim()||null,
     updated_by:curUser, updated_at:new Date().toISOString() };
   try{
     if(old) await sbSend('PATCH','duty_dept',`id=eq.${old.id}`,o); else await sbSend('POST','duty_dept','',o);
@@ -1901,7 +1901,7 @@ async function downloadDutyExcel(){
   const depts = emp ? [emp.dept] : [dept];
   const emps = emp ? [emp] : dutyEmpsOf(dept);
   if(!emp){
-    tableSheet('부서 R&R',['부서','한 줄 정의','주업무','산출물'], depts.map(d=>{ const x=DUTY.depts.find(v=>v.dept===d)||{}; return [d,x.mission||'',x.main_tasks||'',x.outputs||'']; }),[12,36,50,30]);
+    tableSheet('부서 R&R',['부서','한 줄 정의'], depts.map(d=>{ const x=DUTY.depts.find(v=>v.dept===d)||{}; return [d,x.mission||'']; }),[14,90]);
   }
   emps.forEach(personSheet);
   const ids=new Set(emps.map(e=>e.id)); const cal=DUTY.items.filter(i=>ids.has(i.emp_id)&&i.cal_from).sort((a,b)=>a.cal_from-b.cal_from);
