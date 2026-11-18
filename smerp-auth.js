@@ -31,7 +31,7 @@
   if(!token||!screenKey)return;
 
   // ── 조회 권한 없음: 화면을 가림 ──
-  var lang=(ls('sme_lang')||ls('idx_lang')||'ko');
+  var lang=(ls('wf_lang')||ls('sme_lang')||ls('idx_lang')||'ko');
   var MSG={ko:['이 화면을 열 권한이 없습니다','필요하면 관리자에게 권한을 요청하세요.','⌂ 홈으로'],
            en:['You do not have permission to open this page','Ask your administrator for access if you need it.','⌂ Home'],
            zh:['您没有打开此页面的权限','如需使用，请向管理员申请权限。','⌂ 首页']};
@@ -59,7 +59,10 @@
     var a=el.getAttribute('data-perm');if(a)return a;
     if(el.closest('[data-perm="v"],.tab-bar,.tabs,.tab-group,[role=tablist],nav'))return null;
     if(SKIP_CLASS.test(el.className&&el.className.baseVal!==undefined?el.className.baseVal:(el.className||'')))return null;
-    var tx=(el.textContent||el.value||'').replace(/\s+/g,' ').trim();
+    // 다국어(i18n.js) 화면에서도 번역 전 한국어 원문으로 판단
+    var raw=(window.SMERP_I18N&&el.childNodes.length)?window.SMERP_I18N.orig(el):el.textContent;
+    if(!raw&&el.__i18nAttr&&el.__i18nAttr.__val)raw=el.__i18nAttr.__val[0];
+    var tx=(raw||el.value||'').replace(/\s+/g,' ').trim();
     if(!tx||tx.length>18)return null;
     if(/다운로드|download|조회|검색|보기|새로고침|닫기|취소|출력|인쇄|미리보기/i.test(tx))return null;
     for(var i=0;i<RULES.length;i++){if(RULES[i][1].test(tx))return RULES[i][0];}
