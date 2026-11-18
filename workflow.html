@@ -1510,10 +1510,10 @@ body.m-legend-on #cat-legend{display:flex;}
 <div class="modal-overlay" id="scope-modal-overlay" style="z-index:500;">
   <div class="modal" style="max-width:340px;">
     <div class="modal-handle"></div>
-    <h3 id="scope-modal-title" data-i18n="기간 일정 삭제">기간 일정 삭제</h3>
+    <h3 id="scope-modal-title">기간 일정 삭제</h3>
     <p id="scope-modal-msg" style="font-size:12px;color:var(--text2);margin-bottom:12px;"></p>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      <button id="scope-one-btn" class="btn-cancel" style="height:40px;" onclick="scopeChoose('one')" data-i18n="이 날짜만 삭제">이 날짜만 삭제</button>
+      <button id="scope-one-btn" class="btn-cancel" style="height:40px;" onclick="scopeChoose('one')">이 날짜만 삭제</button>
       <button id="scope-all-btn" class="btn-del" style="height:40px;" onclick="scopeChoose('all')">전체 기간 삭제</button>
       <button class="btn-cancel" style="height:40px;" onclick="scopeChoose(null)" data-i18n="취소">취소</button>
     </div>
@@ -5339,8 +5339,23 @@ async function periodClear(){
 function askGroupScope(count){
   return new Promise(function(resolve){
     _scopeResolve=resolve;
+    document.getElementById('scope-modal-title').textContent=t('기간 일정 삭제');
     document.getElementById('scope-modal-msg').textContent=periodCountLabel(count);
-    document.getElementById('scope-all-btn').textContent=t('전체 기간 삭제')+' ('+itemCountLabel(count)+')';
+    document.getElementById('scope-one-btn').textContent=t('이 날짜만 삭제');
+    var ab=document.getElementById('scope-all-btn'); ab.className='btn-del';
+    ab.textContent=t('전체 기간 삭제')+' ('+itemCountLabel(count)+')';
+    document.getElementById('scope-modal-overlay').classList.add('open');
+  });
+}
+// 기간 일정 수정 저장 시 반영 범위 확인 (V20261118-06) — 「이 날짜만」 기본값 때문에 1건만 바뀌는 일 방지
+function askGroupScopeSave(count){
+  return new Promise(function(resolve){
+    _scopeResolve=resolve;
+    document.getElementById('scope-modal-title').textContent=t('기간 일정 수정');
+    document.getElementById('scope-modal-msg').textContent=t('수정 내용을 어디에 반영할까요?')+' ('+periodCountLabel(count)+')';
+    document.getElementById('scope-one-btn').textContent=t('이 날짜만 수정');
+    var ab=document.getElementById('scope-all-btn'); ab.className='btn-save';
+    ab.textContent=t('전체 기간에 반영')+' ('+itemCountLabel(count)+')';
     document.getElementById('scope-modal-overlay').classList.add('open');
   });
 }
@@ -5465,6 +5480,15 @@ async function saveDiary(){
   var pInc=document.getElementById('dm-period-weekend')?document.getElementById('dm-period-weekend').checked:true;
   var editRec=diaryEditId?diaryRecords.find(function(x){return String(x.id)===String(diaryEditId);}):null;
   var scopeAll=!!(editRec && _periodGroup && editRec.group_id===_periodGroup.gid && (document.querySelector('input[name="dm-scope"]:checked')||{}).value==='all');
+  // 기간 일정을 「이 날짜만」 상태로 저장하면 반영 범위를 한 번 더 묻는다 (V20261118-06)
+  if(editRec && _periodGroup && editRec.group_id===_periodGroup.gid && !scopeAll){
+    var gcntSave=getGroupRecs(editRec.group_id).length;
+    if(gcntSave>1){
+      var scopeAns=await askGroupScopeSave(gcntSave);
+      if(!scopeAns) return;                 // 취소 → 창 유지
+      scopeAll=(scopeAns==='all');
+    }
+  }
   var repChosen=(document.getElementById('dm-repeat')||{}).value||'none';
   if(repChosen!=='none') pEnd='';   // 기간과 반복은 동시에 쓰지 않음
   if(pEnd && (parseYmd(pEnd)-parseYmd(obj.date))/86400000>366){alert('기간은 최대 366일까지 설정할 수 있습니다.');return;}
@@ -5705,6 +5729,9 @@ function wfSelSess(btn) {
 // 법인 표시코드(SMEKR/SMEIN/SMETH/SMECN) ↔ employees.entity 실제 DB값 매핑
 // (DB entity 값은 기존 그대로 유지, 화면 표시용 라벨만 신규 코드 사용 — A안)
 const I18N_T = {
+"기간 일정 수정":{zh:"期间日程修改",en:"Edit multi-day event"},
+"수정 내용을 어디에 반영할까요?":{zh:"修改内容应用到哪里？",en:"Where should the changes apply?"},
+"전체 기간에 반영":{zh:"应用到整个期间",en:"Apply to all dates"},
 "선택공유":{zh:"选择共享",en:"Selected"},
 "공유 대상 선택 (본사 부서·개인, 해외법인 전체·개인을 섞어서 선택 가능)":{zh:"选择共享对象（总部部门·个人、海外法人全体·个人可混合选择）",en:"Choose recipients (mix HQ teams/people and overseas entity/people)"},
 "부서":{zh:"部门",en:"Teams"},
