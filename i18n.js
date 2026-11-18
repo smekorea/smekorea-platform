@@ -12,11 +12,12 @@
       · 번역 제외: class="no-i18n" 또는 translate="no" 가 달린 요소와 그 안쪽, 입력칸·textarea
    ── API (window.SMERP_I18N)
       lang() / setLang(l,{save}) / t(s) / orig(el) / onLogin(entity,name,empNo) / entityDefault(entity)
+   ── 사전에 없는 문구는 en/zh 사용 중 자동으로 DB i18n_missing 에 모임 (화면당 최대 300개, 15초마다 전송)
    ── 주의: 전역 t() 를 만들지 않음 (workflow 의 t() 와 충돌 방지)
    ══════════════════════════════════════════════════════════════ */
 (function(){
   if(window.SMERP_I18N) return;
-  var LS='wf_lang', VER='20261118a';
+  var LS='wf_lang', VER='20261118b';
   var SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
   var SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   var cur=document.currentScript;
@@ -117,6 +118,26 @@
     return KO.test(out)?null:out;   // 문장 안 일부만 바뀌는 어색한 혼합은 하지 않음
   }
 
+  /* ── 사전에 없는 문구 자동 수집 (en/zh 사용 중 한국어로 남은 문구 → DB i18n_missing) ── */
+  var MISS_Q=[], MISS_SEEN=new Set(), MISS_MAX=300, missTimer=null;
+  var SCREEN=(location.pathname.split('/').pop()||'index.html');
+  function miss(s){
+    if(lang==='ko'||!DICT||!s) return;
+    var k=String(s).replace(/\s+/g,' ').trim();
+    if(k.length>300||k.replace(/[^가-힣]/g,'').length<2) return;
+    if(MISS_SEEN.has(k)||MISS_SEEN.size>=MISS_MAX) return;
+    MISS_SEEN.add(k); MISS_Q.push(k);
+    if(!missTimer) missTimer=setTimeout(flushMiss,15000);
+  }
+  function flushMiss(keep){
+    missTimer=null; if(!MISS_Q.length) return;
+    var items=MISS_Q.splice(0,MISS_Q.length);
+    try{fetch(SB_URL+'/rest/v1/rpc/i18n_log_missing',{method:'POST',keepalive:!!keep,
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({p_items:items,p_lang:lang,p_screen:SCREEN,p_entity:lsGet('sme_entity'),p_user:lsGet('sme_user')})}).catch(function(){});}catch(e){}
+  }
+  window.addEventListener('pagehide',function(){flushMiss(true);});
+
   /* ── 화면 적용 ── */
   var SKIP_TAG={SCRIPT:1,STYLE:1,TEXTAREA:1,NOSCRIPT:1,CODE:1,PRE:0};
   function skipEl(el){
@@ -134,7 +155,8 @@
     if(!KO.test(cv)) return;
     var par=n.parentNode; if(!par||par.nodeType!==1||skipEl(par)) return;
     if(par.tagName==='OPTION'&&!par.hasAttribute('value')) par.setAttribute('value',par.textContent);
-    var v=tr(cv); if(v==null||v===cv) return;
+    var v=tr(cv); if(v==null||v===cv){ if(KO.test(cv)) miss(cv); return; }
+    if(KO.test(v)) miss(cv);   // 일부만 번역된 경우도 수집
     n.__i18nOrig=cv; n.__i18nDone=v; n.nodeValue=v; tracked.add(n);
   }
   var ATTRS=['placeholder','title','aria-label','data-tip'];
@@ -144,7 +166,7 @@
     for(var i=0;i<ATTRS.length;i++){
       var a=ATTRS[i], cv=el.getAttribute(a); if(!cv||!KO.test(cv)) continue;
       if(o&&o[a]&&o[a][1]===cv) continue;
-      var v=tr(cv); if(v==null||v===cv) continue;
+      var v=tr(cv); if(v==null||v===cv){ miss(cv); continue; }
       o=o||(el.__i18nAttr={}); o[a]=[cv,v]; el.setAttribute(a,v); tracked.add(el);
     }
     if(el.tagName==='INPUT'&&/^(button|submit|reset)$/i.test(el.type)&&KO.test(el.value)){
@@ -211,7 +233,7 @@
   function trMsg(s){
     if(lang==='ko'||!DICT||s==null) return s;
     s=String(s); if(!KO.test(s)) return s;
-    return s.split('\n').map(function(line){var v=tr(line);return v==null?line:v;}).join('\n');
+    return s.split('\n').map(function(line){var v=tr(line);if(v==null&&KO.test(line))miss(line);return v==null?line:v;}).join('\n');
   }
   var _alert=window.alert, _confirm=window.confirm, _prompt=window.prompt;
   window.alert=function(m){return _alert.call(window,trMsg(m));};

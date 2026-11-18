@@ -111,6 +111,19 @@ if(!confirm('정말 삭제하시겠습니까?')) return;
 - 엑셀 업로드의 "기존 전체 삭제" 등 **등록 확인창**은 대상 아님
 - 적용 완료: `admin_log.html`, `directive.html` / 나머지 화면은 **수정할 때 함께 적용**
 
+### 다국어 표준 (2026-11-18 확정 — 공용 엔진 `i18n.js` + 공용 사전 `i18n-dict.js`)
+
+새 기능·화면을 만들거나 기존 화면을 고칠 때 **번역까지 한 작업으로 끝낸다**.
+1. **새 화면**: `<head>`의 `<meta charset>` 바로 다음에 `<script src="i18n.js?v=현재버전"></script>` 추가 (mfg 폴더는 `../i18n.js`). 제조(`mfg_*`)·경영분석(`hq_analysis`)은 적용 제외
+2. **새 한국어 문구**(버튼·라벨·안내문·alert/confirm·placeholder·title)는 `i18n-dict.js`에 `"한국어 원문":["English","中文"]`로 추가 — 원문은 화면에 보이는 그대로(앞뒤 기호·이모지 제외), 숫자·이름이 들어가는 자리는 `{}`
+3. 사전을 고치면 `i18n.js`의 `VER`와 각 화면의 `i18n.js?v=` 를 함께 올려 캐시 갱신
+4. **DB 저장값은 번역하지 않음** — 화면 표시만 엔진이 바꿈. value 없는 `<option>`도 엔진이 원문을 value로 고정하므로 코드에서 한국어 값 비교는 그대로 동작
+5. 화면 글자(`textContent`)를 읽어 로직에 쓰지 말 것. 꼭 필요하면 `SMERP_I18N.orig(el)`로 번역 전 원문을 읽음
+6. 번역하면 안 되는 영역(엑셀 시트명·양식 코드 등)은 `class="no-i18n"` 또는 `translate="no"`
+7. 사전에 없어 한국어로 남은 문구는 en/zh 사용 중 자동으로 `i18n_missing` 테이블에 모임(`status` new→added/ignore). **작업 시작 시 `status='new'` 건을 확인해 사전에 추가하고 `added`로, 이름·데이터는 `ignore`로 정리**
+8. 개발현황 이력(`smerp_module_log`) 내용에 「사전 추가 N개」 기록
+- 전역 `t()`는 만들지 않음 (workflow 자체 `t()`와 충돌) — 엔진 API는 `window.SMERP_I18N`
+
 ---
 
 ## 4. Supabase 패턴
@@ -222,7 +235,7 @@ grep -n "Courier\|monospace" file.html
 `employees` / `partners` / `export_customers` / `maker_alias` / `brand_stock_rule` /
 `work_diary` / `work_diary_confirm` / `cal_todos` / `mfg_*` / `kpi_time_setting` /
 `extra_time_reason_master` / `customer_extra_time_rule` / `po_history` /
-`lot_force_reason_master` / `extra_category` / `smerp_request`
+`lot_force_reason_master` / `extra_category` / `smerp_request` / `i18n_missing`
 
 ---
 
@@ -282,3 +295,4 @@ let scanBuffer = [], scanTimer = null;
 | `node --check` 생략 납품 | JS 오류 배포 위험 |
 | OK 전 코드 생성 | 작업 흐름 위반 |
 | 확인창 없는 삭제 버튼 | 실수 삭제 방지 — `confirm('정말 삭제하시겠습니까?')` 필수 |
+| 새 문구를 사전 없이 배포 | 해외법인 화면에 한국어 노출 — `i18n-dict.js` 추가 필수 |
