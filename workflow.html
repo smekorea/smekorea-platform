@@ -194,9 +194,9 @@ body.todo-dragging .day-cell{transition:background .1s;}
 @media (min-width:769px){
 #cal-view.ts-side{display:flex;align-items:flex-start;}
 #cal-view.ts-side .cal-main{flex:1;min-width:0;}
-#cal-view.ts-side #todo-strip{width:261px;flex:none;margin:8px 0 8px 8px;position:sticky;top:calc(var(--wf-topbar-h,60px) + 4px);max-height:calc(100vh - var(--wf-topbar-h,60px) - 16px);display:flex;flex-direction:column;overflow:hidden;z-index:14;}
+#cal-view.ts-side #todo-strip{width:261px;flex:none;margin:8px 0 8px 8px;position:relative;display:flex;flex-direction:column;overflow:hidden;}
 #cal-view.ts-side .ts-body{flex:1;min-height:0;display:flex;flex-direction:column;}
-#cal-view.ts-side .ts-grid{max-height:none!important;flex:1;overflow-y:auto;}
+#cal-view.ts-side .ts-grid{max-height:none!important;flex:1;overflow-y:auto;align-content:start;}
 #cal-view.ts-side .ts-add{flex-wrap:wrap;}
 #cal-view.ts-side .ts-add input{flex-basis:100%;}
 #cal-view.ts-side .ts-add select{flex:1;}
@@ -206,6 +206,14 @@ body.todo-dragging .day-cell{transition:background .1s;}
 #cal-view.ts-side .ts-bot{flex-wrap:wrap;margin-left:22px;}
 #cal-view.ts-side .ts-head .ts-sum{display:none;}
 #cal-view.ts-closed #todo-strip{width:34px;}
+/* V20261119-10 — 높이 = 달력 아래 끝(JS), 폭 마우스 조절, 번호 검정 글자, 선택한 할 일만 상세 */
+.ts-resizer{position:absolute;top:0;right:0;bottom:0;width:6px;cursor:col-resize;z-index:2;}
+.ts-resizer:hover,.ts-resizer.on{background:rgba(27,58,107,.18);}
+body.ts-resizing{cursor:col-resize;user-select:none;}
+#cal-view.ts-side .ts-no{background:none;color:#111827;font-weight:600;min-width:12px;justify-content:flex-end;}
+#cal-view.ts-side .ts-card:not(.sel):not(.menu-open) .ts-bot{display:none;}
+#cal-view.ts-side .ts-card.sel{background:#f3f6fb;}
+#cal-view.ts-side .ts-title{cursor:pointer;}
 /* V20261119-09 왼쪽 할 일 영역: 폭 290→261px(-10%), 글자 -20% */
 #cal-view.ts-side .ts-head{font-size:11px;padding:5px 10px;}
 #cal-view.ts-side .ts-head .ts-cnt{font-size:9px;line-height:15px;}
@@ -1972,6 +1980,7 @@ function renderCal(){
   }
   document.getElementById('days').innerHTML=html;
   fitMobDays();
+  try{ syncTodoSideH(); }catch(e){}
 }
 // 2026-10-24 휴대폰: 달력이 화면 아래 끝까지 차도록 — 남은 높이를 주(행)마다 고르게 나눔(일정 많은 주는 더 커짐)
 function fitMobDays(){
@@ -2929,8 +2938,10 @@ function renderTodoStrip(){
   const side=todoIsSide();
   const cv=document.getElementById('cal-view');
   if(cv){ cv.classList.toggle('ts-side',side); cv.classList.toggle('ts-closed',side&&!open); }
+  el.style.width=(side&&open)?todoSideW()+'px':'';
   if(side&&!open){   // PC 접힘: 세로 띠
     el.innerHTML=`<div class="ts-vbar" onclick="toggleTodoStrip()" title="${escapeHtml(t('펼치기'))}"><span>▶</span><span class="ts-vtxt">📝 ${t('할 일')}</span><span class="ts-cnt">${active.length}</span></div>`;
+    syncTodoSideH();
     return;
   }
   // 접었을 때 요약: 가장 오래 손대지 않은 할 일
@@ -2956,12 +2967,12 @@ function renderTodoStrip(){
       const reg=td.created_at?fmtNoteDate(td.created_at):'';
       const regToday=!!td.created_at && new Date(td.created_at).toDateString()===new Date().toDateString();   // 오늘 기록은 「오늘」 배지만
       const last=notes.length?fmtNoteDate(notes[notes.length-1].created_at):'';
-      html+=`<div class="ts-card p${pri}${todoMenuOpen===id?' menu-open':''}" draggable="true" data-id="${id}"
+      html+=`<div class="ts-card p${pri}${todoMenuOpen===id?' menu-open':''}${todoSelId===id?' sel':''}" draggable="true" data-id="${id}"
           ondragstart="todoDragStart(event,'${id}')" ondragend="todoDragEnd(event)" ondragover="todoDragOver(event)" ondragleave="this.classList.remove('drop-over')" ondrop="todoDrop(event,'${id}')">
         <div class="ts-top">
           <span class="ts-grip" title="${escapeHtml(t('끌어서 순서 변경'))}">⋮⋮</span>
           <span class="ts-no">${i+1}</span>
-          <span class="ts-title" title="${escapeHtml(stripTitle(td))}" onclick="toggleTodoNotes('${id}')">${escapeHtml(stripTitle(td))}</span>
+          <span class="ts-title" title="${escapeHtml(stripTitle(td))}" onclick="todoTitleClick('${id}')">${escapeHtml(stripTitle(td))}</span>
         </div>
         <div class="ts-bot">
           ${regToday?'':`<span class="ts-meta" title="${escapeHtml(t('우선도'))}: ${t(PRI_LBL[pri]||'중')}">${t('기록')} ${reg}</span>`}
@@ -2992,7 +3003,9 @@ function renderTodoStrip(){
     });
     html+=`</div></div>`;
   }
+  if(side) html+=`<div class="ts-resizer" title="${escapeHtml(t('끌어서 폭 조절'))}" onmousedown="todoResizeStart(event)" ondblclick="todoResetW()"></div>`;
   el.innerHTML=html;
+  syncTodoSideH();
 }
 /* ── 순서 변경 (끌어 놓기 / ▲▼) ── */
 let todoMenuOpen=null, todoDragId=null;
@@ -3209,6 +3222,43 @@ async function calTodoDrop(ev,ds){
   if(SB){ try{ await SB.from('cal_todos').update({memo_date:ds}).eq('id',td.id); }catch(e){ console.warn('[SB] calTodoDrop error:',e); } }
 }
 document.addEventListener('DOMContentLoaded',applyMemoModeUI);
+/* ── 왼쪽 할 일 영역: 선택·높이·폭 조절 (V20261119-10) ── */
+var todoSelId=null;
+function todoTitleClick(id){
+  if(!todoIsSide()){ toggleTodoNotes(id); return; }   // 휴대폰은 종전대로 메모 펼침
+  todoSelId=(todoSelId===String(id)?null:String(id)); renderTodoStrip();
+}
+function todoSideW(){ let w=261; try{ w=+localStorage.getItem('wf_todo_side_w')||261; }catch(e){} return Math.min(560,Math.max(180,w)); }
+// 높이 = 달력(날짜 칸) 아래 끝까지
+function syncTodoSideH(){
+  const el=document.getElementById('todo-strip'), days=document.getElementById('days'), cv=document.getElementById('cal-view');
+  if(!el) return;
+  if(!cv||!cv.classList.contains('ts-side')||!days||!days.offsetParent){ el.style.height=''; return; }
+  const h=Math.round(days.getBoundingClientRect().bottom-el.getBoundingClientRect().top);
+  el.style.height=(h>120?h:120)+'px';
+}
+(function(){
+  if(typeof ResizeObserver==='undefined') return;
+  const ro=new ResizeObserver(()=>{ try{ syncTodoSideH(); }catch(e){} });
+  document.addEventListener('DOMContentLoaded',()=>{ const d=document.getElementById('days'); if(d) ro.observe(d); });
+})();
+window.addEventListener('resize',()=>{ clearTimeout(window._tsH); window._tsH=setTimeout(syncTodoSideH,120); });
+function todoResizeStart(ev){
+  ev.preventDefault();
+  const el=document.getElementById('todo-strip'), bar=ev.currentTarget; if(!el) return;
+  const x0=ev.clientX, w0=el.getBoundingClientRect().width;
+  bar.classList.add('on'); document.body.classList.add('ts-resizing');
+  const move=e=>{ el.style.width=Math.min(560,Math.max(180,Math.round(w0+e.clientX-x0)))+'px'; };
+  const up=()=>{
+    document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up);
+    bar.classList.remove('on'); document.body.classList.remove('ts-resizing');
+    try{ localStorage.setItem('wf_todo_side_w',parseInt(el.style.width)); }catch(e){}
+    syncTodoSideH();
+  };
+  document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
+}
+function todoResetW(){ try{ localStorage.removeItem('wf_todo_side_w'); }catch(e){} renderTodoStrip(); }
+
 (function(){ const mq=window.matchMedia('(max-width:768px)'), f=()=>{ try{ renderTodoStrip(); }catch(_){} }; if(mq.addEventListener) mq.addEventListener('change',f); })();
 
 /* ═══════════════════════════════════════
