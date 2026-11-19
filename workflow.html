@@ -195,7 +195,9 @@ body.todo-dragging .day-cell{transition:background .1s;}
 .mp-row{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #f1f3f7;}
 .mp-row input[type=checkbox]{width:16px;height:16px;flex:none;cursor:pointer;accent-color:#E2772E;}
 .mp-text{flex:1;min-width:0;font-size:14px;color:#111827;cursor:pointer;word-break:break-all;}
-.mp-row.done .mp-text{text-decoration:line-through;color:#9ca3af;}
+.mp-row.done .mp-text{text-decoration:line-through;text-decoration-color:#9ca3af;color:#9ca3af;}
+.mp-btn.ok{background:#fff6ee;border-color:#f0c9a6;color:#b45309;}
+.mp-done-mark{flex:none;font-size:11px;font-weight:700;color:#9ca3af;border:1px solid #d1d5db;border-radius:3px;padding:0 3px;line-height:15px;}
 .mp-edit{flex:1;min-width:0;height:30px;border:1.5px solid #E2772E;border-radius:6px;padding:0 8px;font-size:14px;font-family:'Noto Sans KR',sans-serif;}
 .mp-link{font-size:12px;color:#3f8f5f;white-space:nowrap;cursor:pointer;}
 .mp-btn{border:1px solid #e1e6ee;background:#fff;border-radius:4px;font-size:12px;padding:2px 7px;cursor:pointer;white-space:nowrap;color:#1B3A6B;font-family:'Noto Sans KR',sans-serif;}
@@ -225,7 +227,10 @@ body.ts-resizing{cursor:col-resize;user-select:none;}
 #cal-view.ts-side .ts-no{background:none;color:#111827;font-weight:600;min-width:12px;justify-content:flex-end;}
 /* V20261119-11 — 개인메모 / 팀별공유메모 2구역, 완료 건 회색 취소선·맨 아래·「완」 */
 #cal-view.ts-side .ts-sec{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
-#cal-view.ts-side .ts-sec+.ts-sec{border-top:2px solid #dbe3ef;}
+#cal-view.ts-side .ts-sec-team{flex:1 1 0;}
+.ts-split{flex:none;height:6px;cursor:row-resize;background:#dbe3ef;border-top:1px solid #cfd8e3;border-bottom:1px solid #cfd8e3;}
+.ts-split:hover,.ts-split.on{background:#b9c7dc;}
+body.ts-vresizing{cursor:row-resize;user-select:none;}
 #cal-view.ts-side .ts-sec-team .ts-head{background:#f4f8f2;}
 #cal-view.ts-side .ts-sec-me .ts-head{background:#fdf1e6;}   /* V20261119-12 개인메모 머리 연한 주황 */
 #cal-view.ts-side .ts-card:not(.sel):not(.menu-open) .ts-bot{display:none;}
@@ -2967,7 +2972,7 @@ function renderTodoStrip(){
   }
   let html='';
   if(side){
-    html+=todoSectionHtml('me',true)+todoSectionHtml('team',true);
+    html+=todoSectionHtml('me',true)+`<div class="ts-split" title="${escapeHtml(t('끌어서 개인메모·팀별공유메모 높이 조절'))}" onmousedown="todoSplitStart(event)" ondblclick="todoSplitReset()"></div>`+todoSectionHtml('team',true);
   }else{   // 휴대폰: 개인/팀 전환
     const tab=todoMobTab==='team'?'team':'me';
     html+=`<div class="ts-head" onclick="toggleTodoStrip()">
@@ -2978,8 +2983,27 @@ function renderTodoStrip(){
   }
   if(side) html+=`<div class="ts-resizer" title="${escapeHtml(t('끌어서 폭 조절'))}" onmousedown="todoResizeStart(event)" ondblclick="todoResetW()"></div>`;
   el.innerHTML=html;
+  if(side){ const me=el.querySelector('.ts-sec-me'); if(me) me.style.flex='0 0 '+todoSplitR()+'%'; }
   syncTodoSideH();
 }
+/* 개인메모 / 팀별공유메모 경계 끌기 (V20261119-13) — 개인메모 비율 15~90%, localStorage wf_todo_split */
+function todoSplitR(){ let r=50; try{ r=+localStorage.getItem('wf_todo_split')||50; }catch(e){} return Math.min(90,Math.max(15,r)); }
+function todoSplitStart(ev){
+  ev.preventDefault();
+  const el=document.getElementById('todo-strip'), me=el&&el.querySelector('.ts-sec-me'), tm=el&&el.querySelector('.ts-sec-team'), bar=ev.currentTarget;
+  if(!me||!tm) return;
+  const top=me.getBoundingClientRect().top, total=me.getBoundingClientRect().height+tm.getBoundingClientRect().height;
+  let r=todoSplitR();
+  bar.classList.add('on'); document.body.classList.add('ts-vresizing');
+  const move=e=>{ r=Math.min(90,Math.max(15,Math.round((e.clientY-top)/total*100))); me.style.flex='0 0 '+r+'%'; };
+  const up=()=>{
+    document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up);
+    bar.classList.remove('on'); document.body.classList.remove('ts-vresizing');
+    try{ localStorage.setItem('wf_todo_split',r); }catch(e){}
+  };
+  document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
+}
+function todoSplitReset(){ try{ localStorage.removeItem('wf_todo_split'); }catch(e){} renderTodoStrip(); }
 // 한 구역(개인 / 팀) — V20261119-11
 function todoSectionHtml(scope,withHead){
   const PRI_LBL=['상','중','하'];
@@ -3254,12 +3278,12 @@ function renderMemoPop(){
       ? `<input class="mp-edit" id="mp-edit-${id}" value="${escapeHtml(mm.text)}" onkeydown="if(event.key==='Enter'&&!event.isComposing)saveMemoEdit('${id}');else if(event.key==='Escape'){memoEditId=null;renderMemoPop();}" onblur="saveMemoEdit('${id}')">`
       : `<span class="mp-text" title="${escapeHtml(t('눌러서 수정'))}" onclick="editMemo('${id}')">${escapeHtml(mm.text)}</span>`;
     return `<div class="mp-row${done?' done':''}">
-      <input type="checkbox"${done?' checked':''} title="${escapeHtml(t('완료'))}" onchange="toggleMemoDone('${id}')">
+      ${done?`<span class="mp-done-mark">${t('완')}</span>`:''}
       ${txt}
       ${mm.diary_id
         ? `<span class="mp-link" onclick="closeMemoPop();openTodoDiary('${id}')">🔗 ${t('업무일지')}</span>`
         : `<button class="mp-btn go" onclick="convertTodoToDiary('${id}')">→ ${t('업무일지로')}</button>`}
-      <button class="mp-btn" onclick="memoToTodo('${id}')" title="${escapeHtml(t('날짜를 빼고 할 일 목록으로 보냅니다'))}">${t('할 일로')}</button>
+      <button class="mp-btn${done?'':' ok'}" onclick="toggleMemoDone('${id}')">${done?t('완료 취소'):t('완료')}</button>
       <button class="mp-btn del" onclick="delMemo('${id}')">${t('삭제')}</button>
     </div>`;
   }).join('');
