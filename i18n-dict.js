@@ -1,6 +1,8 @@
 /* i18n-dict.js — SMERP 공용 번역 사전 (한국어 원문 → [English, 中文]). i18n.js 가 en/zh 일 때만 불러옴.
    원문은 화면에 보이는 한국어 그대로(앞뒤 기호 제외), {} = 숫자·이름 등 바뀌는 자리 */
 window.SMERP_I18N_DICT={
+"담당 미입력":["No contact entered", "未填写负责人"],
+"업무일지와 연결된 활동입니다. 저장하면 업무일지도 함께 바뀝니다 (첫 줄 = 일지 제목, 나머지 = 일지 내용).":["This activity is linked to the work diary. Saving changes the diary too (first line = diary title, rest = diary content).", "此活动已联动工作日志。保存后工作日志也会一起变更（第一行 = 日志标题，其余 = 日志内容）。"],
 "업무일지에서 등록한 방문입니다 — 날짜·상태·구분·고객 담당자는 여기서 고치면 일지에도 반영되고, 방문 내용은 업무일지에서 고쳐 주세요.":["Visit registered from the work diary — date, status, type and customer contact edited here are also reflected in the diary; edit the visit content in the work diary.", "从工作日志登记的拜访 — 在此修改日期·状态·分类·客户负责人会同步到日志，拜访内容请在工作日志中修改。"],
 "확인 필요: {} (저장하면 이 표시는 지워집니다)":["Check needed: {} (this note is cleared when saved)", "需确认：{}（保存后此提示将清除）"],
 "LG전자 방문은 관리대상(고객 부서)을 선택해 주세요":["For LG Electronics visits, please select the managed target (customer dept)", "LG电子拜访请选择管理对象（客户部门）"],

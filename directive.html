@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<script src="i18n.js?v=20261119b"></script>
+<script src="i18n.js?v=20261119c"></script>
 <script src="smerp-auth.js?v=2" data-screen="directive"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>업무보고 · SME Korea</title>
@@ -1421,13 +1421,13 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
   </div>
 </div>
 <!-- ── 활동 입력 / 코멘트 창 (바깥 클릭으로 닫히지 않음) ── -->
-<div class="modal-ov" id="djOv">
+<div class="modal-ov" id="djOv" style="z-index:520;">
   <div class="modal" style="width:600px;">
-    <div class="modal-hd"><span>활동 수정 (업무일지 연동)</span><button class="sp-close" onclick="djClose()">✕</button></div>
+    <div class="modal-hd"><span id="djTtl">활동 수정</span><button class="sp-close" onclick="djClose()">✕</button></div>
     <div class="modal-bd">
       <div class="form-row" id="djMeta" style="font-size:12px;color:var(--muted);"></div>
       <div class="form-row"><label class="form-label">활동 내용<span>*</span></label><textarea class="form-textarea" id="djText" style="min-height:140px;"></textarea>
-        <div class="form-hint">업무일지에서 작성된 활동입니다. 저장하면 업무일지도 함께 바뀝니다 (첫 줄 = 일지 제목, 나머지 = 일지 내용).</div></div>
+        <div class="form-hint" id="djHint">업무일지와 연결된 활동입니다. 저장하면 업무일지도 함께 바뀝니다 (첫 줄 = 일지 제목, 나머지 = 일지 내용).</div></div>
     </div>
     <div class="modal-ft"><button class="btn btn-outline" onclick="djClose()">취소</button><button class="btn btn-primary" id="djSave" onclick="djSave()">저장</button></div>
   </div>
@@ -1478,6 +1478,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 /* ══════════════════════════════════════════════════════════════
    directive.html v3.73 (2026-11-09) — 주간회의 표: 담당부서·담당자 열을 기한 앞으로 이동, 「부서 / 담당자」 한 줄 표기
    directive.html v3.72 (2026-11-09) — 담당부서 선택에 「박정용 상무」 추가(사장님→상무 지시, 저장값 상무이사, 활동 담당자 선택 가능, 부서별 평가 제외)
+   directive.html v3.80 (2026-11-19) — 지시 활동 수정: 업무일지 연결 없는 활동도 수정(본인·사장님·상무, 활동 입력 창 「지금까지의 활동」에도 수정) / 거래처관계관리: 고객 담당자 없으면 (SME 담당)만 표시, 사장님·상무 방문 제외(wd_visit_sync도 제외, SME 담당에서 박정용 삭제)
    directive.html v3.79 (2026-11-19) — 거래처관계관리 칸에 고객(SME 담당) 표시·부서/구분/거래처 같은 값 병합·업무일지 방문 안내, 금주계획 달력 연동 줄도 수정(일정 함께 변경)
    directive.html v3.78 (2026-11-09) — 거래처관계관리: 한 칸 여러 건을 한 줄로 표시, 누르면 목록
    directive.html v3.77 (2026-11-09) — 거래처관계관리: 거래처·메이커 칸을 거래처 정보·메이커관리 기준 자동완성, 미등록 이름 등록 안내
@@ -2068,6 +2069,10 @@ function meetRow(d,L,mgr){
    · 코멘트(사장님·상무): 활동내용이 부족할 때 보완할 점을 적는다 → 상태가 「보완 요청」이 되고 담당 측이 다시 활동을 적는다.
    · 완료(사장님·상무): 활동내용에 이상이 없으면 바로 완료. */
 let actId=0, actMode='act';
+function actHistRender(d){
+  const hist=realUpdates(d).filter(u=>u.content).slice(-4);
+  document.getElementById('actHist').innerHTML=hist.length?hist.map(u=>`<div class="${u.type==='코멘트'||u.type==='반려'?'mt-cmt':''}" style="margin-bottom:5px;"><b>${u.type==='코멘트'||u.type==='반려'?'보류 사유 ':''}${esc(md(tsDay(u.created_at)))} ${esc(u.emp_name||'')}</b> ${esc(u.content)}${djCanEdit(u,d)?` <a class="dj-edit" onclick="djOpen(${u.id})">수정</a>`:''}</div>`).join(''):'<span style="color:#9aa1ab;">아직 활동 기록이 없습니다</span>';
+}
 function openAct(id,mode){
   const d=byId[id]; if(!d||!me) return;
   actId=id; actMode=mode;
@@ -2075,8 +2080,7 @@ function openAct(id,mode){
   const rq=isReq(d), reply=rq&&canDecide()&&!isC;
   document.getElementById('actTitle').textContent=isC?'보류 — 사유 입력':reply?'회신 입력':rq?'요청 내용 추가':'활동 입력';
   document.getElementById('actHead').innerHTML=`<b>${esc(d.title)}</b><div class="th-meta">${esc(md(d.meeting_date))} · ${esc(deptLabel(d))} · ${rq?'요청 대상':'지시'} ${esc(d.issuer_name||'-')} · ${statusLabel(d)[0]}</div>`;
-  const hist=realUpdates(d).filter(u=>u.content).slice(-4);
-  document.getElementById('actHist').innerHTML=hist.length?hist.map(u=>`<div class="${u.type==='코멘트'||u.type==='반려'?'mt-cmt':''}" style="margin-bottom:5px;"><b>${u.type==='코멘트'||u.type==='반려'?'보류 사유 ':''}${esc(md(tsDay(u.created_at)))} ${esc(u.emp_name||'')}</b> ${esc(u.content)}</div>`).join(''):'<span style="color:#9aa1ab;">아직 활동 기록이 없습니다</span>';
+  actHistRender(d);
   document.getElementById('actStateRow').style.display=(isC||reply)?'none':'';
   // 담당자: 지시받은 부서의 직원 중에서 고른다(「전체」 부서 지시는 본사 전 직원). 이미 지정된 사람은 체크해 두고,
   // 아직 아무도 없으면 지금 입력하는 사람이 그 부서 소속일 때 본인을 미리 체크한다
@@ -3716,6 +3720,7 @@ function vcHit(v){
 function vcIsLG(p){return /^LG전자/.test(p||'');}
 function vcMerge(a,b){ const o=String(a||'').split(/\s*[,/]\s*/).filter(Boolean); String(b||'').split(/\s*[,/]\s*/).filter(Boolean).forEach(x=>{if(o.indexOf(x)<0)o.push(x);}); return o.join(', '); }
 // LG전자는 부서별 줄, 그 외는 부서·거래처마다 한 줄(직급별 관리대상을 묶어 보여줌)
+const VC_EXEC=['상무이사','대표이사'];   // 사장님·상무 방문은 거래처관계관리에서 제외(2026-11-19)
 function vcBuildRows(){
   const dp=dvCur(), rows=[], byT={}, byK={};
   const keyOf=(dept,ven,cd,role)=>vcIsLG(ven)?dept+'|'+ven+'|'+(cd||'')+'|'+(role||''):dept+'|'+ven;
@@ -3725,7 +3730,7 @@ function vcBuildRows(){
     else{ r.t=null; r.cd=''; r.type=r.type||x.partner_type||''; }
     r.mk=vcMerge(r.mk,x.makers); r.con=r.con&&x.cust_contacts&&r.con.indexOf(x.cust_contacts)<0?r.con+', '+x.cust_contacts:(r.con||x.cust_contacts||''); r.sme=vcMerge(r.sme,x.sme_owner); byT[x.id]=r;
   });
-  vcV.filter(v=>(dp==='전체'||v.dept===dp)).forEach(v=>{
+  vcV.filter(v=>(dp==='전체'||v.dept===dp)&&VC_EXEC.indexOf(v.dept)<0).forEach(v=>{
     let r=v.target_id?byT[v.target_id]:null;
     if(!r){ const k=keyOf(v.dept,v.partner,v.cust_dept,v.cust_role); r=byK[k]; if(!r){ r=byK[k]={t:null,dept:v.dept,type:'',ven:v.partner,mk:'',cd:[v.cust_dept,v.cust_role].filter(Boolean).join(' '),con:'',sme:v.sme_name||'',vs:[]}; rows.push(r); } }
     r.vs.push(v);
@@ -3736,8 +3741,8 @@ function vcFillWho(){ const sel=vcG('vcFWho'),keep=sel.value,dp=dvCur(),n=[]; vc
 function vcSubSet(s){vcSub=s;vcG('vcS-visit').classList.toggle('on',s==='visit');vcG('vcS-target').classList.toggle('on',s==='target');vcG('vcVisitBox').style.display=s==='visit'?'':'none';vcG('vcTargetBox').style.display=s==='target'?'':'none';renderVc();}
 async function renderVc(){ if(!vcLoaded) await vcLoad(); vcFillAc(); if(!vcG('vcFrom').value) vcDefaultPeriod(); if(vcSub==='visit') renderVcVisit(); else renderVcTarget(); }
 function vcReset(){['vcType','vcFMk','vcKind','vcSt','vcFVen','vcFWho','vcKw'].forEach(i=>{vcG(i).value='';});vcG('vcScale').value='week';vcDefaultPeriod();renderVcVisit();}
-// 칸 표시: 고객 담당자(만난 SME 담당) — 고객 담당자가 없으면 거래처
-function vcNm(v){const c=(v.cust_contact||'').split(',')[0].trim(), s=String(v.sme_name||'').replace(/\s*[,/]\s*/g,', ').trim(); return (c||v.partner||'')+(s?'('+s+')':'');}
+// 칸 표시: 고객 담당자(만난 SME 담당) — 고객 담당자가 없으면 (SME 담당)만. 거래처는 줄에 이미 있음
+function vcNm(v){const c=(v.cust_contact||'').split(',')[0].trim(), s=String(v.sme_name||'').replace(/\s*[,/]\s*/g,', ').trim(); return c?c+(s?'('+s+')':''):(s?'('+s+')':'담당 미입력');}
 function vcChip(v){const st=vcState(v),nm=vcNm(v);return `<div class="vc-c vc-${st}" onclick="event.stopPropagation();bfVc(${v.id})" title="${esc((v.visit_kind||'')+' · '+st+' · '+(v.cust_contact||v.partner||'')+(v.sme_name?' · SME '+v.sme_name:''))}">${v.visit_kind==='관계관리'?'<b>관</b> ':''}${esc(nm)}</div>`;}
 // 한 칸에 여러 건이면 한 줄로 — 색은 미실행 > 계획 > 실행 순, 누르면 목록
 function vcChipMulti(a,ix,k){
@@ -5387,13 +5392,17 @@ document.addEventListener('mousedown',function(ev){   // PC: 제목줄을 끌어
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 });
 let djEdit=null;
-function djCanEdit(u,d){ return !!me&&!!u.diary_id&&!!u.content&&d.status!=='완료'&&(u.employee_id===me.id||canDecide()); }
+// v3.80: 업무일지 연결 여부와 관계없이 내용이 있는 활동은 수정(본인 또는 사장님·상무). 완료확인·완료취소 같은 자동 기록 제외
+const DJ_NOEDIT=['완료확인','완료취소','공지확인'];
+function djCanEdit(u,d){ return !!me&&!!u.content&&DJ_NOEDIT.indexOf(u.type)<0&&(d.status!=='완료'||canDecide())&&(u.employee_id===me.id||canDecide()); }
 function djFind(id){ for(const k in updMap){ const u=updMap[k].find(x=>x.id===id); if(u) return u; } return null; }
 function djOpen(id){
   const u=djFind(id); if(!u) return;
   djEdit=u;
   document.getElementById('djText').value=u.content||'';
   document.getElementById('djMeta').textContent=(u.emp_name||'')+' · '+fmtDT(u.created_at);
+  document.getElementById('djTtl').textContent=u.diary_id?'활동 수정 (업무일지 연동)':'활동 수정';
+  document.getElementById('djHint').style.display=u.diary_id?'':'none';
   document.getElementById('djOv').classList.add('open');
   setTimeout(()=>document.getElementById('djText').focus(),50);
 }
@@ -5403,7 +5412,7 @@ async function djSave(){
   const text=document.getElementById('djText').value.replace(/\s+$/,'');
   if(!text.trim()){ showToast('활동 내용을 적어주세요','err'); return; }
   const btn=document.getElementById('djSave'); btn.disabled=true;
-  try{ await sbPatch('directive_updates',djEdit.id,{content:text}); showToast('저장되었습니다 (업무일지에도 반영)','ok'); djClose(); await refresh(); }
+  try{ const lk=!!djEdit.diary_id; await sbPatch('directive_updates',djEdit.id,{content:text}); showToast(lk?'저장되었습니다 (업무일지에도 반영)':'저장되었습니다','ok'); djClose(); await refresh(); if(document.getElementById('actOv').classList.contains('open')&&byId[actId]) actHistRender(byId[actId]); }
   catch(e){ showToast('오류: '+e.message,'err'); }
   btn.disabled=false;
 }

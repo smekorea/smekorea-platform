@@ -17,7 +17,7 @@
    ══════════════════════════════════════════════════════════════ */
 (function(){
   if(window.SMERP_I18N) return;
-  var LS='wf_lang', VER='20261119b';
+  var LS='wf_lang', VER='20261119c';
   var SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
   var SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   var cur=document.currentScript;
