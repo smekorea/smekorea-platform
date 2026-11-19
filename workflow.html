@@ -1291,6 +1291,7 @@ body.m-legend-on #cat-legend{display:flex;}
         <label class="lk-chk"><input type="checkbox" id="dm-lk-pj" onchange="onLinkChk('pj')"> 프로젝트 (세부진척현황)</label>
         <label class="lk-chk" id="dm-lk-ms-wrap" title="프로젝트를 체크해야 선택할 수 있습니다 — 프로젝트의 단계 상태를 마스터에 표시"><input type="checkbox" id="dm-lk-ms" onchange="onLinkChk('ms')"> 부품개발 마스터</label>
         <label class="lk-chk" title="상태가 「일정」인 건을 그 주 금주계획에 올립니다 — 연동하지 않으려면 체크를 해제하세요"><input type="checkbox" id="dm-lk-plan" onchange="this.dataset.touched='1'"> 금주계획</label>
+        <label class="lk-chk" id="dm-lk-vis-wrap" title="거래처 방문·미팅·식사를 업무보고 거래처관계관리 방문현황에 올립니다 — 일정이면 계획, 완료면 실행"><input type="checkbox" id="dm-lk-vis" onchange="this.dataset.touched='1';visChkUI()"> 거래처 방문</label>
         <select id="dm-link-type" class="dm-input" style="display:none;" onchange="onLinkTypeChange()">
           <option value="">연동 안 함</option>
           <option value="directive">지시사항</option>
@@ -1342,6 +1343,14 @@ body.m-legend-on #cat-legend{display:flex;}
             <div class="dm-field" style="flex:2;align-self:flex-end;font-size:11px;color:#6b7280;padding-bottom:8px;">거래처·메이커는 위 일지 칸 값으로 등록됩니다.</div>
           </div>
         </div>
+      </div>
+      <div id="dm-vis-box" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,79,160,.25);">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div class="dm-field" style="min-width:110px;"><label class="dm-label">방문 구분</label><select id="dm-vis-kind" class="dm-input" onchange="this.dataset.touched='1'"><option>실무미팅</option><option>관계관리</option></select></div>
+          <div class="dm-field" style="flex:2;min-width:160px;"><label class="dm-label">고객 담당자</label><input type="text" id="dm-vis-contact" class="dm-input" placeholder="만난 사람 (여러 명은 쉼표)"></div>
+          <div class="dm-field" style="flex:2;min-width:160px;"><label class="dm-label">관리대상</label><select id="dm-vis-tgt" class="dm-input"><option value="">자동 연결</option></select></div>
+        </div>
+        <div id="dm-vis-note" style="font-size:11px;color:#6b7280;margin-top:4px;">거래처는 위 일지 칸 값 · SME 담당은 작성자 · 일정이면 계획, 완료면 실행으로 올라갑니다</div>
       </div>
       <div id="dm-link-hint" style="display:none;font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;"></div>
     </div>
@@ -4809,7 +4818,10 @@ function updateLinkHint(){
 }
 // 창을 열 때: 연동 칸을 비우거나(신규) 그 일지에 걸려 있는 연동을 다시 보여준다
 function resetLinkUI(r){
-  (function(){ var pc=document.getElementById('dm-lk-plan'); if(!pc) return; delete pc.dataset.touched; pc.dataset.isnew=r?'':'1'; pc.checked=r?!!r.link_plan:true; setTimeout(planChkByCat,0); })();
+  (function(){ var pc=document.getElementById('dm-lk-plan'); if(!pc) return; delete pc.dataset.touched; pc.dataset.isnew=r?'':'1';
+    // v1.29: 금주계획 연동 전(11/9 이전)에 만든 업무 일정은 열 때 체크된 상태로
+    pc.checked=r?(!!r.link_plan||(!r.link_plan&&String(r.created_at||'')<'2026-11-09'&&r.category!=='개인업무')):true; setTimeout(planChkByCat,0); })();
+  visReset(r);
   linkPreset=(r&&r.link_type&&r.link_ref_id)?{type:r.link_type,refId:r.link_ref_id,stage:r.link_stage||''}:null;
   var mkEl=document.getElementById('dm-maker'); if(mkEl&&!r) mkEl.value='';
   linkData.dirs=linkData.items=linkData.weekly=null;
@@ -4932,6 +4944,51 @@ function readLinkSel(obj){
   return {type:type,refId:null,stage:null,wkNew:{kind:isSched?'계획':'실적',dept:document.getElementById('dm-link-wk-dept').value,category:document.getElementById('dm-link-wk-cat').value,vendor:vendor,maker:maker,addPartner:addPartner}};
 }
 // 금주계획 연동(v1.28): 개인업무 외 항상 체크, 해제하면 미연동. 기간·반복은 시작일 1건만
+// v1.29 거래처 방문 연동 — 본사 직원만. 매출처·매입처 + 방문·미팅·식사·접대·라운딩·협의면 자동 체크(해제 가능)
+var VIS_ACTS=['방문','미팅','식사','접대','라운딩','협의'], visRec=null;
+function visIsHQ(){ return (wfSession&&wfSession.entity||'KOREA')==='KOREA'; }
+function visReset(r){
+  var c=document.getElementById('dm-lk-vis'), wrap=document.getElementById('dm-lk-vis-wrap'); if(!c) return;
+  visRec=r||null; delete c.dataset.touched; delete document.getElementById('dm-vis-kind').dataset.touched;
+  wrap.style.display=visIsHQ()?'':'none';
+  var fromVc=r&&r.origin==='거래처관리';
+  c.disabled=!!fromVc; wrap.title=fromVc?'업무보고 거래처관계관리에서 등록한 방문입니다 — 그 화면에서 관리됩니다':wrap.title;
+  c.checked=fromVc?true:!!(r&&r.link_visit);
+  document.getElementById('dm-vis-kind').value=(r&&r.visit_kind)||'실무미팅';
+  document.getElementById('dm-vis-contact').value=(r&&r.visit_contact)||'';
+  var t=document.getElementById('dm-vis-tgt'); t.innerHTML='<option value="">자동 연결</option>'; t.dataset.want=(r&&r.visit_target_id)?String(r.visit_target_id):'';
+  if(!r) setTimeout(visAuto,0); else visChkUI();
+}
+function visAuto(){
+  var c=document.getElementById('dm-lk-vis'); if(!c||c.disabled||!visIsHQ()) return;
+  var cat=document.getElementById('dm-cat').value, act=document.getElementById('dm-action').value;
+  var hit=(cat==='매출처'||cat==='매입처')&&VIS_ACTS.indexOf(act)>=0;
+  if(!c.dataset.touched&&(!visRec||!visRec.link_visit)) c.checked=hit;
+  var k=document.getElementById('dm-vis-kind'); if(!k.dataset.touched) k.value=['식사','접대','라운딩'].indexOf(act)>=0?'관계관리':'실무미팅';
+  visChkUI();
+}
+async function visChkUI(){
+  var c=document.getElementById('dm-lk-vis'), box=document.getElementById('dm-vis-box'); if(!c||!box) return;
+  var on=c.checked&&!c.disabled&&visIsHQ(); box.style.display=on?'':'none'; if(!on||!SB) return;
+  var p=(document.getElementById('dm-partner').value||'').trim(), t=document.getElementById('dm-vis-tgt'); if(!p){ t.innerHTML='<option value="">자동 연결 (거래처를 먼저 입력)</option>'; return; }
+  try{
+    var res=await SB.from('rp_visit_targets').select('id,dept,partner,cust_dept,cust_role,cust_contacts').eq('is_deleted',false).eq('partner',p).order('id');
+    var my=wfSession.dept||'', rows=(res.data||[]).filter(function(x){ return !my||x.dept===my||/상무|대표/.test(my); });
+    var want=t.dataset.want||t.value;
+    t.innerHTML='<option value="">자동 연결</option>'+rows.map(function(x){ var l=[x.cust_dept,x.cust_role].filter(Boolean).join(' ')||'(전체)'; return '<option value="'+x.id+'">'+escapeHtml(x.dept+' · '+l)+'</option>'; }).join('');
+    if(want&&rows.some(function(x){return String(x.id)===want;})) t.value=want;
+  }catch(e){ console.warn('[visit] targets',e); }
+}
+document.addEventListener('change',function(ev){ var id=ev.target&&ev.target.id; if(id==='dm-cat'||id==='dm-action') visAuto(); if(id==='dm-partner') visChkUI(); });
+async function applyVisitLink(id,obj){
+  var c=document.getElementById('dm-lk-vis'); if(!SB||!id||!c||c.disabled||!visIsHQ()) return;
+  var on=c.checked, rec=diaryRecords.find(function(x){ return String(x.id)===String(id); });
+  if(on&&!String(obj.partner||'').trim()){ linkWarn('거래처가 비어 있어 거래처 방문에는 올리지 못했습니다. 거래처를 입력해 다시 저장해 주세요.'); on=false; }
+  var upd={link_visit:on, visit_kind:on?document.getElementById('dm-vis-kind').value:null, visit_contact:on?(document.getElementById('dm-vis-contact').value.trim()||null):null, visit_target_id:on?(+document.getElementById('dm-vis-tgt').value||null):null};
+  if(rec&&!rec.link_visit&&!on) return;
+  try{ var u=await SB.from('work_diary').update(upd).eq('id',id).select().single(); if(u.error) throw u.error; if(rec) Object.assign(rec,u.data); }
+  catch(e){ console.warn('[Link] visit:',e); linkWarn('업무일지는 저장됐지만 거래처 방문 연동에 실패했습니다: '+(e.message||e)); }
+}
 function planChkByCat(){ var pc=document.getElementById('dm-lk-plan'), c=document.getElementById('dm-cat'); if(!pc||!c||pc.dataset.isnew!=='1'||pc.dataset.touched) return; pc.checked=c.value!=='개인업무'; }
 document.addEventListener('change',function(ev){ if(ev.target&&ev.target.id==='dm-cat') planChkByCat(); });
 async function applyPlanLink(id,on){
@@ -5603,6 +5660,7 @@ async function saveDiary(){
   }
   await applyDiaryLink(linkRowId,linkSel);   // 업무보고 연동 저장
   { var pcb=document.getElementById('dm-lk-plan'); await applyPlanLink(linkRowId,!!(pcb&&pcb.checked&&obj.category!=='개인업무')); }
+  await applyVisitLink(linkRowId,obj);
   if(todoConvertId && linkRowId) await finishTodoConvert(linkRowId);   // 할 일 → 업무일지 전환 연결
   diaryCopyOrigin=null;
   closeDiaryModal();
