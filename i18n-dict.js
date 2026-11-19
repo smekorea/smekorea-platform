@@ -1,6 +1,22 @@
 /* i18n-dict.js — SMERP 공용 번역 사전 (한국어 원문 → [English, 中文]). i18n.js 가 en/zh 일 때만 불러옴.
    원문은 화면에 보이는 한국어 그대로(앞뒤 기호 제외), {} = 숫자·이름 등 바뀌는 자리 */
 window.SMERP_I18N_DICT={
+"업무일지에서 등록한 방문입니다 — 날짜·상태·구분·고객 담당자는 여기서 고치면 일지에도 반영되고, 방문 내용은 업무일지에서 고쳐 주세요.":["Visit registered from the work diary — date, status, type and customer contact edited here are also reflected in the diary; edit the visit content in the work diary.", "从工作日志登记的拜访 — 在此修改日期·状态·分类·客户负责人会同步到日志，拜访内容请在工作日志中修改。"],
+"확인 필요: {} (저장하면 이 표시는 지워집니다)":["Check needed: {} (this note is cleared when saved)", "需确认：{}（保存后此提示将清除）"],
+"LG전자 방문은 관리대상(고객 부서)을 선택해 주세요":["For LG Electronics visits, please select the managed target (customer dept)", "LG电子拜访请选择管理对象（客户部门）"],
+"LG전자 방문은 관리대상(고객 부서)을 선택해 주세요.\n거래처관계관리 표에서 어느 부서 줄에 올릴지 정합니다.":["For LG Electronics visits, please select the managed target (customer dept).\nIt decides which department row it goes to in Partner Relationship Management.", "LG电子拜访请选择管理对象（客户部门）。\n用于决定在客户关系管理表中归入哪个部门行。"],
+"거래처 방문·미팅·식사를 업무보고 거래처관계관리 방문현황에 올립니다 — 일정이면 계획, 완료면 실행":["Posts partner visits, meetings and meals to Work Report > Partner Relationship Management visit status — scheduled = plan, completed = executed", "将客户拜访·会议·用餐登记到工作报告客户关系管理拜访现况 — 日程为计划，完成为执行"],
+"방문 구분":["Visit Type", "拜访分类"],
+"만난 사람 (여러 명은 쉼표)":["People met (separate with commas)", "会见人员（多人用逗号分隔）"],
+"자동 연결":["Auto link", "自动关联"],
+"자동 연결 (거래처를 먼저 입력)":["Auto link (enter partner first)", "自动关联（请先输入客户）"],
+"선택해 주세요 (LG전자 필수)":["Please select (required for LG Electronics)", "请选择（LG电子必选）"],
+"고객 담당자는 관리대상 명단·지난 방문에서 골라 넣을 수 있고, 「이름 직급」으로 맞춰 저장됩니다 · LG전자는 관리대상(고객 부서)을 꼭 선택":["Customer contacts can be picked from the target list or past visits and are saved as \"Name Title\" · LG Electronics requires a managed target (customer dept)", "客户负责人可从管理对象名单·以往拜访中选择，按「姓名 职级」保存 · LG电子必须选择管理对象（客户部门）"],
+"거래처는 위 일지 칸 값 · SME 담당은 작성자 · 일정이면 계획, 완료면 실행으로 올라갑니다":["Partner = diary field above · SME contact = writer · scheduled goes up as plan, completed as executed", "客户取上方日志栏的值 · SME负责人为填写人 · 日程登记为计划，完成登记为执行"],
+"거래처관리":["Partner Management", "客户管理"],
+"업무보고 거래처관계관리에서 등록한 방문입니다 — 그 화면에서 관리됩니다":["Visit registered in Work Report > Partner Relationship Management — managed on that screen", "在工作报告客户关系管理中登记的拜访 — 请在该画面管理"],
+"거래처가 비어 있어 거래처 방문에는 올리지 못했습니다. 거래처를 입력해 다시 저장해 주세요.":["Partner is empty, so it was not posted as a partner visit. Enter the partner and save again.", "客户为空，未能登记为客户拜访。请输入客户后重新保存。"],
+"업무일지는 저장됐지만 거래처 방문 연동에 실패했습니다: {}":["The work diary was saved, but linking the partner visit failed: {}", "工作日志已保存，但客户拜访关联失败：{}"],
 "(+{}원)":["(+{} KRW)","（+{}韩元）"],
 "(-{}원)":["(-{} KRW)","（-{}韩元）"],
 "(1회 완결)":["(one-time)","（一次完结）"],

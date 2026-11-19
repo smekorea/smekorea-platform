@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<script src="i18n.js?v=20261119a"></script>
+<script src="i18n.js?v=20261119b"></script>
 <script src="smerp-auth.js?v=2" data-screen="directive"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>업무보고 · SME Korea</title>
@@ -1302,7 +1302,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <div class="form-row"><label class="form-label">부서<span>*</span></label><select class="form-input" id="vfDept" onchange="vcFillTargets()"><option>개발기획팀</option><option>개발구매팀</option><option>자재구매팀</option><option>제조팀</option></select></div>
       <div class="form-row"><label class="form-label">관리대상</label><select class="form-input" id="vfTarget" onchange="vcTargetPick()"></select></div>
       <div class="form-row"><label class="form-label">거래처<span>*</span></label><input class="form-input" id="vfVen" data-ac="vcPartnerList"></div>
-      <div class="form-row"><label class="form-label">고객 담당자</label><input class="form-input" id="vfCon" placeholder="여러 명은 쉼표로"></div>
+      <div class="form-row"><label class="form-label">고객 담당자</label><input class="form-input" id="vfCon" list="vcConList" autocomplete="off" placeholder="여러 명은 쉼표로" oninput="vcConAc()" onfocus="vcConAc()" onchange="vcTgtByName()"><datalist id="vcConList"></datalist></div>
       <div class="form-row"><label class="form-label">고객 부서</label><input class="form-input" id="vfCd"></div>
       <div class="form-row"><label class="form-label">고객 직급</label><input class="form-input" id="vfRole"></div>
       <div class="form-row"><label class="form-label">SME 담당</label><input class="form-input" id="vfSme" list="vcEmpList" placeholder="여러 명은 쉼표로"></div>
@@ -3795,6 +3795,22 @@ function bfVc(id){
     boxes:[['방문 내용',bfTxt(v.content)],['메모',bfTxt(v.memo)],['확인 필요',bfTxt(v.check_note)],['원본(엑셀)',v.origin==='엑셀이관'?bfTxt(v.src_value):'']],
     who:v.origin==='엑셀이관'?'2026년 엑셀 이관 (실행일은 그 주 금요일로 통일)':'', edit:vcCanEdit(v.dept)?(()=>vcOpen(id)):null});
 }
+// 고객 담당자 표준화 — 「이름 직급」으로 나눠 같은 사람을 하나로 본다(workflow.html 같은 규칙)
+const CT_TITLES='구매팀장|공장장|부사장|파트장|연구원|책임|선임|사원|주임|대리|과장|차장|부장|팀장|실장|소장|이사|상무|전무|사장|대표|계장|기장|기정|조장|반장|총감|리더|담당|매니저|프로', CT_RE=new RegExp('^(.+?)\\s*('+CT_TITLES+')$');
+function ctParse(tok){ tok=String(tok||'').replace(/^[\s.]+|[\s.]+$/g,''); if(!tok) return null; let m=tok.match(CT_RE); if(m&&m[1].trim().length>=2) return {name:m[1].trim(),title:m[2]}; m=tok.match(/^([가-힣]{2,4})\s*([A-Z])$/); if(m) return {name:m[1],title:m[2]}; return {name:tok,title:''}; }
+function ctSplit(s){ return String(s||'').split(/\s*[,/\n·]\s*/).map(ctParse).filter(Boolean); }
+function ctFull(p){ return p.title.length>1?p.name+' '+p.title:p.name+p.title; }
+function ctMap(primary,extra){ const m={},bad={}; primary.forEach(s=>ctSplit(s).forEach(p=>{ if(p.title.length<2) return; const f=ctFull(p); if(m[p.name]&&m[p.name]!==f) bad[p.name]=1; else m[p.name]=f; })); Object.keys(bad).forEach(k=>delete m[k]); (extra||[]).forEach(s=>ctSplit(s).forEach(p=>{ if(!m[p.name]&&!bad[p.name]&&p.title.length>1) m[p.name]=ctFull(p); })); return m; }
+function ctNorm(s,map){ const seen={}, out=[]; ctSplit(s).forEach(p=>{ if(seen[p.name]) return; seen[p.name]=1; out.push(map&&map[p.name]&&p.title.length<2?map[p.name]:ctFull(p)); }); return out.join(', '); }
+function ctList(primary,extra){ const map=ctMap(primary,extra), names={}; primary.concat(extra||[]).forEach(s=>ctSplit(s).forEach(p=>{ if(!names[p.name]) names[p.name]=map[p.name]||ctFull(p); })); return Object.values(names); }
+function ctAc(inp,dl,cands){ const v=inp.value, i=v.lastIndexOf(','), pre=i>=0?v.slice(0,i+1)+' ':'', have={}; ctSplit(pre).forEach(p=>{have[p.name]=1;}); dl.innerHTML=cands.filter(c=>!have[ctParse(c).name]).slice(0,60).map(c=>`<option value="${esc(pre+c)}">`).join(''); }
+function vcIsLG(p){ return /LG\s*전자/i.test(p||''); }
+// 고른 거래처(+부서)의 관리대상 / 관리대상을 고르면 그 줄만
+function vcConRows(){ const d=vcG('vfDept').value, ven=vcG('vfVen').value.trim(), ks=ven?dvKeys(ven):[]; return vcT.filter(x=>x.dept===d&&ks.length&&dvKeys(x.partner).some(k=>ks.indexOf(k)>=0)); }
+function vcConPast(){ const ven=vcG('vfVen').value.trim(); return ven?vcV.filter(v=>v.partner===ven&&v.cust_contact).map(v=>v.cust_contact).reverse():[]; }
+function vcConAc(){ const tid=vcG('vfTarget').value, rows=tid?vcT.filter(x=>String(x.id)===tid):vcConRows(); ctAc(vcG('vfCon'),vcG('vcConList'),ctList(rows.map(x=>x.cust_contacts||''),vcConPast())); }
+// 고객 담당자 이름이 들어 있는 관리대상이 하나면 자동 선택
+function vcTgtByName(){ if(vcG('vfTarget').value) return; const ns=ctSplit(vcG('vfCon').value).map(p=>p.name); if(!ns.length) return; const hit=vcConRows().filter(x=>{ const rn=ctSplit(x.cust_contacts).map(p=>p.name); return ns.some(n=>rn.indexOf(n)>=0); }); if(hit.length===1){ vcG('vfTarget').value=String(hit[0].id); const c=vcG('vfCd').value,r=vcG('vfRole').value; vcTargetPick(); if(c) vcG('vfCd').value=c; if(r) vcG('vfRole').value=r; } }
 function vcFillTargets(sel){ const d=vcG('vfDept').value, s=vcG('vfTarget'); s.innerHTML='<option value="">직접 입력</option>'+vcT.filter(x=>x.dept===d).map(x=>`<option value="${x.id}">${esc(x.partner+([x.cust_dept,x.cust_role].filter(Boolean).length?' · '+[x.cust_dept,x.cust_role].filter(Boolean).join(' '):''))}</option>`).join(''); s.value=sel?String(sel):''; }
 function vcTargetPick(){ const x=vcT.find(z=>String(z.id)===vcG('vfTarget').value); if(!x) return; vcG('vfVen').value=x.partner||''; vcG('vfCd').value=x.cust_dept||''; vcG('vfRole').value=x.cust_role||''; if(!vcG('vfSme').value) vcG('vfSme').value=x.sme_owner||''; }
 // 거래처 칸 = 관리자설정 거래처 정보, 메이커 칸 = 메이커관리 기준
@@ -3825,6 +3841,9 @@ async function vcSave(){
   if(st==='실행'&&!done){showToast('실행일을 입력해주세요','err');return;}
   if(st==='계획'&&!wk){showToast('계획 주를 선택해주세요','err');return;}
   if(!wk) wk=done;
+  vcTgtByName();
+  if(vcIsLG(ven)&&!vcG('vfTarget').value&&vcConRows().length>1){ showToast('LG전자 방문은 관리대상(고객 부서)을 선택해 주세요','err'); vcG('vfTarget').focus(); return; }
+  vcG('vfCon').value=ctNorm(vcG('vfCon').value,ctMap(vcConRows().map(x=>x.cust_contacts||''),vcConPast()));
   let venS; try{ venS=await vcPartnerOk(ven,vcEdit&&vcEdit.partner); }catch(e){ showToast('거래처 등록 오류: '+e.message,'err'); return; } if(venS===false) return;
   const first=(g('vfSme').split(',')[0]||'').trim(), em=(emps||[]).find(e=>e.name===first&&e.entity===HQ)||me;
   const body={target_id:+g('vfTarget')||null,dept:dept,partner:venS,cust_dept:g('vfCd')||null,cust_role:g('vfRole')||null,cust_contact:g('vfCon')||null,sme_name:g('vfSme')||me.name,employee_id:em.id,plan_week:dvWeekStart(wk),plan_date:g('vfPlan')||null,done_date:st==='실행'?done:null,status:st,visit_kind:g('vfKind'),has_meal:vcG('vfMeal').checked,method:g('vfMethod'),content:vcG('vfText').value.replace(/\s+$/,'')||null,memo:g('vfMemo')||null,check_note:null,updated_at:new Date().toISOString()};

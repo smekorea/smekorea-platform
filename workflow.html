@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<script src="i18n.js?v=20261119a"></script>
+<script src="i18n.js?v=20261119b"></script>
 <script src="smerp-auth.js?v=2" data-screen="workflow"></script>
 
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1347,9 +1347,10 @@ body.m-legend-on #cat-legend{display:flex;}
       <div id="dm-vis-box" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,79,160,.25);">
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <div class="dm-field" style="min-width:110px;"><label class="dm-label">방문 구분</label><select id="dm-vis-kind" class="dm-input" onchange="this.dataset.touched='1'"><option>실무미팅</option><option>관계관리</option></select></div>
-          <div class="dm-field" style="flex:2;min-width:160px;"><label class="dm-label">고객 담당자</label><input type="text" id="dm-vis-contact" class="dm-input" placeholder="만난 사람 (여러 명은 쉼표)"></div>
+          <div class="dm-field" style="flex:2;min-width:160px;"><label class="dm-label">고객 담당자</label><input type="text" id="dm-vis-contact" class="dm-input" list="dm-vis-con-list" autocomplete="off" placeholder="만난 사람 (여러 명은 쉼표)"><datalist id="dm-vis-con-list"></datalist></div>
           <div class="dm-field" style="flex:2;min-width:160px;"><label class="dm-label">관리대상</label><select id="dm-vis-tgt" class="dm-input"><option value="">자동 연결</option></select></div>
         </div>
+        <div style="font-size:11px;color:#6b7280;margin-top:4px;">고객 담당자는 관리대상 명단·지난 방문에서 골라 넣을 수 있고, 「이름 직급」으로 맞춰 저장됩니다 · LG전자는 관리대상(고객 부서)을 꼭 선택</div>
         <div id="dm-vis-note" style="font-size:11px;color:#6b7280;margin-top:4px;">거래처는 위 일지 칸 값 · SME 담당은 작성자 · 일정이면 계획, 완료면 실행으로 올라갑니다</div>
       </div>
       <div id="dm-link-hint" style="display:none;font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;"></div>
@@ -4945,7 +4946,31 @@ function readLinkSel(obj){
 }
 // 금주계획 연동(v1.28): 개인업무 외 항상 체크, 해제하면 미연동. 기간·반복은 시작일 1건만
 // v1.29 거래처 방문 연동 — 본사 직원만. 매출처·매입처 + 방문·미팅·식사·접대·라운딩·협의면 자동 체크(해제 가능)
-var VIS_ACTS=['방문','미팅','식사','접대','라운딩','협의'], visRec=null;
+var VIS_ACTS=['방문','미팅','식사','접대','라운딩','협의'], visRec=null, visRows=[], visRowsFor=null, visPast=[], visPastFor='';
+// v1.30 고객 담당자 표준화 — 「이름 직급」으로 나눠 같은 사람을 하나로 본다(directive.html 같은 규칙)
+var CT_TITLES='구매팀장|공장장|부사장|파트장|연구원|책임|선임|사원|주임|대리|과장|차장|부장|팀장|실장|소장|이사|상무|전무|사장|대표|계장|기장|기정|조장|반장|총감|리더|담당|매니저|프로', CT_RE=new RegExp('^(.+?)\\s*('+CT_TITLES+')$');
+function ctParse(tok){ tok=String(tok||'').replace(/^[\s.]+|[\s.]+$/g,''); if(!tok) return null; var m=tok.match(CT_RE); if(m&&m[1].trim().length>=2) return {name:m[1].trim(),title:m[2]}; m=tok.match(/^([가-힣]{2,4})\s*([A-Z])$/); if(m) return {name:m[1],title:m[2]}; return {name:tok,title:''}; }
+function ctSplit(s){ return String(s||'').split(/\s*[,/\n·]\s*/).map(ctParse).filter(Boolean); }
+function ctFull(p){ return p.title.length>1?p.name+' '+p.title:p.name+p.title; }
+// 이름 → 표준 표기. 관리대상 명단이 우선, 같은 이름에 직급이 둘 이상이면 그 이름은 맞추지 않음. 직급을 직접 쓴 경우(김주효 부장)는 쓴 대로 둔다
+function ctMap(primary,extra){ var m={},bad={}; primary.forEach(function(s){ ctSplit(s).forEach(function(p){ if(p.title.length<2) return; var f=ctFull(p); if(m[p.name]&&m[p.name]!==f) bad[p.name]=1; else m[p.name]=f; }); }); Object.keys(bad).forEach(function(k){ delete m[k]; }); (extra||[]).forEach(function(s){ ctSplit(s).forEach(function(p){ if(!m[p.name]&&!bad[p.name]&&p.title.length>1) m[p.name]=ctFull(p); }); }); return m; }
+function ctNorm(s,map){ var seen={}, out=[]; ctSplit(s).forEach(function(p){ if(seen[p.name]) return; seen[p.name]=1; out.push(map&&map[p.name]&&p.title.length<2?map[p.name]:ctFull(p)); }); return out.join(', '); }
+function ctList(primary,extra){ var map=ctMap(primary,extra), names={}; primary.concat(extra||[]).forEach(function(s){ ctSplit(s).forEach(function(p){ if(!names[p.name]) names[p.name]=map[p.name]||ctFull(p); }); }); return Object.keys(names).map(function(k){ return names[k]; }); }
+// 쉼표로 여러 명 — 마지막 이름 칸에 후보를 보여준다
+function ctAc(inp,dl,cands){ var v=inp.value, i=v.lastIndexOf(','), pre=i>=0?v.slice(0,i+1)+' ':'', have={}; ctSplit(pre).forEach(function(p){ have[p.name]=1; }); dl.innerHTML=cands.filter(function(c){ return !have[ctParse(c).name]; }).slice(0,60).map(function(c){ return '<option value="'+escapeHtml(pre+c)+'">'; }).join(''); }
+function visTgtRows(){ var t=document.getElementById('dm-vis-tgt'), x=visRows.find(function(r){ return String(r.id)===t.value; }); return x?[x]:visRows; }
+function visConCands(){ return ctList(visTgtRows().map(function(r){ return r.cust_contacts||''; }), visPast); }
+function visConAc(){ ctAc(document.getElementById('dm-vis-contact'),document.getElementById('dm-vis-con-list'),visConCands()); }
+function visIsLG(p){ return /LG\s*전자/i.test(p||''); }
+// 고객 담당자 이름으로 관리대상 자동 선택(그 이름이 들어 있는 관리대상이 하나일 때)
+function visTgtByName(){ var t=document.getElementById('dm-vis-tgt'); if(t.value) return; var ns=ctSplit(document.getElementById('dm-vis-contact').value).map(function(p){ return p.name; }); if(!ns.length) return;
+  var hit=visRows.filter(function(r){ var rn=ctSplit(r.cust_contacts).map(function(p){ return p.name; }); return ns.some(function(n){ return rn.indexOf(n)>=0; }); }); if(hit.length===1) t.value=String(hit[0].id); }
+// 저장 전 확인 — LG전자는 관리대상 필수, 고객 담당자는 표준 표기로
+async function visCheckBeforeSave(obj){ var c=document.getElementById('dm-lk-vis'); if(!c||!c.checked||c.disabled||!visIsHQ()) return true;
+  if(visRowsFor!==String(obj.partner||'').trim()) await visChkUI();
+  var inp=document.getElementById('dm-vis-contact'); inp.value=ctNorm(inp.value,ctMap(visRows.map(function(r){ return r.cust_contacts||''; }),visPast)); visTgtByName();
+  if(visIsLG(obj.partner)&&!document.getElementById('dm-vis-tgt').value&&visRows.length>1){ alert('LG전자 방문은 관리대상(고객 부서)을 선택해 주세요.\n거래처관계관리 표에서 어느 부서 줄에 올릴지 정합니다.'); document.getElementById('dm-vis-tgt').focus(); return false; }
+  return true; }
 function visIsHQ(){ return (wfSession&&wfSession.entity||'KOREA')==='KOREA'; }
 function visReset(r){
   var c=document.getElementById('dm-lk-vis'), wrap=document.getElementById('dm-lk-vis-wrap'); if(!c) return;
@@ -4956,7 +4981,7 @@ function visReset(r){
   c.checked=fromVc?true:!!(r&&r.link_visit);
   document.getElementById('dm-vis-kind').value=(r&&r.visit_kind)||'실무미팅';
   document.getElementById('dm-vis-contact').value=(r&&r.visit_contact)||'';
-  var t=document.getElementById('dm-vis-tgt'); t.innerHTML='<option value="">자동 연결</option>'; t.dataset.want=(r&&r.visit_target_id)?String(r.visit_target_id):'';
+  var t=document.getElementById('dm-vis-tgt'); t.innerHTML='<option value="">자동 연결</option>'; t.dataset.want=(r&&r.visit_target_id)?String(r.visit_target_id):''; visRows=[]; visRowsFor=null; visPast=[]; visPastFor='';
   if(!r) setTimeout(visAuto,0); else visChkUI();
 }
 function visAuto(){
@@ -4974,12 +4999,16 @@ async function visChkUI(){
   try{
     var res=await SB.from('rp_visit_targets').select('id,dept,partner,cust_dept,cust_role,cust_contacts').eq('is_deleted',false).eq('partner',p).order('id');
     var my=wfSession.dept||'', rows=(res.data||[]).filter(function(x){ return !my||x.dept===my||/상무|대표/.test(my); });
-    var want=t.dataset.want||t.value;
-    t.innerHTML='<option value="">자동 연결</option>'+rows.map(function(x){ var l=[x.cust_dept,x.cust_role].filter(Boolean).join(' ')||'(전체)'; return '<option value="'+x.id+'">'+escapeHtml(x.dept+' · '+l)+'</option>'; }).join('');
+    var want=t.dataset.want||t.value; visRows=rows; visRowsFor=p;
+    t.innerHTML='<option value="">'+(visIsLG(p)&&rows.length>1?'선택해 주세요 (LG전자 필수)':'자동 연결')+'</option>'+rows.map(function(x){ var l=[x.cust_dept,x.cust_role].filter(Boolean).join(' ')||'(전체)'; return '<option value="'+x.id+'">'+escapeHtml(x.dept+' · '+l)+'</option>'; }).join('');
     if(want&&rows.some(function(x){return String(x.id)===want;})) t.value=want;
+    if(visPastFor!==p){ visPastFor=p; var pv=await SB.from('rp_visits').select('cust_contact').eq('is_deleted',false).eq('partner',p).not('cust_contact','is',null).order('id',{ascending:false}).limit(300); visPast=(pv.data||[]).map(function(x){ return x.cust_contact; }); }
+    visTgtByName(); visConAc();
   }catch(e){ console.warn('[visit] targets',e); }
 }
-document.addEventListener('change',function(ev){ var id=ev.target&&ev.target.id; if(id==='dm-cat'||id==='dm-action') visAuto(); if(id==='dm-partner') visChkUI(); });
+document.addEventListener('change',function(ev){ var id=ev.target&&ev.target.id; if(id==='dm-cat'||id==='dm-action') visAuto(); if(id==='dm-partner') visChkUI(); if(id==='dm-vis-tgt') visConAc(); if(id==='dm-vis-contact') visTgtByName(); });
+document.addEventListener('input',function(ev){ if(ev.target&&ev.target.id==='dm-vis-contact') visConAc(); });
+document.addEventListener('focusin',function(ev){ if(ev.target&&ev.target.id==='dm-vis-contact') visConAc(); });
 async function applyVisitLink(id,obj){
   var c=document.getElementById('dm-lk-vis'); if(!SB||!id||!c||c.disabled||!visIsHQ()) return;
   var on=c.checked, rec=diaryRecords.find(function(x){ return String(x.id)===String(id); });
@@ -5534,6 +5563,7 @@ async function saveDiary(){
 
   if(!obj.date){alert('날짜를 입력해주세요.');return;}
   var linkSel=readLinkSel(obj); if(linkSel===false) return;   // 업무보고 연동 선택
+  if(!(await visCheckBeforeSave(obj))) return;   // 거래처 방문: LG전자 관리대상 필수·고객 담당자 표준화
   var linkRowId=diaryEditId||null;                               // 연동을 걸 일지 1건
   var pEnd=(document.getElementById('dm-period-end')||{}).value||'';
   var pInc=document.getElementById('dm-period-weekend')?document.getElementById('dm-period-weekend').checked:true;
