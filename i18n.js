@@ -1,11 +1,14 @@
 /* ══════════════════════════════════════════════════════════════
-   i18n.js — SMERP 공용 다국어 엔진 (V20261118, 한국어 / English / 中文)
+   i18n.js — SMERP 공용 다국어 엔진 (V20261118 → V20261119-06 DB 사전, 한국어 / English / 中文)
    사용: <head> 안에  <script src="i18n.js?v=1"></script>   (mfg 폴더는 ../i18n.js)
    ── 동작
       · 언어 = localStorage 'wf_lang' (index·workflow·PO와 같은 키). 없으면 법인 기본값
         (KOREA=ko, SMECN=zh, 그 외=en). 직원별 선택값은 employees.lang 에 저장
       · ko 이면 아무것도 하지 않음 (본사 화면 영향 0)
-      · en/zh 이면 i18n-dict.js(공용 사전)를 불러와 화면 글자를 사전으로 바꿔 보여줌
+      · en/zh 이면 공용 사전을 불러와 화면 글자를 사전으로 바꿔 보여줌
+        - (V20261119-06) 사전 = DB smerp_dict (화면: 커뮤니케이션 > SMERP 사전, 전원 수정 가능)
+          브라우저 캐시(localStorage smerp_dict_cache)로 바로 번역 → 버전(smerp_dict_ver) 확인 → 바뀌었으면 새로 받아 다시 번역
+          DB·캐시 모두 없으면 i18n-dict.js(2026-11-19 기준 비상용, 더 이상 수정 안 함)
         - 정적 글자 + 나중에 그려지는 표·팝업(MutationObserver) + placeholder/title + alert/confirm
         - 화면 표시만 바꾸고 DB 값·입력값·select 의 value 는 그대로 (value 없는 option 은 원문을 value 로 고정)
         - 사전에 없는 글자는 원문 그대로 둠
@@ -17,7 +20,7 @@
    ══════════════════════════════════════════════════════════════ */
 (function(){
   if(window.SMERP_I18N) return;
-  var LS='wf_lang', VER='20261119c';
+  var LS='wf_lang', VER='20261119d';
   var SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
   var SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   var cur=document.currentScript;
@@ -240,22 +243,55 @@
   window.confirm=function(m){return _confirm.call(window,trMsg(m));};
   window.prompt=function(m,d){return _prompt.call(window,trMsg(m),d);};
 
-  /* ── 사전 불러오기 ── */
-  var loading=null;
+  /* ── 사전 불러오기 (V20261119-06: DB smerp_dict + 브라우저 캐시, 파일은 비상용) ── */
+  var loading=null, DCACHE='smerp_dict_cache', DCHK='smerp_dict_chk', dictVer=null;
   function dictReady(){
     DICT=window.SMERP_I18N_DICT||{}; buildPats();
     document.documentElement.setAttribute('lang',lang==='zh'?'zh-CN':lang);
     applyAll(); startObserver();
     try{document.dispatchEvent(new CustomEvent('smerp-lang',{detail:{lang:lang}}));}catch(e){}
   }
+  function rpc(fn){
+    return fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:'{}'})
+      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function cacheRead(){ try{ var c=JSON.parse(lsGet(DCACHE)||'null'); return c&&c.d&&c.ver!=null?c:null; }catch(e){ return null; } }
+  // 새 사전으로 바꿔 끼우고 화면 다시 번역
+  function swapDict(d,ver){
+    window.SMERP_I18N_DICT=d; dictVer=ver;
+    if(DICT&&lang!=='ko'){ restoreAll(); DICT=d; buildPats(); applyAll(); }
+  }
+  function fetchDb(){
+    return rpc('smerp_dict_json').then(function(j){
+      if(!j||!j.d) throw new Error('empty');
+      lsSet(DCACHE,JSON.stringify({ver:j.ver,d:j.d})); lsSet(DCHK,String(Date.now()));
+      return j;
+    });
+  }
+  // 캐시가 있으면 버전만 확인(30초에 한 번), 바뀌었으면 새로 받음
+  function refreshDb(force){
+    var last=+(lsGet(DCHK)||0);
+    if(!force&&Date.now()-last<30000) return Promise.resolve(false);
+    lsSet(DCHK,String(Date.now()));
+    return rpc('smerp_dict_ver').then(function(v){
+      if(v!=null&&String(v)===String(dictVer)) return false;
+      return fetchDb().then(function(j){ swapDict(j.d,j.ver); return true; });
+    }).catch(function(){ return false; });
+  }
+  function loadFile(done){
+    var s=document.createElement('script'); s.src=base+'i18n-dict.js?v='+VER;
+    s.onload=function(){ done(); }; s.onerror=function(){ done(); };
+    (document.head||document.documentElement).appendChild(s);
+  }
   function loadDict(cb){
     if(window.SMERP_I18N_DICT){ if(!DICT) dictReady(); cb&&cb(); return; }
     if(loading){ loading.push(cb); return; }
     loading=[cb];
-    var s=document.createElement('script'); s.src=base+'i18n-dict.js?v='+VER;
-    s.onload=function(){ dictReady(); var q=loading; loading=null; q.forEach(function(f){f&&f();}); };
-    s.onerror=function(){ loading=null; };
-    (document.head||document.documentElement).appendChild(s);
+    var fin=function(){ if(window.SMERP_I18N_DICT) dictReady(); var q=loading||[]; loading=null; q.forEach(function(f){f&&f();}); };
+    var c=cacheRead();
+    if(c){ window.SMERP_I18N_DICT=c.d; dictVer=c.ver; fin(); refreshDb(false); return; }
+    fetchDb().then(function(j){ window.SMERP_I18N_DICT=j.d; dictVer=j.ver; fin(); })
+      .catch(function(){ loadFile(fin); });
   }
 
   /* ── 언어 저장 (직원별) ── */
@@ -298,17 +334,13 @@
   }
   window.SMERP_I18N={
     lang:function(){return lang;}, setLang:setLang, onLogin:onLogin, entityDefault:entityDefault,
-    t:function(s){var v=tr(String(s));return v==null?s:v;}, msg:trMsg, orig:orig, apply:applyAll
+    t:function(s){var v=tr(String(s));return v==null?s:v;}, msg:trMsg, orig:orig, apply:applyAll,
+    // SMERP 사전 화면에서 저장한 뒤 바로 반영
+    reload:function(){ return refreshDb(true); }, dictVer:function(){ return dictVer; }
   };
   // 다른 탭에서 언어를 바꾸면 따라감
   window.addEventListener('storage',function(e){ if(e.key===LS&&e.newValue&&e.newValue!==lang) setLang(e.newValue,{save:false}); });
 
-  if(lang!=='ko'){
-    if(document.readyState==='loading'&&!window.SMERP_I18N_DICT){
-      // 화면이 그려지기 전에 사전을 받아 한국어가 잠깐 보이는 것을 줄임
-      document.write('<script src="'+base+'i18n-dict.js?v='+VER+'"><\/script>');
-      document.write('<script>window.SMERP_I18N&&window.SMERP_I18N.__boot&&window.SMERP_I18N.__boot();<\/script>');
-      window.SMERP_I18N.__boot=function(){ if(!DICT) dictReady(); };
-    } else loadDict();
-  }
+  // 캐시가 있으면 화면이 그려지기 전에 바로 번역 시작(한국어가 잠깐 보이는 것을 줄임), 없으면 DB에서 받음
+  if(lang!=='ko') loadDict();
 })();

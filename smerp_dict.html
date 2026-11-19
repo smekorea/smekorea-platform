@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<script src="i18n.js?v=20261119d"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMERP 사전 · SME Korea</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!--
+  smerp_dict.html v1.0 (2026-11-19, V20261119-06) — SMERP 사전 (커뮤니케이션)
+  테이블: smerp_dict(사전 본체) / smerp_dict_log(수정 이력, DB 트리거가 기록) / smerp_dict_meta(버전) / i18n_missing(누락 문구)
+  · 화면 번역 엔진(i18n.js)이 이 사전을 그대로 씀 → 여기서 고치면 모든 화면에 반영(각 PC는 30초 안에 버전 확인 후 갱신)
+  · 수정: 로그인한 전원. 화면문구·누락수집·파일이관 항목의 한국어 원문은 잠금(화면 글자와 맞아야 번역됨), 이 화면에서 등록한 용어는 전부 수정
+  · 사전 내용 칸(한국어·English·中文·설명)은 class="no-i18n" — 영어·중문 화면에서도 원문 그대로 보임
+-->
+<style>
+:root{
+  --point:#1B3A6B; --point-dk:#142C52; --point-bg:#EDF1F7;
+  --brand:#C8001E; --muted:#565C64; --text:#1E2225;
+  --border:#C7CCD4; --line-lt:#DFE3E8; --line-dk:#98A0AB;
+  --bg-sub:#EEF0F3; --surface:#FFFFFF; --accent:#1B3A6B; --accent3:#2E6B4F;
+  --red:#B3261E; --amber:#8A6116; --hdr-h:52px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-sub);color:var(--text);}
+button,input,select,textarea{font-family:'Noto Sans KR',sans-serif;}
+.topbar{position:sticky;top:0;z-index:200;background:#fff;border-bottom:2px solid var(--point);display:flex;align-items:center;height:var(--hdr-h);padding:0 20px;gap:12px;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-tag{display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:46px;padding:0 9px;background:var(--brand);color:#fff;font-size:14px;font-weight:700;border-radius:2px;letter-spacing:.5px;}
+.brand-id{display:flex;flex-direction:column;line-height:1.25;}
+.brand-co{font-size:13px;font-weight:700;letter-spacing:.3px;}
+.brand-file{font-size:10.5px;color:var(--muted);letter-spacing:.3px;}
+.brand-name{font-size:14px;font-weight:500;padding-left:10px;border-left:1px solid var(--border);}
+.tb-spacer{flex:1;}
+.tb-user{color:var(--muted);font-size:12px;}
+.nav-group{display:flex;align-items:center;gap:6px;}
+.nav-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:30px;padding:0 14px;border-radius:2px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;white-space:nowrap;transition:all .15s;}
+.nav-new{background:#fff;border:1.5px solid var(--accent3);color:var(--accent3);}
+.nav-new:hover{background:var(--accent3);color:#fff;}
+.nav-back{background:#fff;border:1.5px solid var(--border);color:var(--text);}
+.nav-back:hover{border-color:var(--point);color:var(--point);}
+.nav-home{background:var(--point);border:1.5px solid var(--point);color:#fff;}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:#fff;padding:0 24px;overflow-x:auto;}
+.tab-btn{padding:11px 17px;font-size:14px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;}
+.tab-btn:hover:not(.active){background:var(--bg-sub);color:var(--point);}
+.tab-btn.active{color:var(--point);font-weight:700;border-bottom-color:var(--point);background:var(--point-bg);}
+.tab-n{display:inline-block;margin-left:5px;min-width:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;line-height:18px;text-align:center;}
+.wrap{padding:14px 20px 40px;}
+.intro{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;}
+.filter-bar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+.filter-bar select,.filter-bar input{height:30px;padding:0 9px;border:1px solid var(--line-dk);border-radius:2px;background:#fff;font-size:12px;color:#111827;}
+.filter-bar input[type=search]{width:260px;}
+.btn{height:30px;padding:0 13px;border-radius:2px;border:none;font-size:12px;cursor:pointer;font-weight:500;}
+.btn:hover{opacity:.88;}
+.btn:disabled{opacity:.5;cursor:default;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-outline{background:#fff;border:1px solid var(--line-dk);color:var(--text);}
+.btn-red{background:#fff;border:1px solid var(--red);color:var(--red);}
+.btn-sm{height:24px;padding:0 8px;font-size:11px;}
+.cnt{margin-left:auto;font-size:12px;color:var(--muted);}
+.tbl-wrap{background:#fff;border:1px solid var(--border);overflow:auto;max-height:calc(100vh - 230px);}
+table.dt{border-collapse:collapse;table-layout:fixed;font-size:12.5px;}
+table.dt thead th{position:sticky;top:0;z-index:2;background:var(--bg-sub);border-bottom:1px solid var(--line-dk);border-right:1px solid var(--line-lt);padding:7px 8px;text-align:left;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;user-select:none;}
+th{position:relative;}
+th.sortable{cursor:pointer;}
+th.sortable:hover{background:rgba(26,86,219,.06);}
+.sort-icon{margin-left:3px;font-size:10px;color:var(--accent);}
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;}
+.col-resizer:hover,.col-resizer.dragging{background:rgba(27,58,107,.25);}
+tbody td{padding:6px 8px;border-bottom:1px solid #eef1f5;border-right:1px solid #e8edf5;color:#111827;vertical-align:top;word-break:break-word;white-space:pre-wrap;}
+tbody td:last-child{border-right:none;}
+tbody tr:hover td{background:#f6f8fb;}
+tbody tr.click{cursor:pointer;}
+.empty{color:#9aa1ab;}
+.kind{display:inline-block;padding:1px 6px;border-radius:2px;font-size:11px;white-space:nowrap;}
+.kind-화면문구{background:#EEF0F3;color:#374151;}
+.kind-업무용어{background:#E7F2EC;color:#2E6B4F;font-weight:700;}
+.act{display:inline-block;padding:1px 6px;border-radius:2px;font-size:11px;background:#EEF0F3;}
+.act-삭제{background:#FBEAEA;color:var(--red);}
+.act-등록{background:#E7F2EC;color:#2E6B4F;}
+.diff del{color:var(--red);text-decoration:line-through;}
+.diff ins{color:#2E6B4F;text-decoration:none;}
+.pager{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:10px;font-size:12px;}
+.mis-in{width:100%;height:28px;padding:0 6px;border:1px solid var(--line-dk);border-radius:2px;font-size:12px;color:#111827;}
+.modal-ov{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:500;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 12px;}
+.modal-ov.open{display:flex;}
+.modal{background:#fff;width:620px;max-width:100%;border-top:3px solid var(--point);box-shadow:0 10px 40px rgba(0,0,0,.25);}
+.modal-hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line-lt);font-weight:700;}
+.modal-bd{padding:14px 16px;}
+.modal-ft{display:flex;gap:8px;align-items:center;padding:10px 16px;border-top:1px solid var(--line-lt);}
+.x-btn{border:none;background:none;font-size:18px;cursor:pointer;color:var(--muted);}
+.form-row{margin-bottom:10px;}
+.form-row label{display:block;font-size:12px;font-weight:700;margin-bottom:4px;}
+.form-row label span{color:var(--red);}
+.form-input,.form-ta{width:100%;padding:6px 8px;border:1px solid var(--line-dk);border-radius:2px;font-size:13px;color:#111827;}
+.form-input{height:32px;}
+.form-ta{min-height:54px;resize:vertical;}
+.form-input[readonly],.form-ta[readonly]{background:var(--bg-sub);color:#4b5563;}
+.form-2{display:flex;gap:10px;}
+.form-2>div{flex:1;}
+.hint{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5;}
+.meta{font-size:11px;color:var(--muted);}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:3px;font-size:13px;color:#fff;opacity:0;pointer-events:none;transition:opacity .2s;z-index:900;}
+.toast.show{opacity:1;}
+.toast.ok{background:#2E6B4F;}
+.toast.err{background:var(--red);}
+.login-need{max-width:420px;margin:80px auto;background:#fff;border:1px solid var(--border);padding:24px;text-align:center;font-size:14px;}
+@media(max-width:640px){
+  .topbar{padding:0 10px;}
+  .brand-id,.nav-new,.tb-user{display:none;}
+  .wrap{padding:10px;}
+  .filter-bar input[type=search]{width:100%;}
+  .form-2{flex-direction:column;gap:0;}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">
+    <span class="brand-tag">SME</span>
+    <div class="brand-id"><div class="brand-co">SMEKOREA</div><div class="brand-file">smerp_dict</div></div>
+    <span class="brand-name">SMERP 사전</span>
+  </div>
+  <div class="tb-spacer"></div>
+  <span class="tb-user" id="tbUser"></span>
+  <div class="nav-group">
+    <button class="nav-btn nav-new" onclick="openNewWindow()" title="SMERP 메인을 새 탭으로 엽니다 (현재 화면 유지)">⧉ 새창열기</button>
+    <button class="nav-btn nav-back" onclick="if(history.length>1){history.back();}else{location.href='index.html';}">← 뒤로</button>
+    <a class="nav-btn nav-home" href="index.html">⌂ 홈</a>
+  </div>
+</div>
+
+<div id="loginNeed" class="login-need" style="display:none;">로그인 후 사용할 수 있습니다.<br><br><a class="nav-btn nav-home" href="index.html">⌂ 홈</a></div>
+
+<div id="app" style="display:none;">
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-dict" onclick="switchTab('dict')">사전</button>
+  <button class="tab-btn" id="tab-miss" onclick="switchTab('miss')">누락 문구<span class="tab-n" id="missN" style="display:none;"></span></button>
+  <button class="tab-btn" id="tab-log" onclick="switchTab('log')">수정 이력</button>
+</div>
+
+<!-- 사전 -->
+<div class="wrap" id="panel-dict">
+  <div class="intro">한국어·English·中文 사전입니다. SMERP 화면 번역에 그대로 쓰이며, 여기서 고치면 모든 화면에 반영됩니다. 업무 용어도 등록해 찾아볼 수 있습니다.</div>
+  <div class="filter-bar">
+    <input type="search" id="fKw" placeholder="한국어·English·中文 검색" oninput="dPage=0;renderDict()">
+    <select id="fKind" onchange="dPage=0;renderDict()"><option value="">구분 전체</option><option value="업무용어">업무용어</option><option value="화면문구">화면문구</option></select>
+    <select id="fField" onchange="dPage=0;renderDict()"><option value="">분야 전체</option></select>
+    <select id="fState" onchange="dPage=0;renderDict()"><option value="">상태 전체</option><option value="noen">영어 없음</option><option value="nozh">중문 없음</option><option value="recent">최근 7일 수정</option></select>
+    <button class="btn btn-outline" onclick="resetFilter()">초기화</button>
+    <button class="btn btn-primary" onclick="openEdit(null)">+ 용어 등록</button>
+    <button class="btn btn-outline" onclick="downloadXlsx()">엑셀 다운로드</button>
+    <span class="cnt" id="dCnt"></span>
+  </div>
+  <div class="tbl-wrap"><table class="dt" id="dictTable"><thead><tr>
+    <th class="sortable" data-sk="kind" onclick="sortBy('dict','kind')">구분<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="ko" onclick="sortBy('dict','ko')">한국어<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="en" onclick="sortBy('dict','en')">English<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="zh" onclick="sortBy('dict','zh')">中文<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="field" onclick="sortBy('dict','field')">분야<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="note" onclick="sortBy('dict','note')">설명<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="updated_by" onclick="sortBy('dict','updated_by')">수정자<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="updated_at" onclick="sortBy('dict','updated_at')">수정일<span class="sort-icon"></span><span class="col-resizer"></span></th>
+  </tr></thead><tbody id="dictBody"></tbody></table></div>
+  <div class="pager" id="dPager"></div>
+</div>
+
+<!-- 누락 문구 -->
+<div class="wrap" id="panel-miss" style="display:none;">
+  <div class="intro">영어·중문 화면을 쓰는 중에 사전에 없어 한국어로 남은 문구가 자동으로 모입니다. 번역을 넣고 「사전 추가」를 누르거나, 사람 이름·데이터처럼 번역하지 않을 글자는 「제외」를 누르세요.</div>
+  <div class="filter-bar">
+    <input type="search" id="mKw" placeholder="문구·화면 검색" oninput="renderMiss()">
+    <span class="cnt" id="mCnt"></span>
+  </div>
+  <div class="tbl-wrap"><table class="dt" id="missTable"><thead><tr>
+    <th class="sortable" data-sk="text_ko" onclick="sortBy('miss','text_ko')">한국어<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="screen" onclick="sortBy('miss','screen')">화면<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="hit_count" onclick="sortBy('miss','hit_count')">횟수<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="last_seen" onclick="sortBy('miss','last_seen')">최근<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th>English<span class="col-resizer"></span></th>
+    <th>中文<span class="col-resizer"></span></th>
+    <th>처리<span class="col-resizer"></span></th>
+  </tr></thead><tbody id="missBody"></tbody></table></div>
+</div>
+
+<!-- 수정 이력 -->
+<div class="wrap" id="panel-log" style="display:none;">
+  <div class="intro">사전을 등록·수정·삭제한 기록입니다. 잘못 고친 것은 「되돌리기」로 바로 전 값으로 돌립니다. (최근 1,000건)</div>
+  <div class="filter-bar">
+    <input type="search" id="lKw" placeholder="문구·수정자 검색" oninput="renderLog()">
+    <select id="lAct" onchange="renderLog()"><option value="">작업 전체</option><option>등록</option><option>수정</option><option>삭제</option><option>복구</option></select>
+    <span class="cnt" id="lCnt"></span>
+  </div>
+  <div class="tbl-wrap"><table class="dt" id="logTable"><thead><tr>
+    <th class="sortable" data-sk="created_at" onclick="sortBy('log','created_at')">일시<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="action" onclick="sortBy('log','action')">작업<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="ko" onclick="sortBy('log','ko')">한국어<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th>바뀐 내용<span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="emp_name" onclick="sortBy('log','emp_name')">수정자<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th>처리<span class="col-resizer"></span></th>
+  </tr></thead><tbody id="logBody"></tbody></table></div>
+</div>
+</div>
+
+<!-- 등록·수정 창 -->
+<div class="modal-ov" id="edOv">
+  <div class="modal">
+    <div class="modal-hd"><span id="edTtl">용어 등록</span><button class="x-btn" onclick="closeEdit()">✕</button></div>
+    <div class="modal-bd">
+      <div class="form-2">
+        <div class="form-row"><label>구분<span>*</span></label><select class="form-input" id="edKind"><option value="업무용어">업무용어</option><option value="화면문구">화면문구</option></select></div>
+        <div class="form-row"><label>분야</label><input class="form-input" id="edField" list="fieldList" placeholder="예: 구매, 출하, 제조"><datalist id="fieldList"></datalist></div>
+      </div>
+      <div class="form-row"><label>한국어<span>*</span></label><textarea class="form-ta no-i18n" id="edKo"></textarea>
+        <div class="hint" id="edKoHint" style="display:none;">화면에 쓰이는 문구라 한국어 원문은 고칠 수 없습니다 (원문이 바뀌면 화면 글자와 맞지 않아 번역이 끊깁니다). 영어·중문만 고쳐 주세요.</div></div>
+      <div class="form-row"><label>English</label><textarea class="form-ta no-i18n" id="edEn"></textarea></div>
+      <div class="form-row"><label>中文</label><textarea class="form-ta no-i18n" id="edZh"></textarea></div>
+      <div class="form-row"><label>설명</label><textarea class="form-ta no-i18n" id="edNote" placeholder="용어 뜻·쓰임 (선택)"></textarea></div>
+      <div class="hint">{} 는 숫자·이름처럼 바뀌는 자리입니다. 번역에도 같은 개수의 {} 를 넣어 주세요.</div>
+      <div class="meta" id="edMeta" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-ft"><button class="btn btn-red" id="edDel" onclick="delEntry()">삭제</button><span style="flex:1"></span><button class="btn btn-outline" onclick="closeEdit()">취소</button><button class="btn btn-primary" id="edSave" onclick="saveEntry()">저장</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
+const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
+const ME=localStorage.getItem('sme_user')||'', ENT=localStorage.getItem('sme_entity')||'';
+const WHO=ME?(ME+(ENT&&ENT!=='KOREA'?' ('+ENT+')':'')):'';
+const FIELDS=['공통','영업','구매','출하·물류','제조','품질','재경','인사·총무','IT·SMERP'];
+const PAGE=100;
+let D=[], M=[], L=[], dPage=0, edItem=null;
+const SORT={dict:{k:'updated_at',asc:false},miss:{k:'hit_count',asc:false},log:{k:'created_at',asc:false}};
+
+/* ── 공통 ── */
+const H=(x)=>Object.assign({'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},x||{});
+async function sbFail(r){ let m=r.status+''; try{const j=await r.json(); m=j.message||j.hint||m; if(j.code) m+=' ('+j.code+')';}catch(e){} const er=new Error(m); er.status=r.status; throw er; }
+async function sbGetAll(table,params){
+  let out=[], from=0, size=1000;
+  while(true){
+    const r=await fetch(`${SB_URL}/rest/v1/${table}?${params}`,{headers:H({'Range-Unit':'items','Range':from+'-'+(from+size-1)})});
+    if(!r.ok) await sbFail(r);
+    const d=await r.json(); out=out.concat(d); if(d.length<size) break; from+=size;
+  }
+  return out;
+}
+async function sbPost(table,body){ const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:H({'Content-Type':'application/json','Prefer':'return=representation'}),body:JSON.stringify(body)}); if(!r.ok) await sbFail(r); return r.json(); }
+async function sbPatch(table,q,body){ const r=await fetch(`${SB_URL}/rest/v1/${table}?${q}`,{method:'PATCH',headers:H({'Content-Type':'application/json','Prefer':'return=representation'}),body:JSON.stringify(body)}); if(!r.ok) await sbFail(r); return r.json(); }
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function p2(n){return String(n).padStart(2,'0');}
+function fmtDT(ts){ if(!ts) return ''; const d=new Date(ts); return `${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+function fmtD(ts){ if(!ts) return ''; const d=new Date(ts); return `${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())}`; }
+let toastT; function toast(m,t){ const el=document.getElementById('toast'); el.textContent=m; el.className='toast show '+(t==='err'?'err':'ok'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2800); }
+function openNewWindow(){ const w=window.open('index.html','_blank'); if(!w) alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.'); }
+const g=id=>document.getElementById(id);
+function norm(s){ return String(s||'').toLowerCase(); }
+function reloadI18n(){ try{ window.SMERP_I18N&&window.SMERP_I18N.reload&&window.SMERP_I18N.reload(); }catch(e){} }
+// 번역의 {} 개수가 원문과 다르면 화면에서 글자가 빠지거나 남음
+function braceOk(ko,v){ if(!v) return true; return (ko.match(/\{\}/g)||[]).length===(v.match(/\{\}/g)||[]).length; }
+function lockedKo(x){ return !!x&&x.origin!=='화면등록'; }
+
+/* ── 정렬·리사이즈 (SMERP 표 표준) ── */
+function sortBy(t,k){ const s=SORT[t]; if(s.k===k) s.asc=!s.asc; else { s.k=k; s.asc=true; } ({dict:renderDict,miss:renderMiss,log:renderLog})[t](); }
+function sortList(list,t){ const s=SORT[t]; return list.slice().sort((a,b)=>{ let x=a[s.k], y=b[s.k]; if(typeof x==='number'||typeof y==='number'){ x=+x||0; y=+y||0; return s.asc?x-y:y-x; } x=String(x||''); y=String(y||''); return s.asc?x.localeCompare(y,'ko'):y.localeCompare(x,'ko'); }); }
+function sortIcons(tid,t){ const s=SORT[t]; document.querySelectorAll('#'+tid+' th.sortable').forEach(th=>{ const ic=th.querySelector('.sort-icon'); if(ic) ic.textContent=th.dataset.sk===s.k?(s.asc?'↑':'↓'):''; }); }
+const RZ_DONE={};
+function initColResize(tid,key,def){
+  if(RZ_DONE[tid]) return; RZ_DONE[tid]=1;
+  const table=g(tid), ths=[...table.querySelectorAll('thead th')];
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem(key)||'null'); }catch(e){}
+  if(!saved||saved.length!==ths.length) saved=def;
+  ths.forEach((th,i)=>{ th.style.width=saved[i]+'px'; });
+  const total=()=>{ table.style.width=ths.reduce((s,x)=>s+parseInt(x.style.width),0)+'px'; };
+  total();
+  ths.forEach(th=>{
+    const rz=th.querySelector('.col-resizer'); if(!rz) return;
+    rz.addEventListener('click',e=>e.stopPropagation());
+    rz.addEventListener('mousedown',e=>{
+      e.preventDefault(); e.stopPropagation(); const sx=e.clientX, sw=parseInt(th.style.width); rz.classList.add('dragging');
+      const mm=e2=>{ th.style.width=Math.max(40,sw+(e2.clientX-sx))+'px'; total(); };
+      const mu=()=>{ rz.classList.remove('dragging'); document.removeEventListener('mousemove',mm); document.removeEventListener('mouseup',mu); localStorage.setItem(key,JSON.stringify(ths.map(x=>parseInt(x.style.width)))); };
+      document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);
+    });
+  });
+}
+
+/* ── 탭 ── */
+let curTab='dict';
+function switchTab(t){
+  curTab=t; ['dict','miss','log'].forEach(x=>{ g('tab-'+x).classList.toggle('active',x===t); g('panel-'+x).style.display=x===t?'':'none'; });
+  if(t==='dict') renderDict(); else if(t==='miss') loadMiss(); else loadLog();
+}
+
+/* ── 사전 ── */
+async function loadDict(){
+  D=await sbGetAll('smerp_dict','select=*&is_deleted=is.false&order=id.asc');
+  const fs=[...new Set(FIELDS.concat(D.map(x=>x.field).filter(Boolean)))];
+  g('fField').innerHTML='<option value="">분야 전체</option>'+fs.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  g('fieldList').innerHTML=fs.map(f=>`<option value="${esc(f)}">`).join('');
+}
+function dictFiltered(){
+  const kw=norm(g('fKw').value.trim()), kind=g('fKind').value, fld=g('fField').value, st=g('fState').value, wk=Date.now()-7*864e5;
+  return D.filter(x=>(!kind||x.kind===kind)&&(!fld||x.field===fld)
+    &&(!st||(st==='noen'&&!x.en)||(st==='nozh'&&!x.zh)||(st==='recent'&&new Date(x.updated_at).getTime()>=wk&&x.origin!=='파일이관'))
+    &&(!kw||norm(x.ko).includes(kw)||norm(x.en).includes(kw)||norm(x.zh).includes(kw)||norm(x.note).includes(kw)));
+}
+function renderDict(){
+  const list=sortList(dictFiltered(),'dict'), pages=Math.max(1,Math.ceil(list.length/PAGE));
+  if(dPage>=pages) dPage=pages-1;
+  const rows=list.slice(dPage*PAGE,(dPage+1)*PAGE);
+  g('dictBody').innerHTML=rows.map(x=>`<tr class="click" onclick="openEdit(${x.id})">
+    <td><span class="kind kind-${esc(x.kind)}">${esc(x.kind)}</span></td><td class="no-i18n">${esc(x.ko)}</td>
+    <td class="no-i18n">${x.en?esc(x.en):'<span class="empty">—</span>'}</td><td class="no-i18n">${x.zh?esc(x.zh):'<span class="empty">—</span>'}</td>
+    <td>${esc(x.field||'')}</td><td class="no-i18n">${esc(x.note||'')}</td><td>${esc(x.updated_by||'')}</td><td>${fmtD(x.updated_at)}</td></tr>`).join('')
+    ||'<tr><td colspan="8" class="empty">조건에 맞는 항목이 없습니다.</td></tr>';
+  g('dCnt').textContent=`${list.length.toLocaleString()}건 / 전체 ${D.length.toLocaleString()}건 · 업무용어 ${D.filter(x=>x.kind==='업무용어').length}건`;
+  g('dPager').innerHTML=pages>1?`<button class="btn btn-outline btn-sm" ${dPage?'':'disabled'} onclick="dPage--;renderDict()">‹ 이전</button><span>${dPage+1} / ${pages}</span><button class="btn btn-outline btn-sm" ${dPage<pages-1?'':'disabled'} onclick="dPage++;renderDict()">다음 ›</button>`:'';
+  initColResize('dictTable','smerp_dict_col_v1',[80,300,280,240,90,180,110,90]); sortIcons('dictTable','dict');
+}
+function resetFilter(){ ['fKw','fKind','fField','fState'].forEach(i=>g(i).value=''); dPage=0; renderDict(); }
+
+function openEdit(id){
+  const x=id?D.find(z=>z.id===id):null; edItem=x;
+  g('edTtl').textContent=x?'사전 수정':'용어 등록';
+  g('edKind').value=x?x.kind:'업무용어'; g('edField').value=x?(x.field||''):'';
+  g('edKo').value=x?x.ko:''; g('edEn').value=x?(x.en||''):''; g('edZh').value=x?(x.zh||''):''; g('edNote').value=x?(x.note||''):'';
+  const lk=lockedKo(x); g('edKo').readOnly=lk; g('edKoHint').style.display=lk?'':'none';
+  g('edMeta').textContent=x?`출처 ${x.origin} · 수정 ${x.updated_by||''} ${fmtDT(x.updated_at)}`:'';
+  g('edDel').style.display=x?'':'none';
+  g('edOv').classList.add('open'); setTimeout(()=>g(x?'edEn':'edKo').focus(),50);
+}
+function closeEdit(){ g('edOv').classList.remove('open'); edItem=null; }
+async function saveEntry(){
+  const ko=g('edKo').value.trim(), en=g('edEn').value.trim(), zh=g('edZh').value.trim();
+  if(!ko){ toast('한국어를 입력해 주세요','err'); return; }
+  if(!en&&!zh){ toast('영어나 중문 중 하나는 입력해 주세요','err'); return; }
+  if(!braceOk(ko,en)||!braceOk(ko,zh)){ toast('번역의 {} 개수가 한국어 원문과 같아야 합니다','err'); return; }
+  const body={kind:g('edKind').value,field:g('edField').value.trim()||null,en:en||null,zh:zh||null,note:g('edNote').value.trim()||null,updated_by:WHO,updated_at:new Date().toISOString()};
+  if(!lockedKo(edItem)) body.ko=ko;
+  const btn=g('edSave'); btn.disabled=true;
+  try{
+    if(edItem){ await sbPatch('smerp_dict','id=eq.'+edItem.id,body); }
+    else{
+      const dup=await sbGetAll('smerp_dict','select=id,is_deleted&ko=eq.'+encodeURIComponent(ko));
+      if(dup.length&&!dup[0].is_deleted){ toast('이미 사전에 있는 한국어입니다 — 검색해서 수정해 주세요','err'); btn.disabled=false; return; }
+      if(dup.length){ await sbPatch('smerp_dict','id=eq.'+dup[0].id,Object.assign(body,{is_deleted:false})); }
+      else await sbPost('smerp_dict',Object.assign(body,{origin:'화면등록',created_by:WHO}));
+    }
+    toast('저장되었습니다'); closeEdit(); await loadDict(); renderDict(); reloadI18n();
+  }catch(e){ toast('오류: '+e.message,'err'); }
+  btn.disabled=false;
+}
+async function delEntry(){
+  if(!edItem||!confirm('정말 삭제하시겠습니까?')) return;
+  try{ await sbPatch('smerp_dict','id=eq.'+edItem.id,{is_deleted:true,updated_by:WHO,updated_at:new Date().toISOString()}); toast('삭제되었습니다'); closeEdit(); await loadDict(); renderDict(); reloadI18n(); }
+  catch(e){ toast('오류: '+e.message,'err'); }
+}
+function downloadXlsx(){
+  const list=sortList(dictFiltered(),'dict');
+  const aoa=[['구분','한국어','English','中文','분야','설명','수정자','수정일']].concat(list.map(x=>[x.kind,x.ko,x.en||'',x.zh||'',x.field||'',x.note||'',x.updated_by||'',fmtD(x.updated_at)]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:10},{wch:40},{wch:40},{wch:30},{wch:12},{wch:30},{wch:14},{wch:12}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'SMERP_Dictionary');
+  const d=new Date(); XLSX.writeFile(wb,`SMERP_사전_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.xlsx`);
+}
+
+/* ── 누락 문구 ── */
+async function loadMiss(){
+  try{ M=await sbGetAll('i18n_missing','select=*&status=eq.new&order=hit_count.desc'); }catch(e){ toast('오류: '+e.message,'err'); M=[]; }
+  // 같은 문구가 언어별로 따로 쌓이므로 한 줄로 묶음
+  const by={}; M.forEach(r=>{ const k=r.text_ko; if(!by[k]) by[k]={text_ko:k,ids:[],screen:new Set(),hit_count:0,last_seen:''}; const b=by[k]; b.ids.push(r.id); if(r.screen) b.screen.add(r.screen); b.hit_count+=r.hit_count||0; if((r.last_seen||'')>b.last_seen) b.last_seen=r.last_seen; });
+  M=Object.values(by).map(b=>Object.assign(b,{screen:[...b.screen].join(', ')}));
+  missBadge(); renderMiss();
+}
+function missBadge(){ const n=g('missN'); n.textContent=M.length; n.style.display=M.length?'':'none'; }
+function renderMiss(){
+  const kw=norm(g('mKw').value.trim());
+  const list=sortList(M.filter(r=>!kw||norm(r.text_ko).includes(kw)||norm(r.screen).includes(kw)),'miss');
+  g('missBody').innerHTML=list.map((r,i)=>{ const k=M.indexOf(r); return `<tr><td class="no-i18n">${esc(r.text_ko)}</td><td>${esc(r.screen)}</td><td style="text-align:right;">${r.hit_count}</td><td>${fmtD(r.last_seen)}</td>
+    <td><input class="mis-in no-i18n" id="mEn${k}"></td><td><input class="mis-in no-i18n" id="mZh${k}"></td>
+    <td><button class="btn btn-primary btn-sm" onclick="missAdd(${k})">사전 추가</button> <button class="btn btn-outline btn-sm" onclick="missIgnore(${k})">제외</button></td></tr>`; }).join('')
+    ||'<tr><td colspan="7" class="empty">처리할 누락 문구가 없습니다.</td></tr>';
+  g('mCnt').textContent=list.length+'건';
+  initColResize('missTable','smerp_dict_miss_col_v1',[300,140,60,90,220,180,150]); sortIcons('missTable','miss');
+}
+async function missAdd(k){
+  const r=M[k], en=g('mEn'+k).value.trim(), zh=g('mZh'+k).value.trim();
+  if(!en&&!zh){ toast('영어나 중문 중 하나는 입력해 주세요','err'); return; }
+  if(!braceOk(r.text_ko,en)||!braceOk(r.text_ko,zh)){ toast('번역의 {} 개수가 한국어 원문과 같아야 합니다','err'); return; }
+  try{
+    const dup=await sbGetAll('smerp_dict','select=id&ko=eq.'+encodeURIComponent(r.text_ko));
+    const body={en:en||null,zh:zh||null,updated_by:WHO,updated_at:new Date().toISOString(),is_deleted:false};
+    if(dup.length) await sbPatch('smerp_dict','id=eq.'+dup[0].id,body);
+    else await sbPost('smerp_dict',Object.assign(body,{ko:r.text_ko,kind:'화면문구',origin:'누락수집',created_by:WHO}));
+    await sbPatch('i18n_missing','id=in.('+r.ids.join(',')+')',{status:'added'});
+    M.splice(k,1); missBadge(); renderMiss(); toast('사전에 추가되었습니다'); await loadDict(); reloadI18n();
+  }catch(e){ toast('오류: '+e.message,'err'); }
+}
+async function missIgnore(k){
+  const r=M[k];
+  try{ await sbPatch('i18n_missing','id=in.('+r.ids.join(',')+')',{status:'ignore'}); M.splice(k,1); missBadge(); renderMiss(); toast('제외했습니다'); }
+  catch(e){ toast('오류: '+e.message,'err'); }
+}
+
+/* ── 수정 이력 ── */
+const LOG_F=[['ko','한국어'],['en','English'],['zh','中文'],['kind','구분'],['field','분야'],['note','설명'],['is_deleted','삭제']];
+async function loadLog(){
+  try{ L=await sbGetAll('smerp_dict_log','select=*&order=id.desc&limit=1000'); }catch(e){ toast('오류: '+e.message,'err'); L=[]; }
+  renderLog();
+}
+function diffHtml(l){
+  const b=l.before||{}, a=l.after||{};
+  if(l.action==='등록') return LOG_F.filter(f=>f[0]!=='is_deleted'&&a[f[0]]).map(f=>`${f[1]}: <ins>${esc(a[f[0]])}</ins>`).join('<br>');
+  return LOG_F.filter(f=>String(b[f[0]]??'')!==String(a[f[0]]??'')).map(f=>f[0]==='is_deleted'?(a.is_deleted?'삭제됨':'복구됨'):`${f[1]}: <del>${esc(b[f[0]]??'')}</del> → <ins>${esc(a[f[0]]??'')}</ins>`).join('<br>');
+}
+function renderLog(){
+  const kw=norm(g('lKw').value.trim()), act=g('lAct').value;
+  const list=sortList(L.filter(l=>(!act||l.action===act)&&(!kw||norm(l.ko).includes(kw)||norm(l.emp_name).includes(kw)||norm(JSON.stringify(l.after)).includes(kw))),'log');
+  g('logBody').innerHTML=list.map(l=>`<tr><td>${fmtDT(l.created_at)}</td><td><span class="act act-${esc(l.action)}">${esc(l.action)}</span></td>
+    <td class="no-i18n">${esc(l.ko)}</td><td class="diff no-i18n">${diffHtml(l)}</td><td>${esc(l.emp_name||'')}</td>
+    <td>${l.before?`<button class="btn btn-outline btn-sm" onclick="revert(${l.id})">되돌리기</button>`:''}</td></tr>`).join('')
+    ||'<tr><td colspan="6" class="empty">기록이 없습니다.</td></tr>';
+  g('lCnt').textContent=list.length+'건';
+  initColResize('logTable','smerp_dict_log_col_v1',[130,60,260,420,130,90]); sortIcons('logTable','log');
+}
+async function revert(id){
+  const l=L.find(x=>x.id===id); if(!l||!l.before) return;
+  if(!confirm('이 수정 전의 값으로 되돌릴까요?')) return;
+  const b=l.before, body={en:b.en||null,zh:b.zh||null,kind:b.kind,field:b.field||null,note:b.note||null,is_deleted:!!b.is_deleted,updated_by:WHO,updated_at:new Date().toISOString()};
+  try{
+    const cur=await sbGetAll('smerp_dict','select=id,ko,origin&id=eq.'+l.dict_id);
+    if(cur.length&&cur[0].origin==='화면등록'&&b.ko) body.ko=b.ko;
+    await sbPatch('smerp_dict','id=eq.'+l.dict_id,body);
+    toast('되돌렸습니다'); await Promise.all([loadDict(),loadLog()]); reloadI18n();
+  }catch(e){ toast('오류: '+e.message,'err'); }
+}
+
+/* ── 시작 ── */
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&g('edOv').classList.contains('open')) closeEdit(); });
+(async function(){
+  if(!ME||localStorage.getItem('sme_auth')!=='1'&&!localStorage.getItem('sme_token')){ g('loginNeed').style.display=''; return; }
+  g('app').style.display=''; g('tbUser').textContent=WHO;
+  try{ await loadDict(); renderDict(); }catch(e){ toast('사전을 불러오지 못했습니다: '+e.message,'err'); }
+  // 누락 문구 건수만 탭에 표시 (사용 기록은 메인 메뉴에서 열 때 access_log 에 smdict 로 남음)
+  try{ const d=await sbGetAll('i18n_missing','select=text_ko&status=eq.new'); const n=new Set(d.map(x=>x.text_ko)).size; g('missN').textContent=n; g('missN').style.display=n?'':'none'; }catch(e){}
+})();
+</script>
+</body>
+</html>
