@@ -9,6 +9,7 @@
         - (V20261119-06) 사전 = DB smerp_dict (화면: 커뮤니케이션 > SMERP 사전, 전원 수정 가능)
           브라우저 캐시(localStorage smerp_dict_cache)로 바로 번역 → 버전(smerp_dict_ver) 확인 → 바뀌었으면 새로 받아 다시 번역
           DB·캐시 모두 없으면 i18n-dict.js(2026-11-19 기준 비상용, 더 이상 수정 안 함)
+        - (V20261119-07) 번역한 문구를 화면별로 기록(smerp_dict_mark → smerp_dict.screens, PC당 화면별 7일 1회)
         - 정적 글자 + 나중에 그려지는 표·팝업(MutationObserver) + placeholder/title + alert/confirm
         - 화면 표시만 바꾸고 DB 값·입력값·select 의 value 는 그대로 (value 없는 option 은 원문을 value 로 고정)
         - 사전에 없는 글자는 원문 그대로 둠
@@ -20,7 +21,7 @@
    ══════════════════════════════════════════════════════════════ */
 (function(){
   if(window.SMERP_I18N) return;
-  var LS='wf_lang', VER='20261119d';
+  var LS='wf_lang', VER='20261119e';
   var SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
   var SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   var cur=document.currentScript;
@@ -33,6 +34,7 @@
   var IDX={en:0,zh:1};
   var KO=/[가-힣]/;
   var DICT=null, PATS=null, SPLITS=null;
+  var USED=new Set();   // (V20261119-07) 이 화면에서 실제로 번역한 사전 문구 → smerp_dict.screens 기록
   var tracked=new Set();
   var busy=false;
 
@@ -50,7 +52,9 @@
   }
   function look(s){
     var e=DICT[s]; if(!e) return null;
-    var v=e[IDX[lang]]; return (v==null||v==='')?null:v;
+    var v=e[IDX[lang]]; if(v==null||v==='') return null;
+    if(USED.size<3000) USED.add(s);
+    return v;
   }
   function fill(tpl,args){var i=0;return tpl.replace(/\{\}/g,function(){var a=args[i++];return a==null?'':tr(a)||a;});}
   // 한 덩어리 번역 (앞뒤 기호 보존 → 정확일치 → 패턴 → 구분자 단위 부분번역)
@@ -140,6 +144,17 @@
       body:JSON.stringify({p_items:items,p_lang:lang,p_screen:SCREEN,p_entity:lsGet('sme_entity'),p_user:lsGet('sme_user')})}).catch(function(){});}catch(e){}
   }
   window.addEventListener('pagehide',function(){flushMiss(true);});
+
+  /* ── (V20261119-07) 사용 화면 기록: 번역한 문구를 그 화면에 기록 — PC당 화면별 7일에 한 번, 화면을 연 지 40초 뒤 ── */
+  function markUsed(){
+    if(lang==='ko'||!USED.size) return;
+    var key='smerp_dict_mark_'+SCREEN, last=+(lsGet(key)||0);
+    if(Date.now()-last<7*864e5) return;
+    lsSet(key,String(Date.now()));
+    try{fetch(SB_URL+'/rest/v1/rpc/smerp_dict_mark',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({p_screen:SCREEN,p_keys:Array.from(USED)})}).catch(function(){});}catch(e){}
+  }
+  setTimeout(markUsed,40000);
 
   /* ── 화면 적용 ── */
   var SKIP_TAG={SCRIPT:1,STYLE:1,TEXTAREA:1,NOSCRIPT:1,CODE:1,PRE:0};

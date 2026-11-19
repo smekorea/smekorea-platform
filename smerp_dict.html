@@ -2,12 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<script src="i18n.js?v=20261119d"></script>
+<script src="i18n.js?v=20261119e"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMERP 사전 · SME Korea</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!--
+  smerp_dict.html v1.1 (2026-11-19, V20261119-07) — 「사용 화면」 칸·화면 필터 (smerp_dict.screens: 처음 1회 전체 프로그램 대조 + 번역 엔진이 실제 번역한 문구 자동 기록)
   smerp_dict.html v1.0 (2026-11-19, V20261119-06) — SMERP 사전 (커뮤니케이션)
   테이블: smerp_dict(사전 본체) / smerp_dict_log(수정 이력, DB 트리거가 기록) / smerp_dict_meta(버전) / i18n_missing(누락 문구)
   · 화면 번역 엔진(i18n.js)이 이 사전을 그대로 씀 → 여기서 고치면 모든 화면에 반영(각 PC는 30초 안에 버전 확인 후 갱신)
@@ -147,6 +148,7 @@ tbody tr.click{cursor:pointer;}
     <input type="search" id="fKw" placeholder="한국어·English·中文 검색" oninput="dPage=0;renderDict()">
     <select id="fKind" onchange="dPage=0;renderDict()"><option value="">구분 전체</option><option value="업무용어">업무용어</option><option value="화면문구">화면문구</option></select>
     <select id="fField" onchange="dPage=0;renderDict()"><option value="">분야 전체</option></select>
+    <select id="fScreen" onchange="dPage=0;renderDict()"><option value="">화면 전체</option></select>
     <select id="fState" onchange="dPage=0;renderDict()"><option value="">상태 전체</option><option value="noen">영어 없음</option><option value="nozh">중문 없음</option><option value="recent">최근 7일 수정</option></select>
     <button class="btn btn-outline" onclick="resetFilter()">초기화</button>
     <button class="btn btn-primary" onclick="openEdit(null)">+ 용어 등록</button>
@@ -159,6 +161,7 @@ tbody tr.click{cursor:pointer;}
     <th class="sortable" data-sk="en" onclick="sortBy('dict','en')">English<span class="sort-icon"></span><span class="col-resizer"></span></th>
     <th class="sortable" data-sk="zh" onclick="sortBy('dict','zh')">中文<span class="sort-icon"></span><span class="col-resizer"></span></th>
     <th class="sortable" data-sk="field" onclick="sortBy('dict','field')">분야<span class="sort-icon"></span><span class="col-resizer"></span></th>
+    <th class="sortable" data-sk="scr" onclick="sortBy('dict','scr')" title="이 문구가 쓰이는 화면 (메뉴 구분 > 화면)">사용 화면<span class="sort-icon"></span><span class="col-resizer"></span></th>
     <th class="sortable" data-sk="note" onclick="sortBy('dict','note')">설명<span class="sort-icon"></span><span class="col-resizer"></span></th>
     <th class="sortable" data-sk="updated_by" onclick="sortBy('dict','updated_by')">수정자<span class="sort-icon"></span><span class="col-resizer"></span></th>
     <th class="sortable" data-sk="updated_at" onclick="sortBy('dict','updated_at')">수정일<span class="sort-icon"></span><span class="col-resizer"></span></th>
@@ -217,6 +220,7 @@ tbody tr.click{cursor:pointer;}
       <div class="form-row"><label>English</label><textarea class="form-ta no-i18n" id="edEn"></textarea></div>
       <div class="form-row"><label>中文</label><textarea class="form-ta no-i18n" id="edZh"></textarea></div>
       <div class="form-row"><label>설명</label><textarea class="form-ta no-i18n" id="edNote" placeholder="용어 뜻·쓰임 (선택)"></textarea></div>
+      <div class="form-row" id="edScrRow"><label>사용 화면</label><div class="hint" id="edScr" style="font-size:12px;color:#111827;"></div></div>
       <div class="hint">{} 는 숫자·이름처럼 바뀌는 자리입니다. 번역에도 같은 개수의 {} 를 넣어 주세요.</div>
       <div class="meta" id="edMeta" style="margin-top:8px;"></div>
     </div>
@@ -233,6 +237,15 @@ const WHO=ME?(ME+(ENT&&ENT!=='KOREA'?' ('+ENT+')':'')):'';
 const FIELDS=['공통','영업','구매','출하·물류','제조','품질','재경','인사·총무','IT·SMERP'];
 const PAGE=100;
 let D=[], M=[], L=[], dPage=0, edItem=null;
+// 화면 파일 → 「메뉴 구분 > 화면 이름」 (개발현황 smerp_module 기준, 없으면 아래 기본값)
+let SCR={'index.html':['메인','SMERP 메인']};
+function scrName(f){ const v=SCR[f]; return v?(v[0]?v[0]+' > ':'')+v[1]:f.replace(/\.html$/,''); }
+function scrText(x){ return (x.screens||[]).map(scrName).join(', '); }
+async function loadScreens(){
+  try{ const r=await sbGetAll('smerp_module','select=module_name,category,file_name');
+    r.forEach(m=>String(m.file_name||'').split(/[\s,·\/]+/).filter(f=>/\.html$/.test(f)).forEach(f=>{ if(!SCR[f]) SCR[f]=[m.category||'',m.module_name]; }));
+  }catch(e){}
+}
 const SORT={dict:{k:'updated_at',asc:false},miss:{k:'hit_count',asc:false},log:{k:'created_at',asc:false}};
 
 /* ── 공통 ── */
@@ -300,10 +313,15 @@ async function loadDict(){
   const fs=[...new Set(FIELDS.concat(D.map(x=>x.field).filter(Boolean)))];
   g('fField').innerHTML='<option value="">분야 전체</option>'+fs.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
   g('fieldList').innerHTML=fs.map(f=>`<option value="${esc(f)}">`).join('');
+  D.forEach(x=>{ x.scr=scrText(x); });
+  const keep=g('fScreen').value, sc=[...new Set(D.flatMap(x=>x.screens||[]))].sort((a,b)=>scrName(a).localeCompare(scrName(b),'ko'));
+  g('fScreen').innerHTML='<option value="">화면 전체</option><option value="-">사용 화면 없음</option>'+sc.map(f=>`<option value="${esc(f)}">${esc(scrName(f))}</option>`).join('');
+  g('fScreen').value=keep;
 }
 function dictFiltered(){
-  const kw=norm(g('fKw').value.trim()), kind=g('fKind').value, fld=g('fField').value, st=g('fState').value, wk=Date.now()-7*864e5;
+  const kw=norm(g('fKw').value.trim()), kind=g('fKind').value, fld=g('fField').value, st=g('fState').value, scf=g('fScreen').value, wk=Date.now()-7*864e5;
   return D.filter(x=>(!kind||x.kind===kind)&&(!fld||x.field===fld)
+    &&(!scf||(scf==='-'?!(x.screens&&x.screens.length):(x.screens||[]).indexOf(scf)>=0))
     &&(!st||(st==='noen'&&!x.en)||(st==='nozh'&&!x.zh)||(st==='recent'&&new Date(x.updated_at).getTime()>=wk&&x.origin!=='파일이관'))
     &&(!kw||norm(x.ko).includes(kw)||norm(x.en).includes(kw)||norm(x.zh).includes(kw)||norm(x.note).includes(kw)));
 }
@@ -314,13 +332,13 @@ function renderDict(){
   g('dictBody').innerHTML=rows.map(x=>`<tr class="click" onclick="openEdit(${x.id})">
     <td><span class="kind kind-${esc(x.kind)}">${esc(x.kind)}</span></td><td class="no-i18n">${esc(x.ko)}</td>
     <td class="no-i18n">${x.en?esc(x.en):'<span class="empty">—</span>'}</td><td class="no-i18n">${x.zh?esc(x.zh):'<span class="empty">—</span>'}</td>
-    <td>${esc(x.field||'')}</td><td class="no-i18n">${esc(x.note||'')}</td><td>${esc(x.updated_by||'')}</td><td>${fmtD(x.updated_at)}</td></tr>`).join('')
-    ||'<tr><td colspan="8" class="empty">조건에 맞는 항목이 없습니다.</td></tr>';
+    <td>${esc(x.field||'')}</td><td style="font-size:11.5px;" title="${esc(x.scr)}">${esc(x.scr)}</td><td class="no-i18n">${esc(x.note||'')}</td><td>${esc(x.updated_by||'')}</td><td>${fmtD(x.updated_at)}</td></tr>`).join('')
+    ||'<tr><td colspan="9" class="empty">조건에 맞는 항목이 없습니다.</td></tr>';
   g('dCnt').textContent=`${list.length.toLocaleString()}건 / 전체 ${D.length.toLocaleString()}건 · 업무용어 ${D.filter(x=>x.kind==='업무용어').length}건`;
   g('dPager').innerHTML=pages>1?`<button class="btn btn-outline btn-sm" ${dPage?'':'disabled'} onclick="dPage--;renderDict()">‹ 이전</button><span>${dPage+1} / ${pages}</span><button class="btn btn-outline btn-sm" ${dPage<pages-1?'':'disabled'} onclick="dPage++;renderDict()">다음 ›</button>`:'';
-  initColResize('dictTable','smerp_dict_col_v1',[80,300,280,240,90,180,110,90]); sortIcons('dictTable','dict');
+  initColResize('dictTable','smerp_dict_col_v2',[80,300,280,240,90,200,180,110,90]); sortIcons('dictTable','dict');
 }
-function resetFilter(){ ['fKw','fKind','fField','fState'].forEach(i=>g(i).value=''); dPage=0; renderDict(); }
+function resetFilter(){ ['fKw','fKind','fField','fState','fScreen'].forEach(i=>g(i).value=''); dPage=0; renderDict(); }
 
 function openEdit(id){
   const x=id?D.find(z=>z.id===id):null; edItem=x;
@@ -329,6 +347,7 @@ function openEdit(id){
   g('edKo').value=x?x.ko:''; g('edEn').value=x?(x.en||''):''; g('edZh').value=x?(x.zh||''):''; g('edNote').value=x?(x.note||''):'';
   const lk=lockedKo(x); g('edKo').readOnly=lk; g('edKoHint').style.display=lk?'':'none';
   g('edMeta').textContent=x?`출처 ${x.origin} · 수정 ${x.updated_by||''} ${fmtDT(x.updated_at)}`:'';
+  g('edScrRow').style.display=x?'':'none'; g('edScr').textContent=x?(x.scr||'아직 쓰인 화면이 확인되지 않았습니다'):'';
   g('edDel').style.display=x?'':'none';
   g('edOv').classList.add('open'); setTimeout(()=>g(x?'edEn':'edKo').focus(),50);
 }
@@ -360,8 +379,8 @@ async function delEntry(){
 }
 function downloadXlsx(){
   const list=sortList(dictFiltered(),'dict');
-  const aoa=[['구분','한국어','English','中文','분야','설명','수정자','수정일']].concat(list.map(x=>[x.kind,x.ko,x.en||'',x.zh||'',x.field||'',x.note||'',x.updated_by||'',fmtD(x.updated_at)]));
-  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:10},{wch:40},{wch:40},{wch:30},{wch:12},{wch:30},{wch:14},{wch:12}];
+  const aoa=[['구분','한국어','English','中文','분야','사용 화면','설명','수정자','수정일']].concat(list.map(x=>[x.kind,x.ko,x.en||'',x.zh||'',x.field||'',x.scr||'',x.note||'',x.updated_by||'',fmtD(x.updated_at)]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:10},{wch:40},{wch:40},{wch:30},{wch:12},{wch:40},{wch:30},{wch:14},{wch:12}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'SMERP_Dictionary');
   const d=new Date(); XLSX.writeFile(wb,`SMERP_사전_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.xlsx`);
 }
@@ -442,7 +461,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&g('edOv').classLis
 (async function(){
   if(!ME||localStorage.getItem('sme_auth')!=='1'&&!localStorage.getItem('sme_token')){ g('loginNeed').style.display=''; return; }
   g('app').style.display=''; g('tbUser').textContent=WHO;
-  try{ await loadDict(); renderDict(); }catch(e){ toast('사전을 불러오지 못했습니다: '+e.message,'err'); }
+  try{ await loadScreens(); await loadDict(); renderDict(); }catch(e){ toast('사전을 불러오지 못했습니다: '+e.message,'err'); }
   // 누락 문구 건수만 탭에 표시 (사용 기록은 메인 메뉴에서 열 때 access_log 에 smdict 로 남음)
   try{ const d=await sbGetAll('i18n_missing','select=text_ko&status=eq.new'); const n=new Set(d.map(x=>x.text_ko)).size; g('missN').textContent=n; g('missN').style.display=n?'':'none'; }catch(e){}
 })();
