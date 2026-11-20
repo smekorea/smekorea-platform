@@ -2810,10 +2810,9 @@ function renderEval(){
   const keepP=pSel.options.length?pSel.value:cy;
   pSel.innerHTML='<option value="">전체 기간</option>'+ys.map(y=>`<option value="${y}"${y===keepP?' selected':''}>${y}년 전체</option>`+ms.filter(m=>m.slice(0,4)===y).map(m=>`<option value="${m}"${m===keepP?' selected':''}>　${m.slice(0,4)}년 ${Number(m.slice(5))}월</option>`).join('')).join('');
   const period=pSel.value, pLabel=period?(period.length===4?period+'년':period.slice(0,4)+'년 '+Number(period.slice(5))+'월'):'전체 기간';
-  const pool=allD.filter(d=>evTarget(d)&&(!period||d.meeting_date.indexOf(period)===0));
-  // 부서: 본사 부서는 건수가 없어도 보여주고, 그 밖의 묶음은 지시가 있을 때만. 「전체」는 맨 아래 따로
-  const keys=deptsOf(HQ,false).filter(k=>k!=='전체');
-  pool.forEach(d=>{const k=groupKey(d);if(k!=='전체'&&keys.indexOf(k)<0)keys.push(k);});
+  // V20261120-06: 사내 부서만 평가 — 해외법인·법인전체는 빼고, 사내 부서는 건수가 없어도 모두 보여준다. 「전체」는 맨 아래 따로
+  const keys=deptsOf(HQ,false).filter(k=>k!=='전체'&&k!=='법인전체');
+  const pool=allD.filter(d=>evTarget(d)&&(!period||d.meeting_date.indexOf(period)===0)&&(groupKey(d)==='전체'||keys.indexOf(groupKey(d))>=0));
   const hasDue=pool.some(d=>d.due_date);
   const cols=[['all','지시'],['done','완료'],['open','미완료'],['none','미진행'],['doing','진행중'],['held','보류'],['report','완료 요청']];
   const TIP={'지시':'정기 보고·행사·일정·전달·부서 내부 지시는 집계에서 뺍니다','미진행':'활동 기록이 아직 없는 지시','진행중':'활동이 입력된 지시','보류':'확인했지만 보류해 재보고를 기다리는 지시','완료 요청':'담당 측이 완료·불가를 올려 확인을 기다리는 지시'};
@@ -2838,8 +2837,7 @@ function renderEval(){
       +(hasDue?cell('late','기한 지남',true):'')
       +`<td>${ds.length?`<div class="evb"><div class="evb-t"><i class="evb-g" style="width:${dr}%;"></i><i class="evb-r" style="width:${Math.min(nr,100-dr)}%;"></i></div><span class="evb-v"><span class="g">${dr}%</span><span class="s">/</span><span class="r">${nr}%</span></span></div>`:dash}</td></tr>`;
   };
-  // 지시가 0건인 부서는 숨긴다(V20261120-04)
-  let body=keys.filter(k=>pool.some(d=>groupKey(d)===k)).map(k=>rowOf(k,pool.filter(d=>groupKey(d)===k),'',k)).join('');
+  let body=keys.map(k=>rowOf(k,pool.filter(d=>groupKey(d)===k),'',k)).join('');
   const common=pool.filter(d=>groupKey(d)==='전체');
   if(common.length) body+=rowOf('전 부서 공통',common,'ev-common','전체');
   body+=rowOf('합계',pool,'sum-total','합계');
