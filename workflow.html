@@ -6217,6 +6217,12 @@ async function confirmMoveCopy(){
 var wfSession = wfSession || { empId:null, empNo:null, name:'', dept:'', rank:'', entity:'', sessH:8, expire:0 };
 let _wfSessH = 8;
 
+// V20261120-09: 「사장님(곽선효)」 = 「사장님」 = 「곽선효」 — 괄호 앞·안 이름을 각각 같은 사람으로 본다
+function wfNameMatch(a, b) {
+  var parts = function(x){ x = String(x||'').replace(/\s/g,''); var m = x.match(/^([^()]*)\(([^()]*)\)$/); return m ? [x, m[1], m[2]].filter(Boolean) : (x ? [x] : []); };
+  var pa = parts(a), pb = parts(b);
+  return pa.some(function(x){ return pb.indexOf(x) >= 0; });
+}
 function wfLoadSession() {
   try {
     const d = JSON.parse(localStorage.getItem('wf_session') || '{}');
@@ -7133,7 +7139,7 @@ async function wfChangePw() {
 
   // url에 user 파라미터가 있어도, 같은 사람의 유효한 세션이면 비번 없이 진입 (V20261118 — 새로고침마다 비번 입력 개선)
   // 다른 사람 이름이거나 세션이 끝났으면 기존처럼 비번 입력
-  var sessOk = wfLoadSession() && (!urlUser || (wfSession.name||'').trim() === urlUser.trim());
+  var sessOk = wfLoadSession() && (!urlUser || wfNameMatch(wfSession.name, urlUser));
   if (!sessOk) wfSession = { empId:null, empNo:null, name:'', dept:'', rank:'', entity:'', sessH:8, expire:0 };   // 다른 사람 세션은 쓰지 않음
   if (sessOk) {
     if (urlUser) { try { var u=new URL(location.href); u.searchParams.delete('user'); history.replaceState(null,'',u.pathname+u.search+u.hash); } catch(e){} }
@@ -7146,7 +7152,7 @@ async function wfChangePw() {
       var sel = document.getElementById('wfLoginName');
       var matched = false;
       for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].dataset.name === smerpName) {
+        if (wfNameMatch(sel.options[i].dataset.name, smerpName)) {
           sel.value = sel.options[i].value;
           matched = true;
           break;
