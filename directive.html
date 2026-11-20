@@ -421,6 +421,14 @@ tbody tr.row-late td{background:#fff7f7;}
 .th-meta{color:#565C64;}
 .mt-table .dd-none{background:#E5E9EF;color:#475569;}
 .mt-table tr.row-late td{background:#FFF1F1;}
+/* V20261120-02 기본 정렬 구역 보기: 미완료 연한 분홍 / 지연 진한 분홍 / 보류 연한 노랑 / 완료 연한 초록(기존) */
+.mt-table tr.row-open td{background:#FFF8F9;}
+.mt-table tr.row-open.row-late td{background:#FFE8EB;}
+.mt-table tr.row-held td{background:#FFFBEA;}
+.mt-grp td,.mt-table tbody tr.mt-grp:hover td{background:#F3F5F9;font-size:12px;font-weight:700;color:#111827;padding:5px 10px;border-right:none;border-top:2px solid #C9D1DE;}
+.mt-grp .gb{display:inline-block;padding:1px 9px;border-radius:10px;color:#fff;margin-right:6px;font-size:11.5px;}
+.mt-grp .gb-week{background:#2563EB;}.mt-grp .gb-open{background:#E11D48;}.mt-grp .gb-held{background:#D97706;}.mt-grp .gb-done{background:#16A34A;}
+.mt-grp .gs{color:#6b7280;font-weight:400;margin-left:4px;}
 .sum-table{margin-bottom:16px;}
 .sum-table th,.sum-table td{text-align:center;}
 .sum-table th:first-child,.sum-table td:first-child{text-align:left;}
@@ -1975,16 +1983,24 @@ function viewTitle(view){
   if(view.length===7) return view.slice(0,4)+'년 '+(+view.slice(5))+'월 지시사항';
   return view+' 지시사항';
 }
-// 기본 정렬(_prio): ① 미완료 중 기한 지난 건(많이 지난 순) ② 미완료 기한 남은 건(임박 순) ③ 미완료 상시·기한 없음·전달 ④ 보류 ⑤ 완료(완료일 최신 순)
+// 기본 정렬(_prio) — 구역: ① 지난주 지시(직전 월요일 이후, 완료 여부 무관·지시일 순) ② 미완료(지연→임박→상시·전달) ③ 보류 ④ 완료(완료일 최신 순)
 let mtSortKey='_prio', mtSortAsc=true;
+// 「지난주」 기준 = 오늘 이전의 가장 최근 월요일(주간회의일). 월요일 회의 당일에는 지난 월요일부터
+function mtWeekStart(){const dt=toDate(todayStr());let back=(dt.getDay()+6)%7;if(back===0)back=7;dt.setDate(dt.getDate()-back);return ymd(dt);}
+function mtSection(d,ws){
+  if(d.meeting_date&&d.meeting_date>=ws) return 0;
+  const r=mtRank(d); return r===4?3:r===3?2:1;
+}
 function mtRank(d){
-  if(isDone(d)) return 4;
+  if(d.status==='완료') return 4;   // 완료요청(완료보고)은 아직 확인 전이므로 미완료로 본다
   if(d.status==='보류'||evState(d)==='held') return 3;
   if(isLate(d)) return 0;
   if(isTask(d)&&d.due_date) return 1;
   return 2;
 }
 function mtPrioCmp(a,b){
+  const sa=a._sec, sb=b._sec; if(sa!==sb) return sa-sb;
+  if(sa===0) return (a.meeting_date||'')<(b.meeting_date||'')?-1:(a.meeting_date||'')>(b.meeting_date||'')?1:a.id-b.id;   // 지난주 지시: 지시일 순
   const ra=mtRank(a), rb=mtRank(b); if(ra!==rb) return ra-rb;
   const cmp=(x,y)=>x===y?0:(x<y?-1:1);
   let c=0;
@@ -2017,7 +2033,8 @@ function renderMeet(){
   const lateN=tasks.filter(d=>isLate(d)&&evState(d)!=='held').length;
   const cntOf=k=>tasks.filter(d=>stMatch(d,k)).length, sumTxt='완료 '+cntOf('done')+'건 · 미완료 '+cntOf('open')+'건'+(lateN?' (지연 '+lateN+'건)':'')+' · 보류 '+cntOf('held')+'건 · 전달 '+cntOf('info')+'건';
   document.getElementById('mtCnt').textContent='합계 '+tasks.length+'건 · '+sumTxt;
-  list.forEach(d=>{d._done=doneDay(d);});
+  const ws=mtWeekStart();
+  list.forEach(d=>{d._done=doneDay(d); d._sec=mtSection(d,ws);});
   list.sort((a,b)=>{
     if(mtSortKey==='_prio') return mtPrioCmp(a,b);
     const av=a[mtSortKey], bv=b[mtSortKey];
@@ -2031,8 +2048,19 @@ function renderMeet(){
   document.getElementById('mtAll').checked=openIds.length>0&&openIds.every(id=>picked[id]);
   let h='';
   if(!list.length) h+='<tr><td colspan="10" class="mt-pick">해당하는 지시사항이 없습니다</td></tr>';
-  // 날짜 구분줄은 없앴다(V20261120) — 지시일 칸에 요일까지 표시
-  list.forEach(d=>{ h+=meetRow(d,L,mgr); });
+  // 날짜 구분줄은 없앴다(V20261120) — 지시일 칸에 요일까지 표시. 기본 정렬일 때만 구역 머리줄을 넣는다
+  const SEC=[['gb-week','지난주 지시'],['gb-open','미완료'],['gb-held','보류'],['gb-done','완료']];
+  let prevSec=-1;
+  list.forEach(d=>{
+    if(mtSortKey==='_prio'&&d._sec!==prevSec){
+      prevSec=d._sec; const g=list.filter(x=>x._sec===d._sec), sc=SEC[d._sec];
+      let sub='';
+      if(d._sec===0) sub=md(ws)+' 이후 · 완료 '+g.filter(x=>isTask(x)&&mtRank(x)===4).length+' / 미완료 '+g.filter(x=>isTask(x)&&mtRank(x)<4).length;
+      else if(d._sec===1){ const ln=g.filter(isLate).length; if(ln) sub='지연 '+ln+'건'; }
+      h+=`<tr class="mt-grp"><td colspan="10"><span class="gb ${sc[0]}">${sc[1]}</span>${g.length}건${sub?`<span class="gs">· ${esc(sub)}</span>`:''}</td></tr>`;
+    }
+    h+=meetRow(d,L,mgr);
+  });
   // 집계줄은 표 맨 아래에 둔다
   h+=`<tr class="mt-sec"><td colspan="10">${esc(viewTitle(view))}${dept?' · '+esc(dept):''}${document.getElementById('mtStatus').value?' · '+esc(document.getElementById('mtStatus').selectedOptions[0].text):''} · 합계 ${list.length}건${tasks.length?' — '+sumTxt:''}</td></tr>`;
   tb.innerHTML=h;
@@ -2073,7 +2101,8 @@ function meetRow(d,L,mgr){
   // 주간회의 표에서는 「미진행」을 지시 내용 앞에 이미 표시하므로 상태 칸에서는 생략한다(완료 확인만 보이게)
   const stHtml=(['미진행','미회신'].indexOf(statusLabel(d)[0])>=0?'':statusBadge(d))+(held&&cm?`<span class="st-date">${esc(md(tsDay(cm.created_at)))}</span>`:'')+stBtn;
   if(mng) ctl+=`<button class="btn btn-outline mt-btn" onclick="openForm(${d.id})" title="지시 내용을 수정합니다">수정</button><button class="btn btn-red mt-btn" onclick="delDirectives([${d.id}])" title="중복 등록 등 잘못 올린 지시를 DB에서 삭제합니다(복구 불가)">삭제</button>`;
-  return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&isTask(d)?'row-done':''}">
+  const rk=isTask(d)?mtRank(d):-1, rowCls=rk===4?'row-done':rk===3?'row-held':rk>=0?'row-open':'';
+  return `<tr class="${isLate(d)?'row-late':''} ${rowCls}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
     <td>${esc(md(d.meeting_date))}${d.meeting_date?'('+'일월화수목금토'[toDate(d.meeting_date).getDay()]+')':''}</td><td>${esc(d.issuer_name||'-')}</td>
     <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
