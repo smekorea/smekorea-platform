@@ -449,6 +449,20 @@ tbody tr.row-late td{background:#fff7f7;}
 .ev-table td.clk.ev-bad{color:#b91c1c;}
 .ev-table tr.ev-common td{background:#FAFAF7;color:#4b5563;}
 .ev-table tr.sum-total td{background:var(--bg-sub);font-weight:700;border-top:2px solid var(--line-dk);}
+/* V20261120-04 부서별 평가 디자인 */
+.ev-table thead th{background:#1F2A44;color:#fff;font-weight:700;font-size:12.5px;padding:9px 6px;border-right:1px solid #34405C;}
+.ev-table tbody td{padding:6px;font-size:13px;}
+.ev-table tbody td:first-child{font-weight:700;}
+.ev-table td.clk.ev-bad{background:#FFF1F2;}
+.ev-table tr.sum-total td{background:#E8EDF7;border-top:2px solid #1F2A44;}
+.ev-rate{font-weight:800;} .ev-rate.hi{color:#15803D;} .ev-rate.mid{color:#C2410C;} .ev-rate.lo{color:#B91C1C;}
+.ev-lg{font-weight:400;font-size:11px;margin-left:4px;} .ev-lg i{display:inline-block;width:8px;height:8px;margin:0 3px 0 6px;vertical-align:0;}
+.evb{display:flex;justify-content:center;align-items:flex-end;gap:14px;height:44px;}
+.evb-c{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:30px;height:44px;}
+.evb-c span{font-size:10.5px;font-weight:700;line-height:12px;}
+.evb-c i{display:block;width:18px;border-radius:2px 2px 0 0;min-height:1px;}
+.evb-g{background:#22A55A;} .evb-r{background:#E5484D;}
+.evb-c.g span{color:#15803D;} .evb-c.r span{color:#B91C1C;}
 .ev-rate{font-weight:700;}
 .ev-sub{font-size:10.5px;color:var(--muted);display:block;}
 .ev-good{color:#166534;} .ev-mid{color:#854d0e;} .ev-bad{color:#b91c1c;}
@@ -1039,12 +1053,6 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     </div>
     <div class="tbl-wrap"><table class="ev-table" id="evTable"><thead id="evHead"></thead><tbody id="evBody"></tbody></table></div>
     <select id="evLast" style="display:none;"></select>
-    <div class="ev-note">
-      · <b>미진행</b> = 활동 기록이 아직 없는 지시. <b>진행중</b> = 활동이 입력된 지시. <b>보류</b> = 확인했지만 보류해 재보고를 기다리는 지시. <b>완료 요청</b> = 담당 측이 완료·불가를 올려 확인을 기다리는 지시.<br>
-      · <b>완료율</b> = 완료 ÷ 지시. <b>평균 처리일</b> = 완료된 지시의 지시일부터 완료일까지 일수 평균.<br>
-      · <b>기한 지남</b>은 기한이 있는 지시가 있을 때만 나옵니다(기한이 지났는데 미완료인 건수).<br>
-      · 「전 부서 공통」은 담당부서가 전체인 지시로, 부서별 숫자에는 넣지 않습니다. 정기 보고·행사·일정·전달·부서 내부 지시는 집계에서 뺍니다.
-    </div>
   </div>
 </div>
 
@@ -2807,7 +2815,10 @@ function renderEval(){
   pool.forEach(d=>{const k=groupKey(d);if(k!=='전체'&&keys.indexOf(k)<0)keys.push(k);});
   const hasDue=pool.some(d=>d.due_date);
   const cols=[['all','지시'],['done','완료'],['open','미완료'],['none','미진행'],['doing','진행중'],['held','보류'],['report','완료 요청']];
-  document.getElementById('evHead').innerHTML='<tr><th>부서</th>'+cols.map(c=>`<th>${c[1]}</th>`).join('')+'<th>완료율</th><th>평균 처리일</th>'+(hasDue?'<th>기한 지남</th>':'')+'</tr>';
+  const TIP={'지시':'정기 보고·행사·일정·전달·부서 내부 지시는 집계에서 뺍니다','미진행':'활동 기록이 아직 없는 지시','진행중':'활동이 입력된 지시','보류':'확인했지만 보류해 재보고를 기다리는 지시','완료 요청':'담당 측이 완료·불가를 올려 확인을 기다리는 지시'};
+  const thT=(txt,tip)=>`<th${tip?` title="${esc(tip)}"`:''}>${txt}</th>`;
+  document.getElementById('evHead').innerHTML='<tr>'+thT('부서','「전 부서 공통」은 담당부서가 전체인 지시로, 부서별 숫자에는 넣지 않습니다')+cols.map(c=>thT(c[1],TIP[c[1]])).join('')+thT('완료율','완료 ÷ 지시')+thT('평균 처리일','완료된 지시의 지시일부터 완료일까지 일수 평균')+(hasDue?thT('기한 지남','기한이 지났는데 미완료인 건수'):'')
+    +'<th title="완료율(완료 ÷ 지시) · 미진행율(미진행 ÷ 지시)">완료율 · 미진행율<span class="ev-lg"><i class="evb-g"></i>완료<i class="evb-r"></i>미진행</span></th></tr>';
   evCells={};
   const dash='<span style="color:#c0c4cc;">-</span>';
   const rowOf=(label,ds,cls,key)=>{
@@ -2819,17 +2830,21 @@ function renderEval(){
       return `<td class="clk num${warn?' ev-bad':''}" onclick="goPick('${ck}')">${n}</td>`;
     };
     const days=pick.done.filter(d=>d.completed_at).map(d=>Math.max(0,dayDiff(d.meeting_date,tsDay(d.completed_at))));
+    const dr=ds.length?Math.round(pick.done.length/ds.length*100):0, nr=ds.length?Math.round(pick.none.length/ds.length*100):0;
+    const bar=(v,c)=>`<div class="evb-c ${c}"><span>${v}%</span><i class="evb-${c}" style="height:${Math.round(v*0.3)}px;"></i></div>`;
     return `<tr class="${cls||''}"><td>${esc(label)}</td>`+cols.map(c=>cell(c[0],c[1],c[0]==='none')).join('')
-      +`<td>${ds.length?'<b>'+Math.round(pick.done.length/ds.length*100)+'%</b>':dash}</td><td>${days.length?(days.reduce((a,b)=>a+b,0)/days.length).toFixed(1)+'일':dash}</td>`
-      +(hasDue?cell('late','기한 지남',true):'')+'</tr>';
+      +`<td>${ds.length?`<span class="ev-rate ${dr>=80?'hi':dr>=50?'mid':'lo'}">${dr}%</span>`:dash}</td><td>${days.length?(days.reduce((a,b)=>a+b,0)/days.length).toFixed(1)+'일':dash}</td>`
+      +(hasDue?cell('late','기한 지남',true):'')
+      +`<td>${ds.length?`<div class="evb">${bar(dr,'g')}${bar(nr,'r')}</div>`:dash}</td></tr>`;
   };
-  let body=keys.map(k=>rowOf(k,pool.filter(d=>groupKey(d)===k),'',k)).join('');
+  // 지시가 0건인 부서는 숨긴다(V20261120-04)
+  let body=keys.filter(k=>pool.some(d=>groupKey(d)===k)).map(k=>rowOf(k,pool.filter(d=>groupKey(d)===k),'',k)).join('');
   const common=pool.filter(d=>groupKey(d)==='전체');
   if(common.length) body+=rowOf('전 부서 공통',common,'ev-common','전체');
   body+=rowOf('합계',pool,'sum-total','합계');
   document.getElementById('evBody').innerHTML=body;
-  renderReqStat();
-  applyResize('evTable',hasDue?'directive_eval_col_v2d':'directive_eval_col_v2',[170,90,90,90,90,90,90,100,100,110,100].slice(0,hasDue?11:10));
+  // 요청 처리 현황은 V20261120-04에서 뺐다
+  applyResize('evTable',hasDue?'directive_eval_col_v3d':'directive_eval_col_v3',[170,80,80,80,80,80,80,90,90,100,90].slice(0,hasDue?11:10).concat([190]));
 }
 // v3.29: 요청 처리 현황 — 부서가 사장님·상무께 올린 요청(평가와 같은 기간). 회신 = 사장님·상무가 적은 첫 기록
 function renderReqStat(){
