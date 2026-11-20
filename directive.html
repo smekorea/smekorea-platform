@@ -933,6 +933,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <span class="fb-label" style="margin-left:6px;">상태</span>
       <select id="mtStatus" onchange="renderMeet()" title="미완료 = 미진행 + 진행중 + 완료요청"><option value="">전체 상태</option><option value="open">미완료</option><option value="none">　└ 미진행</option><option value="doing">　└ 진행중</option><option value="report">　└ 완료요청</option><option value="held">보류</option><option value="done">완료</option><option value="info">전달</option></select>
       <button class="btn btn-primary" onclick="openForm()">＋ 지시 등록</button><button class="btn btn-outline" onclick="fmPreType='요청';openForm()" title="부서에서 사장님·상무께 올리는 요청">＋ 요청 등록</button>
+      <button class="btn btn-outline" id="mtPrioBtn" onclick="mtSort('_prio')" style="display:none;" title="미완료(기한 지난 건 → 기한 임박 순) → 보류 → 완료 순으로 되돌립니다">↺ 기본 정렬</button>
       <span class="cnt-badge" id="mtCnt"></span>
     </div>
     <div class="qk-box" id="qkBox" style="display:none;">
@@ -949,7 +950,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
       <table id="mtTable" class="mt-table">
         <thead><tr>
           <th style="padding:7px 2px;text-align:center;"><input type="checkbox" id="mtAll" title="화면의 미완료 건 전체 선택" onchange="pickAll(this.checked)"></th>
-          <th class="sortable" onclick="mtSort('meeting_date')">지시일<span class="sort-icon" id="msort-meeting_date">↓</span><div class="col-resizer"></div></th>
+          <th class="sortable" onclick="mtSort('meeting_date')">지시일<span class="sort-icon" id="msort-meeting_date"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('issuer_name')">지시자<span class="sort-icon" id="msort-issuer_name"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('title')">지시 내용<span class="sort-icon" id="msort-title"></span><div class="col-resizer"></div></th>
           <th class="sortable" onclick="mtSort('owner_dept')">담당부서 · 담당자<span class="sort-icon" id="msort-owner_dept"></span><div class="col-resizer"></div></th>
@@ -1974,9 +1975,28 @@ function viewTitle(view){
   if(view.length===7) return view.slice(0,4)+'년 '+(+view.slice(5))+'월 지시사항';
   return view+' 지시사항';
 }
-let mtSortKey='meeting_date', mtSortAsc=false;
+// 기본 정렬(_prio): ① 미완료 중 기한 지난 건(많이 지난 순) ② 미완료 기한 남은 건(임박 순) ③ 미완료 상시·기한 없음·전달 ④ 보류 ⑤ 완료(완료일 최신 순)
+let mtSortKey='_prio', mtSortAsc=true;
+function mtRank(d){
+  if(isDone(d)) return 4;
+  if(d.status==='보류'||evState(d)==='held') return 3;
+  if(isLate(d)) return 0;
+  if(isTask(d)&&d.due_date) return 1;
+  return 2;
+}
+function mtPrioCmp(a,b){
+  const ra=mtRank(a), rb=mtRank(b); if(ra!==rb) return ra-rb;
+  const cmp=(x,y)=>x===y?0:(x<y?-1:1);
+  let c=0;
+  if(ra<=1) c=cmp(a.due_date||'',b.due_date||'');          // 기한 이른 순(지난 건은 많이 지난 순)
+  else if(ra===4) c=cmp(b._done||'',a._done||'');           // 완료일 최신 순
+  else c=cmp(b.meeting_date||'',a.meeting_date||'');        // 지시일 최신 순
+  return c||(b.id-a.id);
+}
 function mtSort(key){
-  if(mtSortKey===key) mtSortAsc=!mtSortAsc; else{mtSortKey=key;mtSortAsc=true;}
+  if(key==='_prio'){mtSortKey='_prio';mtSortAsc=true;}
+  else if(mtSortKey===key) mtSortAsc=!mtSortAsc; else{mtSortKey=key;mtSortAsc=true;}
+  document.getElementById('mtPrioBtn').style.display=mtSortKey==='_prio'?'none':'';
   ['meeting_date','owner_dept','issuer_name','title','due_date','_done','status'].forEach(k=>{
     const el=document.getElementById('msort-'+k); if(el) el.textContent=k===mtSortKey?(mtSortAsc?'↑':'↓'):'';
   });
@@ -1994,10 +2014,12 @@ function renderMeet(){
     renderBulk(); return;
   }
   const tasks=list.filter(isTask);
-  const cntOf=k=>tasks.filter(d=>stMatch(d,k)).length, sumTxt='완료 '+cntOf('done')+'건 · 미완료 '+cntOf('open')+'건 · 보류 '+cntOf('held')+'건 · 전달 '+cntOf('info')+'건';
+  const lateN=tasks.filter(d=>isLate(d)&&evState(d)!=='held').length;
+  const cntOf=k=>tasks.filter(d=>stMatch(d,k)).length, sumTxt='완료 '+cntOf('done')+'건 · 미완료 '+cntOf('open')+'건'+(lateN?' (지연 '+lateN+'건)':'')+' · 보류 '+cntOf('held')+'건 · 전달 '+cntOf('info')+'건';
   document.getElementById('mtCnt').textContent='합계 '+tasks.length+'건 · '+sumTxt;
   list.forEach(d=>{d._done=doneDay(d);});
   list.sort((a,b)=>{
+    if(mtSortKey==='_prio') return mtPrioCmp(a,b);
     const av=a[mtSortKey], bv=b[mtSortKey];
     if(av!==bv){
       if(av==null||av==='') return 1; if(bv==null||bv==='') return -1;      // 빈 값은 항상 아래
@@ -2009,13 +2031,8 @@ function renderMeet(){
   document.getElementById('mtAll').checked=openIds.length>0&&openIds.every(id=>picked[id]);
   let h='';
   if(!list.length) h+='<tr><td colspan="10" class="mt-pick">해당하는 지시사항이 없습니다</td></tr>';
-  // 지시일 순으로 볼 때만, 날짜가 여러 개면 날짜가 바뀔 때마다 구분줄을 넣는다
-  const multi=mtSortKey==='meeting_date'&&list.length&&list[0].meeting_date!==list[list.length-1].meeting_date;
-  let prev='';
-  list.forEach(d=>{
-    if(multi&&d.meeting_date!==prev) h+=`<tr class="mt-date"><td colspan="10">${esc(d.meeting_date)} (${'일월화수목금토'[toDate(d.meeting_date).getDay()]}) · ${list.filter(x=>x.meeting_date===d.meeting_date).length}건</td></tr>`;
-    prev=d.meeting_date; h+=meetRow(d,L,mgr);
-  });
+  // 날짜 구분줄은 없앴다(V20261120) — 지시일 칸에 요일까지 표시
+  list.forEach(d=>{ h+=meetRow(d,L,mgr); });
   // 집계줄은 표 맨 아래에 둔다
   h+=`<tr class="mt-sec"><td colspan="10">${esc(viewTitle(view))}${dept?' · '+esc(dept):''}${document.getElementById('mtStatus').value?' · '+esc(document.getElementById('mtStatus').selectedOptions[0].text):''} · 합계 ${list.length}건${tasks.length?' — '+sumTxt:''}</td></tr>`;
   tb.innerHTML=h;
@@ -2058,7 +2075,7 @@ function meetRow(d,L,mgr){
   if(mng) ctl+=`<button class="btn btn-outline mt-btn" onclick="openForm(${d.id})" title="지시 내용을 수정합니다">수정</button><button class="btn btn-red mt-btn" onclick="delDirectives([${d.id}])" title="중복 등록 등 잘못 올린 지시를 DB에서 삭제합니다(복구 불가)">삭제</button>`;
   return `<tr class="${isLate(d)?'row-late':''} ${d.status==='완료'&&isTask(d)?'row-done':''}">
     <td style="text-align:center;padding:8px 2px;overflow:visible;">${mgr&&open?`<input type="checkbox" ${picked[d.id]?'checked':''} onchange="pickOne(${d.id},this.checked)">`:''}</td>
-    <td>${esc(md(d.meeting_date))}</td><td>${esc(d.issuer_name||'-')}</td>
+    <td>${esc(md(d.meeting_date))}${d.meeting_date?'('+'일월화수목금토'[toDate(d.meeting_date).getDay()]+')':''}</td><td>${esc(d.issuer_name||'-')}</td>
     <td class="clk" onclick="openPanel(${d.id})">${flags}${esc(d.title)}<div class="th-meta">${esc(meta)}</div></td>
     <td>${esc(ownerLine(d))}</td><td>${ddayHtml(d)}</td><td>${doneCell(d)}</td><td>${stHtml}</td>
     <td>${actHtml}</td>
@@ -2897,7 +2914,7 @@ function applyResize(tableId,KEY,def){
 }
 function initColResize(){
   applyResize('listTable','directive_col_v3',[44,92,76,78,72,104,110,340,150,66,104,300]);
-  applyResize('mtTable','directive_meet_col_v8',[32,70,72,400,150,132,70,150,440,250]);
+  applyResize('mtTable','directive_meet_col_v9',[32,84,72,400,150,132,70,150,440,250]);
 }
 
 let toastTimer;
