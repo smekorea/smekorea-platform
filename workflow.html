@@ -167,6 +167,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','N
 .ts-btn.del{color:#d9455a;}
 .ts-more{display:none;flex-basis:100%;gap:4px;justify-content:flex-end;}
 .ts-card.menu-open .ts-more{display:flex;}
+/* V20261121-04 PC 왼쪽 메모 선택 줄: 완료 / 삭제 / → 업무일지로 만 (기록일·경과일·⋯ 숨김, ⋯ 메뉴 기능은 PC에서 미사용) */
+.ts-bot .ts-pc-only{display:none;}
+#cal-view.ts-side .ts-bot .ts-pc-only{display:inline-block;}
+#cal-view.ts-side .ts-bot .ts-meta:not(.ts-who),#cal-view.ts-side .ts-bot .ts-age,#cal-view.ts-side .ts-bot .ts-menu-btn,#cal-view.ts-side .ts-card .ts-more{display:none !important;}
 .ts-notes{flex-basis:100%;padding:6px 8px;background:#f7f9fc;border-radius:6px;}
 .ts-note{display:flex;gap:8px;font-size:14px;line-height:21px;color:#111827;padding:2px 0;}
 .ts-note .ts-nd{color:#6b7280;white-space:nowrap;}
@@ -2761,10 +2765,10 @@ function renderTodos(){
   </div>`;
   applyI18n();
 }
-async function confirmCompleteTodo(id){
+async function confirmCompleteTodo(id,noConfirm){
   const td=findTodo(id);if(!td)return;
-  const ok=window.confirm(t('정말 완료하시겠습니까?'));
-  if(!ok) return;
+  // V20261121-04: 왼쪽 메모(개인·팀) 완료는 확인창 없음(사용자 결정) — 할 일 탭은 유지
+  if(!noConfirm && !window.confirm(t('정말 완료하시겠습니까?'))) return;
   td.status='done';
   td.completed_at=new Date().toISOString();
   if(SB){
@@ -3302,13 +3306,14 @@ function todoSectionHtml(scope,withHead){
         <span class="ts-age ${ageCls}" title="${escapeHtml(t('기록·마지막 메모 이후 지난 날'))}">${ageTxt}</span>
         ${td.diary_id?`<span class="ts-link" onclick="openTodoDiary('${id}')">🔗 ${t('업무일지 전환됨')}</span>`:''}
         <span class="ts-sp"></span>
-        <button class="ts-btn go" onclick="convertTodoToDiary('${id}')" title="${escapeHtml(t('업무일지로'))}">→<span class="ts-go-txt"> ${t('업무일지로')}</span></button>
+        <button class="ts-btn ts-pc-only" onclick="event.stopPropagation();confirmCompleteTodo('${id}',1)">${t('완료')}</button>
         <button class="ts-btn del" onclick="event.stopPropagation();delTodo('${id}',${scope==='me'?1:0})">${t('삭제')}</button>
-        <button class="ts-btn" onclick="toggleTodoMenu('${id}')" title="${escapeHtml(t('더보기'))}">⋯</button>
+        <button class="ts-btn go" onclick="convertTodoToDiary('${id}')" title="${escapeHtml(t('업무일지로'))}">→<span class="ts-go-txt"> ${t('업무일지로')}</span></button>
+        <button class="ts-btn ts-menu-btn" onclick="toggleTodoMenu('${id}')" title="${escapeHtml(t('더보기'))}">⋯</button>
       </div>
       <div class="ts-more">
         <button class="ts-btn" onclick="toggleTodoNotes('${id}')">${t('메모')}${notes.length?' '+notes.length:''}</button>
-        <button class="ts-btn" onclick="confirmCompleteTodo('${id}')">${t('완료')}</button>
+        <button class="ts-btn" onclick="confirmCompleteTodo('${id}',1)">${t('완료')}</button>
         <button class="ts-btn" onclick="editTodo('${id}')">${t('수정')}</button>
         <button class="ts-btn" onclick="moveTodo('${id}',-1)">▲</button>
         <button class="ts-btn" onclick="moveTodo('${id}',1)">▼</button>
@@ -3616,7 +3621,7 @@ async function memoToTodo(id){
   if(SB){ try{ await SB.from('cal_todos').update({memo_date:null,sort_no:mm.sort_no,status:mm.status,completed_at:mm.completed_at}).eq('id',mm.id); }catch(e){ console.warn('[SB] memoToTodo error:',e); } }
 }
 async function delMemo(id){
-  if(!confirm(t('정말 삭제하시겠습니까?'))) return;
+  // V20261121-04: 메모 모드 날짜메모 삭제는 확인창 없음(사용자 결정, 나만 보는 메모)
   todos=todos.filter(x=>String(x.id)!==String(id));
   saveLocal(); renderMemoPop(); renderCal();
   if(SB){ try{ await SB.from('cal_todos').delete().eq('id',id); await SB.from('cal_todo_notes').delete().eq('todo_id',id); }catch(e){ console.warn('[SB] delMemo error:',e); } }
