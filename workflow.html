@@ -1196,7 +1196,7 @@ body.m-legend-on #cat-legend{display:flex;}
   <div class="memo-pop">
     <div class="memo-pop-head"><span id="memo-pop-title"></span><button class="memo-pop-x" onclick="closeMemoPop()">✕</button></div>
     <div class="memo-pop-add">
-      <input id="memo-pop-input" type="text" placeholder="메모를 입력하고 Enter" onkeydown="if(event.key==='Enter'&&!event.isComposing)addDateMemo()">
+      <input id="memo-pop-input" type="text" placeholder="메모를 입력하고 Enter" onkeydown="if(event.key==='Enter'&&!event.isComposing)addDateMemo()" onpaste="memoPaste(event,'date')">
       <button onclick="addDateMemo()" data-i18n="추가">추가</button>
     </div>
     <div class="memo-pop-list" id="memo-pop-list"></div>
@@ -3133,8 +3133,10 @@ async function saveEditedTodo(){
   editTodoId=null;
   renderTodos();
 }
-async function delTodo(id){
-  if(!confirm(t('정말 삭제하시겠습니까?'))) return;   // 삭제 확인창 표준 (2026-10-13)
+async function delTodo(id,noConfirm){
+  // 삭제 확인창 표준 (2026-10-13). 예외 V20261121: 왼쪽 개인메모 삭제는 확인창 없음(사용자 결정) — 팀 메모는 유지
+  const isTeam=teamTodos.some(x=>String(x.id)===String(id));
+  if(!(noConfirm&&!isTeam) && !confirm(t('정말 삭제하시겠습니까?'))) return;
   todos=todos.filter(x=>String(x.id)!==String(id));
   teamTodos=teamTodos.filter(x=>String(x.id)!==String(id));
   if(SB){
@@ -3272,7 +3274,7 @@ function todoSectionHtml(scope,withHead){
   }
   html+=`<div class="ts-body">
     <div class="ts-add">
-      <input id="ts-new-text-${scope}" type="text" placeholder="${active.length+1}. ${escapeHtml(t(scope==='team'?'팀 메모를 입력하고 Enter':'할 일을 입력하고 Enter'))}" onkeydown="if(event.key==='Enter'&&!event.isComposing)addStripTodo('${scope}')">
+      <input id="ts-new-text-${scope}" type="text" placeholder="${active.length+1}. ${escapeHtml(t(scope==='team'?'팀 메모를 입력하고 Enter':'할 일을 입력하고 Enter'))}" onkeydown="if(event.key==='Enter'&&!event.isComposing)addStripTodo('${scope}')" onpaste="memoPaste(event,'${scope}')">
       <select id="ts-new-pri-${scope}"><option value="0">${t('우선도: 상')}</option><option value="1" selected>${t('우선도: 중')}</option><option value="2">${t('우선도: 하')}</option></select>
       <button onclick="addStripTodo('${scope}')">${t('추가')}</button>
     </div><div class="ts-grid">`;
@@ -3301,6 +3303,7 @@ function todoSectionHtml(scope,withHead){
         ${td.diary_id?`<span class="ts-link" onclick="openTodoDiary('${id}')">🔗 ${t('업무일지 전환됨')}</span>`:''}
         <span class="ts-sp"></span>
         <button class="ts-btn go" onclick="convertTodoToDiary('${id}')" title="${escapeHtml(t('업무일지로'))}">→<span class="ts-go-txt"> ${t('업무일지로')}</span></button>
+        <button class="ts-btn del" onclick="event.stopPropagation();delTodo('${id}',${scope==='me'?1:0})">${t('삭제')}</button>
         <button class="ts-btn" onclick="toggleTodoMenu('${id}')" title="${escapeHtml(t('더보기'))}">⋯</button>
       </div>
       <div class="ts-more">
@@ -3309,7 +3312,7 @@ function todoSectionHtml(scope,withHead){
         <button class="ts-btn" onclick="editTodo('${id}')">${t('수정')}</button>
         <button class="ts-btn" onclick="moveTodo('${id}',-1)">▲</button>
         <button class="ts-btn" onclick="moveTodo('${id}',1)">▼</button>
-        <button class="ts-btn del" onclick="delTodo('${id}')">${t('삭제')}</button>
+        <button class="ts-btn del" onclick="delTodo('${id}',${scope==='me'?1:0})">${t('삭제')}</button>
       </div>`;
     if(isOpen){
       html+=`<div class="ts-notes">`;
@@ -3327,7 +3330,7 @@ function todoSectionHtml(scope,withHead){
       <div class="ts-top">
         <span class="ts-done-mark">${t('완')}</span>
         <span class="ts-title ts-done-title" title="${escapeHtml(stripTitle(td))}${td.emp_name&&scope==='team'?' — '+escapeHtml(td.emp_name):''}">${escapeHtml(stripTitle(td))}</span>
-        <button class="ts-btn del ts-done-del" onclick="delTodo('${id}')">${t('삭제')}</button>
+        <button class="ts-btn del ts-done-del" onclick="delTodo('${id}',${scope==='me'?1:0})">${t('삭제')}</button>
       </div></div>`;
   });
   html+=`</div></div></div>`;
@@ -3402,6 +3405,34 @@ async function saveTodoOrder(ids){
     try{ await Promise.all(changed.map(td=>SB.from('cal_todos').update({sort_no:td.sort_no}).eq('id',td.id))); }
     catch(e){ console.warn('[SB] saveTodoOrder error:',e); }
   }
+}
+/* V20261121-03: 여러 줄 붙여넣기 → 메모 여러 개로 등록 (확인창 없음, 사용자 결정)
+   · 카톡 PC 복사 「[이름] [오전 9:49] 내용」 = 대화 1개 → 메모 1개, 내용만 저장(이름·시간 제외, A안). 머리글 없는 줄은 위 대화에 이어 붙임
+   · 머리글이 없으면 줄 1개 → 메모 1개, 빈 줄 제외 / 한 줄이면 종전처럼 입력칸에 그대로 */
+const MEMO_KAKAO_RE=/^\[[^\]\n]*\]\s*\[(?:오전|오후|AM|PM|上午|下午)\s*\d{1,2}:\d{2}\]\s?(.*)$/i;
+function splitPasteMemos(txt){
+  const lines=String(txt||'').replace(/\r/g,'').split('\n');
+  let out=[];
+  if(lines.some(l=>MEMO_KAKAO_RE.test(l))){
+    lines.forEach(l=>{ const m=l.match(MEMO_KAKAO_RE); if(m) out.push(m[1]); else if(out.length){ if(l.trim()) out[out.length-1]+=' '+l.trim(); } else out.push(l); });
+  } else out=lines;
+  return out.map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+let memoPasting=false;
+async function memoPaste(ev,kind){
+  const cd=ev.clipboardData||window.clipboardData; if(!cd) return;
+  const parts=splitPasteMemos(cd.getData('text'));
+  if(parts.length<2){ if(parts.length===1&&MEMO_KAKAO_RE.test(String(cd.getData('text')).trim())){ ev.preventDefault(); const inp=ev.target; inp.value=(inp.value?inp.value+' ':'')+parts[0]; } return; }
+  ev.preventDefault();
+  if(memoPasting) return; memoPasting=true;
+  const inp=ev.target, cur=inp.value.trim(); if(cur) parts[0]=cur+' '+parts[0];
+  try{
+    for(const p of parts){
+      const el=kind==='date'?document.getElementById('memo-pop-input'):document.getElementById('ts-new-text-'+kind); if(!el) break;
+      el.value=p;
+      if(kind==='date') await addDateMemo(); else await addStripTodo(kind);
+    }
+  } finally { memoPasting=false; }
 }
 async function addStripTodo(scope){
   scope=scope==='team'?'team':'me';
