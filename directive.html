@@ -99,6 +99,7 @@ body.md-dir .tab-bar{background:#fdf6f6;} body.md-report .tab-bar{background:#f3
 .tk-table td,.tk-table th{vertical-align:middle;padding:6px 7px;} .tk-table td.dv-d{text-overflow:clip;} .tk-stb{white-space:nowrap;}
 .tk-table th.tk-tl-h{padding:0!important;} .tk-table td.tk-tl-c{padding:0!important;}
 .tk-table td.tk-sticky,.tk-table th.tk-sticky{position:sticky;left:0;z-index:2;background:#fff;} .tk-table th.tk-sticky{z-index:8;cursor:default;background:#DCE3EE;}
+.tk-table th .tk-allfold{cursor:pointer;display:inline-block;width:16px;text-align:center;color:#1B3A6B;} .tk-table th .tk-allfold:hover{color:#C8001E;}
 .tk-table tr.tk-grp td{background:#eef3fa;font-weight:700;} .tk-table tr.tk-grp td.tk-sticky{background:#eef3fa;cursor:pointer;}
 .tk-tl{position:relative;height:30px;} .tk-tlh{position:relative;height:40px;color:#142C52;font-size:11px;}
 /* v3.51: 일정 머리줄 2단(위 = 년월/년, 아래 = 일·주·월) + 본문 세로줄 맨 아래까지 */
@@ -4438,7 +4439,7 @@ function renderTkMaster(){
   const list=tkList(), R=tkRange(all,pj);
   const sh=(k,l)=>`<th class="sortable" onclick="tkSortBy('${k}')">${l}<span class="sort-icon">${tkSortK===k?(tkSortAsc?'↑':'↓'):''}</span></th>`;
   document.querySelectorAll('.tk-scsel').forEach(x=>{ x.innerHTML=tkScaleSelHtml(); });
-  document.getElementById('tkThead').innerHTML=`<tr><th class="tk-sticky">분야 · 세부과제</th>${sh('owner','담당')}${sh('start','시작')}${sh('target','목표')}${sh('done','완료')}${sh('pg','진척')}${sh('st','상태')}${sh('last','최근 활동')}<th>처리</th>${tkHide?'':`<th class="tk-tl-h">${tkHeadHtml(R,pj)}</th>`}</tr>`;
+  document.getElementById('tkThead').innerHTML=`<tr><th class="tk-sticky"><span id="tkAllFold" class="tk-allfold" onclick="tkToggleAll(event)" title="전체 분야 접기 / 펼치기">▾</span> 분야 · 세부과제</th>${sh('owner','담당')}${sh('start','시작')}${sh('target','목표')}${sh('done','완료')}${sh('pg','진척')}${sh('st','상태')}${sh('last','최근 활동')}<th>처리</th>${tkHide?'':`<th class="tk-tl-h">${tkHeadHtml(R,pj)}</th>`}</tr>`;
   const getters={owner:t=>t.owner_name||'',start:t=>t.start_date||'',target:t=>t.target_date||'',done:t=>t.done_date||'',pg:t=>t.progress||0,st:t=>tkStLabel(t),last:t=>tkLastLog(t)};
   const byA={}; list.forEach(t=>{ const a=t.area||'(분야 없음)'; (byA[a]=byA[a]||[]).push(t); });
   const fAr=document.getElementById('tkArea').value, fOn=!!(document.getElementById('tkSt').value||document.getElementById('tkWho').value.trim()||document.getElementById('tkKw').value.trim());
@@ -4461,6 +4462,8 @@ function renderTkMaster(){
         +`${tkHide?'':`<td class="tk-tl-c">${tkBarHtml(t,R,pj)}</td>`}</tr>`;
     });
   });
+  tkFoldAreas=ord.filter(a=>(byA[a]||[]).length);   // V20261121: 머리 ▾/▸ = 세부과제가 있는 분야 전체 접기·펼치기
+  { const fe=document.getElementById('tkAllFold'), allCol=tkFoldAreas.length&&tkFoldAreas.every(a=>tkCollapsed[a]); if(fe){ fe.textContent=allCol?'▸':'▾'; fe.title=allCol?'전체 분야 펼치기':'전체 분야 접기'; fe.style.visibility=tkFoldAreas.length?'':'hidden'; } }
   if(body&&!all.length) body=`<tr class="tk-hint"><td colspan="${tkHide?9:10}">💡 분야 줄의 「수정」을 눌러 그 분야의 세부과제를 추가하세요</td></tr>`+body;
   document.getElementById('tkBody').innerHTML=body||`<tr><td colspan="${tkHide?9:10}" style="text-align:center;padding:24px;color:#9aa1ab;">분야가 없습니다${tkCanProj(pj)?' — 「과제 수정」에서 분야를 추가하세요':''}</td></tr>`;
   document.getElementById('tkCnt').textContent=list.length+'건';
@@ -4500,6 +4503,9 @@ function tkStick(id,grp){
 }
 document.addEventListener('mouseup',ev=>{ if(ev.target&&ev.target.closest&&ev.target.closest('#dvLogTable')&&curMode==='task'&&!tkHide) setTimeout(()=>tkStickSpan('dvLogTable'),0); if(ev.target&&ev.target.closest&&ev.target.closest('#tkTable')) setTimeout(tkStick,0); if(ev.target&&ev.target.closest&&ev.target.closest('#dvMsTable')&&dvMsView==='gantt') setTimeout(()=>tkStick('dvMsTable','dv-grp'),0); });
 function tkToggle(a){ tkCollapsed[a]=!tkCollapsed[a]; renderTkMaster(); }
+/* V20261121: 추진과제 마스터 머리 「분야 · 세부과제」 ▾/▸ — 펼쳐진 분야가 하나라도 있으면 전체 접기, 모두 접혀 있으면 전체 펼치기 */
+let tkFoldAreas=[];
+function tkToggleAll(ev){ if(ev) ev.stopPropagation(); if(!tkFoldAreas.length) return; const anyOpen=tkFoldAreas.some(a=>!tkCollapsed[a]); tkFoldAreas.forEach(a=>{ tkCollapsed[a]=anyOpen; }); renderTkMaster(); }
 function tkScaleOpen(ev){
   ev.stopPropagation(); const m=document.getElementById('tkScaleMenu');
   [...m.querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.textContent===({day:'일별',week:'주별',month:'월별'}[tkScale])));
