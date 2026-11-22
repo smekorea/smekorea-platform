@@ -389,7 +389,7 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     </div>
     <div class="sb-item admin" data-key="admin" onclick="showSection('admin')">
       <div class="sb-name">관리자 설정</div>
-      <div class="sb-cnt">1</div>
+      <div class="sb-cnt">2</div>
     </div>
     <div class="sb-sep"></div>
     <div class="sb-item orange" data-key="collab" onclick="showSection('collab')">
@@ -658,13 +658,20 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     <div class="sec-panel" id="panel-admin">
       <div class="sec-hd">
         <div class="sec-title">관리자 설정</div>
-        <div class="sec-cnt">1</div>
+        <div class="sec-cnt">2</div>
       </div>
       <table class="menu-tbl">
         <tbody>
+          <!-- 기준정보 (master.html, 2026-11-23 관리자설정에서 분리 — 담당자 업무용 기준정보) -->
+          <tr onclick="openWithPW('master')">
+            <td><div class="m-name">기준정보</div><div class="m-desc">거래처·품목·재고기준</div></td>
+            <td><div class="m-desc">거래처·메이커·품목·LG사급 / 재고운영·납기·리드타임 / 매입매출·재고조사 업로드 / 접속 이력</div></td>
+            <td><span class="badge new-b">NEW</span></td>
+            <td><div class="act-btns"><button class="act-btn" aria-label="바로가기" onclick="go(event,'master.html')">→</button></div></td>
+          </tr>
           <tr onclick="openWithPW('admin')">
-            <td><div class="m-name">관리자 설정</div><div class="m-desc">마스터·직원·접속이력</div></td>
-            <td><div class="m-desc">마스터·직원·접속이력 / 매입매출·재고조사 업로드</div></td>
+            <td><div class="m-name">관리자 설정</div><div class="m-desc">직원·권한</div></td>
+            <td><div class="m-desc">직원 관리(조직·부서) / 권한 관리(계정·역할)</div></td>
             <td><span class="badge hq">관리자전용</span></td>
             <td><div class="act-btns"><button class="act-btn" aria-label="바로가기" onclick="go(event,'admin_log.html')">→</button></div></td>
           </tr>
@@ -860,9 +867,9 @@ initAuth();
 
 /* ── 개인 계정 (사번·개인 비밀번호) — 법인별로 app_entity_mode가 personal일 때 ── */
 let MODES=null;
-const HQ_KEYS={'admin_log.html':['admin','admin_partners','perm'],'hq_analysis.html':['hq'],'cost_table.html':['cost'],
+const HQ_KEYS={'admin_log.html':['admin','perm'],'hq_analysis.html':['hq'],'cost_table.html':['cost'],
   'kpi_shipping.html':['kpi_shipping'],'kpi_mfg.html':['kpi_mfg'],'kpi_purchase.html':['kpi_purchase'],'kpi_material.html':['kpi_material'],'kpi_planning.html':['kpi_planning']};
-const TARGET_KEY={trade:'trade',dailyclose:'dailyclose',ship:'ship',shiplot:'shiplot',po:'po',stock:'stock',smartmat:'smartmat',schedule:'schedule',workflow:'workflow',collab:'collab',directive:'directive',orgchart:'orgchart'};
+const TARGET_KEY={trade:'trade',dailyclose:'dailyclose',ship:'ship',shiplot:'shiplot',po:'po',stock:'stock',smartmat:'smartmat',schedule:'schedule',workflow:'workflow',collab:'collab',directive:'directive',orgchart:'orgchart',master:['master','admin_partners']};
 async function rpcIdx(fn,args){
   const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{})});
   const tx=await r.text();if(!r.ok){let m=tx;try{m=JSON.parse(tx).message||tx;}catch(e){}throw new Error(m);}return tx?JSON.parse(tx):null;
@@ -873,7 +880,7 @@ function myPerms(){try{return JSON.parse(localStorage.getItem('sme_perms')||'{}'
 function canOpen(t){
   if(!localStorage.getItem('sme_token'))return true;           // 기존 방식 로그인
   const k=TARGET_KEY[t];if(!k)return true;
-  const P=myPerms();if(P[k]&&P[k].v)return true;
+  const P=myPerms();if([].concat(k).some(x=>P[x]&&P[x].v))return true;
   alert(idxT('이 화면을 열 권한이 없습니다'));return false;
 }
 async function refreshMe(){
@@ -1069,7 +1076,7 @@ async function checkPW(){
 }
 
 function handleTarget(t,n){
-  const map={trade:'trade.html',dailyclose:'daily_close.html',ship:'shipment.html',shiplot:'ship_lot.html',po:'po_hub.html',stock:'stock_analysis.html',smartmat:'smart_material.html',schedule:'schedule.html',workflow:'workflow.html',collab:'collab.html',directive:'directive.html',orgchart:'org_chart.html',smdict:'smerp_dict.html'};
+  const map={trade:'trade.html',dailyclose:'daily_close.html',ship:'shipment.html',shiplot:'ship_lot.html',po:'po_hub.html',stock:'stock_analysis.html',smartmat:'smart_material.html',schedule:'schedule.html',workflow:'workflow.html',collab:'collab.html',directive:'directive.html',orgchart:'org_chart.html',smdict:'smerp_dict.html',master:'master.html'};
   if(map[t]){
     writeLog(n,t);
     if(t==='workflow') { window.open(map[t]+'?user='+encodeURIComponent(n),'_blank'); return; }
@@ -1127,7 +1134,7 @@ function nav(u){
 }
 // (2026-10-07) 바로가기 버튼으로 연 화면도 access_log에 남긴다 — SMERP 개발현황 활용도 자동 집계용.
 // 키는 행 클릭(handleTarget)과 같은 이름을 쓴다. 로그인 전이면 기록하지 않는다.
-const LOG_KEY_BY_URL={'daily_close.html':'dailyclose','shipment.html':'ship','ship_lot.html':'shiplot','po_hub.html':'po','stock_analysis.html':'stock','smart_material.html':'smartmat','schedule.html':'schedule','workflow.html':'workflow','collab.html':'collab','directive.html':'directive','org_chart.html':'orgchart','trade.html':'trade','smerp_dict.html':'smdict'};
+const LOG_KEY_BY_URL={'master.html':'master','daily_close.html':'dailyclose','shipment.html':'ship','ship_lot.html':'shiplot','po_hub.html':'po','stock_analysis.html':'stock','smart_material.html':'smartmat','schedule.html':'schedule','workflow.html':'workflow','collab.html':'collab','directive.html':'directive','org_chart.html':'orgchart','trade.html':'trade','smerp_dict.html':'smdict'};
 function logByUrl(u){
   const n=localStorage.getItem('sme_user');
   const k=LOG_KEY_BY_URL[String(u).split('?')[0]];
