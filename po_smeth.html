@@ -1218,8 +1218,13 @@ document.getElementById('m-date').value=new Date().toISOString().slice(0,10);
 </script>
 <script>
 // ── PO 수정/취소 (조회 목록) ──
+// 해외 PO 수정 규칙(V20261123-20): 본사 직원은 해외 PO 보기만 — 수정·취소 버튼은 해외법인 직원과 승인권자(시스템 관리자)에게만
+let _poApprover=false;
+(async()=>{try{const{data}=await sb.rpc('smerp_po_approver');_poApprover=data===true;if(_poApprover&&typeof renderList==='function')renderList();}catch(e){}})();
+function _poIsHQ(){return (localStorage.getItem('sme_entity')||'KOREA')==='KOREA';}
 function poActionBtns(r){
   if(r._sub) return '';
+  if(_poIsHQ()&&!_poApprover) return '';
   const id=String(r.id||'');
   if(!id) return '';
   return '<button class="po-actbtn edit" onclick="openEditPO(\''+id+'\')">'+t('수정')+'</button>'+
@@ -1227,6 +1232,9 @@ function poActionBtns(r){
 }
 function _findPO(id){ return (typeof listData!=='undefined'?listData:[]).find(x=>String(x.id)===String(id)); }
 function _shipBlock(r){
+  if((r.shipped||0)>0&&_poApprover){
+    return !confirm('이미 본사 출하가 진행된 PO입니다 (출하 '+(r.shipped||0).toLocaleString()+').\n승인권자로 수정·취소하시겠습니까?');
+  }
   if((r.shipped||0)>0){
     showToast(t('⚠ 이미 본사 출하가 진행된 PO입니다')+' ('+t('출하')+' '+(r.shipped||0).toLocaleString()+') — '+t('본사와 협의 후 처리하세요'),'error');
     return true;

@@ -934,10 +934,14 @@ function doLogin() {
     document.getElementById('pwInput').focus();
   }
 }
-function doLogout() {
-  if (!confirm('로그아웃 하시겠습니까?')) return;
-  localStorage.removeItem('sme_auth');
-  location.reload();
+function doLogout(){
+  // SMERP 개인 계정 로그아웃(메인과 동일) — 옛 1120 로그인창 사용 안 함 (V20261123-20)
+  if(!confirm('로그아웃 하시겠습니까?'))return;
+  const tk=localStorage.getItem('sme_token');
+  const done=()=>{['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change','sme_login_at','wf_session','sb-muxuhrbsbrstmrrvlupw-auth-token'].forEach(k=>localStorage.removeItem(k));
+    try{sessionStorage.removeItem('po_auth');sessionStorage.removeItem('hq_auth');}catch(e){}
+    location.href='../index.html';};
+  if(tk){sb.rpc('app_logout',{p_token:tk}).then(done,done);}else done();
 }
 
 // ══════════════════════════════════
@@ -2769,12 +2773,9 @@ function showToast(msg) {
 // 시작
 // ══════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
-  if (localStorage.getItem('sme_auth') === '1') {
-    document.getElementById('loginOverlay').style.display = 'none';
-    init();
-  } else {
-    document.getElementById('loginOverlay').style.display = 'flex';
-  }
+  // 로그인은 SMERP 개인 계정(smerp-session.js)이 확인 — 옛 1120 로그인창은 띄우지 않음
+  document.getElementById('loginOverlay').style.display = 'none';
+  init();
 });
 
 </script>

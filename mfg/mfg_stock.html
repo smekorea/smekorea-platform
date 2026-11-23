@@ -803,7 +803,15 @@ function doLogin(){
   if(pw==='1120'){localStorage.setItem('sme_auth','1');document.getElementById('lo').style.display='none';init();}
   else{document.getElementById('loginErr').textContent='비밀번호가 올바르지 않습니다.';document.getElementById('pwInput').value='';}
 }
-function doLogout(){if(!confirm('로그아웃?'))return;localStorage.removeItem('sme_auth');location.reload();}
+function doLogout(){
+  // SMERP 개인 계정 로그아웃(메인과 동일) — 옛 1120 로그인창 사용 안 함 (V20261123-20)
+  if(!confirm('로그아웃 하시겠습니까?'))return;
+  const tk=localStorage.getItem('sme_token');
+  const done=()=>{['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change','sme_login_at','wf_session','sb-muxuhrbsbrstmrrvlupw-auth-token'].forEach(k=>localStorage.removeItem(k));
+    try{sessionStorage.removeItem('po_auth');sessionStorage.removeItem('hq_auth');}catch(e){}
+    location.href='../index.html';};
+  if(tk){sb.rpc('app_logout',{p_token:tk}).then(done,done);}else done();
+}
 
 // ── 탭 ──
 function showTab(name){
@@ -1487,10 +1495,13 @@ function _cmp(a, b, key, asc){
 function initColResize(tableId, storageKey) {
   const table = document.getElementById(tableId);
   if (!table) return;
+  // 숨겨진 탭에서는 너비가 0으로 잡혀 칸이 전부 좁아짐 → 표가 보일 때만 적용 (V20261123-20)
+  if (table.offsetParent === null) return;
   const ths = table.querySelectorAll('thead th');
-  const saved = JSON.parse(localStorage.getItem(storageKey)||'{}');
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem(storageKey)||'{}')||{}; } catch(e) {}
   ths.forEach((th, i) => {
-    const w = saved[i] || th.offsetWidth;
+    const w = (saved[i] >= 50) ? saved[i] : Math.max(50, parseInt(th.getAttribute('data-w0')||th.style.width,10) || th.offsetWidth);
+    if (!th.getAttribute('data-w0')) th.setAttribute('data-w0', parseInt(th.style.width,10)||'');
     th.style.width = w + 'px'; th.style.minWidth = w + 'px';
   });
   table.style.tableLayout = 'fixed';
@@ -1751,8 +1762,8 @@ let _tt;
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
 
 window.addEventListener('DOMContentLoaded',()=>{
-  if(localStorage.getItem('sme_auth')==='1'){document.getElementById('lo').style.display='none';init();}
-  else document.getElementById('lo').style.display='flex';
+  // 로그인은 SMERP 개인 계정(smerp-session.js)이 확인 — 옛 1120 로그인창은 띄우지 않음
+  document.getElementById('lo').style.display='none';init();
 });
 </script>
 <script src="../smerp-tweaks.js"></script>
