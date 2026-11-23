@@ -197,7 +197,13 @@ body.memo-mode .event-chip.memo-chip.done{background:transparent !important;colo
 .lg-imp{background:#FFF9C4;color:#E24B4A;font-weight:700;border-left:3px solid #E24B4A;padding:0 5px;border-radius:3px;}
 .mp-imp-btn{background:#fff !important;color:#9ca3af !important;border:1.5px solid #e1e6ee !important;padding:0 10px !important;}
 .mp-imp-btn.on{background:#FFF9C4 !important;color:#E24B4A !important;border-color:#E24B4A !important;font-weight:700;}
-.mp-star{flex:none;border:none;background:none;cursor:pointer;font-size:15px;line-height:1;color:#d1d5db;padding:0 2px;}
+.mp-star{flex:none;border:none;background:none;cursor:pointer;font-size:15px;line-height:1;color:#9ca3af;padding:0 2px;}
+/* V20261123-13: 메모 칩은 왼쪽 세로 막대 없이 📝 + 바탕·글씨색만 / 고치기 중 「★ 중요」 버튼 */
+.event-chip.memo-chip{border-left:none !important;}
+.mp-edit-imp{flex:none;height:30px;border:1.5px solid #e1e6ee;background:#fff;color:#9ca3af;border-radius:6px;padding:0 9px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;}
+.mp-edit-imp.on{background:#FFF9C4;color:#E24B4A;border-color:#E24B4A;font-weight:700;}
+html.wf-dark .mp-edit-imp{background:var(--surface);border-color:var(--border);}
+html.wf-dark .mp-edit-imp.on{background:#4a3f12;color:#ff8f8f;border-color:#E24B4A;}
 .mp-star:hover{color:#f59e0b;}
 .mp-star.on{color:#E24B4A;}
 .mp-row.imp .mp-text{color:#E24B4A;font-weight:700;}
@@ -3535,6 +3541,14 @@ function memosForDate(ds){
 }
 var memoNewImp=false;   // V20261123-10: 입력창 「★ 중요」 상태
 function toggleMemoNewImp(){ memoNewImp=!memoNewImp; const b=document.getElementById('memo-pop-imp'); if(b) b.classList.toggle('on',memoNewImp); const inp=document.getElementById('memo-pop-input'); if(inp) inp.focus(); }
+// 고치기 중 「★ 중요」 — 입력 중인 글이 지워지지 않게 다시 그리지 않고 표시만 바꿈 (mousedown 기본동작 막아 입력칸 blur 방지)
+async function toggleMemoImpEdit(id,btn){
+  const mm=todos.find(x=>String(x.id)===String(id)); if(!mm) return;
+  mm.pri=(mm.pri===0)?1:0;
+  if(btn){ btn.classList.toggle('on',mm.pri===0); const row=btn.closest('.mp-row'); if(row){ row.classList.toggle('imp',mm.pri===0&&mm.status!=='done'); const st=row.querySelector('.mp-star'); if(st) st.classList.toggle('on',mm.pri===0); } }
+  saveLocal(); renderCal();
+  if(SB){ try{ await SB.from('cal_todos').update({pri:mm.pri}).eq('id',mm.id); }catch(e){ console.warn('[SB] toggleMemoImpEdit error:',e); } }
+}
 async function toggleMemoImp(id){
   const mm=todos.find(x=>String(x.id)===String(id)); if(!mm) return;
   mm.pri=(mm.pri===0)?1:0;
@@ -3578,7 +3592,7 @@ function renderMemoPop(){
     const id=String(mm.id), done=mm.status==='done';
     if(!done) no++;
     const txt=memoEditId===id
-      ? `<input class="mp-edit" id="mp-edit-${id}" value="${escapeHtml(mm.text)}" onkeydown="if(event.key==='Enter'&&!event.isComposing)saveMemoEdit('${id}');else if(event.key==='Escape'){memoEditId=null;renderMemoPop();}" onblur="saveMemoEdit('${id}')">`
+      ? `<input class="mp-edit" id="mp-edit-${id}" value="${escapeHtml(mm.text)}" onkeydown="if(event.key==='Enter'&&!event.isComposing)saveMemoEdit('${id}');else if(event.key==='Escape'){memoEditId=null;renderMemoPop();}" onblur="saveMemoEdit('${id}')"><button class="mp-edit-imp${mm.pri===0?' on':''}" onmousedown="event.preventDefault()" onclick="toggleMemoImpEdit('${id}',this)" title="${escapeHtml(t('중요 표시'))}">★ ${t('중요')}</button>`
       : `<span class="mp-text" title="${escapeHtml(t('눌러서 수정'))}" onclick="editMemo('${id}')">${escapeHtml(mm.text)}</span>`;
     const imp=mm.pri===0&&!done;
     return `<div class="mp-row${done?' done':''}${imp?' imp':''}">
