@@ -1,5 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
-   smerp-auth.js v1.0 (2026-10-30) — 개인 계정 권한 적용 (전 화면 공통)
+   smerp-auth.js v1.1 (2026-11-23) — 개인 계정 권한 적용 (전 화면 공통)
+   ── v1.1: 첫 비밀번호(1120)·초기화 후 새 비밀번호를 정하기 전에는 어떤 화면도 열지 않음(메인으로),
+            만료·사용중지 시 Supabase 로그인 세션도 함께 지움
    사용: <script src="smerp-auth.js?v=1" data-screen="trade"></script>  (mfg 폴더는 ../smerp-auth.js)
    ── 개인 계정(사번·개인 비밀번호, localStorage sme_token)으로 로그인한 경우만 작동
       · 화면 조회 권한이 없으면 화면을 가리고 홈 버튼만 보여줌
@@ -29,6 +31,7 @@
   };
   window.SMERP_AUTH=api;
   if(!token||!screenKey)return;
+  var KEYS=['sme_user','sme_auth','sme_hq_auth','sme_token','sme_emp_no','sme_perms','sme_must_change','sb-muxuhrbsbrstmrrvlupw-auth-token'];
 
   // ── 조회 권한 없음: 화면을 가림 ──
   var lang=(ls('wf_lang')||ls('sme_lang')||ls('idx_lang')||'ko');
@@ -44,6 +47,12 @@
       d.innerHTML='<div class="bx"><b>'+msg(0)+'</b><p>'+msg(1)+'</p><a href="'+home+'">'+msg(2)+'</a></div>';document.body.appendChild(d);};
     if(document.body)put();else document.addEventListener('DOMContentLoaded',put);
   }
+  // 새 비밀번호를 정하기 전(1120 로그인) — 메인에서 비밀번호부터
+  function goChangePw(){
+    alert(lang==='en'?'Please set a new password first.':(lang==='zh'?'请先设置新密码。':'새 비밀번호를 먼저 정해주세요.'));
+    location.href=home;
+  }
+  if(ls('sme_must_change')==='1'){block();goChangePw();return;}
   var p0=perms[screenKey];
   if(!(p0&&p0.v)){block();verify(true);return;}
 
@@ -95,10 +104,11 @@
       .then(function(me){
         if(me===undefined)return;            // 네트워크 오류 — 저장된 권한으로 계속
         if(!me){
-          ['sme_user','sme_auth','sme_hq_auth','sme_token','sme_emp_no','sme_perms'].forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});
+          KEYS.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});
           alert(lang==='en'?'Your login has expired. Please sign in again.':(lang==='zh'?'登录已过期，请重新登录。':'로그인이 만료되었습니다. 다시 로그인해주세요.'));
           location.href=home;return;
         }
+        if(me.must_change){try{localStorage.setItem('sme_must_change','1');}catch(e){}block();goChangePw();return;}
         var np=me.perms||{};
         try{localStorage.setItem('sme_perms',JSON.stringify(np));}catch(e){}
         var changed=JSON.stringify(np[screenKey]||{})!==JSON.stringify(perms[screenKey]||{});

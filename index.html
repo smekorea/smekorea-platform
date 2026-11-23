@@ -738,16 +738,19 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
   <div class="popup-box">
     <div class="popup-icon">🔑</div>
     <div class="popup-title" data-i18n="비밀번호 변경">비밀번호 변경</div>
-    <div class="popup-sub" id="cpwSub" data-i18n="8자 이상, 영문과 숫자를 함께 써주세요">8자 이상, 영문과 숫자를 함께 써주세요</div>
+    <div class="popup-sub" id="cpwSub" data-i18n="4~6자 — 숫자·문자·특수문자 모두 가능">4~6자 — 숫자·문자·특수문자 모두 가능</div>
+    <div id="cpwOldWrap">
     <div class="popup-lbl" data-i18n="현재 비밀번호">현재 비밀번호</div>
     <input class="popup-inp" id="cpwOld" type="password" maxlength="64" autocomplete="current-password">
+    </div>
     <div class="popup-lbl" data-i18n="새 비밀번호">새 비밀번호</div>
-    <input class="popup-inp" id="cpwNew" type="password" maxlength="64" autocomplete="new-password">
+    <input class="popup-inp" id="cpwNew" type="password" maxlength="6" autocomplete="new-password">
     <div class="popup-lbl" data-i18n="새 비밀번호 확인">새 비밀번호 확인</div>
-    <input class="popup-inp" id="cpwNew2" type="password" maxlength="64" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePw()">
+    <input class="popup-inp" id="cpwNew2" type="password" maxlength="6" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePw()">
     <div class="popup-err" id="cpwError"></div>
     <button class="popup-btn" onclick="submitChangePw()" data-i18n="변경">변경</button>
     <div class="popup-cancel" id="cpwCancel" onclick="closeChangePw()">✕ <span data-i18n="취소">취소</span></div>
+    <div class="popup-cancel" id="cpwLogout" onclick="forceLogout()" style="display:none;">✕ <span data-i18n="로그아웃">로그아웃</span></div>
   </div>
 </div>
 
@@ -858,7 +861,9 @@ function initAuth(){
   refreshMe();
 }
 // 경영 마감 · 전용 메뉴: 전용 비밀번호(DB private_login 확인)로 로그인한 허용 명단만 표시
-function isPrivate(){return localStorage.getItem('sme_auth')==='1'&&localStorage.getItem('sme_private')==='1';}
+function isPrivate(){
+  if(localStorage.getItem('sme_token')){const P=myPerms();return localStorage.getItem('sme_auth')==='1'&&!!(P.dailyclose&&P.dailyclose.v);} // 개인 계정: 일일 마감보고 권한
+  return localStorage.getItem('sme_auth')==='1'&&localStorage.getItem('sme_private')==='1';}
 function applyPrivate(){
   const on=isPrivate();const g=document.getElementById('privGrp');if(g)g.classList.toggle('on',on);
   const c=on?2:1;['sbCntTrade','secCntTrade'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=c;});
@@ -879,32 +884,44 @@ function isPersonal(ent){return !!(MODES&&MODES[ent]==='personal');}
 function myPerms(){try{return JSON.parse(localStorage.getItem('sme_perms')||'{}');}catch(e){return {};}}
 function canOpen(t){
   if(!localStorage.getItem('sme_token'))return true;           // 기존 방식 로그인
+  if(mustChange()){openChangePw(true,t);return false;}         // 1120 로그인 — 새 비밀번호 먼저
   const k=TARGET_KEY[t];if(!k)return true;
   const P=myPerms();if([].concat(k).some(x=>P[x]&&P[x].v))return true;
   alert(idxT('이 화면을 열 권한이 없습니다'));return false;
 }
+async function authFn(body){
+  let r,j=null;
+  try{r=await fetch(SB_URL+'/functions/v1/smerp-auth',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});j=await r.json();}catch(e){}
+  if(!j)throw new Error(idxT('서버에 연결할 수 없습니다'));
+  return j;
+}
+// Supabase 로그인 세션 저장 — 다른 화면의 supabase-js가 같은 세션을 씀(DB 단 권한 확인용)
+const SB_AUTH_KEY='sb-muxuhrbsbrstmrrvlupw-auth-token';
+function saveSbSession(ses){try{if(ses)localStorage.setItem(SB_AUTH_KEY,JSON.stringify(ses));}catch(e){}}
+function mustChange(){return localStorage.getItem('sme_must_change')==='1';}
 async function refreshMe(){
   const tk=localStorage.getItem('sme_token');if(!tk)return;
   let me=null;try{me=await rpcIdx('app_me',{p_token:tk});}catch(e){return;}
   if(!me){ // 만료·사용중지 → 다시 로그인
-    ['sme_user','sme_auth','sme_hq_auth','sme_token','sme_emp_no','sme_perms','sme_private'].forEach(k=>localStorage.removeItem(k));
+    clearLogin();
     document.getElementById('tbUser').style.display='none';applyPrivate();return;
   }
-  localStorage.setItem('sme_perms',JSON.stringify(me.perms||{}));
+  localStorage.setItem('sme_perms',JSON.stringify(me.perms||{}));applyPrivate();
   document.getElementById('tbChpw').style.display='';
-  if(me.must_change)openChangePw(true);
+  if(me.must_change){localStorage.setItem('sme_must_change','1');openChangePw(true);}else localStorage.removeItem('sme_must_change');
 }
 async function personalLogin(){
-  const err=document.getElementById('pwError');const no=parseInt(document.getElementById('empNoInput').value,10);const pw=document.getElementById('pwInput').value;
-  if(!no){err.textContent='⚠ '+idxT('사번을 입력해주세요');return;}
+  const err=document.getElementById('pwError');const no=parseInt(document.getElementById('nameSelect').value,10);const pw=document.getElementById('pwInput').value;
+  if(!no){err.textContent='⚠ '+idxT('이름을 선택해주세요');return;}
   err.textContent=idxT('로그인 중...');
-  let r;try{r=await rpcIdx('app_login',{p_entity:pendingEntity,p_emp_no:no,p_pw:pw});}catch(e){err.textContent='⚠ '+e.message;return;}
+  let r;try{r=await authFn({action:'login',entity:pendingEntity,emp_no:no,pw:pw});}catch(e){err.textContent='⚠ '+e.message;return;}
   if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||idxT('비밀번호가 올바르지 않습니다'));document.getElementById('pwInput').value='';return;}
-  localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));
+  localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));saveSbSession(r.session);
   localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);localStorage.removeItem('sme_private');
   localStorage.removeItem('sme_hq_auth');sessionStorage.removeItem('hq_auth');sessionStorage.setItem('po_auth','1');
+  if(r.must_change)localStorage.setItem('sme_must_change','1');else localStorage.removeItem('sme_must_change');
   let me=null;try{me=await rpcIdx('app_me',{p_token:r.token});}catch(e){}
-  localStorage.setItem('sme_perms',JSON.stringify((me&&me.perms)||{}));
+  localStorage.setItem('sme_perms',JSON.stringify((me&&me.perms)||{}));applyPrivate();
   document.getElementById('tbUser').style.display='flex';document.getElementById('tbUserName').textContent=r.name+' 님';
   document.getElementById('tbChpw').style.display='';
   await idxLangAfterLogin(r.entity,r.name,r.emp_no);
@@ -913,29 +930,44 @@ async function personalLogin(){
   if(pendingTarget&&canOpen(pendingTarget))handleTarget(pendingTarget,r.name);
 }
 let cpwAfter='';
+// 첫 로그인(1120)·초기화 후: 새 비밀번호를 저장하기 전에는 닫을 수 없음 (취소 = 로그아웃)
 function openChangePw(force,after){
   cpwAfter=after||'';
   ['cpwOld','cpwNew','cpwNew2'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('cpwError').textContent='';
-  document.getElementById('cpwSub').textContent=force?idxT('처음 로그인하셨습니다. 비밀번호를 바꿔주세요')+' — '+idxT('8자 이상, 영문과 숫자를 함께 써주세요'):idxT('8자 이상, 영문과 숫자를 함께 써주세요');
+  document.getElementById('cpwSub').textContent=force?idxT('처음 로그인하셨습니다. 새 비밀번호를 입력해주세요')+' — '+idxT('4~6자 — 숫자·문자·특수문자 모두 가능'):idxT('4~6자 — 숫자·문자·특수문자 모두 가능');
+  document.getElementById('cpwOldWrap').style.display=force?'none':'';
   document.getElementById('cpwCancel').style.display=force?'none':'';
+  document.getElementById('cpwLogout').style.display=force?'':'none';
   document.getElementById('cpwOverlay').style.display='flex';
-  setTimeout(()=>document.getElementById('cpwOld').focus(),80);
+  setTimeout(()=>document.getElementById(force?'cpwNew':'cpwOld').focus(),80);
 }
-function closeChangePw(){document.getElementById('cpwOverlay').style.display='none';}
+function closeChangePw(){if(mustChange())return;document.getElementById('cpwOverlay').style.display='none';}
 async function submitChangePw(){
   const o=document.getElementById('cpwOld').value,n1=document.getElementById('cpwNew').value,n2=document.getElementById('cpwNew2').value,err=document.getElementById('cpwError');
   if(n1!==n2){err.textContent='⚠ '+idxT('새 비밀번호가 서로 다릅니다');return;}
-  let r;try{r=await rpcIdx('app_change_pw',{p_token:localStorage.getItem('sme_token'),p_old:o,p_new:n1});}catch(e){err.textContent='⚠ '+e.message;return;}
+  if(n1.length<4||n1.length>6){err.textContent='⚠ '+idxT('새 비밀번호는 4~6자로 입력하세요');return;}
+  if(n1==='1120'){err.textContent='⚠ '+idxT('1120은 새 비밀번호로 쓸 수 없습니다');return;}
+  err.textContent=idxT('저장 중...');
+  let r;try{r=await authFn({action:'change_pw',token:localStorage.getItem('sme_token'),old:o,new:n1});}catch(e){err.textContent='⚠ '+e.message;return;}
   if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||'');return;}
-  closeChangePw();alert(idxT('비밀번호 변경')+' ✓');
+  saveSbSession(r.session);localStorage.removeItem('sme_must_change');
+  document.getElementById('cpwOverlay').style.display='none';alert(idxT('비밀번호를 바꿨습니다'));
   const t=cpwAfter;cpwAfter='';if(t&&canOpen(t))handleTarget(t,localStorage.getItem('sme_user'));
+}
+function clearLogin(){
+  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change',SB_AUTH_KEY].forEach(k=>localStorage.removeItem(k));
+}
+function forceLogout(){
+  const tk=localStorage.getItem('sme_token');if(tk)rpcIdx('app_logout',{p_token:tk}).catch(()=>{});
+  clearLogin();document.getElementById('cpwOverlay').style.display='none';
+  document.getElementById('tbUser').style.display='none';document.getElementById('tbChpw').style.display='none';applyPrivate();
 }
 
 function doLogout(){
   if(!confirm('로그아웃 하시겠습니까?'))return;
   const tk=localStorage.getItem('sme_token');if(tk)rpcIdx('app_logout',{p_token:tk}).catch(()=>{});
-  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private'].forEach(k=>localStorage.removeItem(k));
+  clearLogin();
   applyPrivate();
   document.getElementById('tbChpw').style.display='none';
   ['po_auth','hq_auth'].forEach(k=>sessionStorage.removeItem(k));
@@ -1021,18 +1053,21 @@ async function onCorpSelect(){
   pendingEntity=CORP_ENTITY_MAP[corp]||'';
   await loadModes();
   const personal=isPersonal(pendingEntity);
-  document.getElementById('empNoWrap').style.display=personal?'':'none';
-  document.getElementById('nameWrap').style.display=personal?'none':'';
+  document.getElementById('empNoWrap').style.display='none';
+  document.getElementById('nameWrap').style.display='';
   document.getElementById('pwInput').placeholder=personal?'':'••••';
-  if(personal){setTimeout(()=>document.getElementById('empNoInput').focus(),50);return;}
   if(!corp){ sel.innerHTML=`<option value="">${idxT('— 법인을 먼저 선택해주세요 —')}</option>`; sel.disabled=true; return; }
   sel.innerHTML=`<option value="">${idxT('불러오는 중...')}</option>`; sel.disabled=true;
   try{
-    const res=await fetch(`${SB_URL}/rest/v1/employees?select=name,rank&active=eq.true&entity=eq.${pendingEntity}&order=emp_no`,
+    const res=await fetch(`${SB_URL}/rest/v1/employees?select=emp_no,name,name_local,rank,dept&active=eq.true&entity=eq.${pendingEntity}&order=emp_no`,
       {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
     const data=await res.json();
+    // 개인 계정 법인: 값 = 사번(로그인 키), 동명이인은 부서로 구분, 해외는 현지 이름 함께
+    const cnt={};(data||[]).forEach(e=>{cnt[e.name]=(cnt[e.name]||0)+1;});
     sel.innerHTML=`<option value="">${idxT('— 선택해주세요 —')}</option>`+
-      (data||[]).map(e=>`<option value="${e.name}">${e.name}${e.rank?' ('+e.rank+')':''}</option>`).join('');
+      (data||[]).map(e=>{
+        const tail=personal?(cnt[e.name]>1&&e.dept?' ('+e.dept+')':(e.rank?' ('+e.rank+')':''))+(e.name_local?' '+e.name_local:''):(e.rank?' ('+e.rank+')':'');
+        return `<option value="${personal?e.emp_no:e.name}">${e.name}${tail}</option>`;}).join('');
   }catch(e){
     sel.innerHTML=`<option value="">${idxT('불러오기 실패 (새로고침 후 재시도)')}</option>`;
   }
@@ -1043,7 +1078,7 @@ function getName(){return document.getElementById('nameSelect').value;}
 function openWithPW(t){
   pendingTarget=t;
   const n=localStorage.getItem('sme_user');
-  if(t==='dailyclose'&&localStorage.getItem('sme_auth')==='1'&&!isPrivate()){alert('전용 비밀번호로 로그인한 경우에만 열 수 있습니다.\n로그아웃 후 전용 비밀번호로 다시 로그인해주세요.');return;}
+  if(t==='dailyclose'&&localStorage.getItem('sme_auth')==='1'&&!localStorage.getItem('sme_token')&&!isPrivate()){alert('전용 비밀번호로 로그인한 경우에만 열 수 있습니다.\n로그아웃 후 전용 비밀번호로 다시 로그인해주세요.');return;}
   if(n&&localStorage.getItem('sme_auth')==='1'){if(!canOpen(t))return;sessionStorage.setItem('po_auth','1');handleTarget(t,n);return;}
   ['corpSelect','pwInput','empNoInput'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('empNoWrap').style.display='none';document.getElementById('nameWrap').style.display='';
@@ -1094,6 +1129,7 @@ function handleTarget(t,n){
 
 function openHQ(url,screen){
   if(localStorage.getItem('sme_token')){
+    if(mustChange()){openChangePw(true);return;}
     const k=HQ_KEYS[url]||[];const P=myPerms();
     if(!k.some(x=>P[x]&&P[x].v)){alert(idxT('이 화면을 열 권한이 없습니다'));return;}
     localStorage.setItem('sme_hq_auth','1');sessionStorage.setItem('hq_auth','1');writeLog(localStorage.getItem('sme_user'),screen);nav(url);return;
