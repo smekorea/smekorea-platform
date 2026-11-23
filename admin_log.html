@@ -741,7 +741,7 @@ td.center .al-pline{justify-content:center;}
       <span class="big-tt">권한 관리</span><span class="big-sub" id="pmSub"></span>
       <span class="big-grow"></span>
       <button class="big-btn big-btn-p" id="pmV-users" onclick="pmView('users')" style="display:none;">← 사람별 권한</button>
-      <button class="big-btn" id="pmV-roles" onclick="pmView('roles')" style="font-size:11.5px;" title="역할(권한 묶음)을 고칩니다 — 시스템 관리자">역할 묶음 편집</button>
+      <button class="big-btn" id="pmV-roles" onclick="pmView('roles')" style="font-size:11.5px;" title="부서별 기본 권한 세트를 고칩니다 — 시스템 관리자">기본 권한 편집</button>
       <button class="big-btn" id="pmV-ops" onclick="pmView('ops')" style="font-size:11.5px;" title="법인별 일괄 발급·로그인 방식 전환 — 시스템 관리자">법인 일괄 발급·전환</button>
       <button class="big-btn" onclick="pmLoad()">새로고침</button>
     </div>
@@ -1567,7 +1567,7 @@ var PM_ST_TIP={'역할 없음':'역할이 없으면 로그인할 수 없습니�
 function pmB(txt,style){return `<span class="badge" style="${style}" title="${_pe(PM_ST_TIP[txt]||'')}">${txt}</span>`;}
 function pmStatus(u){
   const b=[];
-  if(!u.role_id)b.push(pmB('역할 없음','background:var(--bg);color:var(--muted);border:1px solid var(--border);'));
+  if(!u.role_id)b.push(pmB('기본 권한 없음','background:var(--bg);color:var(--muted);border:1px solid var(--border);'));
   if(!u.has_pw)b.push(pmB('미발급','background:var(--bg);color:var(--muted);border:1px solid var(--border);'));
   else if(u.must_change)b.push(pmB('1120 (변경 전)','background:#FFF7E6;color:#B45309;border:1px solid #F5D49A;'));
   if(u.locked)b.push(pmB('잠김','background:#FDECEC;color:#B91C1C;border:1px solid #F3B4B4;'));
@@ -1611,21 +1611,24 @@ function pmExtra(u){
   let h=`<div class="pm-form" style="flex-wrap:wrap;gap:14px;"><b style="margin-right:4px;" title="직원 관리와 권한 관리는 따로 줍니다. 본사 직원이면 전 법인, 해외는 자기 법인만">관리 권한</b>`+
     `<label title="관리자설정 > 직원 관리: 직원 등록·수정·퇴직 처리"><input type="checkbox" ${eff('admin')?'checked':''} ${byRole&&role.is_admin?'disabled':''} onchange="pmSetMgr(${u.emp_no},'admin',this.checked)"> 직원 관리 (등록·수정·퇴직)</label>`+
     `<label title="관리자설정 > 권한 관리: 역할·화면 권한 지정, 계정 발급, 비밀번호 초기화"><input type="checkbox" ${eff('perm')?'checked':''} ${byRole&&role.is_admin?'disabled':''} onchange="pmSetMgr(${u.emp_no},'perm',this.checked)"> 권한 관리 (역할·권한 지정·계정 발급·초기화)</label>`;
-  if(u.entity==='KOREA'){
-    const ents=u.entities||[];
-    h+=`<span style="color:var(--muted);font-size:12px;">볼 수 있는 해외법인 (아무것도 안 고르면 전체)</span>`+
-      [['SMEGLOBAL','태국 SMETH'],['SMECN','중국 SMECN'],['GSMEIN','인도 SMEIN']].map(([k,l])=>`<label><input type="checkbox" class="pmU-ent" value="${k}" ${ents.includes(k)?'checked':''}> ${l}</label>`).join('')+
-      `<button class="row-btn" onclick="pmSaveEnts(${u.emp_no})">법인 범위 저장</button>`;
-  }
   return h+`</div>`;
 }
 async function pmSetMgr(no,key,on){
   const a={p_token:pmTok(),p_emp_no:no,p_screen:key,p_v:on,p_c:on,p_u:on,p_d:on&&key==='admin',p_f:false};
   try{await pmRpc('app_admin_save_override',a);await pmLoad();delete PM.logs[no];pmPick(no);}catch(e){alert('저장 실패: '+e.message);pmRenderUsers();}
 }
+// 볼 수 있는 해외법인 — 본사 직원만, 체크한 법인만 (기본 = 본사만), 시스템 관리자는 전 법인
+function pmEntLine(u){
+  if(u.entity!=='KOREA'||!pmScopeAll())return '';
+  const role=(PM.data.roles||[]).find(r=>r.id===u.role_id);
+  if(role&&role.is_admin)return `<div class="pm-form"><b>볼 수 있는 해외법인</b><span style="color:var(--muted);">시스템 관리자 — 전 법인</span></div>`;
+  const ents=u.entities||[];
+  return `<div class="pm-form"><b>볼 수 있는 해외법인</b>`+[['SMECN','중국 SMECN'],['SMEGLOBAL','태국 SMETH'],['GSMEIN','인도 SMEIN']].map(([k,l])=>`<label><input type="checkbox" class="pmU-ent" value="${k}" ${ents.includes(k)?'checked':''} onchange="pmSaveEnts(${u.emp_no})"> ${l}</label>`).join('')+
+    `<span style="color:var(--muted);font-size:12px;">체크한 법인 자료만 볼 수 있습니다 (체크 없음 = 본사만)</span></div>`;
+}
 async function pmSaveEnts(no){
   const ents=[...document.querySelectorAll('.pmU-ent:checked')].map(x=>x.value);
-  try{await pmRpc('app_admin_save_entities',{p_token:pmTok(),p_emp_no:no,p_entities:ents});await pmLoad();delete PM.logs[no];pmPick(no);alert('저장했습니다.');}catch(e){alert('저장 실패: '+e.message);}
+  try{await pmRpc('app_admin_save_entities',{p_token:pmTok(),p_emp_no:no,p_entities:ents});await pmLoad();delete PM.logs[no];pmPick(no);}catch(e){alert('저장 실패: '+e.message);}
 }
 function pmRoleSummary(roleId){
   if(!roleId)return '<span style="color:var(--accent);">역할이 없으면 로그인할 수 없습니다.</span>';
@@ -1663,31 +1666,33 @@ function pmRenderUsers(){
     const roles=(D.roles||[]).filter(r=>(pmIsAdmin()||!r.is_admin)&&(pmScopeAll()?true:(!r.can_manage_entity&&(r.entity===u.entity||r.entity==='OVERSEAS'))));
     right=`<div class="pm-card"><div class="pm-card-h"><b style="font-size:16px;">${_pe(u.name)}</b>${u.name_local?' <span style="color:var(--muted)">'+_pe(u.name_local)+'</span>':''} <span style="color:var(--muted);">· 사번 ${u.emp_no} · ${_pe(PM_ENT[u.entity]||u.entity)} · ${_pe(u.dept||'')} ${_pe(u.rank||'')}</span> <span style="margin-left:6px;">${pmStatus(u)}</span>`+
       `<span style="float:right;font-size:12px;color:var(--muted);">마지막 로그인 ${u.last_login?_pe(String(u.last_login).slice(0,16).replace('T',' ')):'없음'}</span></div>`+
-      `<div class="pm-form"><b style="margin-right:4px;">역할</b><select id="pmU-role" onchange="pmEl('pmU-chg').style.display=(+this.value||null)===${u.role_id||'null'}?'none':'';"><option value="">(역할 없음 — 로그인 불가)</option>${roles.map(r=>`<option value="${r.id}" ${r.id===u.role_id?'selected':''}>${_pe(r.name)}</option>`).join('')}</select>`+
-      `<label title="끄면 이 사람은 로그인할 수 없습니다"><input type="checkbox" id="pmU-active" ${(!u.has_acct||u.acct_active)?'checked':''}> 계정 사용</label>`+
-      `<button class="row-btn" onclick="pmSaveUser(${u.emp_no},false)">저장</button><span id="pmU-chg" style="display:none;color:var(--accent);font-size:12px;font-weight:700;">「저장」을 눌러야 역할이 바뀝니다</span>`+
+      `<div class="pm-form"><b style="margin-right:4px;" title="부서별 기본 권한 세트 — 새 화면이 생기면 이 세트에 넣어 한 번에 적용. 아래 화면별 권한은 이 사람만의 예외">기본 권한(부서)</b>`+
+      `<span id="pmU-roleTxt" style="${u.role_id?'':'display:none;'}"><b style="color:var(--point);">${_pe(pmRoleName(u.role_id)||'')}</b> <button class="row-btn" style="padding:2px 8px;font-size:11.5px;" onclick="pmEl('pmU-roleTxt').style.display='none';pmEl('pmU-roleEd').style.display='';">변경</button></span>`+
+      `<span id="pmU-roleEd" style="${u.role_id?'display:none;':''}display:${u.role_id?'none':'inline-flex'};gap:6px;align-items:center;"><select id="pmU-role"><option value="">(없음 — 로그인 불가)</option>${roles.map(r=>`<option value="${r.id}" ${r.id===u.role_id?'selected':''}>${_pe(r.name)}</option>`).join('')}</select>`+
+      `<button class="row-btn" onclick="pmSaveUser(${u.emp_no},false)">저장</button></span>`+
+      `<label title="끄면 이 사람은 로그인할 수 없습니다" style="margin-left:10px;"><input type="checkbox" id="pmU-active" ${(!u.has_acct||u.acct_active)?'checked':''} onchange="pmSaveUser(${u.emp_no},false)"> 계정 사용</label>`+
       `<span style="margin-left:auto;display:flex;gap:6px;">`+(u.locked?`<button class="row-btn" onclick="pmSaveUser(${u.emp_no},true)">잠금 해제</button>`:'')+
       (u.has_pw?`<button class="row-btn" onclick="pmResetPw(${u.emp_no})" title="비밀번호를 1120으로 초기화 (다음 로그인 때 본인이 변경)">비밀번호 초기화(1120)</button>`
                :`<button class="row-btn" style="background:var(--point);color:#fff;" onclick="pmIssueOne(${u.emp_no})" title="이 사람 계정을 만듭니다 (첫 비밀번호 1120) — 역할을 먼저 저장하세요">계정 발급(1120)</button>`)+`</span></div>`+
       pmExtra(u)+
-      `<div class="pm-step" style="margin-top:10px;"><b>화면별 권한</b><span style="color:var(--muted);font-size:12px;margin-left:8px;">지금 적용 중인 권한에 체크되어 있습니다 · 노란 줄 = 역할 기본값과 다르게 바꾼 화면</span></div>`+
+      `<div class="pm-step" style="margin-top:10px;"><b>화면별 권한</b><span style="color:var(--muted);font-size:12px;margin-left:8px;">지금 적용 중인 권한에 체크되어 있습니다 · 노란 줄 = 기본 권한(부서)과 다르게 바꾼 화면</span></div>`+pmEntLine(u)+
       pmLvTable(u)+
       `<div class="pm-step" style="margin-top:14px;"><b>변경 이력</b></div><div class="pm-hist" id="pmHist">${pmHistHtml(u.emp_no)}</div></div>`;
   }
   pmPaint(`<div class="pm-wrap"><div class="pm-left">${left}</div><div class="pm-right">${right}</div></div>`);
 }
 function pmLvTable(u){
-  let h=`<table class="pm-lvt"><colgroup><col style="width:110px"><col style="width:190px">${PM_LV4.map(()=>'<col style="width:76px">').join('')}<col style="width:60px"><col style="width:86px"></colgroup>`+
-    `<thead><tr><th>묶음</th><th>화면</th>${PM_LV4.map(x=>`<th class="c">${x[1]}</th>`).join('')}<th class="c" title="확정·승인 (확정 기능이 있는 화면만)">승인</th><th class="c"></th></tr></thead><tbody>`;
+  let h=`<table class="pm-lvt"><colgroup><col style="width:110px"><col style="width:190px">${PM_LV4.map(()=>'<col style="width:76px">').join('')}<col style="width:60px"></colgroup>`+
+    `<thead><tr><th>묶음</th><th>화면</th>${PM_LV4.map(x=>`<th class="c">${x[1]}</th>`).join('')}<th class="c" title="확정·승인 (확정 기능이 있는 화면만)">승인</th></tr></thead><tbody>`;
   let lastG='';
   pmScreens().filter(s=>!['admin','perm'].includes(s.key)).forEach(s=>{ // 관리자설정 두 화면은 위 「관리 권한」 줄에서
     const e=pmEff(u.emp_no,u.role_id,s.key);const lv=pmLv4(e.p);const acts=s.actions||'';
     const can={none:true,view:acts.includes('v'),edit:/[cu]/.test(acts),del:acts.includes('d')};
     const diff=!!e.o;
-    h+=`<tr class="${diff?'pm-ov':''}"><td>${s.grp!==lastG?_pe(s.grp):''}</td><td>${_pe(s.label)}</td>`;lastG=s.grp;
+    h+=`<tr class="${diff?'pm-ov':''}" ${diff?'title="기본 권한(부서)과 다르게 설정됨"':''}><td>${s.grp!==lastG?_pe(s.grp):''}</td><td>${_pe(s.label)}</td>`;lastG=s.grp;
     PM_LV4.forEach(([k])=>{h+=`<td class="c"><input type="radio" name="pmlv_${s.key}" ${lv===k?'checked':''} ${can[k]?'':'disabled'} onchange="pmSetLv(${u.emp_no},'${s.key}','${k}')"></td>`;});
     h+=`<td class="c">${acts.includes('f')?`<input type="checkbox" ${e.p.f?'checked':''} onchange="pmSetF(${u.emp_no},'${s.key}',this.checked)">`:'<span style="color:#cbd5e1;">—</span>'}</td>`;
-    h+=`<td class="c">${diff?`<button class="row-btn" style="padding:2px 6px;font-size:11px;" onclick="pmToRole(${u.emp_no},'${s.key}')" title="이 화면을 역할 기본값으로 되돌립니다">역할대로</button>`:''}</td></tr>`;
+    h+=`</tr>`;
   });
   return h+'</tbody></table>';
 }
@@ -1763,7 +1768,7 @@ async function pmSaveUser(no,unlock){
 }
 async function pmIssueOne(no){
   const u=(PM.data.users||[]).find(x=>x.emp_no===no);
-  if(!u||!u.role_id){alert('역할을 먼저 고르고 「저장」한 뒤 발급하세요.');return;}
+  if(!u||!u.role_id){alert('기본 권한(부서)을 먼저 고르고 「저장」한 뒤 발급하세요.');return;}
   if(!confirm('이 사람의 계정을 발급합니다. 첫 비밀번호는 1120이며, 첫 로그인 때 본인이 새 비밀번호를 정합니다.'))return;
   try{const r=await admAuthFn({action:'admin_reset',token:pmTok(),emp_no:no});if(!r||!r.ok)throw new Error((r&&r.error)||'');alert('계정을 발급했습니다 — 사번 '+no+', 첫 비밀번호 1120');await pmLoad();delete PM.logs[no];pmPick(no);}
   catch(e){alert('발급 실패: '+e.message);}
