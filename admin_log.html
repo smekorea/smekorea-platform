@@ -85,15 +85,16 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .pm-mx tr.pm-ov td{background:#FFF9EB;}
 .pm-hint{margin:0 16px 10px;padding:7px 12px;background:#F6F8FB;border-left:3px solid var(--point);font-size:12.5px;color:#374151;}
 .pm-lvt{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px;}
-.pm-lvt th{background:#1B3A6B;color:#fff;font-weight:700;padding:6px 8px;border-bottom:1px solid #dfe5ee;border-right:1px solid #e8edf5;text-align:left;position:sticky;top:0;z-index:2;}
+.pm-lvt th{background:#1B3A6B;color:#fff;font-weight:700;border-right-color:#ffffff33 !important;padding:6px 8px;border-bottom:1px solid #dfe5ee;border-right:1px solid #e8edf5;text-align:left;position:sticky;top:0;z-index:2;}
 .pm-lvt td{padding:4px 8px;border-bottom:1px solid #eef1f5;border-right:1px solid #e8edf5;color:#111827;}
 .pm-lvt td.c,.pm-lvt th.c{text-align:center;}
-.pm-lvt tr.pm-ov td{background:#FFF9EB;}
+.pm-lvt tr.pm-g1 td{border-top:2px solid #1B3A6B;}
+.pm-lvt td.pm-grp{vertical-align:middle;font-weight:700;border-right:2px solid #1B3A6B;}
+.pm-lvt .pm-own{color:#B45309;font-size:11px;font-weight:700;margin-left:4px;}
+.pm-lvlegend .pm-own{color:#B45309;font-weight:700;}
 .pm-lvt th small{display:block;font-size:10px;font-weight:500;opacity:.85;}
-.pm-lvt td.pm-inc{background:#DCE7F7 !important;}
 .pm-lvt .pm-na{color:#d1d5db;}
 .pm-lvlegend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 8px;font-size:12.5px;font-weight:700;color:#111827;}
-.pm-lvlegend span{color:#fff;padding:2px 9px;font-weight:700;}
 .pm-lvlegend em{font-style:normal;font-weight:400;color:#4b5563;margin-left:8px;}
 .pm-lvt input[type=radio],.pm-lvt input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1B3A6B;}
 .pm-lvt input:disabled{cursor:not-allowed;opacity:.25;}
@@ -1685,37 +1686,38 @@ function pmRenderUsers(){
   pmPaint(`<div class="pm-wrap"><div class="pm-left">${left}</div><div class="pm-right">${right}</div></div>`);
 }
 // 해외법인 자료 열람 (본사 직원, 화면별·법인별) — 제조·KPI·일일마감은 본사 전용이라 제외
-const PM_OVS=[['SMECN','중국'],['SMEGLOBAL','태국'],['GSMEIN','인도']];
+const PM_OVS=[['SMECN','SMECN'],['SMEGLOBAL','SMETH'],['GSMEIN','SMEIN']];
 function pmOvsOn(u){return u.entity==='KOREA'&&pmScopeAll();}
 function pmOvsApplies(key){return !/^(mfg_|kpi_)/.test(key)&&key!=='dailyclose';}
 function pmOvsHas(u,ent,key){const L=u.entities||[];return L.includes(ent+'|*')||L.includes(ent+'|'+key);}
 function pmLvTable(u){
   const role=(PM.data.roles||[]).find(r=>r.id===u.role_id);const allEnt=!!(role&&role.is_admin);
   const ovs=pmOvsOn(u);
-  const LVC=['#9CA3AF','#3B6FB6','#1E4E96','#0F2F63']; // 오른쪽으로 갈수록 진하게 = 권한이 높아짐
-  let h=`<div class="pm-lvlegend">권한 범위 <span style="background:${LVC[0]}">차단</span>›<span style="background:${LVC[1]}">읽기전용</span>›<span style="background:${LVC[2]}">수정</span>›<span style="background:${LVC[3]}">삭제</span>`+
-    `<em>오른쪽일수록 높은 권한 · 높은 칸은 왼쪽 권한을 모두 포함 (파란 띠) · <b>승인</b>은 따로 체크</em></div>`;
-  h+=`<table class="pm-lvt" id="pmLvTbl"><colgroup><col style="width:110px"><col style="width:200px">${PM_LV4.map(()=>'<col style="width:84px">').join('')}<col style="width:64px">${ovs?PM_OVS.map(()=>'<col style="width:64px">').join(''):''}</colgroup>`+
-    `<thead><tr><th>묶음</th><th>화면</th>`+
-    PM_LV4.map((x,i)=>`<th class="c" style="background:${LVC[i]};color:#fff;">${x[1]}${i===2?'<small>읽기 포함</small>':i===3?'<small>수정 포함</small>':''}</th>`).join('')+
-    `<th class="c" style="background:#7C2D12;color:#fff;" title="확정·승인 (확정 기능이 있는 화면만)">승인</th>`+
-    (ovs?PM_OVS.map(([k,l])=>`<th class="c" style="background:#065F46;color:#fff;" title="${l} 법인 자료도 이 권한으로 볼 수 있음">해외 ${l}</th>`).join(''):'')+
+  const HQC='#1B3A6B',OVC='#0F5132'; // 제목 색: 본사 권한 칸 / 해외법인 칸 두 가지만
+  let h=`<div class="pm-lvlegend">권한 범위 <b>차단 → 읽기전용 → 수정 → 삭제</b><em>오른쪽일수록 높은 권한 · 높은 칸은 왼쪽 권한을 모두 포함 · 승인은 따로 체크 · <span class="pm-own">개별</span> = 기본 권한(부서)과 다르게 바꾼 화면</em></div>`;
+  h+=`<table class="pm-lvt" id="pmLvTbl"><colgroup><col style="width:110px"><col style="width:210px">${PM_LV4.map(()=>'<col style="width:84px">').join('')}<col style="width:64px">${ovs?PM_OVS.map(()=>'<col style="width:70px">').join(''):''}</colgroup>`+
+    `<thead><tr><th style="background:${HQC}">묶음</th><th style="background:${HQC}">화면</th>`+
+    PM_LV4.map((x,i)=>`<th class="c" style="background:${HQC}">${x[1]}${i===2?'<small>읽기 포함</small>':i===3?'<small>수정 포함</small>':''}</th>`).join('')+
+    `<th class="c" style="background:${HQC}" title="확정·승인 (확정 기능이 있는 화면만)">승인</th>`+
+    (ovs?PM_OVS.map(([k,l])=>`<th class="c" style="background:${OVC}" title="${l} 법인 자료도 이 권한으로 볼 수 있음">${l}</th>`).join(''):'')+
     `</tr></thead><tbody>`;
+  const rowsAll=pmScreens().filter(s=>!['admin','perm'].includes(s.key)); // 관리자설정 두 화면은 위 「관리 권한」 줄에서
+  const span={};rowsAll.forEach(s=>span[s.grp]=(span[s.grp]||0)+1);
   let lastG='';
-  pmScreens().filter(s=>!['admin','perm'].includes(s.key)).forEach(s=>{ // 관리자설정 두 화면은 위 「관리 권한」 줄에서
+  rowsAll.forEach(s=>{
     const acts=s.actions||'';const e=pmEff(u.emp_no,u.role_id,s.key);const lv=pmLv4(e.p,acts);
     const can={none:true,view:acts.includes('v'),edit:/[cu]/.test(acts),del:acts.includes('d')};
-    const diff=!!e.o;const lvIdx=PM_LV4.findIndex(x=>x[0]===lv);
-    h+=`<tr class="${diff?'pm-ov':''}" ${diff?'title="기본 권한(부서)과 다르게 설정됨"':''}><td>${s.grp!==lastG?_pe(s.grp):''}</td><td>${_pe(s.label)}</td>`;lastG=s.grp;
-    PM_LV4.forEach(([k],i)=>{const inc=i>0&&i<lvIdx; // 포함되는 낮은 단계 = 파란 띠
-      h+=`<td class="c${inc?' pm-inc':''}">${can[k]?`<input type="radio" name="pmlv_${s.key}" ${lv===k?'checked':''} onchange="pmSetLv(${u.emp_no},'${s.key}','${k}')">`:'<span class="pm-na" title="이 화면에 없는 기능">—</span>'}</td>`;});
+    const diff=!!e.o;const first=s.grp!==lastG;
+    h+=`<tr class="${first?'pm-g1':''}">`+(first?`<td class="pm-grp" rowspan="${span[s.grp]}">${_pe(s.grp)}</td>`:'')+`<td>${_pe(s.label)}${diff?' <span class="pm-own" title="기본 권한(부서)과 다르게 설정됨">개별</span>':''}</td>`;lastG=s.grp;
+    PM_LV4.forEach(([k])=>{
+      h+=`<td class="c">${can[k]?`<input type="radio" name="pmlv_${s.key}" ${lv===k?'checked':''} onchange="pmSetLv(${u.emp_no},'${s.key}','${k}')">`:'<span class="pm-na" title="이 화면에 없는 기능">—</span>'}</td>`;});
     h+=`<td class="c">${acts.includes('f')?`<input type="checkbox" ${e.p.f?'checked':''} onchange="pmSetF(${u.emp_no},'${s.key}',this.checked)">`:'<span class="pm-na">—</span>'}</td>`;
     if(ovs)PM_OVS.forEach(([k])=>{
       h+=`<td class="c">${!pmOvsApplies(s.key)?'<span class="pm-na" title="본사 전용 화면">—</span>':allEnt?'<input type="checkbox" checked disabled title="시스템 관리자 — 전 법인">':
         `<input type="checkbox" ${pmOvsHas(u,k,s.key)?'checked':''} ${lv==='none'?'disabled title="차단된 화면"':''} onchange="pmSetOvs(${u.emp_no},'${s.key}','${k}',this.checked)">`}</td>`;});
     h+=`</tr>`;
   });
-  setTimeout(()=>initColResize('pmLvTbl','al_pmlv_v1'),30);
+  setTimeout(()=>initColResize('pmLvTbl','al_pmlv_v2'),30);
   return h+'</tbody></table>';
 }
 async function pmSetOvs(no,key,ent,on){
