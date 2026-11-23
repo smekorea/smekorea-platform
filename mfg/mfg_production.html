@@ -669,14 +669,21 @@ function doLogin(){
   const name=document.getElementById('lo_name').value;
   const pw=document.getElementById('lo_pw').value;
   if(!name){document.getElementById('lo_err').textContent='이름을 선택하세요.';return;}
-  if(pw!=='1120'){document.getElementById('lo_err').textContent='비밀번호가 올바르지 않습니다.';return;}
   localStorage.setItem('sme_auth','1');
   localStorage.setItem('mfg_operator',name);
   document.getElementById('hdr_user').textContent='👤 '+name;
   document.getElementById('lo').style.display='none';
   init();
 }
-function doLogout(){if(!confirm('로그아웃 하시겠습니까?'))return;localStorage.removeItem('sme_auth');location.reload();}
+function doLogout(){
+  // SMERP 개인 계정 로그아웃(메인과 동일) — 옛 1120 로그인창 사용 안 함 (V20261123-22)
+  if(!confirm('로그아웃 하시겠습니까?'))return;
+  const tk=localStorage.getItem('sme_token');
+  const done=()=>{['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change','sme_login_at','wf_session','sb-muxuhrbsbrstmrrvlupw-auth-token'].forEach(k=>localStorage.removeItem(k));
+    try{sessionStorage.removeItem('po_auth');sessionStorage.removeItem('hq_auth');}catch(e){}
+    location.href='../index.html';};
+  if(tk){sb.rpc('app_logout',{p_token:tk}).then(done,done);}else done();
+}
 
 // ── 탭 전환 ──
 function chTab(name){
@@ -1527,14 +1534,11 @@ function renderAg(data){
 // ── 초기 실행 ──
 window.addEventListener('DOMContentLoaded',()=>{
   loadOps();
-  if(localStorage.getItem('sme_auth')==='1'){
-    document.getElementById('lo').style.display='none';
-    const saved=localStorage.getItem('mfg_operator')||'';
-    if(saved)document.getElementById('hdr_user').textContent='👤 '+saved;
-    init();
-  } else {
-    document.getElementById('lo').style.display='flex';
-  }
+  // 로그인은 SMERP 개인 계정(smerp-session.js)이 확인 — 옛 1120 로그인창은 띄우지 않음, 작업자는 화면 안에서 선택 (V20261123-22)
+  document.getElementById('lo').style.display='none';
+  const saved=localStorage.getItem('mfg_operator')||'';
+  if(saved)document.getElementById('hdr_user').textContent='👤 '+saved;
+  init();
 });
 </script>
 </body>

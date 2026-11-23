@@ -3187,8 +3187,9 @@ async function scApprove(){
   if(!ids.length){alert('확정할 품목을 선택하세요.');return;}
   const miss=ids.map(id=>SC.find(x=>x.id===id)).filter(r=>!r.cause||!String(r.reason||'').trim());
   if(miss.length){alert(`원인·사유가 없는 품목이 ${miss.length}건 있습니다.\n예: ${miss.slice(0,5).map(r=>r.item_code).join(', ')}`);return;}
-  const pw=prompt(`${ids.length}건을 확정합니다. 관리자 비밀번호를 입력하세요.`);if(pw==null)return;
-  if(pw!=='9901'){alert('관리자 비밀번호가 맞지 않습니다.');return;}
+  // (V20261123-22) 관리자 비밀번호 9901 폐지 → 권한 관리의 재고현황 분석 「승인」 체크
+  if(!(window.SMERP_AUTH&&SMERP_AUTH.can('f','stock'))){alert('재고조사 확정 권한(승인)이 없습니다. 관리자에게 요청하세요.');return;}
+  if(!confirm(`${ids.length}건을 확정합니다. 진행하시겠습니까?`))return;
   const {data,error}=await sb.rpc('approve_stock_count',{p_ids:ids,p_user:scUser()});
   if(error){alert('확정 실패: '+error.message);return;}
   await scLoad();alert(`${data}건 확정했습니다.`);
@@ -3200,7 +3201,7 @@ async function scSetStatus(ids,st){
 function scHold(){const ids=scChecked();if(!ids.length){alert('보류할 품목을 선택하세요.');return;}scSetStatus(ids,'보류');}
 async function scReopen(id){
   if(!confirm('확정을 취소하고 검토중으로 되돌릴까요? (재고원장에 반영된 실사조정도 함께 취소됩니다)'))return;
-  const pw=prompt('관리자 비밀번호를 입력하세요.');if(pw==null)return;if(pw!=='9901'){alert('관리자 비밀번호가 맞지 않습니다.');return;}
+  if(!(window.SMERP_AUTH&&SMERP_AUTH.can('f','stock'))){alert('재고조사 확정 권한(승인)이 없습니다. 관리자에게 요청하세요.');return;}
   const {error}=await sb.rpc('reopen_stock_count',{p_id:id});if(error){alert('취소 실패: '+error.message);return;}await scLoad();
 }
 function scExport(){

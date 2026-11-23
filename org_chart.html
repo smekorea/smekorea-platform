@@ -950,14 +950,13 @@ function renderHist(){
 
 /* ── 조직 이력 입력 (경영 전용 인증 필요 — index.html 과 같은 sme_hq_auth) ── */
 const ORG_KINDS = ['조직변경','입사','퇴사','이동','직급변경','직책변경','법인명변경','법인장변경','인원충원','기타'];
-const PW_HQ = '9901';
+// (V20261123-22) 경영 비밀번호 9901 폐지 → 권한 관리의 글로벌 조직도 「승인」 체크가 있어야 조직 이력 입력·수정·삭제
 let histEditId = null, pwNext = null;
-const hasHq = () => { try{ return localStorage.getItem('sme_hq_auth')==='1' || sessionStorage.getItem('hq_auth')==='1'; }catch(e){ return false; } };
-function needHq(fn){ if(hasHq()) return fn(); pwNext = fn; document.getElementById('pwIn').value=''; document.getElementById('pwErr').textContent='';
-  document.getElementById('pwOv').classList.add('show'); setTimeout(()=>document.getElementById('pwIn').focus(),50); }
+const hasHq = () => !!(window.SMERP_AUTH && SMERP_AUTH.can('f','orgchart'));
+function needHq(fn){ if(hasHq()) return fn(); alert('조직 이력 입력 권한(승인)이 없습니다. 관리자에게 요청하세요.'); }
 function closePw(){ document.getElementById('pwOv').classList.remove('show'); pwNext=null; }
 function checkPw(){
-  if(document.getElementById('pwIn').value!==PW_HQ){ document.getElementById('pwErr').textContent='⚠ 비밀번호가 올바르지 않습니다'; document.getElementById('pwIn').value=''; return; }
+  if(!hasHq()){ document.getElementById('pwErr').textContent='⚠ 비밀번호가 올바르지 않습니다'; document.getElementById('pwIn').value=''; return; }
   try{ localStorage.setItem('sme_hq_auth','1'); sessionStorage.setItem('hq_auth','1'); }catch(e){}
   const fn = pwNext; closePw(); if(fn) fn();
 }
