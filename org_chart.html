@@ -283,6 +283,26 @@ a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underli
 #krChart .box[data-eid], #krChart .unit-hd[data-dept]{cursor:pointer;}
 #krChart .box[data-eid]:hover{outline:2px solid var(--point);} #krChart .unit-hd[data-dept]:hover{color:var(--point);}
 .fr2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+/* V20261123 거래처관리 — 거래처 자동완성 · 업무 항목 선택 */
+.dp-acw{position:relative;display:flex;flex-direction:column;gap:4px;}
+#dpAc{position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid var(--point);max-height:300px;overflow:auto;box-shadow:0 6px 16px rgba(15,23,42,.18);display:none;}
+#dpAc .ac-i{display:flex;gap:8px;align-items:center;padding:6px 10px;font-size:12.5px;color:#111827;cursor:pointer;border-bottom:1px solid #f0f2f5;}
+#dpAc .ac-i.on,#dpAc .ac-i:hover{background:#eef3fb;}
+#dpAc .ac-i .ac-n{flex:1;min-width:0;font-weight:600;} #dpAc .ac-i small{color:var(--muted);font-weight:500;font-size:11px;white-space:nowrap;}
+#dpAc .ac-new{color:var(--brand);font-weight:700;} #dpAc .ac-msg{padding:8px 10px;font-size:12px;color:var(--muted);}
+.dp-hint{font-size:11.5px;font-weight:500;color:#b45309;} .dp-hint button{margin-left:6px;}
+.dp-chips{display:flex;flex-wrap:wrap;gap:6px 8px;padding:8px;border:1.5px solid var(--border);background:var(--bg-sub);min-height:36px;}
+.ov-bd .dp-chips label{flex-direction:row;align-items:center;gap:4px;font-weight:600;color:#111827;font-size:12.5px;background:#fff;border:1px solid var(--border);padding:3px 9px;cursor:pointer;}
+.ov-bd .dp-chips label.on{border-color:var(--point);background:#eef3fb;color:var(--point);}
+.ov-bd .dp-chips label.off{color:var(--muted);}
+.ov-bd .dp-chips input{height:auto;}
+.dp-tline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;} .dp-tline input,.dp-tline select{flex:1;}
+.ov-bd .dp-tline input#dp-newopt{flex:2;} .ov-bd .dp-tline select{flex:0 0 120px;}
+.to-grid{display:grid;grid-template-columns:1fr 70px 90px 60px;gap:6px 8px;align-items:center;font-size:12px;}
+.to-grid .to-h{font-weight:700;color:var(--muted);} .ov-bd .to-grid input[type=checkbox]{height:auto;justify-self:center;}
+#toBody{max-height:62vh;overflow:auto;}
+.to-kind{font-size:13px;font-weight:700;color:var(--point);margin:6px 0 2px;}
+tr.dp-add td{background:#fafbfd;padding:6px 8px;} tr.dp-add .rbtn{margin-right:6px;}
 .ov-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);}
 @media (max-width:640px){ .fr3,.fr2{grid-template-columns:1fr;} }
 .filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
@@ -520,11 +540,16 @@ a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underli
     <div class="ov-bd">
       <div class="fr3">
         <label><span>담당 <b>*</b></span><select id="dp-emp"></select></label>
-        <label><span>구분 <b>*</b></span><select id="dp-kind"><option value="매입처">매입처</option><option value="매출처">매출처</option></select></label>
+        <label><span>구분 <b>*</b></span><select id="dp-kind" onchange="dpKindChange()"><option value="매입처">매입처</option><option value="매출처">매출처</option><option value="매입매출처">매입매출처</option></select></label>
         <label>정 / 부<select id="dp-role"><option value="정">정</option><option value="부">부</option></select></label>
       </div>
-      <label class="full"><span>거래처 <b>*</b></span><input id="dp-name" list="dp-plist" placeholder="거래처명 — 목록에서 선택"><datalist id="dp-plist"></datalist></label>
-      <label class="full">업무내용<input id="dp-task" placeholder="예: 발주, 수요예측, 단가협의, 수주·출하"></label>
+      <div class="dp-acw"><label class="full"><span>거래처 <b>*</b></span><input id="dp-name" autocomplete="off" placeholder="거래처명·별칭 2글자 이상 입력 — 목록에서 선택" oninput="dpAcInput()" onkeydown="dpAcKey(event)" onfocus="dpAcInput()" onblur="setTimeout(dpAcBlur,150)"></label>
+        <div id="dpAc"></div><div class="dp-hint" id="dp-phint" style="display:none;"></div></div>
+      <div class="ov-bd-sec"><label class="full" style="margin-bottom:4px;"><span>업무내용 <small style="font-weight:500;">— 해당 업무를 모두 체크</small></span></label>
+        <div class="dp-chips" id="dp-tasks"></div>
+        <div class="dp-tline" style="margin-top:6px;"><input id="dp-task-etc" placeholder="기타 — 목록에 없는 업무 직접 입력"><button type="button" class="rbtn" onclick="dpAddOptToggle()">＋ 항목 추가</button><button type="button" class="rbtn" id="dpOptMgrBtn" onclick="openTaskOpt()">⚙ 항목 관리</button></div>
+        <div class="dp-tline" id="dp-addopt" style="display:none;margin-top:6px;"><input id="dp-newopt" placeholder="새 항목 이름 (예: 재고확인)" onkeydown="if(event.key==='Enter'){event.preventDefault();dpAddOpt();}"><select id="dp-newopt-kind"><option value="매입처">매입처 목록</option><option value="매출처">매출처 목록</option><option value="양쪽">양쪽 모두</option></select><button type="button" class="rbtn" onclick="dpAddOpt()">추가</button></div>
+      </div>
       <div class="fr3">
         <label>주기<select id="dp-cycle"></select></label>
         <label>비고<input id="dp-note"></label>
@@ -532,6 +557,14 @@ a.dt-nm{color:var(--point);cursor:pointer;text-decoration:underline;text-underli
       </div>
     </div>
     <div class="ov-ft"><button class="btn" onclick="closeDpForm()">취소</button><button class="btn btn-primary" id="dpSaveBtn" onclick="saveDpForm()">저장</button></div>
+  </div>
+</div>
+<!-- V20261123 거래처관리 업무 항목 관리 -->
+<div class="mov" id="toOv">
+  <div class="ov-box" style="width:520px;">
+    <div class="ov-hd"><span>⚙ 업무 항목 관리</span><button class="ov-x" onclick="closeTaskOpt()">✕</button></div>
+    <div class="ov-bd" id="toBody"></div>
+    <div class="ov-ft"><button class="btn" onclick="closeTaskOpt()">취소</button><button class="btn btn-primary" id="toSaveBtn" onclick="saveTaskOpt()">저장</button></div>
   </div>
 </div>
 <!-- 경영 전용 인증 창 (이력 입력 권한) -->
@@ -1421,13 +1454,15 @@ const empLabel = e => e ? `${dispName(e)} ${e.rank||''}`.trim() : '';
 
 async function loadDuty(force){
   if(DUTY.loaded && !force) return;
-  const [d,i,h,o] = await Promise.all([
+  const [d,i,h,o,to,pa] = await Promise.all([
     sbGet('duty_dept', `select=*&entity=eq.${DUTY_ENT}`),
     sbGet('duty_item', `select=*&entity=eq.${DUTY_ENT}&is_deleted=eq.false&order=sort_no,id`),
     sbGet('duty_history', `select=*&entity=eq.${DUTY_ENT}&order=changed_at.desc&limit=500`),
-    sbGet('duty_partner', `select=*&entity=eq.${DUTY_ENT}&is_deleted=eq.false&order=sort_no,id`)
+    sbGet('duty_partner', `select=*&entity=eq.${DUTY_ENT}&is_deleted=eq.false&order=sort_no,id`),
+    sbGet('duty_task_option', `select=*&entity=eq.${DUTY_ENT}&order=kind,sort_no,id`).catch(()=>[]),
+    sbGet('partners', `select=id,name,alias1,alias2,type,entity,is_active&entity=eq.${DUTY_ENT}&order=name&limit=5000`).catch(()=>[])
   ]);
-  DUTY.depts=d; DUTY.items=i; DUTY.hist=h; DUTY.dparts=o; DUTY.loaded=true;
+  DUTY.depts=d; DUTY.items=i; DUTY.hist=h; DUTY.dparts=o; DUTY.topts=to; DUTY.pall=pa.filter(p=>p.is_active!==false); DUTY.loaded=true;
   if(!DUTY.partners){
     sbGet('partner_recent_v','select=id,name,type,entity,last_sale,last_buy&order=name')
       .then(p=>{ DUTY.partners=p; if(curTab==='duty') renderDuty(); })
@@ -1468,7 +1503,7 @@ function dtTbl(id, cols, rows, opt={}){
     `<th class="sortable" style="width:${c.w}px;" onclick="dtSort('${id}','${c.k}')">${c.label}<span class="sort-icon">${st.k===c.k?(st.asc?'↑':'↓'):''}</span></th>`).join('');
   const body = rs.length ? rs.map(r=>`<tr${opt.rowAttr?opt.rowAttr(r):''}>${cols.map(c=>`<td class="${c.cls||''}"${c.td?c.td(r):''}>${c.fmt?c.fmt(r):esc(r[c.k]??'')}</td>`).join('')}</tr>`).join('')
     : `<tr><td colspan="${cols.length}" class="c" style="color:var(--muted);padding:14px;">${opt.empty||'등록된 내용이 없습니다'}</td></tr>`;
-  return `<div class="tbl-wrap dt-wrap"><table id="${id}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  return `<div class="tbl-wrap dt-wrap"><table id="${id}"><thead><tr>${head}</tr></thead><tbody>${body}${opt.foot||''}</tbody></table></div>`;
 }
 function dtSort(id,k){ const s=DT_SORT[id]||{}; DT_SORT[id] = s.k===k ? {k,asc:!s.asc} : {k,asc:true}; renderDuty(); }
 // UTC 저장값 → 한국시간 표시
@@ -1506,7 +1541,7 @@ function dutyFormHtml(e, idx){
   const head = hd.map((x,i)=>`<th style="width:${wd[i]}px;">${x}</th>`).join('') + (ed?'<th style="width:116px;">관리</th>':'');
   const hs = e ? DUTY.hist.filter(x=>x.emp_id===e.id).slice(0,30) : [];
   const dps = e ? DUTY.dparts.filter(r=>r.emp_id===e.id) : [];
-  const lastOf = r => { const pp=dpPartner(r); return pp ? ((r.kind==='매입처'?pp.last_buy:pp.last_sale)||'') : ''; };
+  const lastOf = r => dpLast(r);
   const fmpId = 'dt-fmp-'+idx;
   return `<div class="fm">
     <div class="fm-top"><div class="fm-title">업무분장표</div>
@@ -1515,7 +1550,7 @@ function dutyFormHtml(e, idx){
     <div class="tbl-wrap fm-wrap"><table id="dt-form-${idx}" class="fm-tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
     <div class="fm-sub">■ 2. 거래처관리 <small>담당 매입처·매출처와 업무내용 (발주·수요예측 등)</small>${ed?`<span class="fm-act"><button class="rbtn" onclick="openDpForm(null,${e.id})">＋ 거래처 추가</button><button class="rbtn" onclick="autoDutyPartner(${e.id})" title="거래처 영업담당·거래명세서 담당 기준, 최근 1년 거래처 중 없는 것만 추가">🔄 자동생성</button></span>`:''}</div>
     ${dtTbl(fmpId, [
-      {k:'kind',label:'구분',w:70,cls:'c',val:r=>(r.kind==='매입처'?0:1)+String(r.partner_name)},
+      {k:'kind',label:'구분',w:84,cls:'c',val:r=>dpKindOrd(r.kind)+String(r.partner_name)},
       {k:'partner_name',label:'거래처',w:220,cls:'tw'},
       {k:'role',label:'정 / 부',w:60,cls:'c'},
       {k:'task',label:'업무내용',w:280,cls:'tw'},
@@ -1523,7 +1558,8 @@ function dutyFormHtml(e, idx){
       {k:'note',label:'비고',w:180,cls:'tw'},
       {k:'last',label:'최근 거래일',w:96,cls:'c',val:lastOf,fmt:r=>esc(lastOf(r))},
       ...(ed?[{k:'act',label:'관리',w:110,cls:'c',nosort:true,fmt:r=>`<button class="rbtn" onclick="openDpForm(${r.id})">수정</button> <button class="rbtn del" onclick="delDp(${r.id})">삭제</button>`}]:[])
-    ], DT_SORT[fmpId] ? dps : dps.slice().sort(dpSort), {empty: e ? (ed?'등록된 거래처가 없습니다 — 「＋ 거래처 추가」 또는 「🔄 자동생성」으로 등록하세요':'등록된 거래처가 없습니다') : '&nbsp;'})}
+    ], DT_SORT[fmpId] ? dps : dps.slice().sort(dpSort), {empty: e ? (ed?'등록된 거래처가 없습니다 — 「＋ 거래처 추가」 또는 「🔄 자동생성」으로 등록하세요':'등록된 거래처가 없습니다') : '&nbsp;',
+      foot: ed ? `<tr class="dp-add"><td colspan="8"><button class="rbtn" onclick="openDpForm(null,${e.id},'매입처')">＋ 매입처 추가</button><button class="rbtn" onclick="openDpForm(null,${e.id},'매출처')">＋ 매출처 추가</button><button class="rbtn" onclick="openDpForm(null,${e.id},'매입매출처')">＋ 매입매출처 추가</button></td></tr>` : ''})}
     <div class="fm-sub">■ 3. 변경점관리</div>
     ${dtTbl('dt-fmh-'+idx, [
       {k:'changed_at',label:'일자',w:130,cls:'c',fmt:x=>esc(kstTime(x.changed_at))},
@@ -1772,11 +1808,188 @@ async function saveHistForm(){
   finally{ btn.disabled=false; }
 }
 
-/* ── 2. 거래처관리 (duty_partner, 담당자별) ── */
-const dpSort = (a,b)=>(a.kind===b.kind?0:(a.kind==='매입처'?-1:1))||(a.sort_no||0)-(b.sort_no||0)||String(a.partner_name).localeCompare(String(b.partner_name),'ko');
+/* ── 2. 거래처관리 (duty_partner, 담당자별) — V20261123: 매입매출처 · 업무 항목 선택 · 거래처 자동완성 ── */
+const DP_KINDS = ['매입처','매입매출처','매출처'];
+const dpKindOrd = k => { const i=DP_KINDS.indexOf(k); return i<0?9:i; };
+const dpSort = (a,b)=>dpKindOrd(a.kind)-dpKindOrd(b.kind)||(a.sort_no||0)-(b.sort_no||0)||String(a.partner_name).localeCompare(String(b.partner_name),'ko');
 function dpPartner(r){ const ps=DUTY.partners||[]; return (r.partner_id && ps.find(p=>p.id===r.partner_id)) || ps.find(p=>p.name===r.partner_name) || null; }
-const dpTaskDefault = kind => kind==='매입처' ? '발주' : '수주·출하';
-function openDpForm(id, empId){
+function dpLast(r){ const pp=dpPartner(r); if(!pp) return '';
+  if(r.kind==='매입처') return pp.last_buy||''; if(r.kind==='매출처') return pp.last_sale||'';
+  const a=pp.last_buy||'', b=pp.last_sale||''; return a>b?a:b; }
+const dpSubKinds = kind => kind==='매입매출처' ? ['매입처','매출처'] : [kind];
+// 업무 항목 (duty_task_option) — 구분별, 매입매출처는 두 목록 합침(같은 이름은 한 번)
+function dpOpts(kind, withHidden){
+  const seen=new Set(), out=[];
+  dpSubKinds(kind).forEach(k=>(DUTY.topts||[]).filter(o=>o.kind===k && (withHidden||o.active)).sort((a,b)=>(a.sort_no||0)-(b.sort_no||0)||a.id-b.id)
+    .forEach(o=>{ if(!seen.has(o.label)){ seen.add(o.label); out.push(o); } }));
+  return out;
+}
+const dpAllLabels = () => new Set((DUTY.topts||[]).map(o=>o.label));
+function dpTaskDefault(kind){
+  const d = dpOpts(kind).filter(o=>o.is_auto_default).map(o=>o.label);
+  return d.length ? d.join('·') : (kind==='매입처' ? '발주' : kind==='매출처' ? '수주·출하' : '발주·수주·출하');
+}
+// 저장된 업무내용 → 체크 항목 + 기타
+function dpParseTask(txt){
+  const all=dpAllLabels(), chk=[], etc=[];
+  String(txt||'').split(/[·,，、\/]/).map(x=>x.trim()).filter(Boolean).forEach(x=>{ if(all.has(x)){ if(!chk.includes(x)) chk.push(x); } else etc.push(x); });
+  return {chk, etc:etc.join(', ')};
+}
+let dpChecked = new Set();
+function dpRenderTasks(){
+  const kind=document.getElementById('dp-kind').value;
+  const opts=dpOpts(kind), shown=new Set(opts.map(o=>o.label));
+  // 숨긴 항목이라도 이미 체크된 것은 보여 줌
+  const extra=[...dpChecked].filter(x=>!shown.has(x));
+  const chip=(lb,off)=>`<label class="${dpChecked.has(lb)?'on':''}${off?' off':''}"><input type="checkbox" value="${esc(lb)}" ${dpChecked.has(lb)?'checked':''} onchange="dpChk(this)">${esc(lb)}${off?' (숨김)':''}</label>`;
+  document.getElementById('dp-tasks').innerHTML = opts.map(o=>chip(o.label,false)).join('') + extra.map(x=>chip(x,true)).join('')
+    || '<span style="font-size:12px;color:var(--muted);">등록된 항목이 없습니다 — 「＋ 항목 추가」로 추가하세요</span>';
+  const nk=document.getElementById('dp-newopt-kind');
+  nk.style.display = kind==='매입매출처' ? '' : 'none';
+}
+function dpChk(cb){ if(cb.checked) dpChecked.add(cb.value); else dpChecked.delete(cb.value); cb.parentElement.classList.toggle('on',cb.checked); }
+function dpKindChange(){
+  // 다른 구분 목록에만 있는 항목은 체크 해제
+  const kind=document.getElementById('dp-kind').value, ok=new Set(dpOpts(kind,true).map(o=>o.label));
+  dpChecked = new Set([...dpChecked].filter(x=>ok.has(x)));
+  dpRenderTasks(); dpAcInput(true);
+}
+function dpAddOptToggle(){ const b=document.getElementById('dp-addopt'); const on=b.style.display==='none'; b.style.display=on?'':'none'; if(on) document.getElementById('dp-newopt').focus(); }
+async function dpAddOpt(){
+  const lb=document.getElementById('dp-newopt').value.trim();
+  if(!lb){ alert('항목 이름을 입력해 주세요.'); return; }
+  if(/[·,，、\/]/.test(lb)){ alert('항목 이름에는 · , / 를 쓸 수 없습니다.'); return; }
+  const kind=document.getElementById('dp-kind').value;
+  let ks = kind==='매입매출처' ? document.getElementById('dp-newopt-kind').value : kind;
+  ks = ks==='양쪽' ? ['매입처','매출처'] : [ks];
+  const todo = ks.filter(k=>!(DUTY.topts||[]).some(o=>o.kind===k && o.label===lb));
+  const hidden = (DUTY.topts||[]).filter(o=>ks.includes(o.kind) && o.label===lb && !o.active);
+  if(!todo.length && !hidden.length){ alert('이미 있는 항목입니다.'); dpChecked.add(lb); dpRenderTasks(); return; }
+  try{
+    const now=new Date().toISOString();
+    if(todo.length) await sbSend('POST','duty_task_option','', todo.map(k=>({ entity:DUTY_ENT, kind:k, label:lb,
+      sort_no:Math.max(0,...(DUTY.topts||[]).filter(o=>o.kind===k).map(o=>o.sort_no||0))+1, created_by:curUser, updated_by:curUser, updated_at:now })));
+    for(const o of hidden) await sbSend('PATCH','duty_task_option',`id=eq.${o.id}`,{active:true, updated_by:curUser, updated_at:now});
+    await logDuty('항목', null, null, `거래처관리 업무 항목 추가 [${ks.join('·')}] ${lb}`, null, null);
+    DUTY.topts = await sbGet('duty_task_option', `select=*&entity=eq.${DUTY_ENT}&order=kind,sort_no,id`);
+    dpChecked.add(lb); document.getElementById('dp-newopt').value=''; document.getElementById('dp-addopt').style.display='none';
+    dpRenderTasks();
+  }catch(e){ alert('항목 추가 실패: '+e.message); }
+}
+// 항목 관리 (이름·순서·자동생성 기본·사용) — 팀장·대표/상무·경영 인증
+function canManageOpt(){ if(hasHq()) return true; const me=dutyMe(); return !!me && (isBoss(me) || me.title==='팀장'); }
+function openTaskOpt(){
+  if(!canManageOpt()){ alert('항목 관리는 팀장·대표/상무만 할 수 있습니다.'); return; }
+  document.getElementById('toBody').innerHTML = ['매입처','매출처'].map(k=>{
+    const list=(DUTY.topts||[]).filter(o=>o.kind===k).sort((a,b)=>(a.sort_no||0)-(b.sort_no||0)||a.id-b.id);
+    return `<div class="to-kind">${k}</div><div class="to-grid"><span class="to-h">항목명</span><span class="to-h">순서</span><span class="to-h">자동생성 기본</span><span class="to-h">사용</span>
+      ${list.map(o=>`<input data-id="${o.id}" data-f="label" value="${esc(o.label)}"><input type="number" data-id="${o.id}" data-f="sort_no" value="${o.sort_no||0}">
+      <input type="checkbox" data-id="${o.id}" data-f="is_auto_default" ${o.is_auto_default?'checked':''}><input type="checkbox" data-id="${o.id}" data-f="active" ${o.active?'checked':''}>`).join('')}</div>`;
+  }).join('') + `<div class="note" style="font-size:11.5px;color:var(--muted);">「사용」을 끄면 새로 체크할 수 없고, 이미 저장된 업무내용은 그대로 남습니다. 이름을 바꿔도 기존 업무내용 글자는 바뀌지 않습니다. 「자동생성 기본」은 🔄 자동생성 때 미리 체크되는 항목입니다.</div>`;
+  document.getElementById('toOv').classList.add('show');
+}
+function closeTaskOpt(){ document.getElementById('toOv').classList.remove('show'); }
+async function saveTaskOpt(){
+  const ch={};
+  document.querySelectorAll('#toBody [data-id]').forEach(el=>{ const id=+el.dataset.id, f=el.dataset.f;
+    const v = el.type==='checkbox' ? el.checked : f==='sort_no' ? (parseInt(el.value,10)||0) : el.value.trim();
+    (ch[id]=ch[id]||{})[f]=v; });
+  const rows=[];
+  for(const [id,o] of Object.entries(ch)){ const old=(DUTY.topts||[]).find(x=>x.id===+id); if(!old) continue;
+    if(!o.label){ alert('항목 이름이 비어 있습니다.'); return; }
+    if(/[·,，、\/]/.test(o.label)){ alert('항목 이름에는 · , / 를 쓸 수 없습니다.'); return; }
+    if((DUTY.topts||[]).some(x=>x.id!==+id && x.kind===old.kind && x.label===o.label)){ alert(`같은 이름의 항목이 있습니다: [${old.kind}] ${o.label}`); return; }
+    if(['label','sort_no','is_auto_default','active'].some(f=>o[f]!==old[f])) rows.push({id:+id, old, o}); }
+  if(!rows.length){ closeTaskOpt(); return; }
+  const btn=document.getElementById('toSaveBtn'); btn.disabled=true;
+  try{
+    const now=new Date().toISOString();
+    for(const r of rows) await sbSend('PATCH','duty_task_option',`id=eq.${r.id}`,{...r.o, updated_by:curUser, updated_at:now});
+    await logDuty('항목', null, null, `거래처관리 업무 항목 수정 ${rows.length}건 (${rows.map(r=>`[${r.old.kind}] ${r.old.label}${r.o.label!==r.old.label?'→'+r.o.label:''}`).join(', ')})`,
+      rows.map(r=>r.old), rows.map(r=>r.o));
+    DUTY.topts = await sbGet('duty_task_option', `select=*&entity=eq.${DUTY_ENT}&order=kind,sort_no,id`);
+    closeTaskOpt();
+    if(document.getElementById('dpOv').classList.contains('show')) dpRenderTasks();
+  }catch(e){ alert('저장 실패: '+e.message); }
+  finally{ btn.disabled=false; }
+}
+
+// 거래처 자동완성 — 거래처 정보(이름·별칭) 기준, 구분이 맞는 거래처 → 앞부분 일치 → 최근 거래일 순
+const dpNorm = v => String(v||'').toUpperCase().replace(/\(주\)|㈜|주식회사|\(유\)|유한회사|\s|[.\-_,]/g,'');
+let dpAcList=[], dpAcIdx=-1, DP_PENDING=null;
+function dpTypeOk(p, kind){ const ty=p.type||''; if(!ty) return 1; if(kind==='매입매출처') return ty==='매입매출처'?0:1; return (ty===kind||ty==='매입매출처')?0:2; }
+function dpRecent(p, kind){ const r=(DUTY.partners||[]).find(x=>x.id===p.id)||{};
+  return kind==='매입처' ? (r.last_buy||'') : kind==='매출처' ? (r.last_sale||'') : [r.last_buy||'',r.last_sale||''].sort().pop(); }
+function dpFindExact(name){ const q=dpNorm(name); if(!q) return null; const ps=DUTY.pall||[];
+  return ps.find(p=>p.name===name) || ps.find(p=>dpNorm(p.name)===q) || ps.find(p=>dpNorm(p.alias1)===q||dpNorm(p.alias2)===q) || null; }
+function dpAcInput(silent){
+  const el=document.getElementById('dp-name'), box=document.getElementById('dpAc');
+  if(/[a-z]/.test(el.value)){ const pos=el.selectionStart; el.value=el.value.toUpperCase(); try{ el.setSelectionRange(pos,pos); }catch(e){} }
+  document.getElementById('dp-phint').style.display='none';
+  if(silent===true && document.activeElement!==el) return;
+  const raw=el.value.trim(), q=dpNorm(raw);
+  if(q.length<2){ box.style.display='none'; dpAcList=[]; return; }
+  if(!DUTY.pall){ box.innerHTML='<div class="ac-msg">거래처 목록을 불러오는 중…</div>'; box.style.display='block'; return; }
+  const kind=document.getElementById('dp-kind').value;
+  const hits=[];
+  DUTY.pall.forEach(p=>{
+    const keys=[p.name,p.alias1,p.alias2].filter(Boolean); let best=9, viaAlias='';
+    keys.forEach((k,i)=>{ const nk=dpNorm(k); const pos=nk.indexOf(q); if(pos<0) return; const sc=pos===0?0:1; if(sc<best){ best=sc; viaAlias=i?k:''; } });
+    if(best<9) hits.push({p, typ:dpTypeOk(p,kind), pre:best, rec:dpRecent(p,kind), via:viaAlias});
+  });
+  hits.sort((a,b)=>a.typ-b.typ||a.pre-b.pre||String(b.rec).localeCompare(String(a.rec))||a.p.name.localeCompare(b.p.name,'ko'));
+  dpAcList = hits.slice(0,30).map(h=>({p:h.p, via:h.via, rec:h.rec}));
+  const exact = dpFindExact(raw);
+  if(!exact) dpAcList.push({add:raw});
+  dpAcIdx=-1;
+  box.innerHTML = dpAcList.map((x,i)=> x.add
+    ? `<div class="ac-i ac-new" onmousedown="event.preventDefault();dpAcPick(${i})">＋ 신규 거래처 등록 — 「${esc(x.add)}」</div>`
+    : `<div class="ac-i" onmousedown="event.preventDefault();dpAcPick(${i})"><span class="ac-n">${esc(x.p.name)}${x.via?` <small>별칭 ${esc(x.via)}</small>`:''}</span><small>${esc(x.p.type||'')}</small><small>${x.rec?'최근 '+esc(x.rec):''}</small></div>`).join('');
+  box.style.display = dpAcList.length ? 'block' : 'none';
+}
+function dpAcKey(ev){
+  const box=document.getElementById('dpAc'); if(box.style.display!=='block' || !dpAcList.length) return;
+  if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ ev.preventDefault(); dpAcIdx=(dpAcIdx+(ev.key==='ArrowDown'?1:-1)+dpAcList.length)%dpAcList.length;
+    [...box.children].forEach((c,i)=>c.classList.toggle('on',i===dpAcIdx)); const c=box.children[dpAcIdx]; if(c) c.scrollIntoView({block:'nearest'}); }
+  else if(ev.key==='Enter'){ if(dpAcIdx>=0){ ev.preventDefault(); dpAcPick(dpAcIdx); } }
+  else if(ev.key==='Escape'){ ev.stopPropagation(); box.style.display='none'; }
+}
+function dpAcPick(i){
+  const x=dpAcList[i]; if(!x) return;
+  document.getElementById('dpAc').style.display='none';
+  if(x.add){ dpRegisterPartner(x.add); return; }
+  document.getElementById('dp-name').value = x.p.name;
+  document.getElementById('dp-phint').style.display='none';
+}
+function dpAcBlur(){
+  document.getElementById('dpAc').style.display='none';
+  const el=document.getElementById('dp-name'), v=el.value.trim(), hint=document.getElementById('dp-phint');
+  if(!v || !DUTY.pall){ hint.style.display='none'; return; }
+  const ex=dpFindExact(v);
+  if(ex){ if(ex.name!==v) el.value=ex.name; hint.style.display='none'; return; }   // 별칭·표기 차이 → 표준 이름
+  hint.innerHTML = `거래처 정보에 없는 이름입니다 — 그대로 저장하거나 <button type="button" class="rbtn" onclick="dpRegisterPartner(document.getElementById('dp-name').value.trim())">＋ 신규 거래처 등록</button>`;
+  hint.style.display='';
+}
+function dpRegisterPartner(name){
+  if(!name) return;
+  const kind=document.getElementById('dp-kind').value;
+  DP_PENDING={name, maxId:(DUTY.pall||[]).reduce((a,b)=>Math.max(a,b.id),0)};
+  const w=window.open('master.html?tab=partners&add='+encodeURIComponent(name)+'&ptype='+encodeURIComponent(kind)+'&entity='+encodeURIComponent(DUTY_ENT),'_blank');
+  if(!w){ alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.'); DP_PENDING=null; }
+}
+// 등록 탭에서 돌아오면 거래처 다시 읽고 새 거래처 자동 선택
+window.addEventListener('focus', async ()=>{
+  if(!DP_PENDING) return; const pd=DP_PENDING;
+  try{
+    const pa = await sbGet('partners', `select=id,name,alias1,alias2,type,entity,is_active&entity=eq.${DUTY_ENT}&order=name&limit=5000`);
+    DUTY.pall = pa.filter(p=>p.is_active!==false);
+    const nw = DUTY.pall.filter(p=>p.id>pd.maxId).sort((a,b)=>b.id-a.id)[0] || dpFindExact(pd.name);
+    if(nw){ DP_PENDING=null;
+      if(document.getElementById('dpOv').classList.contains('show')){ document.getElementById('dp-name').value=nw.name; document.getElementById('dp-phint').style.display='none'; } }
+  }catch(e){}
+});
+
+function openDpForm(id, empId, kindPre){
   const r = id ? DUTY.dparts.find(x=>x.id===id) : null;
   const e = empById(r ? r.emp_id : empId);
   if(!e || !canEditEmp(e)){ alert('이 인원의 거래처를 수정할 권한이 없습니다.'); return; }
@@ -1787,30 +2000,40 @@ function openDpForm(id, empId){
   document.getElementById('dp-emp').value = String(e.id);
   document.getElementById('dp-cycle').innerHTML = `<option value="">—</option>`+DUTY_CYCLES.map(c=>`<option value="${c}">${CYCLE_LABEL[c]}</option>`).join('');
   const v=(k,d='')=> r&&r[k]!=null ? r[k] : d;
-  document.getElementById('dp-kind').value = v('kind','매입처');
+  document.getElementById('dp-kind').value = r ? r.kind : (DP_KINDS.includes(kindPre) ? kindPre : '매입처');
   document.getElementById('dp-role').value = v('role','정');
   document.getElementById('dp-name').value = v('partner_name');
-  document.getElementById('dp-task').value = v('task');
+  const pt = dpParseTask(r ? r.task : '');
+  dpChecked = new Set(pt.chk);
+  document.getElementById('dp-task-etc').value = pt.etc;
   document.getElementById('dp-cycle').value = v('cycle');
   document.getElementById('dp-note').value = v('note');
   document.getElementById('dp-sort').value = v('sort_no',0);
-  const pl=document.getElementById('dp-plist');
-  pl.innerHTML = (DUTY.partners||[]).filter(p=>!p.entity||p.entity===DUTY_ENT).map(p=>`<option value="${esc(p.name)}">`).join('');
+  document.getElementById('dp-newopt').value=''; document.getElementById('dp-addopt').style.display='none';
+  document.getElementById('dpOptMgrBtn').style.display = canManageOpt() ? '' : 'none';
+  document.getElementById('dpAc').style.display='none'; document.getElementById('dp-phint').style.display='none';
+  dpRenderTasks();
   document.getElementById('dpOv').classList.add('show');
   setTimeout(()=>document.getElementById('dp-name').focus(),50);
 }
-function closeDpForm(){ document.getElementById('dpOv').classList.remove('show'); dpEditId=null; }
+function closeDpForm(){ document.getElementById('dpOv').classList.remove('show'); document.getElementById('dpAc').style.display='none'; dpEditId=null; }
 async function saveDpForm(){
   const emp = empById(+document.getElementById('dp-emp').value);
   if(!emp || !canEditEmp(emp)){ alert('이 인원의 거래처를 수정할 권한이 없습니다.'); return; }
-  const name = document.getElementById('dp-name').value.trim();
+  let name = document.getElementById('dp-name').value.trim();
   if(!name){ alert('거래처를 입력해 주세요.'); return; }
   const kind = document.getElementById('dp-kind').value;
-  const pp = (DUTY.partners||[]).find(x=>x.name===name);
+  const ex = dpFindExact(name); if(ex) name = ex.name;
+  const pp = ex || (DUTY.partners||[]).find(x=>x.name===name);
   if(DUTY.dparts.some(x=>x.id!==dpEditId && x.emp_id===emp.id && x.kind===kind && x.partner_name===name)){ alert('이미 등록된 거래처입니다.'); return; }
+  // 체크 항목(화면 순서) + 기타
+  const order = [...document.querySelectorAll('#dp-tasks input[type=checkbox]')].map(c=>c.value);
+  const chk = order.filter(x=>dpChecked.has(x));
+  const etc = document.getElementById('dp-task-etc').value.trim();
+  const task = [chk.join('·'), etc].filter(Boolean).join(' / ') || null;
   const sn = parseInt(document.getElementById('dp-sort').value,10);
   const o = { entity:DUTY_ENT, emp_id:emp.id, dept:emp.dept, kind, partner_id:pp?pp.id:null, partner_name:name,
-    role:document.getElementById('dp-role').value, task:document.getElementById('dp-task').value.trim()||null,
+    role:document.getElementById('dp-role').value, task,
     cycle:document.getElementById('dp-cycle').value||null, note:document.getElementById('dp-note').value.trim()||null,
     sort_no:isNaN(sn)?0:sn, updated_by:curUser, updated_at:new Date().toISOString() };
   const btn=document.getElementById('dpSaveBtn'); btn.disabled=true;
@@ -1838,6 +2061,7 @@ async function delDp(id){
   }catch(e){ alert('삭제 실패: '+e.message); }
 }
 // 자동생성 — 거래처 영업담당(partners.sales_manager) + 거래명세서 담당(trade_slip.manager), 최근 1년 거래 · 없는 것만 추가
+// V20261123: 같은 거래처가 매입·매출 둘 다면 「매입매출처」 한 줄, 업무내용 = 항목 관리의 「자동생성 기본」
 async function autoDutyPartner(empId){
   const e = empById(empId);
   if(!e || !canEditEmp(e)){ alert('이 인원의 거래처를 수정할 권한이 없습니다.'); return; }
@@ -1850,18 +2074,26 @@ async function autoDutyPartner(empId){
     ]);
     const d0=new Date(); d0.setFullYear(d0.getFullYear()-1); const cut=d0.toISOString().slice(0,10);
     const rec = id => DUTY.partners.find(p=>p.id===id) || {};
-    const cand = new Map();
-    const add = (kind,pid,name) => { if(!name) return; const k=kind+'|'+(pid||name); if(!cand.has(k)) cand.set(k,{kind,pid,name}); };
+    const cand = new Map();   // 거래처 → {pid, name, kinds:Set}
+    const add = (kind,pid,name) => { if(!name) return; const k=String(pid||name); if(!cand.has(k)) cand.set(k,{pid,name,kinds:new Set()}); cand.get(k).kinds.add(kind); };
     ps.filter(p=>!p.entity||p.entity===DUTY_ENT).forEach(p=>{ const r=rec(p.id);
       if((r.last_buy||'')>=cut) add('매입처',p.id,p.name);
       if((r.last_sale||'')>=cut) add('매출처',p.id,p.name); });
     ts.forEach(x=>{ if((x.slip_date||'')<cut) return; const kind = x.slip_type==='매입'?'매입처':'매출처';
       const r=rec(x.partner_id); add(kind, x.partner_id, r.name||x.partner_name); });
     const mine = DUTY.dparts.filter(x=>x.emp_id===e.id);
-    const has = c => mine.some(x=>x.kind===c.kind && ((c.pid && x.partner_id===c.pid) || x.partner_name===c.name));
-    const add2 = [...cand.values()].filter(c=>!has(c));
+    const covered = (c,k) => mine.some(x=>((c.pid && x.partner_id===c.pid) || x.partner_name===c.name) && (x.kind===k || x.kind==='매입매출처'));
+    const add2 = [];
+    [...cand.values()].forEach(c=>{
+      const need=[...c.kinds].filter(k=>!covered(c,k)); if(!need.length) return;
+      const has = mine.some(x=>(c.pid && x.partner_id===c.pid) || x.partner_name===c.name);
+      // 둘 다 필요하고 기존 줄이 없으면 매입매출처 한 줄
+      if(need.length===2 && !has) add2.push({kind:'매입매출처', pid:c.pid, name:c.name});
+      else need.forEach(k=>add2.push({kind:k, pid:c.pid, name:c.name}));
+    });
     if(!add2.length){ alert(`${dispName(e)} — 추가할 거래처가 없습니다.\n(거래처 영업담당·거래명세서 담당 기준, 최근 1년 거래)`); return; }
-    if(!confirm(`${dispName(e)} — 거래처 ${add2.length}건 추가합니다.\n(매입처 ${add2.filter(c=>c.kind==='매입처').length} · 매출처 ${add2.filter(c=>c.kind==='매출처').length})`)) return;
+    const cnt=k=>add2.filter(c=>c.kind===k).length;
+    if(!confirm(`${dispName(e)} — 거래처 ${add2.length}건 추가합니다.\n(매입처 ${cnt('매입처')} · 매입매출처 ${cnt('매입매출처')} · 매출처 ${cnt('매출처')})`)) return;
     const now=new Date().toISOString();
     const rows = add2.map(c=>({ entity:DUTY_ENT, emp_id:e.id, dept:e.dept, kind:c.kind, partner_id:c.pid||null, partner_name:c.name,
       role:'정', task:dpTaskDefault(c.kind), is_auto:true, created_by:curUser, updated_by:curUser, updated_at:now }));
@@ -1921,7 +2153,7 @@ async function downloadDutyExcel(){
     PC.forEach(x=>put(r,x[0],x[1],x[2],{h:true})); r++;
     const dps = DUTY.dparts.filter(x=>x.emp_id===e.id).sort(dpSort);
     (dps.length?dps:[null]).forEach(x=>{ const pp=x?dpPartner(x):null;
-      const vals=[x?x.kind:'', x?x.partner_name:'', x?x.role:'', x?x.task||'':'', x?(x.cycle?CYCLE_LABEL[x.cycle]:''):'', x?x.note||'':'', pp?((x.kind==='매입처'?pp.last_buy:pp.last_sale)||''):''];
+      const vals=[x?x.kind:'', x?x.partner_name:'', x?x.role:'', x?x.task||'':'', x?(x.cycle?CYCLE_LABEL[x.cycle]:''):'', x?x.note||'':'', x?dpLast(x):''];
       PC.forEach((c,i)=>put(r,c[0],c[1],vals[i],{al:[1,3,5].includes(i)?'left':'center'})); r++; });
     // 3. 변경점관리
     r++; ws.mergeCells(r,1,r,10); const v=ws.getCell(r,1); v.value='■ 3. 변경점관리'; v.font=font({bold:true,size:11}); r++;
