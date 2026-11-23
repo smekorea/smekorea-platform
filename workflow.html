@@ -190,6 +190,17 @@ body.memo-mode .day-hdr.sun{color:#ffecec;}
 body.memo-mode .day-hdr.sat{color:#eaf4ff;}
 .event-chip.memo-chip{background:#FFF8C5;border-left-color:#E0B400;color:#5b4a00 !important;}
 .event-chip.memo-chip.done{text-decoration:line-through;text-decoration-color:#6b7280;color:#6b7280 !important;background:#f5f5f0;border-left-color:#cfcfc4;}
+/* V20261123-10 메모 모드: 중요(일지 상·★ 메모)만 노란 바탕+빨간 글씨, 나머지는 바탕색 없음(왼쪽 얇은 막대만) */
+body.memo-mode .event-chip:not(.imp-chip):not(.memo-imp){background:transparent !important;color:#111827 !important;font-weight:400;}
+body.memo-mode .event-chip.memo-chip.done{background:transparent !important;color:#6b7280 !important;}
+.event-chip.memo-chip.memo-imp{background:#FFF9C4 !important;border-left-color:#E24B4A;color:#E24B4A !important;font-weight:700;}
+.lg-imp{background:#FFF9C4;color:#E24B4A;font-weight:700;border-left:3px solid #E24B4A;padding:0 5px;border-radius:3px;}
+.mp-imp-btn{background:#fff !important;color:#9ca3af !important;border:1.5px solid #e1e6ee !important;padding:0 10px !important;}
+.mp-imp-btn.on{background:#FFF9C4 !important;color:#E24B4A !important;border-color:#E24B4A !important;font-weight:700;}
+.mp-star{flex:none;border:none;background:none;cursor:pointer;font-size:15px;line-height:1;color:#d1d5db;padding:0 2px;}
+.mp-star:hover{color:#f59e0b;}
+.mp-star.on{color:#E24B4A;}
+.mp-row.imp .mp-text{color:#E24B4A;font-weight:700;}
 body.todo-dragging .day-cell{transition:background .1s;}
 .day-cell.drop-over{outline:2px dashed #E2772E;outline-offset:-2px;background:#fff8ef !important;}
 .memo-pop-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:400;align-items:center;justify-content:center;}
@@ -791,6 +802,12 @@ html.wf-dark .event-chip.shared-chip{color:#d6b8ff !important;}
 html.wf-dark .event-chip.imp-chip{color:#ff8f8f !important;}
 html.wf-dark .event-chip.memo-chip{color:#ffe27a !important;}
 html.wf-dark .event-chip.memo-chip.done{color:#8b93a3 !important;}
+html.wf-dark body.memo-mode .event-chip:not(.imp-chip):not(.memo-imp){color:var(--text1) !important;}
+html.wf-dark body.memo-mode .event-chip.memo-chip.done{color:#8b93a3 !important;}
+html.wf-dark .event-chip.memo-chip.memo-imp{color:#ff8f8f !important;}
+html.wf-dark .mp-imp-btn{background:var(--surface) !important;border-color:var(--border) !important;}
+html.wf-dark .mp-imp-btn.on{background:#4a3f12 !important;color:#ff8f8f !important;border-color:#E24B4A !important;}
+html.wf-dark .mp-row.imp .mp-text{color:#ff8f8f;}
 html.wf-dark .corp-line span{filter:brightness(2.1);}
 /* 왼쪽 개인메모 · 팀별공유메모 */
 html.wf-dark .ts-wrap{background:var(--app-bg);border-color:var(--border);}
@@ -1202,6 +1219,7 @@ body.m-legend-on #cat-legend{display:flex;}
     <div class="memo-pop-head"><span id="memo-pop-title"></span><button class="memo-pop-x" onclick="closeMemoPop()">✕</button></div>
     <div class="memo-pop-add">
       <input id="memo-pop-input" type="text" placeholder="메모를 입력하고 Enter" onkeydown="if(event.key==='Enter'&&!event.isComposing)addDateMemo()" onpaste="memoPaste(event,'date')">
+      <button class="mp-imp-btn" id="memo-pop-imp" onclick="toggleMemoNewImp()" title="중요 메모로 입력" data-i18n-title="중요 메모로 입력">★ <span data-i18n="중요">중요</span></button>
       <button onclick="addDateMemo()" data-i18n="추가">추가</button>
     </div>
     <div class="memo-pop-list" id="memo-pop-list"></div>
@@ -2109,6 +2127,7 @@ function renderLegend(){
   const el=document.getElementById('cat-legend');
   if(el&&typeof memoMode!=='undefined'&&memoMode){   // 메모 모드 범례 (V20261119-08)
     el.innerHTML=`
+    <div class="cat-item"><span class="lg-imp">${t('중요(일지 상·★ 메모)')}</span></div>
     <div class="cat-item"><div class="cat-dot" style="background:#378ADD"></div>${t('일정')}</div>
     <div class="cat-item"><div class="cat-dot" style="background:#E2772E"></div>${t('진행중')}</div>
     <div class="cat-item"><div class="cat-dot" style="background:#E24B4A"></div>${t('지시/후속')}</div>
@@ -2199,7 +2218,7 @@ function renderCal(){
         onclick="event.stopPropagation();">⏰ ${escapeHtml(t.text)}</div>`).join('');
     let memoNo=0;   // V20261121: 진행 중 메모 번호 1. 2. 3. (완료 건은 번호 없이 취소선)
     const memoChips=dayMemos.map(mm=>{ const no=mm.status==='done'?'':(++memoNo)+'. ';
-      return `<div class="event-chip memo-chip${mm.status==='done'?' done':''}" title="${escapeHtml(no+mm.text)}"
+      return `<div class="event-chip memo-chip${mm.status==='done'?' done':''}${(mm.pri===0&&mm.status!=='done')?' memo-imp':''}" title="${escapeHtml(no+mm.text)}"
         onclick="event.stopPropagation();openMemoPop('${ds}')">📝 ${no}${escapeHtml(mm.text)}${mm.diary_id?' 🔗':''}</div>`; }).join('');
     let more='', chipHtml=memoChips+dirChips+chips+sharedChips+todoChips;
     if(isMob){   // 휴대폰: 칸당 일정 수 제한(글자 단계별), 나머지는 +N
@@ -3514,8 +3533,17 @@ function toggleMemoMode(){
 function memosForDate(ds){
   return todos.filter(x=>x.memo_date===ds).sort((a,b)=>((a.status==='done')-(b.status==='done'))||String(a.created_at||'').localeCompare(String(b.created_at||'')));
 }
+var memoNewImp=false;   // V20261123-10: 입력창 「★ 중요」 상태
+function toggleMemoNewImp(){ memoNewImp=!memoNewImp; const b=document.getElementById('memo-pop-imp'); if(b) b.classList.toggle('on',memoNewImp); const inp=document.getElementById('memo-pop-input'); if(inp) inp.focus(); }
+async function toggleMemoImp(id){
+  const mm=todos.find(x=>String(x.id)===String(id)); if(!mm) return;
+  mm.pri=(mm.pri===0)?1:0;
+  saveLocal(); renderMemoPop(); renderCal();
+  if(SB){ try{ await SB.from('cal_todos').update({pri:mm.pri}).eq('id',mm.id); }catch(e){ console.warn('[SB] toggleMemoImp error:',e); } }
+}
 function openMemoPop(ds){
   memoPopDate=ds; memoEditId=null;
+  memoNewImp=false; { const b=document.getElementById('memo-pop-imp'); if(b) b.classList.remove('on'); }
   const d=new Date(ds+'T00:00:00');
   document.getElementById('memo-pop-title').textContent=`📝 ${fmtMonthDay(d.getMonth()+1,d.getDate())} (${t(DAYS[d.getDay()])}) ${t('메모')}`;
   renderMemoPop();
@@ -3552,8 +3580,10 @@ function renderMemoPop(){
     const txt=memoEditId===id
       ? `<input class="mp-edit" id="mp-edit-${id}" value="${escapeHtml(mm.text)}" onkeydown="if(event.key==='Enter'&&!event.isComposing)saveMemoEdit('${id}');else if(event.key==='Escape'){memoEditId=null;renderMemoPop();}" onblur="saveMemoEdit('${id}')">`
       : `<span class="mp-text" title="${escapeHtml(t('눌러서 수정'))}" onclick="editMemo('${id}')">${escapeHtml(mm.text)}</span>`;
-    return `<div class="mp-row${done?' done':''}">
+    const imp=mm.pri===0&&!done;
+    return `<div class="mp-row${done?' done':''}${imp?' imp':''}">
       ${done?`<span class="mp-done-mark">${t('완')}</span>`:`<span class="mp-no">${no}.</span>`}
+      ${done?'':`<button class="mp-star${imp?' on':''}" onclick="toggleMemoImp('${id}')" title="${escapeHtml(t(imp?'중요 해제':'중요 표시'))}">★</button>`}
       ${txt}
       ${mm.diary_id
         ? `<span class="mp-link" onclick="closeMemoPop();openTodoDiary('${id}')">🔗 ${t('업무일지')}</span>`
@@ -3567,14 +3597,14 @@ function renderMemoPop(){
 async function addDateMemo(){
   const inp=document.getElementById('memo-pop-input'); if(!inp||!memoPopDate) return;
   const text=inp.value.trim(); if(!text) return;
-  const obj={text,cat:1,pri:1,status:'todo',due:null,memo:'',created_at:new Date().toISOString(),employee_id:wfSession.empId||null,sort_no:null,memo_date:memoPopDate};
+  const obj={text,cat:1,pri:memoNewImp?0:1,status:'todo',due:null,memo:'',created_at:new Date().toISOString(),employee_id:wfSession.empId||null,sort_no:null,memo_date:memoPopDate};
   let newId=null;
   if(SB){
     try{ const {data,error}=await SB.from('cal_todos').insert(obj).select().single(); if(error) throw error; if(data) newId=data.id; }
     catch(e){ console.warn('[SB] addDateMemo error:',e); alert(t('저장 실패')+': '+(e.message||e)); return; }
   }
   todos.unshift({id:newId||Date.now(),...obj,diary_id:null});
-  saveLocal(); inp.value=''; renderMemoPop(); renderCal(); inp.focus();
+  saveLocal(); inp.value=''; if(memoNewImp) toggleMemoNewImp(); renderMemoPop(); renderCal(); inp.focus();
 }
 async function toggleMemoDone(id){
   const mm=todos.find(x=>String(x.id)===String(id)); if(!mm) return;
@@ -6560,6 +6590,11 @@ const I18N_T = {
 "⌂ 홈":{zh:"⌂ 首页",en:"⌂ Home"},
 "전체화면":{zh:"全屏",en:"Full screen"},
 "전체화면 해제":{zh:"退出全屏",en:"Exit full screen"},
+"중요(일지 상·★ 메모)":{zh:"重要（日志高·★备忘）",en:"Important (diary High · ★ memo)"},
+"중요 메모로 입력":{zh:"作为重要备忘录输入",en:"Add as important memo"},
+"중요 표시":{zh:"标记为重要",en:"Mark important"},
+"중요 해제":{zh:"取消重要",en:"Unmark important"},
+"중요":{zh:"重要",en:"Important"},
 "직접 선택":{zh:"自定义",en:"Custom"},
 "밝은 색":{zh:"浅色",en:"Light"},
 "어두운 색":{zh:"深色",en:"Dark"},
