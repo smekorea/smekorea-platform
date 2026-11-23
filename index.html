@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<script src="smerp-session.js?v=1"></script>
 <script src="i18n.js?v=20261119e"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMEKOREA 통합 플랫폼</title>
@@ -931,7 +932,7 @@ async function personalLogin(){
   err.textContent=idxT('로그인 중...');
   let r;try{r=await authFn({action:'login',entity:pendingEntity,emp_no:no,pw:pw});}catch(e){err.textContent='⚠ '+e.message;return;}
   if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||idxT('비밀번호가 올바르지 않습니다'));document.getElementById('pwInput').value='';return;}
-  localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));saveSbSession(r.session);
+  localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));saveSbSession(r.session);localStorage.setItem('sme_login_at',String(Date.now()));
   localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);localStorage.removeItem('sme_private');
   localStorage.removeItem('sme_hq_auth');sessionStorage.removeItem('hq_auth');sessionStorage.setItem('po_auth','1');
   if(r.must_change)localStorage.setItem('sme_must_change','1');else localStorage.removeItem('sme_must_change');
@@ -942,6 +943,7 @@ async function personalLogin(){
   await idxLangAfterLogin(r.entity,r.name,r.emp_no);
   err.textContent='';closePW();writeLog(r.name,'SMERP 로그인',r.entity);
   if(r.must_change){openChangePw(true,pendingTarget);return;}
+  if(goReturn())return;
   if(pendingTarget&&canOpen(pendingTarget))handleTarget(pendingTarget,r.name);
 }
 let cpwAfter='';
@@ -968,10 +970,17 @@ async function submitChangePw(){
   if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||'');return;}
   saveSbSession(r.session);localStorage.removeItem('sme_must_change');
   document.getElementById('cpwOverlay').style.display='none';alert(idxT('비밀번호를 바꿨습니다'));
+  if(goReturn())return;
   const t=cpwAfter;cpwAfter='';if(t&&canOpen(t))handleTarget(t,localStorage.getItem('sme_user'));
 }
 function clearLogin(){
-  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change',SB_AUTH_KEY].forEach(k=>localStorage.removeItem(k));
+  ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change','sme_login_at','wf_session',SB_AUTH_KEY].forEach(k=>localStorage.removeItem(k));
+}
+// 로그인이 필요해 메인으로 온 경우(다른 화면에서) — 로그인 후 원래 화면으로
+function goReturn(){
+  let r='';try{r=sessionStorage.getItem('smerp_return')||'';sessionStorage.removeItem('smerp_return');}catch(e){}
+  if(r&&/^[\w\-/.]+\.html(\?.*)?$/.test(r)){location.href=r;return true;}
+  return false;
 }
 function forceLogout(){
   const tk=localStorage.getItem('sme_token');if(tk)rpcIdx('app_logout',{p_token:tk}).catch(()=>{});
@@ -1074,8 +1083,9 @@ async function onCorpSelect(){
   if(!corp){ sel.innerHTML=`<option value="">${idxT('— 법인을 먼저 선택해주세요 —')}</option>`; sel.disabled=true; return; }
   sel.innerHTML=`<option value="">${idxT('불러오는 중...')}</option>`; sel.disabled=true;
   try{
-    const res=await fetch(`${SB_URL}/rest/v1/employees?select=emp_no,name,name_local,rank,dept&active=eq.true&entity=eq.${pendingEntity}&order=emp_no`,
-      {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    // 로그인 전 이름 목록은 RPC (직원 테이블은 로그인한 사람만 조회 — DB 단 차단)
+    const res=await fetch(`${SB_URL}/rest/v1/rpc/app_login_names`,
+      {method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_entity:pendingEntity})});
     const data=await res.json();
     // 개인 계정 법인: 값 = 사번(로그인 키), 동명이인은 부서로 구분, 해외는 현지 이름 함께
     const cnt={};(data||[]).forEach(e=>{cnt[e.name]=(cnt[e.name]||0)+1;});
