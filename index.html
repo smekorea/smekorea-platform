@@ -731,6 +731,7 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     <input class="popup-inp" id="pwInput" type="password" maxlength="64" autocomplete="current-password" placeholder="••••" onkeydown="if(event.key==='Enter')checkPW()">
     <div class="popup-err" id="pwError"></div>
     <button class="popup-btn" onclick="checkPW()" data-i18n="로그인">로그인</button>
+    <div id="otherUserLink" style="display:none;text-align:center;margin-top:10px;"><a href="javascript:void(0)" onclick="loginAsOther()" style="font-size:12px;color:#1B3A6B;font-weight:700;text-decoration:underline;" data-i18n="다른 사람으로 로그인">다른 사람으로 로그인</a></div>
     <div class="popup-cancel" onclick="closePW()">✕ <span data-i18n="취소">취소</span></div>
   </div>
 </div>
@@ -932,6 +933,8 @@ async function personalLogin(){
   err.textContent=idxT('로그인 중...');
   let r;try{r=await authFn({action:'login',entity:pendingEntity,emp_no:no,pw:pw});}catch(e){err.textContent='⚠ '+e.message;return;}
   if(!r||!r.ok){err.textContent='⚠ '+((r&&r.error)||idxT('비밀번호가 올바르지 않습니다'));document.getElementById('pwInput').value='';return;}
+  // (V20261124-01) 이 PC가 마지막 로그인한 법인·이름을 기억 — 다음엔 비밀번호만 입력 (로그아웃해도 유지, 「다른 사람으로 로그인」으로 해제)
+  try{localStorage.setItem('sme_last_login',JSON.stringify({corp:document.getElementById('corpSelect').value,emp_no:r.emp_no}));}catch(e){}
   localStorage.setItem('sme_token',r.token);localStorage.setItem('sme_emp_no',String(r.emp_no));saveSbSession(r.session);localStorage.setItem('sme_login_at',String(Date.now()));
   localStorage.setItem('sme_user',r.name);localStorage.setItem('sme_auth','1');localStorage.setItem('sme_entity',r.entity);localStorage.removeItem('sme_private');
   localStorage.removeItem('sme_hq_auth');sessionStorage.removeItem('hq_auth');sessionStorage.setItem('po_auth','1');
@@ -1113,7 +1116,30 @@ function openWithPW(t){
   document.getElementById('pwError').textContent='';
   document.getElementById('pwOverlay').style.display='flex';
   applyIdxI18n();
-  setTimeout(()=>document.getElementById('corpSelect').focus(),100);
+  document.getElementById('otherUserLink').style.display='none';
+  prefillLastLogin().then(ok=>{ if(!ok) setTimeout(()=>document.getElementById('corpSelect').focus(),100); });
+}
+// (V20261124-01) 이 PC에서 마지막으로 로그인한 법인·이름을 미리 골라 둠 → 비밀번호만 입력
+async function prefillLastLogin(){
+  let last=null;try{last=JSON.parse(localStorage.getItem('sme_last_login')||'null');}catch(e){}
+  if(!last||!last.corp||!last.emp_no)return false;
+  const cs=document.getElementById('corpSelect');
+  if(![...cs.options].some(o=>o.value===last.corp))return false;
+  cs.value=last.corp;await onCorpSelect();
+  const ns=document.getElementById('nameSelect');
+  if(![...ns.options].some(o=>o.value===String(last.emp_no))){cs.value='';await onCorpSelect();return false;}
+  ns.value=String(last.emp_no);
+  document.getElementById('otherUserLink').style.display='';
+  setTimeout(()=>document.getElementById('pwInput').focus(),80);
+  return true;
+}
+// 공용 PC 등 — 기억을 지우고 법인·이름부터 다시 선택
+async function loginAsOther(){
+  try{localStorage.removeItem('sme_last_login');}catch(e){}
+  document.getElementById('corpSelect').value='';document.getElementById('pwInput').value='';document.getElementById('pwError').textContent='';
+  await onCorpSelect();
+  document.getElementById('otherUserLink').style.display='none';
+  setTimeout(()=>document.getElementById('corpSelect').focus(),50);
 }
 
 async function checkPW(){
