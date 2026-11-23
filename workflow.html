@@ -3658,10 +3658,16 @@ async function calTodoDrop(ev,ds){
   ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.classList.remove('drop-over');
   const id=todoDragId; todoDragId=null; document.body.classList.remove('todo-dragging');
   const td=todos.find(x=>String(x.id)===String(id)); if(!td) return;   // 팀 메모는 달력에 놓지 않음
-  td.memo_date=ds;
+  // V20261123-21: 옮기기 → 복사. 왼쪽 메모는 그대로, 놓은 날짜에 같은 글·우선도의 날짜 메모 새로 생성(덧글·업무일지 연결은 복사 안 함)
+  const obj={text:td.text,cat:td.cat??1,pri:td.pri??1,status:'todo',due:null,memo:'',created_at:new Date().toISOString(),employee_id:wfSession.empId||null,sort_no:null,memo_date:ds};
+  let newId=null;
+  if(SB){
+    try{ const {data,error}=await SB.from('cal_todos').insert(obj).select().single(); if(error) throw error; if(data) newId=data.id; }
+    catch(e){ console.warn('[SB] calTodoDrop error:',e); alert(t('저장 실패')+': '+(e.message||e)); return; }
+  }
+  todos.unshift({id:newId||Date.now(),...obj,diary_id:null,completed_at:null});
   if(!memoMode) setMemoMode(true);   // 메모는 메모 모드에서 보이므로 켠다
   saveLocal(); renderAll();
-  if(SB){ try{ await SB.from('cal_todos').update({memo_date:ds}).eq('id',td.id); }catch(e){ console.warn('[SB] calTodoDrop error:',e); } }
 }
 document.addEventListener('DOMContentLoaded',applyMemoModeUI);
 /* ── 왼쪽 할 일 영역: 선택·높이·폭 조절 (V20261119-10) ── */
