@@ -1,5 +1,5 @@
 /* ============================================================================
-   smerp-session.js v1.0 (2026-11-23) — 개인 계정 로그인 세션 공용 (전 화면 <head> 맨 앞)
+   smerp-session.js v1.1 (2026-11-23) — 개인 계정 로그인 세션 공용 (전 화면 <head> 맨 앞)
    ── DB 단 차단(RLS) 이후: DB 요청마다 「로그인한 사람」 표시(Supabase 세션 토큰)를 붙여야 자료가 나온다
       1) 화면이 직접 부르는 REST 요청(공용 키만 붙은 것)에 로그인 토큰을 붙임 — supabase-js 요청은 이미 붙어 있음
       2) 토큰이 끝나 가면(1시간) 새로 받아 저장 (같은 세션 키를 supabase-js와 함께 씀)
@@ -50,6 +50,12 @@
   }
   window.SMERP_SB_TOKEN=fresh;
 
+  // 예전 공용 키(anon JWT)로 보내는 화면(출하관리·바코드 LOT·KPI 출하·일정)도 로그인 토큰으로 바꿈 (V20261123-17)
+  function isAnonJwt(a){
+    if(a.indexOf('Bearer eyJ')!==0) return false;
+    try{var p=a.slice(7).split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(p)).role==='anon';}catch(e){return false;}
+  }
+
   window.fetch=async function(input,init){
     try{
       var url=typeof input==='string'?input:(input&&input.url)||'';
@@ -57,7 +63,7 @@
         var src=(init&&init.headers)||(typeof input!=='string'&&input.headers)||{};
         var h=new Headers(src);
         var a=h.get('Authorization')||'';
-        if(!a||a.indexOf('Bearer sb_publishable')===0){
+        if(!a||a.indexOf('Bearer sb_publishable')===0||isAnonJwt(a)){
           var tk=await fresh();
           if(tk){h.set('Authorization','Bearer '+tk);init=Object.assign({},init||{},{headers:h});}
         }
