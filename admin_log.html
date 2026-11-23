@@ -508,6 +508,31 @@ td.center .al-pline{justify-content:center;}
 .pm-sec .pm-btn{margin-left:auto;}
 .pm-lvwrap{max-height:calc(100vh - 230px);overflow:auto;border:1px solid #e3e8ef;display:inline-block;max-width:100%;vertical-align:top;}
 .pm-lvwrap .pm-lvt th{position:sticky;top:0;z-index:4;}
+/* (V20261124-03) 명단 표 · 오른쪽 위 세로 폭 축소 */
+.pm-left{flex:0 0 330px;}
+.pm-ut{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12.5px;}
+.pm-ut th{position:sticky;top:0;z-index:4;background:#F3F5F8;color:#1B3A6B;font-weight:700;padding:5px 6px;border-bottom:1px solid #d6dce5;text-align:left;height:26px;box-sizing:border-box;}
+.pm-ut th.c,.pm-ut td.c{text-align:center;}
+.pm-ut tr.pm-ue td{position:sticky;top:26px;z-index:3;background:#1B3A6B;color:#fff;font-weight:700;padding:4px 8px;}
+.pm-ut td{padding:5px 6px;border-bottom:1px solid #eef1f5;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pm-ut tr.gfirst td{border-top:1px solid #c9d2df;}
+.pm-ut td.pm-ud{background:#F7F9FC;color:#1B3A6B;font-weight:700;vertical-align:top;border-right:1px solid #e3e8ef;cursor:default;white-space:normal;}
+.pm-ut tr.pm-ur{cursor:pointer;}
+.pm-ut tr.pm-ur:hover td:not(.pm-ud){background:#F6F8FB;}
+.pm-ut tr.pm-ur.on td:not(.pm-ud){background:#E8EEF8;}
+.pm-ut tr.pm-ur.on td.pm-un{box-shadow:inset 3px 0 0 #1B3A6B;}
+.pm-ut .pm-no{color:var(--muted);font-size:11.5px;}
+.pm-ut td .pm-b,.pm-ut td span{white-space:nowrap;}
+.pm-card{padding:10px 14px;}
+.pm-head{padding-bottom:6px;margin-bottom:8px;}
+.pm-head .nm{font-size:16px;}
+.pm-info{margin-bottom:6px;}
+.pm-info th{width:104px;padding:5px 10px;}
+.pm-info td{padding:4px 10px;}
+.pm-info .pm-btn{height:26px;padding:0 10px;}
+.pm-info select{padding:3px 6px;min-width:150px;}
+.pm-sec{margin:2px 0 4px;padding:5px 0 3px;}
+.pm-lvlegend{margin:0 0 6px;}
 </style>
 </head>
 <body>
@@ -1661,7 +1686,7 @@ async function pmSetMgr(no,key,on){
 // 볼 수 있는 해외법인 — 본사 직원만, 체크한 법인만 (기본 = 본사만), 시스템 관리자는 전 법인
 function pmEntLine(u){
   if(u.entity!=='KOREA')return `<tr><th>볼 수 있는 법인</th><td><span class="pm-note">${_pe(PM_ENT[u.entity]||u.entity)} 자료만 (해외 직원은 자기 법인만)</span></td></tr>`;
-  return pmOvsOn(u)?`<tr><th>해외법인 자료</th><td><span class="pm-note">아래 표 오른쪽 SMECN·SMETH·SMEIN 칸에서 화면별로 체크 — 체크한 것만 볼 수 있습니다 (체크 없음 = 본사 자료만)</span></td></tr>`:'';
+  return pmOvsOn(u)?`<tr><th>해외법인 자료</th><td><span class="pm-note" title="체크한 것만 볼 수 있습니다 (체크 없음 = 본사 자료만)">표 오른쪽 SMECN·SMETH·SMEIN 칸에서 화면별 체크</span></td></tr>`:'';
 }
 async function pmSaveEnts(no){
   const ents=[...document.querySelectorAll('.pmU-ent:checked')].map(x=>x.value);
@@ -1690,13 +1715,19 @@ function pmRenderUsers(){
   const D=PM.data;const q=(PM.q||'').trim().toLowerCase();
   const users=pmSortedUsers((D.users||[]).filter(u=>!q||[u.name,u.name_local,u.dept,String(u.emp_no),pmRoleName(u.role_id)].some(v=>String(v||'').toLowerCase().includes(q))));
   let left=`<div style="display:flex;gap:6px;margin-bottom:8px;"><input id="pmQ" value="${_pe(PM.q||'')}" placeholder="이름·부서·사번·역할 검색" oninput="PM.q=this.value;pmRenderUsers();setTimeout(()=>{const x=pmEl('pmQ');x.focus();x.setSelectionRange(x.value.length,x.value.length);},0)" style="flex:1;padding:6px 9px;border:1px solid var(--border);font-size:13px;"></div><div class="pm-list">`;
-  let lastE='',lastD='';
+  // (V20261124-03) 명단 = 표: A열 부서(같은 부서 합침) · B열 이름 · 사번 · 상태, 법인별 제목줄
+  const gcnt={};users.forEach(u=>{const k=u.entity+'|'+(u.dept||'');gcnt[k]=(gcnt[k]||0)+1;});
+  left+=`<table class="pm-ut"><colgroup><col style="width:92px"><col><col style="width:38px"><col style="width:86px"></colgroup><thead><tr><th>부서</th><th>이름</th><th class="c">사번</th><th class="c">상태</th></tr></thead><tbody>`;
+  let lastE='',lastK='';
   users.forEach(u=>{
-    if(u.entity!==lastE){left+=`<div class="pm-g1">${_pe(PM_ENT[u.entity]||u.entity)}</div>`;lastE=u.entity;lastD='';}
-    if((u.dept||'')!==lastD){left+=`<div class="pm-g2">${_pe(u.dept||'(부서 없음)')}</div>`;lastD=u.dept||'';}
-    left+=`<div class="pm-item${PM.selEmp===u.emp_no?' on':''}" onclick="pmPick(${u.emp_no})" title="기본 권한: ${_pe(pmRoleName(u.role_id)||'없음')}"><div class="pm-nm"><b>${_pe(u.name)}</b><span class="pm-no">${u.emp_no}</span></div><div style="text-align:right;">${pmStatus(u)}</div></div>`;
+    if(u.entity!==lastE){left+=`<tr class="pm-ue"><td colspan="4">${_pe(PM_ENT[u.entity]||u.entity)}</td></tr>`;lastE=u.entity;lastK='';}
+    const k=u.entity+'|'+(u.dept||'');const on=PM.selEmp===u.emp_no;
+    left+=`<tr class="pm-ur${on?' on':''}${k!==lastK?' gfirst':''}" onclick="pmPick(${u.emp_no})" title="기본 권한: ${_pe(pmRoleName(u.role_id)||'없음')}">`+
+      (k!==lastK?`<td class="pm-ud" rowspan="${gcnt[k]}" onclick="event.stopPropagation()">${_pe(u.dept||'(부서 없음)')}</td>`:'')+
+      `<td class="pm-un"><b>${_pe(u.name)}</b></td><td class="c pm-no">${u.emp_no}</td><td class="c">${pmStatus(u)}</td></tr>`;
+    lastK=k;
   });
-  left+=`</div>`;
+  left+=`</tbody></table></div>`;
   const u=(D.users||[]).find(x=>x.emp_no===PM.selEmp);
   let right='<div class="empty-state" style="padding:60px;">왼쪽 명단에서 사람을 고르세요.</div>';
   if(u){
@@ -1706,12 +1737,13 @@ function pmRenderUsers(){
       `<span class="meta">${_pe(PM_ENT[u.entity]||u.entity)} · ${_pe(u.dept||'')} · ${_pe(u.rank||'')} · 사번 ${u.emp_no}</span>`+
       `<span class="last">마지막 로그인 ${u.last_login?_pe(String(u.last_login).slice(0,16).replace('T',' ')):'없음'}</span></div>`+
       `<table class="pm-info"><tbody>`+
-      `<tr><th title="부서별 기본 권한 세트 — 고르면 바로 저장. 아래 화면별 권한은 이 사람만의 예외">기본 권한(부서)</th><td><div class="pm-row"><select id="pmU-role" onchange="pmSaveUser(${u.emp_no},false)"><option value="">(없음 — 로그인 불가)</option>${roles.map(r=>`<option value="${r.id}" ${r.id===u.role_id?'selected':''}>${_pe(r.name)}</option>`).join('')}</select><span class="pm-note">고르면 바로 저장됩니다</span></div></td></tr>`+
-      `<tr><th>계정</th><td><div class="pm-row"><label title="끄면 이 사람은 로그인할 수 없습니다"><input type="checkbox" id="pmU-active" ${(!u.has_acct||u.acct_active)?'checked':''} onchange="pmSaveUser(${u.emp_no},false)"> 계정 사용</label><span>${st}</span>`+
+      `<tr><th title="부서별 기본 권한 세트 — 고르면 바로 저장. 아래 화면별 권한은 이 사람만의 예외">기본 권한(부서)</th><td><div class="pm-row"><select id="pmU-role" onchange="pmSaveUser(${u.emp_no},false)" title="고르면 바로 저장됩니다"><option value="">(없음 — 로그인 불가)</option>${roles.map(r=>`<option value="${r.id}" ${r.id===u.role_id?'selected':''}>${_pe(r.name)}</option>`).join('')}</select></div></td>`+
+      `<th>계정</th><td><div class="pm-row"><label title="끄면 이 사람은 로그인할 수 없습니다"><input type="checkbox" id="pmU-active" ${(!u.has_acct||u.acct_active)?'checked':''} onchange="pmSaveUser(${u.emp_no},false)"> 계정 사용</label><span>${st}</span>`+
       `<span class="pm-acts">`+(u.locked?`<button class="pm-btn" onclick="pmSaveUser(${u.emp_no},true)">잠금 해제</button>`:'')+
       (u.has_pw?`<button class="pm-btn" onclick="pmResetPw(${u.emp_no})" title="비밀번호를 1120으로 초기화 (다음 로그인 때 본인이 변경)">비밀번호 초기화</button>`
                :`<button class="pm-btn pri" onclick="pmIssueOne(${u.emp_no})" title="이 사람 계정을 만듭니다 (첫 비밀번호 1120) — 기본 권한을 먼저 고르세요">계정 발급</button>`)+`</span></div></td></tr>`+
-      pmExtra(u)+pmEntLine(u)+`</tbody></table>`+
+      (()=>{const a=pmExtra(u),b=pmEntLine(u);const cell=x=>x.replace(/^<tr>/,'').replace(/<\/tr>$/,'');
+        if(a&&b)return '<tr>'+cell(a)+cell(b)+'</tr>';const one=a||b;return one?one.replace(/<td>/,'<td colspan="3">'):'';})()+`</tbody></table>`+
       `<div class="pm-sec"><b>화면별 권한</b><span class="pm-note">지금 적용 중인 권한에 체크되어 있습니다 · 누르면 바로 저장</span>`+
       `<button class="pm-btn" onclick="pmCopyDept(${u.emp_no})" title="이 사람의 기본 권한·화면별 권한·해외법인 자료 체크를 같은 법인·같은 부서 전원에게 똑같이 적용 (관리 권한은 제외)">같은 부서 전원에게 적용</button></div>`+
       pmLvTable(u)+
