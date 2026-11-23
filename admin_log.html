@@ -1679,7 +1679,8 @@ function pmRenderUsers(){
       (u.has_pw?`<button class="row-btn" onclick="pmResetPw(${u.emp_no})" title="비밀번호를 1120으로 초기화 (다음 로그인 때 본인이 변경)">비밀번호 초기화(1120)</button>`
                :`<button class="row-btn" style="background:var(--point);color:#fff;" onclick="pmIssueOne(${u.emp_no})" title="이 사람 계정을 만듭니다 (첫 비밀번호 1120) — 역할을 먼저 저장하세요">계정 발급(1120)</button>`)+`</span></div>`+
       pmExtra(u)+
-      `<div class="pm-step" style="margin-top:10px;"><b>화면별 권한</b><span style="color:var(--muted);font-size:12px;margin-left:8px;">지금 적용 중인 권한에 체크되어 있습니다 · 노란 줄 = 기본 권한(부서)과 다르게 바꾼 화면</span></div>`+pmEntLine(u)+
+      `<div class="pm-step" style="margin-top:10px;"><b>화면별 권한</b><span style="color:var(--muted);font-size:12px;margin-left:8px;">지금 적용 중인 권한에 체크되어 있습니다</span>`+
+      `<button class="row-btn" style="margin-left:auto;" onclick="pmCopyDept(${u.emp_no})" title="이 사람의 기본 권한·화면별 권한·해외법인 자료 체크를 같은 법인·같은 부서 전원에게 똑같이 적용 (관리 권한은 제외)">같은 부서 전원에게 적용</button></div>`+pmEntLine(u)+
       pmLvTable(u)+
       `<div class="pm-step" style="margin-top:14px;"><b>변경 이력</b></div><div class="pm-hist" id="pmHist">${pmHistHtml(u.emp_no)}</div></div>`;
   }
@@ -1719,6 +1720,15 @@ function pmLvTable(u){
   });
   setTimeout(()=>initColResize('pmLvTbl','al_pmlv_v2'),30);
   return h+'</tbody></table>';
+}
+async function pmCopyDept(no){
+  const u=PM.data.users.find(x=>x.emp_no===no);if(!u)return;
+  const others=(PM.data.users||[]).filter(x=>x.emp_no!==no&&x.entity===u.entity&&(x.dept||'')===(u.dept||'')&&x.has_acct);
+  if(!others.length){alert('같은 부서에 다른 직원이 없습니다.');return;}
+  if(!confirm(`${u.name}의 권한을 같은 부서 ${others.length}명에게 똑같이 적용합니다.\n\n대상: ${others.map(x=>x.name).join(', ')}\n\n기본 권한(부서)·화면별 권한·해외법인 자료 체크가 덮어쓰기됩니다 (관리 권한은 그대로).`))return;
+  try{const r=await pmRpc('app_admin_copy_to_dept',{p_token:pmTok(),p_emp_no:no});PM.data=await pmRpc('app_admin_data',{p_token:pmTok()});PM.logs={};
+    alert(`${r.count}명에게 적용했습니다: ${r.names}`);}catch(e){alert('적용 실패: '+e.message);}
+  pmPick(no);
 }
 async function pmSetOvs(no,key,ent,on){
   const sc=document.querySelector('.pm-right')?.scrollTop||0;
