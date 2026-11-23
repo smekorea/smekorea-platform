@@ -493,7 +493,7 @@ td.center .al-pline{justify-content:center;}
   <div class="tab-group g-perf" title="실적 자료">
     <button class="tab-btn" id="tab-trade-btn" onclick="switchTab('trade')">매입·매출</button>
   </div>
-  <div class="tab-group g-sys" title="이력">
+  <div class="tab-group g-sys" title="이력" id="tab-log-group">
     <button class="tab-btn" id="tab-log-btn" onclick="switchTab('log')">접속 이력</button>
   </div>
 </div>
@@ -1636,6 +1636,8 @@ const PV = k => !!(MY_PERMS[k] && MY_PERMS[k].v);
 const FULL_ADMIN = TOKEN_MODE ? PV('master') : HQ_OK;
 const PARTNER_ONLY = MAIN_OK && !FULL_ADMIN;
 const CAN_PARTNERS = TOKEN_MODE ? (PV('admin_partners') || PV('master')) : true;
+// (V20261123-23) 접속 이력 탭은 권한 관리 「기준정보 — 접속 이력」 읽기 권한이 있는 사람만 (기본: 시스템 관리자·경영진)
+const CAN_LOG = TOKEN_MODE ? PV('master_log') : false;
 if(MAIN_OK && PARTNER_ONLY && !CAN_PARTNERS){ alert('접근 권한이 없습니다.'); window.location.href='index.html'; }
 if(TOKEN_MODE && localStorage.getItem('sme_must_change')==='1'){ alert('새 비밀번호를 먼저 입력하세요.'); window.location.href='index.html'; }
 const MY_ENTITY = localStorage.getItem('sme_entity') || 'KOREA';
@@ -1654,6 +1656,7 @@ const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString('ko-KR');
 // ── 탭 전환 ──
 function switchTab(t) {
   if(PARTNER_ONLY) t = 'partners';
+  if(t==='log' && !CAN_LOG) t = 'partners';
   try{localStorage.setItem('master_last_tab',t);}catch(e){}
   setTimeout(fitWraps,80);setTimeout(fitWraps,700);
   ['items','lg','partners','master','alias','maker','logistics','trade','stock','log'].forEach(x => {
@@ -5757,6 +5760,8 @@ function fitWraps(){
   });
 }
 window.addEventListener('resize',()=>{clearTimeout(window._fwT);window._fwT=setTimeout(fitWraps,120);});
+(function(){if(!CAN_LOG){const g=document.getElementById('tab-log-group');if(g)g.style.display='none';}
+})();
 (function(){let t0='partners';try{const v=localStorage.getItem('master_last_tab');if(v&&document.getElementById('tab-'+v+'-btn'))t0=v;}catch(e){}
   // 다른 화면에서 바로가기: ?tab=partners&add=이름&ptype=매출처&entity=KOREA (신규 등록) / ?tab=partners&edit=id (수정)
   if(PARTNER_ONLY) applyPartnerOnlyUI();
