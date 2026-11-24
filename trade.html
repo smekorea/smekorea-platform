@@ -858,6 +858,7 @@ async function loadWait(skipGen){
   try{
     WAIT=await getAll('trade_slip?select=*,trade_slip_line(count)&entity=eq.'+curEntity+'&status=eq.작성중&source_type=in.(출하,스마트입고)&order=slip_date.desc,id.desc');
     await loadShipDone(WAIT);
+    await loadQtyChk(WAIT);
   }catch(e){box.innerHTML=`<div class="empty">불러오기 실패: ${esc(e.message)}</div>`;return;}
   renderWait();
   if(!skipGen)runAutoGen(false);
@@ -867,6 +868,7 @@ const WAIT_COLS=[
   {t:'구분',k:'slip_type',w:60,f:r=>typeBadge(r.slip_type)},
   {t:'출처',k:'source_type',w:80,f:r=>esc(r.source_type==='스마트입고'?'스마트 입고':(String(r.created_by||'').includes('검수')?'검수완료':'출하완료'))},
   {t:'출하',k:'_ship',w:90,f:r=>r.source_type!=='출하'?'':(shipDone(r)?'<span class="badge b-done">출하완료</span>':'<span class="badge b-warn">출하 미완료</span>'),sv:r=>r.source_type!=='출하'?'':(shipDone(r)?'1':'0')},
+  {t:'수량점검',k:'_qchk',w:110,f:r=>qchkHtml(r.id),sv:r=>{const q=QCHK[r.id];return q?(q.over?2:1):0;}},
   {t:'공급구분',k:'supply_kind',w:80,f:r=>kindBadge(r)},
   {t:'거래처',k:'partner_name',w:200,f:r=>esc(r.partner_name)+(r.partner_id?'':' <span class="badge b-warn">거래처 미연결</span>')},
   {t:'부서',k:'dept',w:90},{t:'담당',k:'manager',w:70},
@@ -886,6 +888,19 @@ async function loadShipDone(rows){
   }
 }
 function shipDone(r){return r.source_type!=='출하'||!r.source_id||SHIPDONE[r.source_id]===true;}
+// (V20261124-04) 출하 요구수량 대비 수량 차이 — 품목 줄 비고 「요구 N」 기준. 초과(빨강)·부족(주황) 줄 수를 목록에 미리 표시
+let QCHK={};
+async function loadQtyChk(rows){
+  QCHK={};const ids=rows.filter(r=>r.source_type==='출하').map(r=>r.id);
+  for(let i=0;i<ids.length;i+=150){
+    try{(await getAll('trade_slip_line?select=slip_id,qty,note&note=like.'+enc('요구*')+'&slip_id=in.('+ids.slice(i,i+150).join(',')+')')).forEach(x=>{
+      const req=num(String(x.note||'').replace(/^요구 /,''));const q=num(x.qty);if(req===q)return;
+      const o=QCHK[x.slip_id]||(QCHK[x.slip_id]={over:0,under:0});if(q>req)o.over++;else o.under++;});}catch(e){}
+  }
+}
+function qchkHtml(id){const q=QCHK[id];if(!q)return '';
+  return (q.over?`<span class="badge" style="background:#FEE4E2;color:#B42318;border-color:#FDA29B">⚠ 초과 ${q.over}</span> `:'')+(q.under?`<span class="badge b-warn">부족 ${q.under}</span>`:'');}
+function qtyOver(w){return w.warn_type==='수량차이'&&num((w.detail||{}).qty)>num((w.detail||{}).req);}
 function renderWait(){
   const q=(document.getElementById('waitQ').value||'').toLowerCase();const d=deptFilter();
   let rows=WAIT.filter(r=>(!d||r.dept===d)&&(!q||(r.partner_name||'').toLowerCase().includes(q)));
@@ -982,7 +997,7 @@ function renderSlip(){
   h+='</tbody></table></div>';
   const sup=curLines.reduce((a,b)=>a+num(b.supply_amt),0),vat=curLines.reduce((a,b)=>a+num(b.vat_amt),0);
   h+=`<div class="sumbar">수량 <b>${fmt(curLines.reduce((a,b)=>a+num(b.qty),0))}</b> 공급가 <b>${money(sup)}</b> VAT <b>${money(vat)}</b> 합계 <b>${money(sup+vat)}</b> <span class="note">${esc(s.currency||'')}</span></div>`;
-  if(s._warn&&s._warn.length){h+='<div style="margin-top:6px;font-weight:700">확정 시 경고·사유</div>'+s._warn.map(w=>`<div class="wl ${w.warn_type==='타고객배정'?'red':''}"><b>${esc(w.warn_type)}</b> ${esc(warnText(w))}<br>사유: ${esc(w.reason||'')} <span class="note">(${esc(w.reason_by||'')})</span></div>`).join('');}
+  if(s._warn&&s._warn.length){h+='<div style="margin-top:6px;font-weight:700">확정 시 경고·사유</div>'+s._warn.map(w=>`<div class="wl ${w.warn_type==='타고객배정'||qtyOver(w)?'red':''}"><b>${esc(w.warn_type)}</b> ${esc(warnText(w))}<br>사유: ${esc(w.reason||'')} <span class="note">(${esc(w.reason_by||'')})</span></div>`).join('');}
   if(s.status!=='작성중')h+=`<div class="note">확정: ${esc(s.confirmed_by||'')} ${s.confirmed_at?new Date(s.confirmed_at).toLocaleString('ko-KR'):''} ${s.note?(' · '+esc(s.note)):''}</div>`;
   document.getElementById('slipBody').innerHTML=h;
 
@@ -1027,7 +1042,7 @@ function warnText(w){
   const d=w.detail||{};
   if(w.warn_type==='출고이상')return `${d.item_code||''} — 이달 누계 ${fmt(d.cur)} / 최근 3개월 평균 ${fmt(d.avg)} (${d.pct>0?'+':''}${fmt(d.pct,0)}%, 기준 ±${fmt(d.limit,0)}%)`;
   if(w.warn_type==='단가차이')return `${d.item_code||''} — 단가 ${fmt(d.price,4)} / 최근 ${fmt(d.last,4)} (${d.pct>0?'+':''}${fmt(d.pct,0)}%)`;
-  if(w.warn_type==='수량차이')return `${d.item_code||''} — 요구 ${fmt(d.req)} / 출하 ${fmt(d.qty)}`;
+  if(w.warn_type==='수량차이')return `${d.item_code||''} — 요구 ${fmt(d.req)} / 출하 ${fmt(d.qty)} (${num(d.qty)>num(d.req)?'초과':'부족'})`;
   if(w.warn_type==='타고객배정')return `${d.item_code||''} — ${(d.others||[]).map(o=>o.name+' '+fmt(o.qty)).join(', ')} 배정분 사용`;
   return JSON.stringify(d);
 }
@@ -1191,7 +1206,7 @@ async function startConfirm(){
   try{warns=await computeWarnings();}catch(e){alert('경고 계산 오류: '+e.message);btns.forEach(b=>b.disabled=false);return;}
   btns.forEach(b=>b.disabled=false);
   if(warns.length){pendingWarn=warns;
-    document.getElementById('warnList').innerHTML=warns.map(w=>`<div class="wl ${w.warn_type==='타고객배정'?'red':''}"><b>${esc(w.warn_type)}</b> ${esc(warnText(w))}</div>`).join('');
+    document.getElementById('warnList').innerHTML=warns.map(w=>`<div class="wl ${w.warn_type==='타고객배정'||qtyOver(w)?'red':''}"><b>${esc(w.warn_type)}</b> ${esc(warnText(w))}</div>`).join('');
     document.getElementById('warnReason').value='';document.getElementById('warnOv').classList.add('on');document.getElementById('warnReason').focus();}
   else doConfirm([]);
 }

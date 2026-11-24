@@ -2340,6 +2340,18 @@
     const qty = parseFloat(qtyInput.value);
     if (!lotNo) { showToast('⚠ LOT NO를 입력해주세요', true); return; }
     if (!qty || qty <= 0) { showToast('⚠ 수량을 정확히 입력해주세요', true); return; }
+    // (V20261124-04) LOT NO·수량 칸 바뀜 / 필요수량 초과 경고 — 11/16 정민전자 962-9115 수량 80,261,007 입력 사고
+    {
+      const lr = itemRows.find(r => r.id === currentLotItemId) || {};
+      const req = Number(lr.qty_required) || 0;
+      const cur = currentEntries_sum();
+      if (/^\d{1,6}$/.test(lotNo) && req > 0 && Number(lotNo) === req && qty !== req) {
+        if (!confirm(`LOT NO와 수량이 바뀌어 입력된 것 같습니다.\nLOT NO: ${lotNo} / 수량: ${qty.toLocaleString()}\n그대로 등록할까요?`)) { noInput.focus(); return; }
+      }
+      if (req > 0 && cur + qty > req) {
+        if (!confirm(`등록 수량 합계(${(cur + qty).toLocaleString()})가 필요수량(${req.toLocaleString()})을 넘습니다.\n그대로 등록할까요?`)) { qtyInput.focus(); return; }
+      }
+    }
     const now = new Date().toISOString();
     const result = await sbPost('ship_lot_item_lot', { ship_lot_item_id: currentLotItemId, lot_no: lotNo, qty, created_by: workerName, created_at: now });
     if (!Array.isArray(result) || result.length === 0) {
@@ -2358,6 +2370,8 @@
     renderLotModal();
     noInput.focus();
   }
+
+  function currentEntries_sum(){ return currentLotEntries.reduce((s2,l)=>s2+(parseFloat(l.qty)||0),0); }
 
   async function removeLotEntry(lotRowId) {
     if (!confirm('정말 삭제하시겠습니까?')) return;   // 삭제 확인창 표준 (2026-10-13)
