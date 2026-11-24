@@ -2,7 +2,9 @@
    - 출하LOT관리(ship_lot.html) 「출고검수 완료 확정」과 매입매출관리(trade.html) 자동 생성이 같이 쓴다.
    - 출하 1건(ship_schedule) → 매출 전표 초안(작성중). 직거래·LG사급이 섞이면 전표 2장(사급 = 수량만, 금액 0).
    - 중복은 DB 고유키(trade_slip_source_uq: source_type+source_id+supply_kind)로 막힌다(409 → 건너뜀).
-   - 본사(KOREA) 출하 기준. */
+   - 본사(KOREA) 출하 기준.
+   V20261124-08: 전표 수량 = 출하팀 확인 수량(qty_confirmed) → 검수 완료 품목은 스캔 수량 → 검수 안 된 품목은 출하지시 수량(비고 「검수 미확인」).
+     syncAndConfirm: 출고검수 완료 확정 때 작성중 전표 수량을 다시 맞추고, 출하지시 수량과 모두 같으면 바로 확정(회의 결정 2026-11-24). */
 (function(){
   const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
   const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
@@ -27,6 +29,7 @@
     return out;
   }
   const post=(tb,body)=>api(tb,{method:'POST',body:JSON.stringify(body),headers:{Prefer:'return=representation'}});
+  const patch=(tb,q,body)=>api(tb+'?'+q,{method:'PATCH',body:JSON.stringify(body),headers:{Prefer:'return=minimal'}});
   const num=v=>{const n=Number(String(v==null?'':v).replace(/,/g,''));return isFinite(n)?n:0;};
   const inCodes=arr=>'in.('+arr.map(v=>'"'+String(v).replace(/"/g,'\\"')+'"').map(encodeURIComponent).join(',')+')';
 
@@ -67,15 +70,23 @@
     return {info,supply};
   }
 
+  // 품목 1줄의 전표 수량과 비고
+  function lineQty(x){
+    const req=num(x.qty_required);
+    if(x.qty_confirmed!=null&&x.qty_confirmed!=='')return {q:num(x.qty_confirmed),note:num(x.qty_confirmed)!==req?('요구 '+req):null};
+    if(x.is_done){const q=num(x.qty_scanned);return {q,note:q!==req?('요구 '+req):null};}
+    return {q:req,note:'검수 미확인'};
+  }
+  const ITEM_SEL='ship_lot_item?select=id,ship_schedule_id,item_code,description,qty_required,qty_scanned,qty_confirmed,is_done,unit_price,maker';
+
   async function createKind(s,its,kind,info,by){
     const p=findPartner(s.customer);
     const vp=num(M.setting.default_vat_pct);const dl=kind==='LG사급';
     const lines=its.map((x,i)=>{
-      const q=num(x.qty_scanned);const pr=num(x.unit_price);const sup=dl?0:Math.round(q*pr);
+      const lq=lineQty(x);const q=lq.q;const pr=num(x.unit_price);const sup=dl?0:Math.round(q*pr);
       const it=info[x.item_code]||{};
       return {line_no:i+1,item_code:x.item_code,description:x.description||it.description||'',spec:it.spec||null,brand:x.maker||it.brand||null,
-        qty:q,unit_price:pr,supply_amt:sup,vat_amt:dl?0:Math.round(sup*vp/100),source_line_id:x.id,
-        note:num(x.qty_required)!==q?('요구 '+num(x.qty_required)):null};
+        qty:q,unit_price:pr,supply_amt:sup,vat_amt:dl?0:Math.round(sup*vp/100),source_line_id:x.id,note:lq.note};
     });
     const sup=lines.reduce((a,b)=>a+b.supply_amt,0),vat=lines.reduce((a,b)=>a+b.vat_amt,0);
     const e=emp(s.manager);
@@ -104,7 +115,7 @@
     let made=0;
     for(let i=0;i<todo.length;i+=40){
       const chunk=todo.slice(i,i+40);
-      const items=await getAll('ship_lot_item?select=id,ship_schedule_id,item_code,description,qty_required,qty_scanned,unit_price,maker&ship_schedule_id=in.('+chunk.map(s=>s.id).join(',')+')&order=id');
+      const items=await getAll(ITEM_SEL+'&ship_schedule_id=in.('+chunk.map(s=>s.id).join(',')+')&order=id');
       const {info,supply}=await itemInfo([...new Set(items.map(x=>x.item_code).filter(Boolean))]);
       for(const s of chunk){
         const its=items.filter(x=>x.ship_schedule_id===s.id);if(!its.length)continue;
@@ -122,5 +133,38 @@
     return await api('trade_slip?select=id,slip_no,status,supply_kind&source_type=eq.출하&source_id=eq.'+shipId+'&order=id')||[];
   }
 
-  window.TradeAutoGen={createForShips,slipsForShip};
+  // 출고검수 완료 확정 → 작성중 전표 수량을 확인 수량으로 다시 맞추고, 차이가 없으면 확정
+  // 반환: {confirmed:[slip_no], pending:[{slip_id,supply_kind,reason,diffs:[{item_code,req,qty,unchk}]}]}
+  async function syncAndConfirm(ship,user){
+    await master();
+    const out={confirmed:[],pending:[]};
+    const slips=await api('trade_slip?select=id,slip_no,status,supply_kind,partner_id,source_type&source_type=eq.출하&source_id=eq.'+ship.id+'&status=eq.작성중&order=id')||[];
+    if(!slips.length)return out;
+    const items=await getAll(ITEM_SEL+'&ship_schedule_id=eq.'+ship.id);const IB={};items.forEach(x=>IB[x.id]=x);
+    const vp=num(M.setting.default_vat_pct);
+    for(const sl of slips){
+      const dl=sl.supply_kind==='LG사급';
+      const lines=await getAll('trade_slip_line?select=id,item_code,qty,unit_price,supply_amt,vat_amt,note,source_line_id&slip_id=eq.'+sl.id+'&order=line_no');
+      const diffs=[];
+      for(const l of lines){
+        const x=IB[l.source_line_id];if(!x)continue;
+        const lq=lineQty(x);const sup=dl?0:Math.round(lq.q*num(l.unit_price));const vat=dl?0:Math.round(sup*vp/100);
+        if(num(l.qty)!==lq.q||(l.note||null)!==(lq.note||null)||num(l.supply_amt)!==sup){
+          await patch('trade_slip_line','id=eq.'+l.id,{qty:lq.q,supply_amt:sup,vat_amt:vat,note:lq.note});
+          l.qty=lq.q;l.supply_amt=sup;l.vat_amt=vat;l.note=lq.note;
+        }
+        if(lq.note)diffs.push({item_code:l.item_code,req:num(x.qty_required),qty:lq.q,unchk:lq.note==='검수 미확인'});
+      }
+      const su=lines.reduce((a,b)=>a+num(b.supply_amt),0),va=lines.reduce((a,b)=>a+num(b.vat_amt),0);
+      await patch('trade_slip','id=eq.'+sl.id,{supply_total:su,vat_total:va,total:su+va,updated_at:new Date().toISOString()});
+      if(diffs.length){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'qty',diffs});continue;}
+      if(!sl.partner_id){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'partner',diffs:[]});continue;}
+      try{const r=await api('rpc/confirm_trade_slip',{method:'POST',body:JSON.stringify({p_slip_id:sl.id,p_user:(user||'출하팀')+' (출고검수)',p_warnings:[]})});
+        out.confirmed.push((r&&r.slip_no)||'');}
+      catch(e){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'error',msg:e.message,diffs:[]});}
+    }
+    return out;
+  }
+
+  window.TradeAutoGen={createForShips,slipsForShip,syncAndConfirm};
 })();

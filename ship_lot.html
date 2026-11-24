@@ -465,7 +465,7 @@
 </style>
 <link rel="stylesheet" href="smerp-mobile.css?v=1">
 <script src="smerp-mobile.js?v=1" defer></script>
-<script src="trade_autogen.js?v=1"></script>
+<script src="trade_autogen.js?v=2"></script>
 <style id="m-page">
 /* 휴대폰 화면(폭 768px 이하) 전용 보정 — PC 화면에는 적용되지 않음 */
 @media screen and (max-width:768px){
@@ -2927,9 +2927,23 @@
           <div class="force-reason-box" onclick="toggleForceReasonList(this)"><span class="box-text"><span class="ph">사유 선택</span></span><span>▾</span></div>
           <div class="force-reason-list">${reasonChks}</div>
         </div>
+        <div class="force-qty-row" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12.5px;">
+          <span style="font-weight:700;color:var(--accent);">실제 출하수량</span>
+          <input type="number" class="force-item-qty" data-item="${r.id}" data-req="${r.qty_required||0}" min="0" value="${(r.qty_scanned||0)>0?r.qty_scanned:(r.qty_required||0)}" style="width:120px;text-align:right;" oninput="updateForceQtyHint(${r.id})">
+          <span class="force-qty-hint" id="fqh-${r.id}" style="font-size:11.5px;color:var(--muted);">출하지시 ${(r.qty_required||0).toLocaleString()}</span>
+        </div>
         <input type="text" class="force-item-note" data-item="${r.id}" placeholder="이 품목에 대한 비고(선택)">
       </div>`;
     }).join('');
+  }
+
+  // (V20261124-08) 강제완료 품목 실제 출하수량 — 출하지시와 다르면 빨간 안내(거래명세서는 확정대기로 감)
+  function updateForceQtyHint(itemId){
+    const inp=document.querySelector(`.force-item-qty[data-item="${itemId}"]`);const hint=document.getElementById('fqh-'+itemId);if(!inp||!hint)return;
+    const req=Number(inp.dataset.req)||0;const v=inp.value===''?null:Number(inp.value);
+    if(v===null){hint.textContent='수량을 입력하세요';hint.style.color='var(--accent)';return;}
+    if(v===req){hint.textContent=`출하지시 ${req.toLocaleString()}`;hint.style.color='var(--muted)';}
+    else{hint.textContent=`출하지시 ${req.toLocaleString()} → 차이 ${(v-req).toLocaleString()} (구매팀 조율 필요)`;hint.style.color='var(--accent)';}
   }
 
   // ── 강제완료 사유 확인 팝업(출하지시 목록에서 "확인" 클릭 시) ──
@@ -3039,7 +3053,7 @@
     if (rows.length === 0) { closeForceModal(); doComplete(null); return; }
 
     let anyReason = false;
-    const perItem = []; // {itemId, itemCode, text}
+    const perItem = []; // {itemId, itemCode, text, qty}
     for (const rowEl of rows) {
       const itemId = rowEl.dataset.itemId;
       const checked = Array.from(rowEl.querySelectorAll('.force-item-chk:checked')).map(el => el.value);
@@ -3047,15 +3061,21 @@
       const text = [checked.join(', '), note].filter(Boolean).join(' / ');
       if (text) anyReason = true;
       const itemRow = itemRows.find(r => String(r.id) === String(itemId));
-      perItem.push({ itemId, itemCode: itemRow ? itemRow.item_code : itemId, text });
+      const qEl = rowEl.querySelector('.force-item-qty');
+      const qty = (qEl && qEl.value !== '') ? Number(qEl.value) : null;
+      perItem.push({ itemId, itemCode: itemRow ? itemRow.item_code : itemId, text, qty });
     }
     if (!anyReason) { showToast('⚠ 최소 한 품목 이상에 사유를 선택하거나 비고를 입력해주세요', true); return; }
+    // (V20261124-08) 바코드리딩불가·수기 미확인 품목도 실제 출하수량을 정해야 거래명세서 수량이 맞음
+    const noQty = perItem.filter(it => it.qty === null || !isFinite(it.qty) || it.qty < 0);
+    if (noQty.length) { showToast('⚠ 모든 품목의 실제 출하수량을 입력해주세요 (' + noQty.map(it => it.itemCode).join(', ') + ')', true); return; }
 
-    // 품목별 사유를 ship_lot_item.force_reason에 개별 저장
+    // 품목별 사유·실제 출하수량을 ship_lot_item에 개별 저장
     for (const it of perItem) {
-      if (it.text) {
-        await sbPatch('ship_lot_item', it.itemId, { force_reason: it.text });
-      }
+      const body = { qty_confirmed: it.qty };
+      if (it.text) body.force_reason = it.text;
+      await sbPatch('ship_lot_item', it.itemId, body);
+      const ir = itemRows.find(r => String(r.id) === String(it.itemId)); if (ir) ir.qty_confirmed = it.qty;
     }
     // 전체 요약(출하지시 비고/사유란用)
     const combined = perItem.filter(it => it.text).map(it => `${it.itemCode}: ${it.text}`).join(' | ');
@@ -3078,16 +3098,39 @@
     await sbPatch('ship_schedule', currentSid, patchBody);
     Object.assign(currentSchedule, patchBody);
     // 검수완료 확정 → 매출전표 초안(확정대기) 즉시 생성 (2026-11-03, trade_autogen.js 공통)
+    // (V20261124-08) 출하지시 수량과 모두 같으면 거래명세서 바로 확정, 다르면 확정대기 + 안내창 (회의 결정 2026-11-24)
     let slipMsg = '';
+    let pendingAlert = null;
     try {
       if (window.TradeAutoGen && currentSchedule.lot_required !== false) {
         await TradeAutoGen.createForShips([currentSchedule]);
-        const slips = await TradeAutoGen.slipsForShip(currentSchedule.id);
-        slipMsg = slips.length ? ' · 거래명세서 확정대기 등록됨' : '';
+        const res = await TradeAutoGen.syncAndConfirm(currentSchedule, workerName || currentSchedule.lot_started_by);
+        if (res.confirmed.length) slipMsg = ' · 거래명세서 확정 ' + res.confirmed.join(', ');
+        if (res.pending.length) {
+          slipMsg += ' · ⚠ 거래명세서 확정대기 ' + res.pending.length + '건';
+          const lines = ['거래명세서를 확정하지 못한 건이 있습니다.'];
+          res.pending.forEach(p => {
+            if (p.reason === 'qty') {
+              lines.push('', '[출하지시 수량과 다름 — ' + (p.supply_kind || '직거래') + ']');
+              p.diffs.forEach(d => lines.push(d.unchk ? `${d.item_code} — 검수 미확인 (출하지시 ${d.req.toLocaleString()})` : `${d.item_code} — 지시 ${d.req.toLocaleString()} / 출하 ${d.qty.toLocaleString()}`));
+            } else if (p.reason === 'partner') {
+              lines.push('', '[거래처가 등록된 거래처와 연결되지 않음 — ' + (p.supply_kind || '직거래') + ']');
+            } else {
+              lines.push('', '[확정 오류] ' + (p.msg || ''));
+            }
+          });
+          lines.push('', `구매팀 담당(${currentSchedule.manager || '-'})과 수량을 조율한 뒤`, '매입매출관리 「확정 대기」에서 확정해 주세요.');
+          pendingAlert = lines.join('\n');
+        }
+        if (!res.confirmed.length && !res.pending.length) {
+          const slips = await TradeAutoGen.slipsForShip(currentSchedule.id);
+          slipMsg = slips.length ? ' · 거래명세서 ' + slips.map(x => x.slip_no || x.status).join(', ') : '';
+        }
       }
-    } catch (e) { slipMsg = ' · ⚠ 거래명세서 등록 실패: ' + e.message; }
-    showToast((forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다 (품목별 사유 등록됨)' : '✓ 출고검수 완료 확정되었습니다') + slipMsg, slipMsg.includes('실패'));
+    } catch (e) { slipMsg = ' · ⚠ 거래명세서 처리 실패: ' + e.message; }
+    showToast((forceReason ? '⚠ 미완료 상태로 강제 완료 처리되었습니다 (품목별 사유 등록됨)' : '✓ 출고검수 완료 확정되었습니다') + slipMsg, slipMsg.includes('실패') || !!pendingAlert);
     playSound('done');
+    if (pendingAlert) alert(pendingAlert);
     renderCompleteState();
     setTimeout(()=>{ switchTab('list'); loadList(); }, 2500);
   }

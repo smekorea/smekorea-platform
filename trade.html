@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="smerp-mobile.css?v=1">
 <script src="smerp-mobile.js?v=1" defer></script>
-<script src="trade_autogen.js?v=1"></script>
+<script src="trade_autogen.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
@@ -189,7 +189,7 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
   <button class="tab-btn active" id="tabbtn-wait" onclick="switchTab('wait')">① 확정 대기<span class="cnt" id="cnt-wait"></span></button>
   <button class="tab-btn" id="tabbtn-new" onclick="switchTab('new')">② 직접 입력</button>
   <button class="tab-btn" id="tabbtn-list" onclick="switchTab('list')">③ 전표 목록</button>
-  <button class="tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">④ 재고·배정</button>
+  <button class="tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">④ 재고·수불</button>
   <button class="tab-btn" id="tabbtn-lg" onclick="switchTab('lg')">⑥ LG 마감<span class="cnt" id="cnt-lg"></span></button>
   <button class="tab-btn" id="tabbtn-set" onclick="switchTab('set')">⑤ 설정</button>
 </div>
@@ -239,12 +239,24 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
 <div class="wrap" id="tab-stock" style="display:none">
   <div class="info" id="stockInfo">재고는 재고원장 기준입니다. 확정된 매입은 입고(+), 매출은 출고(−)로 반영되고, 고객별 배정은 장부상 몫입니다(실물은 보관위치별).</div>
   <div class="toolbar">
-    <input class="inp" id="stockQ" placeholder="품목코드·품명 검색" oninput="renderStock()" style="width:220px">
-    <label class="note"><input type="checkbox" id="stockNeg" onchange="renderStock()"> 마이너스 재고만</label>
+    <button class="btn btn-p" id="stkModeFlow" onclick="setStockMode('flow')">수불</button><button class="btn" id="stkModeNow" onclick="setStockMode('now')">현재고·배정</button>
+    <span id="stkFlowCtl" style="display:inline-flex;align-items:center;gap:6px;margin-left:8px">
+      <input class="inp" type="date" id="flowFrom"> ~ <input class="inp" type="date" id="flowTo">
+      <button class="btn" onclick="flowQuick(0)">이번 달</button><button class="btn" onclick="flowQuick(-1)">지난 달</button>
+      <button class="btn btn-p" onclick="loadFlow()">조회</button>
+      <label class="note"><input type="checkbox" id="flowMoved" onchange="renderFlow()"> 기간 중 입출고 있는 품목만</label>
+    </span>
+    <input class="inp" id="stockQ" placeholder="품목코드·품명 검색" oninput="renderStockAny()" style="width:200px">
+    <label class="note"><input type="checkbox" id="stockNeg" onchange="renderStockAny()"> 마이너스 재고만</label>
     <span class="grow"></span>
+    <button class="btn" id="flowXls" onclick="flowExcel()">엑셀</button>
     <button class="btn" onclick="loadStock()">새로고침</button>
   </div>
-  <div class="grid2">
+  <div class="grid2" id="stkFlowBox">
+    <div class="box"><div class="box-h">품목별 수불 <span class="note" id="flowSum"></span></div><div class="tbl-wrap" id="flowTbl"></div></div>
+    <div class="box"><div class="box-h" id="flowDetH">입출고 내역</div><div class="box-b" id="flowDet"><div class="note">왼쪽에서 품목을 선택하면 기간 중 언제 몇 개가 어느 거래처에서 들어오고 나갔는지 보입니다.</div></div></div>
+  </div>
+  <div class="grid2" id="stkNowBox" style="display:none">
     <div class="box"><div class="box-h">품목별 재고·배정</div><div class="tbl-wrap" id="stockTbl"></div></div>
     <div class="box"><div class="box-h" id="stockDetH">품목 상세</div><div class="box-b" id="stockDet"><div class="note">왼쪽에서 품목을 선택하세요.</div></div></div>
   </div>
@@ -867,8 +879,8 @@ const WAIT_COLS=[
   {t:'일자',k:'slip_date',w:90},
   {t:'구분',k:'slip_type',w:60,f:r=>typeBadge(r.slip_type)},
   {t:'출처',k:'source_type',w:80,f:r=>esc(r.source_type==='스마트입고'?'스마트 입고':(String(r.created_by||'').includes('검수')?'검수완료':'출하완료'))},
-  {t:'출하',k:'_ship',w:90,f:r=>r.source_type!=='출하'?'':(shipDone(r)?'<span class="badge b-done">출하완료</span>':'<span class="badge b-warn">출하 미완료</span>'),sv:r=>r.source_type!=='출하'?'':(shipDone(r)?'1':'0')},
-  {t:'수량점검',k:'_qchk',w:110,f:r=>qchkHtml(r.id),sv:r=>{const q=QCHK[r.id];return q?(q.over?2:1):0;}},
+  {t:'출하',k:'_ship',w:90,f:r=>r.source_type!=='출하'?'':(SHIPST[r.source_id]==='ship'?'<span class="badge b-done">출하완료</span>':SHIPST[r.source_id]==='lot'?'<span class="badge b-done">검수완료</span>':'<span class="badge b-warn">출하 미완료</span>'),sv:r=>r.source_type!=='출하'?'':(shipDone(r)?'1':'0')},
+  {t:'수량점검',k:'_qchk',w:110,f:r=>qchkHtml(r.id),sv:r=>{const q=QCHK[r.id];return q?(q.over?3:q.under?2:q.unchk?1:0):0;}},
   {t:'공급구분',k:'supply_kind',w:80,f:r=>kindBadge(r)},
   {t:'거래처',k:'partner_name',w:200,f:r=>esc(r.partner_name)+(r.partner_id?'':' <span class="badge b-warn">거래처 미연결</span>')},
   {t:'부서',k:'dept',w:90},{t:'담당',k:'manager',w:70},
@@ -880,11 +892,13 @@ const WAIT_COLS=[
 ];
 function lineCount(r){return (r.trade_slip_line&&r.trade_slip_line[0])?r.trade_slip_line[0].count:0;}
 // 출하 전표의 출하완료 여부 (ship_schedule.ship_done) — 출하 미완료면 확정 불가 (2026-11-03)
-let SHIPDONE={};
+// (V20261124-08) 출고검수 완료 확정(lot_status 완료)도 확정 가능 — 회의 결정 2026-11-24
+let SHIPDONE={},SHIPST={};
+function shipStOf(x){return x.ship_done==='완료'?'ship':(x.lot_status==='완료'?'lot':'');}
 async function loadShipDone(rows){
   const ids=[...new Set(rows.filter(r=>r.source_type==='출하'&&r.source_id).map(r=>r.source_id))];
   for(let i=0;i<ids.length;i+=150){
-    try{(await getAll('ship_schedule?select=id,ship_done&id=in.('+ids.slice(i,i+150).join(',')+')')).forEach(x=>SHIPDONE[x.id]=x.ship_done==='완료');}catch(e){}
+    try{(await getAll('ship_schedule?select=id,ship_done,lot_status&id=in.('+ids.slice(i,i+150).join(',')+')')).forEach(x=>{SHIPST[x.id]=shipStOf(x);SHIPDONE[x.id]=!!SHIPST[x.id];});}catch(e){}
   }
 }
 function shipDone(r){return r.source_type!=='출하'||!r.source_id||SHIPDONE[r.source_id]===true;}
@@ -893,13 +907,15 @@ let QCHK={};
 async function loadQtyChk(rows){
   QCHK={};const ids=rows.filter(r=>r.source_type==='출하').map(r=>r.id);
   for(let i=0;i<ids.length;i+=150){
-    try{(await getAll('trade_slip_line?select=slip_id,qty,note&note=like.'+enc('요구*')+'&slip_id=in.('+ids.slice(i,i+150).join(',')+')')).forEach(x=>{
+    try{(await getAll('trade_slip_line?select=slip_id,qty,note&or='+enc('(note.like.요구*,note.eq.검수 미확인)')+'&slip_id=in.('+ids.slice(i,i+150).join(',')+')')).forEach(x=>{
+      const o=QCHK[x.slip_id]||(QCHK[x.slip_id]={over:0,under:0,unchk:0});
+      if(x.note==='검수 미확인'){o.unchk++;return;}
       const req=num(String(x.note||'').replace(/^요구 /,''));const q=num(x.qty);if(req===q)return;
-      const o=QCHK[x.slip_id]||(QCHK[x.slip_id]={over:0,under:0});if(q>req)o.over++;else o.under++;});}catch(e){}
+      if(q>req)o.over++;else o.under++;});}catch(e){}
   }
 }
 function qchkHtml(id){const q=QCHK[id];if(!q)return '';
-  return (q.over?`<span class="badge" style="background:#FEE4E2;color:#B42318;border-color:#FDA29B">⚠ 초과 ${q.over}</span> `:'')+(q.under?`<span class="badge b-warn">부족 ${q.under}</span>`:'');}
+  return (q.over?`<span class="badge" style="background:#FEE4E2;color:#B42318;border-color:#FDA29B">⚠ 초과 ${q.over}</span> `:'')+(q.under?`<span class="badge b-warn">부족 ${q.under}</span> `:'')+(q.unchk?`<span class="badge b-warn">미검수 ${q.unchk}</span>`:'');}
 function qtyOver(w){return w.warn_type==='수량차이'&&num((w.detail||{}).qty)>num((w.detail||{}).req);}
 function renderWait(){
   const q=(document.getElementById('waitQ').value||'').toLowerCase();const d=deptFilter();
@@ -1003,7 +1019,7 @@ function renderSlip(){
 
   let f='';
   if(ed){
-    f+=`<button class="btn btn-r" onclick="dropSlip()">삭제</button><span class="tb-spacer"></span><button class="btn" onclick="previewCurrent()">미리보기</button><button class="btn" onclick="saveSlip(true)">저장</button>`+(shipDone(s)?`<button class="btn btn-p" onclick="startConfirm()">확정</button>`:`<span class="note" style="color:#b91c1c;font-weight:700;margin:0 6px">출하 미완료 — 출하관리에서 출하완료 후 확정 가능</span><button class="btn" onclick="location.href='shipment.html'">출하관리로</button><button class="btn btn-p" disabled style="opacity:.45;cursor:not-allowed">확정</button>`);
+    f+=`<button class="btn btn-r" onclick="dropSlip()">삭제</button><span class="tb-spacer"></span><button class="btn" onclick="previewCurrent()">미리보기</button><button class="btn" onclick="saveSlip(true)">저장</button>`+(shipDone(s)?`<button class="btn btn-p" onclick="startConfirm()">확정</button>`:`<span class="note" style="color:#b91c1c;font-weight:700;margin:0 6px">출하 미완료 — 출고검수 완료 확정 또는 출하완료 후 확정 가능</span><button class="btn" onclick="location.href='ship_lot.html'">출하LOT으로</button><button class="btn btn-p" disabled style="opacity:.45;cursor:not-allowed">확정</button>`);
   }else if(s.status==='확정'){
     f+=`<button class="btn btn-r" onclick="cancelSlip()">확정 취소</button>`;
     if(s.slip_type==='매입')f+=`<button class="btn" onclick="toSale()">판매로 넘기기</button>`;
@@ -1042,7 +1058,7 @@ function warnText(w){
   const d=w.detail||{};
   if(w.warn_type==='출고이상')return `${d.item_code||''} — 이달 누계 ${fmt(d.cur)} / 최근 3개월 평균 ${fmt(d.avg)} (${d.pct>0?'+':''}${fmt(d.pct,0)}%, 기준 ±${fmt(d.limit,0)}%)`;
   if(w.warn_type==='단가차이')return `${d.item_code||''} — 단가 ${fmt(d.price,4)} / 최근 ${fmt(d.last,4)} (${d.pct>0?'+':''}${fmt(d.pct,0)}%)`;
-  if(w.warn_type==='수량차이')return `${d.item_code||''} — 요구 ${fmt(d.req)} / 출하 ${fmt(d.qty)} (${num(d.qty)>num(d.req)?'초과':'부족'})`;
+  if(w.warn_type==='수량차이')return d.unchk?`${d.item_code||''} — 검수 미확인 (출하지시 ${fmt(d.req)})`:`${d.item_code||''} — 요구 ${fmt(d.req)} / 출하 ${fmt(d.qty)} (${num(d.qty)>num(d.req)?'초과':'부족'})`;
   if(w.warn_type==='타고객배정')return `${d.item_code||''} — ${(d.others||[]).map(o=>o.name+' '+fmt(o.qty)).join(', ')} 배정분 사용`;
   return JSON.stringify(d);
 }
@@ -1195,8 +1211,8 @@ function refreshCurrentTab(){if(curTab==='wait')loadWait(true);else if(curTab===
 async function startConfirm(){
   syncHead();
   if(curSlip.source_type==='출하'&&curSlip.source_id){
-    try{const sr=await api('ship_schedule?select=ship_done&id=eq.'+curSlip.source_id);SHIPDONE[curSlip.source_id]=!!(sr&&sr[0]&&sr[0].ship_done==='완료');}catch(e){}
-    if(!shipDone(curSlip)){alert('출하 미완료 건입니다.\n출하관리에서 출하완료 처리 후 확정할 수 있습니다.');renderSlip();return;}
+    try{const sr=await api('ship_schedule?select=ship_done,lot_status&id=eq.'+curSlip.source_id);const x=(sr&&sr[0])||{};SHIPST[curSlip.source_id]=shipStOf(x);SHIPDONE[curSlip.source_id]=!!SHIPST[curSlip.source_id];}catch(e){}
+    if(!shipDone(curSlip)){alert('출하 미완료 건입니다.\n출고검수 완료 확정 또는 출하완료 처리 후 확정할 수 있습니다.');renderSlip();return;}
   }
   if(!curSlip.partner_id){alert('거래처를 목록에서 선택해야 확정할 수 있습니다.');return;}
   if(!curLines.some(l=>l.item_code&&num(l.qty))){alert('품목을 입력하세요.');return;}
@@ -1249,7 +1265,8 @@ async function computeWarnings(){
   const s=curSlip,out=[];const lines=curLines.filter(l=>l.item_code&&num(l.qty));
   const p=PBYID[s.partner_id];const codes=[...new Set(lines.map(l=>l.item_code))];
   // ① 수량차이 (출하 요구수량 대비 부족)
-  lines.forEach(l=>{if(l.note&&/^요구 /.test(l.note)){const req=num(l.note.replace(/^요구 /,''));if(req!==num(l.qty))out.push({line_id:l.id,warn_type:'수량차이',detail:{item_code:l.item_code,req,qty:num(l.qty)}});}});
+  lines.forEach(l=>{if(l.note&&/^요구 /.test(l.note)){const req=num(l.note.replace(/^요구 /,''));if(req!==num(l.qty))out.push({line_id:l.id,warn_type:'수량차이',detail:{item_code:l.item_code,req,qty:num(l.qty)}});}
+    else if(l.note==='검수 미확인')out.push({line_id:l.id,warn_type:'수량차이',detail:{item_code:l.item_code,req:num(l.qty),qty:num(l.qty),unchk:true}});});
   const dl=isDelivery(s),lgc=s.source_type==='LG마감';
   if(s.slip_type==='매출'&&!lgc){
     if(!dl){
@@ -1627,7 +1644,80 @@ async function makeLgSlip(){
 }
 
 /* ══ ④ 재고·배정 ══ */
-async function loadStock(){
+/* ══ ④ 재고·수불 (V20261124-08) — 수불 = 재고원장(stock_ledger) 기준, 일자 = 전표일자(없으면 기록일). 기초는 시작일 전 누계 ══ */
+let STKMODE='flow',FLOW=[],FLOWDET=null;
+function setStockMode(m){STKMODE=m;loadStock();}
+function applyStockModeUI(){
+  const f=STKMODE==='flow';
+  document.getElementById('stkFlowBox').style.display=f?'':'none';document.getElementById('stkNowBox').style.display=f?'none':'';
+  document.getElementById('stkFlowCtl').style.display=f?'inline-flex':'none';document.getElementById('flowXls').style.display=f?'':'none';
+  document.getElementById('stkModeFlow').classList.toggle('btn-p',f);document.getElementById('stkModeNow').classList.toggle('btn-p',!f);
+}
+async function loadStock(){applyStockModeUI();if(STKMODE==='flow')return loadFlow();return loadStockNow();}
+function renderStockAny(){if(STKMODE==='flow')renderFlow();else renderStock();}
+function flowQuick(mo){
+  const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+mo);const y=d.getFullYear(),m=d.getMonth()+1,last=new Date(y,m,0).getDate();const p2=v=>String(v).padStart(2,'0');
+  document.getElementById('flowFrom').value=`${y}-${p2(m)}-01`;document.getElementById('flowTo').value=`${y}-${p2(m)}-${p2(last)}`;loadFlow();
+}
+async function loadFlow(){
+  const f=document.getElementById('flowFrom').value,t2=document.getElementById('flowTo').value;
+  if(!f||!t2){flowQuick(0);return;}
+  if(f>t2){alert('시작일이 종료일보다 늦습니다.');return;}
+  const box=document.getElementById('flowTbl');box.innerHTML='<div class="loading">불러오는 중…</div>';
+  try{FLOW=await getAll('rpc/stock_flow?p_entity='+enc(curEntity)+'&p_from='+f+'&p_to='+t2+'&order=item_code');}
+  catch(e){box.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;}
+  FLOW.forEach(r=>{const it=IBYCODE[r.item_code]||{};r.description=it.description||'';r.brand=it.brand||'';
+    ['opening','in_qty','out_qty','etc_qty','closing'].forEach(k=>r[k]=num(r[k]));});
+  renderFlow();
+  if(FLOWDET&&FLOW.some(r=>r.item_code===FLOWDET))flowDetail(FLOWDET);
+}
+const FLOW_COLS=[
+  {t:'품목코드',k:'item_code',w:110},{t:'품목명',k:'description',w:200},{t:'브랜드',k:'brand',w:80},
+  {t:'기초',k:'opening',w:90,cls:'r',f:r=>fmt(r.opening)},
+  {t:'입고',k:'in_qty',w:90,cls:'r',f:r=>r.in_qty?`<span style="color:#1d4ed8">${fmt(r.in_qty)}</span>`:''},
+  {t:'출고',k:'out_qty',w:90,cls:'r',f:r=>r.out_qty?`<span style="color:#b45309">${fmt(r.out_qty)}</span>`:''},
+  {t:'조정·기타',k:'etc_qty',w:80,cls:'r',f:r=>r.etc_qty?fmt(r.etc_qty):''},
+  {t:'기말',k:'closing',w:90,cls:'r',f:r=>`<span style="font-weight:700;${r.closing<0?'color:#B42318':''}">${fmt(r.closing)}</span>`},
+  {t:'최근 입출고',k:'last_date',w:90}
+];
+function flowRows(){
+  const q=(document.getElementById('stockQ').value||'').toLowerCase();const neg=document.getElementById('stockNeg').checked;const mv=document.getElementById('flowMoved').checked;
+  return FLOW.filter(r=>(!q||r.item_code.toLowerCase().includes(q)||(r.description||'').toLowerCase().includes(q))&&(!neg||r.closing<0)&&(!mv||r.in_qty||r.out_qty||r.etc_qty));
+}
+function renderFlow(){
+  let rows=flowRows();
+  const sIn=rows.reduce((a,b)=>a+b.in_qty,0),sOut=rows.reduce((a,b)=>a+b.out_qty,0);
+  document.getElementById('flowSum').textContent=`${fmt(rows.length)}품목 · 입고 ${fmt(sIn)} · 출고 ${fmt(sOut)}`;
+  rows=sortRows('tFlow',FLOW_COLS,rows);
+  document.getElementById('flowTbl').innerHTML=tableHtml('tFlow',FLOW_COLS,rows.slice(0,2000),r=>`class="click" onclick="flowDetail('${esc(r.item_code)}')"`);
+  bindTable('tFlow',FLOW_COLS,renderFlow);
+}
+const RSN_COLOR={입고:'#1d4ed8',출고:'#b45309',기초:'#475467'};
+async function flowDetail(code){
+  FLOWDET=code;const r=FLOW.find(x=>x.item_code===code)||{opening:0,description:''};
+  const f=document.getElementById('flowFrom').value,t2=document.getElementById('flowTo').value;
+  document.getElementById('flowDetH').innerHTML=`${esc(code)} <span class="note">${esc(r.description||'')}</span>`;
+  const box=document.getElementById('flowDet');box.innerHTML='<div class="loading">불러오는 중…</div>';
+  let d=[];try{d=await getAll('rpc/stock_flow_detail?p_entity='+enc(curEntity)+'&p_item='+enc(code)+'&p_from='+f+'&p_to='+t2);}
+  catch(e){box.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;}
+  let bal=num(r.opening);
+  const rows=d.map(x=>{bal+=num(x.qty);return Object.assign({},x,{bal});});
+  box.innerHTML=`<table class="dt" style="width:640px"><thead><tr><th style="width:86px">일자</th><th style="width:60px">구분</th><th style="width:170px">거래처</th><th style="width:128px">전표번호</th><th class="r" style="width:90px">수량</th><th class="r" style="width:96px">잔량</th></tr></thead><tbody>
+    <tr><td>${esc(f)}</td><td colspan="4" class="note">기초 (시작일 전 누계)</td><td class="r" style="font-weight:700">${fmt(r.opening)}</td></tr>
+    ${rows.map(x=>`<tr ${x.slip_id?`class="click" onclick="openSlip(${x.slip_id})"`:''} title="${esc([x.location_name,x.alloc_name?('배정 '+x.alloc_name):'',x.note].filter(Boolean).join(' · '))}">
+      <td>${esc(x.d)}</td><td style="color:${RSN_COLOR[x.reason]||'#7a4b9c'};font-weight:700">${esc(x.reason)}</td>
+      <td>${esc(x.partner_name||x.location_name||'')}</td><td>${esc(x.slip_no||'')}</td>
+      <td class="r">${num(x.qty)>0?'+':''}${fmt(x.qty)}</td><td class="r">${fmt(x.bal)}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">기간 중 입출고가 없습니다.</td></tr>'}
+    <tr><td>${esc(t2)}</td><td colspan="4" class="note">기말</td><td class="r" style="font-weight:700">${fmt(bal)}</td></tr></tbody></table>
+    <div class="note" style="margin-top:6px">전표번호가 있는 줄을 누르면 전표가 열립니다. 줄에 마우스를 올리면 보관위치·배정 고객이 보입니다.</div>`;
+}
+function flowExcel(){
+  const f=document.getElementById('flowFrom').value,t2=document.getElementById('flowTo').value;
+  const rows=sortRows('tFlow',FLOW_COLS,flowRows());
+  xlsxSave([{name:'재고수불',cols:[12,30,10,12,12,12,12,12,11],
+    aoa:[['품목코드','품목명','브랜드','기초','입고','출고','조정·기타','기말','최근 입출고']].concat(rows.map(r=>[r.item_code,r.description,r.brand,r.opening,r.in_qty,r.out_qty,r.etc_qty,r.closing,r.last_date||'']))}],`재고수불_${curEntity}_${f}_${t2}.xlsx`);
+}
+async function loadStockNow(){
   const box=document.getElementById('stockTbl');box.innerHTML='<div class="loading">불러오는 중…</div>';
   try{
     const [al,bl]=await Promise.all([getAll('stock_alloc_v?entity=eq.'+curEntity),getAll('stock_balance_v?entity=eq.'+curEntity)]);
