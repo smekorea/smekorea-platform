@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="smerp-mobile.css?v=1">
 <script src="smerp-mobile.js?v=1" defer></script>
-<script src="trade_autogen.js?v=2"></script>
+<script src="trade_autogen.js?v=3"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ══════════════════════════════════════════════════════════════
@@ -295,6 +295,20 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
       <div class="box-b" id="locBox"></div>
     </div>
   </div>
+  <div class="grid2">
+    <div class="box">
+      <div class="box-h">월별 평균환율 <span class="note">(1단위 = 원 · 매월 1회 등록)</span><span class="grow" style="flex:1"></span>
+        <select class="inp" id="fxYear" onchange="renderFx()" style="width:90px"></select><button class="btn btn-p" onclick="saveFx()">저장</button></div>
+      <div class="box-b"><div id="fxBox"></div>
+        <div class="note">거래처 환율 기준이 「전월평균」이면 전표일자 전월 평균이 자동으로 들어갑니다(11월 전표 → 10월 평균). 전표에서 직접 고칠 수 있고, 확정된 전표의 환율은 나중에 이 표를 고쳐도 바뀌지 않습니다.</div></div>
+    </div>
+    <div class="box">
+      <div class="box-h">외화 거래처 · 환율 기준 <span class="grow" style="flex:1"></span>
+        <div style="position:relative"><input class="inp" id="fxPartnerAdd" placeholder="거래처 검색 후 추가" style="width:180px"></div></div>
+      <div class="box-b"><div class="tbl-wrap" id="fxPartnerTbl"></div>
+        <div class="note">거래처 정보(기준정보)의 거래 통화·환율 기준을 여기서 바로 고칩니다. 전표에서 이 거래처를 고르면 통화와 환율이 자동으로 들어갑니다. 「거래일」·「결제일」 기준은 전표에서 환율을 직접 입력합니다.</div></div>
+    </div>
+  </div>
   <div class="box">
     <div class="box-h">품목별 출고이상 기준 <span class="grow" style="flex:1"></span>
       <input class="inp" id="ruleItem" placeholder="품목코드" style="width:140px"><input class="inp" id="rulePct" type="number" placeholder="기준 %" style="width:90px">
@@ -354,8 +368,9 @@ textarea.inp{height:70px;width:100%;padding:6px 8px;}
 <div class="ov" id="pvOv"><div class="md" style="width:900px">
   <div class="md-h"><span id="pvTitle">거래명세서 미리보기</span><span class="tb-spacer"></span>
     <span id="pvCols" style="font-size:12px;font-weight:400;display:flex;gap:8px;align-items:center"></span>
-    <button class="btn" style="height:26px" id="pvSaveCols" onclick="saveStmtCols()" title="지금 고른 칸을 이 거래처의 기본으로 저장">거래처 기본 저장</button>
-    <button class="btn" style="height:26px" onclick="pvPrint()">🖨 인쇄</button>
+    <select class="inp" id="pvLayout" style="height:26px" onchange="pvLayoutChange()" title="출력 방식"><option value="pair">한 장에 공급자+공급받는자</option><option value="single">각각 한 장씩</option></select>
+    <button class="btn" style="height:26px" id="pvSaveCols" onclick="saveStmtCols()" title="지금 고른 칸·출력 방식을 이 거래처의 기본으로 저장">거래처 기본 저장</button>
+    <button class="btn" style="height:26px" id="pvPrintBtn" onclick="pvPrint()">🖨 인쇄</button>
     <button class="btn" style="height:26px" onclick="closePreview()">닫기</button></div>
   <div style="background:#e9ecf1;padding:0"><iframe id="pvFrame" style="width:100%;height:78vh;border:0;display:block;background:#e9ecf1"></iframe></div>
 </div></div>
@@ -535,7 +550,29 @@ function pickPartner(p){
   const pin=document.getElementById('fPartner');if(pin)pin.value=p.name;
   showPartnerInfo();
   if(curSlip.slip_type==='매출'){const loc=partnerLocation(p.id);if(loc){curSlip.location_id=loc;const fl=document.getElementById('fLoc');if(fl)fl.value=loc;}}
+  applyPartnerFx(PBYID[p.id]||p,true);
   fillLastPrices();
+}
+/* ── 환율 (V20261124-09) — 거래처 「거래 통화·환율 기준」 + 월별 평균환율(fx_month). 전월평균 = 전표일자 전월 평균 ── */
+let FXM={};
+const FX_RULES=['전월평균','거래일','계약고정','결제일'];
+function prevYm(d){const x=new Date((d||new Date().toISOString().slice(0,10))+'T00:00:00');x.setDate(1);x.setMonth(x.getMonth()-1);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0');}
+function fxFor(p,dateStr){
+  const cur=p&&p.currency;if(!cur||cur==='KRW')return {rate:1,src:'KRW'};
+  const rule=p.fx_rule||'전월평균';
+  if(rule==='계약고정')return num(p.fx_fixed)?{rate:num(p.fx_fixed),src:'계약 고정환율',rule}:{rate:null,src:'계약 고정환율 미등록',rule};
+  if(rule==='전월평균'){const ym=prevYm(dateStr);const r=FXM[ym+'|'+cur];return r?{rate:r,src:ym+' 평균',rule}:{rate:null,src:ym+' '+cur+' 평균환율 미등록',rule};}
+  return {rate:null,src:rule+' 환율 직접 입력',rule};
+}
+function applyPartnerFx(p,msg){
+  if(!editable()||!p||!p.currency)return;
+  const g=id=>document.getElementById(id);const cur=p.currency;
+  curSlip.currency=cur;
+  if(cur==='KRW')curSlip.fx_rate=1;
+  else{const f=fxFor(p,curSlip.slip_date);if(f.rate)curSlip.fx_rate=f.rate;else if(num(curSlip.fx_rate)<=1)curSlip.fx_rate=null;
+    if(msg)toast(`「${p.name}」 ${cur} · 환율 기준 ${f.rule||'전월평균'} → ${f.rate?fmt(f.rate,2)+' ('+f.src+')':f.src}`);}
+  if(g('fCur'))g('fCur').value=cur;if(g('fFx'))g('fFx').value=curSlip.fx_rate==null?'':curSlip.fx_rate;
+  curLines.forEach(recalcLine);
 }
 // 거래처 검색: 이름이 정확히 일치하는 거래처가 없으면 맨 아래 「신규 거래처 등록」
 function partnerListNew(q){
@@ -543,7 +580,7 @@ function partnerListNew(q){
   if(q&&!PARTNERS.some(p=>p.name===q))list.push({label:'＋ 신규 거래처 등록 「'+q+'」',sub:'기준정보 → 거래처 정보 (새 탭)',_new:q});
   return list;
 }
-const P_SEL='partners?select=id,name,alias1,alias2,partner_code,biz_no,ceo,biz_type,biz_item,address,tel,contact_person,type,is_active,entity,stmt_cols&entity=eq.';
+const P_SEL='partners?select=id,name,alias1,alias2,partner_code,biz_no,ceo,biz_type,biz_item,address,tel,contact_person,type,is_active,entity,stmt_cols,stmt_layout,currency,fx_rule,fx_fixed&entity=eq.';
 let PENDING_PARTNER=null;
 function openPartnerReg(name,ptype){
   ptype=ptype||(curSlip&&curSlip.slip_type==='매출'?'매출처':'매입처');
@@ -787,6 +824,7 @@ async function loadMaster(){
   LOCS=locs||[];const locIds=LOCS.map(l=>l.id);LOCMAP=maps.filter(m=>locIds.includes(m.location_id));
   PARTNERS=pts;PBYID={};PARTNERS.forEach(p=>PBYID[p.id]=p);
   EMPS=emps;RULES=rules;
+  try{FXM={};(await getAll('fx_month?select=ym,currency,rate')).forEach(x=>FXM[x.ym+'|'+x.currency]=num(x.rate));}catch(e){}
   if(!ITEMS.length){ITEMS=await getAll('item_lookup_mv?select=item_code,description,spec,brand,maker_pn,lg_pn&order=item_code');IBYCODE={};ITEMS.forEach(i=>IBYCODE[i.item_code]=i);}
   if(!Object.keys(SUPPLY).length){
     try{const lt=await api('stock_inventory?select=ym&order=ym.desc&limit=1');
@@ -824,7 +862,7 @@ async function runAutoGen(manual){
   try{
     const start=SETTING.auto_start_date||'2026-11-01';
     // 출하완료 또는 LOT 검수완료 확정 중 먼저 된 쪽에서 초안 생성 (2026-11-03) — 생성 로직은 trade_autogen.js 공통
-    const ships=await getAll('ship_schedule?select=id,customer,ship_date,manager,recv_dept,ship_done&or=(ship_done.eq.완료,lot_status.eq.완료)&lot_required=is.true&ship_date=gte.'+start+'&order=ship_date,id');
+    const ships=await getAll('ship_schedule?select=id,customer,ship_date,manager,recv_dept,recv_manager,lot_completed_by,ship_done&or=(ship_done.eq.완료,lot_status.eq.완료)&lot_required=is.true&ship_date=gte.'+start+'&order=ship_date,id');
     made=await TradeAutoGen.createForShips(ships);
     // 스마트전자 입고 기록 → 매입 전표 (발주번호·입고일 단위로 묶음)
     const rc=await getAll('smart_po_receipt?select=id,po_item_id,qty,received_date,note,created_by&slip_id=is.null&order=id');
@@ -985,12 +1023,13 @@ function renderSlip(){
     <div class="k">거래처 정보</div><div class="pinfo" id="fPInfo" style="grid-column:span 5">${partnerInfoHtml(s.partner_id)}</div>
     <div class="k">부서</div><div><select class="inp" id="fDept" ${dis}><option value=""></option>${depts.map(d=>`<option ${d===s.dept?'selected':''}>${esc(d)}</option>`).join('')}</select></div>
     <div class="k">담당자</div><div><select class="inp" id="fMgr" ${dis}>${mgrOptions(s.dept,s.manager)}</select></div>
+    <div class="k">출하담당</div><div><select class="inp" id="fShipMgr" ${dis}>${mgrOptions('',s.ship_manager)}</select></div>
     <div class="k">보관위치</div><div><select class="inp" id="fLoc" ${dis}>${locOpt}</select></div>
     <div class="k">통화</div><div><select class="inp" id="fCur" ${dis}>${['KRW','USD','CNY','THB','INR'].map(c=>`<option ${c===s.currency?'selected':''}>${c}</option>`).join('')}</select></div>
-    <div class="k">환율</div><div><input class="inp" id="fFx" value="${esc(s.fx_rate||1)}" ${dis}></div>
+    <div class="k">환율</div><div><input class="inp" id="fFx" value="${esc(s.fx_rate==null?'':s.fx_rate)}" ${dis} title="${esc(fxHint(s))}" placeholder="환율 입력"></div>
     <div class="k">VAT</div><div><select class="inp" id="fVat" ${dis}>${['과세','영세','면세'].map(v=>`<option ${v===s.vat_type?'selected':''}>${v}${v==='과세'?' ('+num(SETTING.default_vat_pct)+'%)':''}</option>`).join('')}</select></div>
     <div class="k">공급구분</div><div><select class="inp" id="fKind" ${ed&&s.source_type!=='LG마감'?'':'disabled'}>${['직거래','LG사급'].map(v=>`<option ${v===(s.supply_kind||'직거래')?'selected':''}>${v}</option>`).join('')}</select>${s.close_status?'&nbsp;'+closeBadge(s):''}</div>
-    <div class="k">비고</div><div style="grid-column:span 3"><input class="inp" id="fNote" value="${esc(s.note||'')}" ${dis}></div>
+    <div class="k">비고</div><div><input class="inp" id="fNote" value="${esc(s.note||'')}" ${dis}></div>
   </div>`;
   if(ed)h+=`<div class="toolbar"><button class="btn" onclick="syncHead();addLine();renderSlip()">＋ 품목행</button><button class="btn" onclick="syncHead();document.getElementById('pasteOv').classList.add('on')">엑셀 붙여넣기</button><span class="grow"></span><span class="note">${isDelivery(s)?'<b>LG사급 납품</b> — 수량만 관리합니다(금액은 ⑥ LG 마감에서 LG전자로 청구). ':''}줄의 구분이 전표와 다르면 저장할 때 별도 전표로 나눕니다.</span></div>`;
   h+=`<div class="tbl-wrap" style="max-height:46vh"><table class="dt lines" id="tLines"><thead><tr>
@@ -1039,6 +1078,7 @@ function renderSlip(){
     fm.addEventListener('change',()=>{const v=fm.value;curSlip.manager=v||null;curSlip.emp_no=empNo(v);const d=empDept(v);
       if(d&&d!==fd.value){fd.value=d;curSlip.dept=d;fm.innerHTML=mgrOptions(d,v);}});
     ['fVat','fCur'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{syncHead();curLines.forEach(recalcLine);renderSlip();}));
+    document.getElementById('fDate').addEventListener('change',()=>{syncHead();const pp=PBYID[curSlip.partner_id];if(pp&&pp.currency&&pp.currency!=='KRW'){applyPartnerFx(pp,true);renderSlip();}});
     const fk=document.getElementById('fKind');
     if(fk&&!fk.disabled)fk.addEventListener('change',()=>{syncHead();curLines.forEach(l=>{l._kind=curSlip.supply_kind;recalcLine(l);});if(!isDelivery(curSlip))fillLastPrices();renderSlip();});
     document.querySelectorAll('#tLines select[data-f="_kind"]').forEach(sel=>sel.addEventListener('change',()=>{curLines[+sel.dataset.i]._kind=sel.value;syncHead();renderSlip();}));
@@ -1063,11 +1103,13 @@ function warnText(w){
   return JSON.stringify(d);
 }
 function delLine(i){syncHead();curLines.splice(i,1);curLines.forEach((l,k)=>l.line_no=k+1);renderSlip();}
+function fxHint(s){const p=PBYID[s.partner_id];if(!p||!p.currency||p.currency==='KRW')return '';const f=fxFor(p,s.slip_date);return `${p.currency} · ${f.rule||'전월평균'} · ${f.rate?fmt(f.rate,2)+' ('+f.src+')':f.src}`;}
 function syncHead(){
   if(!editable())return;
   const g=id=>document.getElementById(id);
   curSlip.slip_date=g('fDate').value;curSlip.dept=g('fDept').value||null;curSlip.manager=g('fMgr').value||null;curSlip.emp_no=empNo(curSlip.manager)||curSlip.emp_no||null;
-  curSlip.location_id=+g('fLoc').value||null;curSlip.currency=g('fCur').value;curSlip.fx_rate=num(g('fFx').value)||1;
+  curSlip.location_id=+g('fLoc').value||null;curSlip.currency=g('fCur').value;curSlip.fx_rate=num(g('fFx').value)||(curSlip.currency==='KRW'?1:null);
+  if(g('fShipMgr'))curSlip.ship_manager=g('fShipMgr').value||null;
   curSlip.vat_type=g('fVat').value.replace(/ \(.*/,'');curSlip.note=g('fNote').value||null;
   if(g('fKind')&&!g('fKind').disabled)curSlip.supply_kind=g('fKind').value;
   const pin=g('fPartner');if(pin.value!==curSlip.partner_name){curSlip.partner_id=null;curSlip.partner_name=pin.value;}
@@ -1137,7 +1179,7 @@ async function saveSlip(showMsg){
   lines.forEach((l,i)=>{l.line_no=i+1;recalcLine(l);});
   const sup=lines.reduce((a,b)=>a+num(b.supply_amt),0),vat=lines.reduce((a,b)=>a+num(b.vat_amt),0);
   const head={entity:s.entity,slip_type:s.slip_type,slip_date:s.slip_date,partner_id:s.partner_id,partner_name:s.partner_name||null,dept:s.dept,
-    manager:s.manager,emp_no:s.emp_no||null,location_id:s.location_id,currency:s.currency,fx_rate:s.fx_rate,vat_type:s.vat_type,note:s.note,
+    manager:s.manager,emp_no:s.emp_no||null,location_id:s.location_id,currency:s.currency,fx_rate:s.fx_rate,vat_type:s.vat_type,note:s.note,ship_manager:s.ship_manager||null,
     supply_kind:s.supply_kind,supply_total:sup,vat_total:vat,total:sup+vat,updated_at:new Date().toISOString(),updated_by:curUser||null};
   const wasNew=!s.id;
   try{
@@ -1215,6 +1257,7 @@ async function startConfirm(){
     if(!shipDone(curSlip)){alert('출하 미완료 건입니다.\n출고검수 완료 확정 또는 출하완료 처리 후 확정할 수 있습니다.');renderSlip();return;}
   }
   if(!curSlip.partner_id){alert('거래처를 목록에서 선택해야 확정할 수 있습니다.');return;}
+  if(curSlip.currency&&curSlip.currency!=='KRW'&&!(num(curSlip.fx_rate)>0)){alert('외화 전표입니다. 환율을 입력해야 확정할 수 있습니다.');return;}
   if(!curLines.some(l=>l.item_code&&num(l.qty))){alert('품목을 입력하세요.');return;}
   const ok=await saveSlip(false);if(!ok)return;
   const btns=document.querySelectorAll('#slipFoot .btn');btns.forEach(b=>b.disabled=true);
@@ -1237,14 +1280,15 @@ function marginTarget(sl){return sl&&sl.slip_type==='매출'&&!isDelivery(sl);}
 async function calcMargin(sl,lines){
   const costs=await costMap(lines.map(l=>l.item_code),sl.slip_date,[sl.partner_id]);
   let cs=0,base=0,miss=0;
+  const fxK=(sl.currency&&sl.currency!=='KRW')?(num(sl.fx_rate)||1):1; // 외화 판매는 원화로 환산해 마진 계산 (V20261124-09)
   lines.forEach(l=>{if(!num(l.supply_amt)&&!num(l.qty))return;
     const c=costs[sl.partner_id+'|'+l.item_code]!=null?costs[sl.partner_id+'|'+l.item_code]:costs[l.item_code];
-    if(c==null||!l.item_code){if(num(l.supply_amt))miss++;return;}cs+=c*num(l.qty);base+=num(l.supply_amt);});
+    if(c==null||!l.item_code){if(num(l.supply_amt))miss++;return;}cs+=c*num(l.qty);base+=num(l.supply_amt)*fxK;});
   const amt=Math.round(base-cs);
   return {cost_total:Math.round(cs),margin_amt:amt,margin_rate:base?Math.round(amt/base*1000)/10:null,cost_missing:miss};
 }
 async function saveMargin(id){
-  const sl=(await api('trade_slip?select=id,slip_type,slip_date,partner_id,supply_kind,source_type&id=eq.'+id))[0];
+  const sl=(await api('trade_slip?select=id,slip_type,slip_date,partner_id,supply_kind,source_type,currency,fx_rate&id=eq.'+id))[0];
   if(!marginTarget(sl))return null;
   const ls=await getAll('trade_slip_line?select=item_code,qty,supply_amt&slip_id=eq.'+id);
   const m=await calcMargin(sl,ls);await patch('trade_slip','id=eq.'+id,m);return m;
@@ -1364,6 +1408,7 @@ function printChecked(){const ids=[...document.querySelectorAll('.prChk:checked'
 
 /* ── 거래명세서 출력 (이카운트 양식: 공급자용/공급받는자용, 페이지당 13행 — v2.0에서 11→13) ── */
 const STMT_ROWS=13;
+const STMT_ROWS_SINGLE=40; // 「각각 한 장씩」 출력 시 쪽당 품목 줄 수 (V20261124-09)
 const PL={
   ko:{title:'거래명세서',sup:'공급자용',buy:'공급받는자용',sp:'공급자',no:'일련번호',biz:'사업자등록번호',tel:'TEL',ceo:'성명',name:'상호',mgr:'담당자',addr:'주소',amt:'금 액',won:'정',
       date:'일자',code:'품목코드',mpn:'메이커품번',lgpn:'LG품번',item:'품목명[규격]',qty:'수량(단위포함)',price:'단가',supply:'공급가액',brand:'브랜드명',tq:'수량',vat:'VAT',total:'합계',recv:'인수',sign:'인',hon:'貴 中'},
@@ -1424,13 +1469,17 @@ async function costMap(codes,dateStr,pids){
 }
 /* 명세서 표시 칸: 일자·품명·수량·단가·공급가액은 고정, 아래 칸은 선택 (거래처 기본 → 법인 기본) */
 const STMT_OPT=[['item_code','품번'],['maker_pn','메이커품번'],['lg_pn','LG품번'],['spec','규격'],['brand','브랜드']];
-let PV_ARGS=null,PV_COLS=null;
+let PV_ARGS=null,PV_COLS=null,PV_LAYOUT='pair';
+function stmtLayoutFor(slips){const pids=[...new Set(slips.map(s=>s.partner_id))];const p=pids.length===1?PBYID[pids[0]]:null;return (p&&p.stmt_layout)==='single'?'single':'pair';}
+function pvLayoutChange(){PV_LAYOUT=document.getElementById('pvLayout').value;renderPreview();}
 function stmtColsFor(slips){
   const pids=[...new Set(slips.map(s=>s.partner_id))];const p=pids.length===1?PBYID[pids[0]]:null;
   const v=(p&&p.stmt_cols)||SETTING.stmt_cols||'item_code,description,spec,brand';return v.split(',').map(x=>x.trim()).filter(Boolean);
 }
 function openPreview(args,title){
-  PV_ARGS=args;PV_COLS=stmtColsFor(args[0]);
+  PV_ARGS=args;PV_COLS=stmtColsFor(args[0]);PV_LAYOUT=stmtLayoutFor(args[0]);document.getElementById('pvLayout').value=PV_LAYOUT;
+  // 미확정 거래명세서는 출력 불가 — 미리보기만 (2026-11-24 상무님 결정)
+  const pb=document.getElementById('pvPrintBtn');pb.disabled=!!args[3];pb.style.opacity=args[3]?'.45':'';pb.title=args[3]?'확정 후 출력할 수 있습니다':'';
   document.getElementById('pvTitle').textContent=title||'거래명세서 미리보기';
   const one=new Set(args[0].map(s=>s.partner_id)).size===1&&args[0][0].partner_id;
   document.getElementById('pvSaveCols').style.display=one?'':'none';
@@ -1438,23 +1487,27 @@ function openPreview(args,title){
   renderPreview();document.getElementById('pvOv').classList.add('on');
 }
 function pvToggle(){PV_COLS=['description'].concat([...document.querySelectorAll('#pvCols input:checked')].map(x=>x.value));renderPreview();}
-function renderPreview(){const a=PV_ARGS;document.getElementById('pvFrame').srcdoc=statementHtml(a[0],a[1],a[2],a[3],a[4],PV_COLS);}
+function renderPreview(){const a=PV_ARGS;document.getElementById('pvFrame').srcdoc=statementHtml(a[0],a[1],a[2],a[3],a[4],PV_COLS,PV_LAYOUT);}
 async function saveStmtCols(){
   const pid=PV_ARGS&&PV_ARGS[0][0].partner_id;if(!pid)return;
-  const v=PV_COLS.join(',');
-  try{await patch('partners','id=eq.'+pid,{stmt_cols:v});if(PBYID[pid])PBYID[pid].stmt_cols=v;const pp=PARTNERS.find(x=>x.id===pid);if(pp)pp.stmt_cols=v;
-    toast(`「${(PBYID[pid]||{}).name||''}」 명세서 기본 칸을 저장했습니다.`);}catch(e){alert('저장 실패: '+e.message);}
+  const v=PV_COLS.join(',');const ly=PV_LAYOUT;
+  try{await patch('partners','id=eq.'+pid,{stmt_cols:v,stmt_layout:ly});if(PBYID[pid]){PBYID[pid].stmt_cols=v;PBYID[pid].stmt_layout=ly;}const pp=PARTNERS.find(x=>x.id===pid);if(pp){pp.stmt_cols=v;pp.stmt_layout=ly;}
+    toast(`「${(PBYID[pid]||{}).name||''}」 명세서 기본 칸·출력 방식을 저장했습니다.`);}catch(e){alert('저장 실패: '+e.message);}
 }
-function pvPrint(){const fr=document.getElementById('pvFrame');try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){alert('인쇄 실패: '+e.message);}}
+function pvPrint(){if(PV_ARGS&&PV_ARGS[3]){alert('미확정 거래명세서는 출력할 수 없습니다.\n확정 후 출력해 주세요.');return;}const fr=document.getElementById('pvFrame');try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){alert('인쇄 실패: '+e.message);}}
 function closePreview(){document.getElementById('pvOv').classList.remove('on');document.getElementById('pvFrame').srcdoc='';}
-function statementHtml(slips,lines,lang,draft,costs,cols){
-  const per=STMT_ROWS;const pages=[];costs=costs||{};cols=cols||stmtColsFor(slips);
+function statementHtml(slips,lines,lang,draft,costs,cols,layout){
+  const single=layout==='single';
+  const per=single?STMT_ROWS_SINGLE:STMT_ROWS;const pages=[];costs=costs||{};cols=cols||stmtColsFor(slips);
   slips.forEach(s=>{
     const ls=lines.filter(l=>l.slip_id===s.id);const n=Math.max(1,Math.ceil(ls.length/per));
-    for(let i=0;i<n;i++)pages.push({s,ls:ls.slice(i*per,(i+1)*per),pg:i+1,pn:n,all:ls});
+    for(let i=0;i<n;i++)pages.push({s,ls:ls.slice(i*per,(i+1)*per),pg:i+1,pn:n,all:ls,per});
   });
   const wm=draft?`<div class="wm">${lang==='ko'?'미리보기 · 미확정':(lang==='zh'?'预览 · 未确认':'PREVIEW · DRAFT')}</div>`:'';
-  const body=pages.map(pg=>`<div class="page">${wm}${copyHtml(pg,'sup',lang,draft,costs,cols)}<div class="cut"><span>✂</span></div>${copyHtml(pg,'buy',lang,draft,costs,cols)}</div>`).join('');
+  // 각각 한 장씩: 공급자용 전체 쪽 → 공급받는자용 전체 쪽 (V20261124-09)
+  const body=single
+    ?['sup','buy'].map(k=>pages.map(pg=>`<div class="page">${wm}${copyHtml(pg,k,lang,draft,costs,cols).replace('<div class="cp','<div class="cp full')}</div>`).join('')).join('')
+    :pages.map(pg=>`<div class="page">${wm}${copyHtml(pg,'sup',lang,draft,costs,cols)}<div class="cut"><span>✂</span></div>${copyHtml(pg,'buy',lang,draft,costs,cols)}</div>`).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>거래명세서</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -1465,6 +1518,7 @@ body{font-family:'Noto Sans KR',sans-serif;color:#1E2225;background:#e9ecf1;-web
 .cut{position:relative;border-top:1px dashed #9aa3af;margin:3mm 0 3mm}
 .cut span{position:absolute;left:-2mm;top:-9px;font-size:12px;color:#9aa3af;background:#fff;padding-right:2px}
 .cp{height:135mm;display:flex;flex-direction:column}
+.cp.full{height:277mm}
 .band{height:4px;background:#1B3A6B;margin-bottom:4px}
 .top{display:flex;gap:5mm;align-items:stretch}
 .lt{flex:1;display:flex;flex-direction:column}
@@ -1527,6 +1581,7 @@ table{border-collapse:collapse;width:100%}
 .cp.buy .chip.buy{background:#D97B7B;border-color:#D97B7B}
 @page{size:A4;margin:0}
 @media print{body{background:#fff}.page{margin:0;box-shadow:none}}
+${draft?'@media print{.page{display:none!important}body:after{content:"미확정 거래명세서는 출력할 수 없습니다";display:block;padding:40mm;font-size:20px}}':''}
 </style></head><body>
 ${body}</body></html>`;
 }
@@ -1550,7 +1605,7 @@ function copyHtml(pg,kind,lang,draft,costs,cols){
   if(cols.includes('brand'))C.push({k:'brand',w:9,h:L.brand,v:l=>esc(l.brand||'')});
   const dw=C.find(x=>x.k==='description');dw.w=Math.max(16,100-C.reduce((a,b)=>a+b.w,0));
   let rows=pg.ls.map(l=>'<tr>'+C.map(x=>`<td${x.c?` class="${x.c}"`:''}>${x.v(l)}</td>`).join('')+'</tr>').join('');
-  for(let i=pg.ls.length;i<STMT_ROWS;i++)rows+='<tr>'+C.map((x,j)=>`<td>${j?'':'&nbsp;'}</td>`).join('')+'</tr>';
+  for(let i=pg.ls.length;i<(pg.per||STMT_ROWS);i++)rows+='<tr>'+C.map((x,j)=>`<td>${j?'':'&nbsp;'}</td>`).join('')+'</tr>';
   const last=pg.pg===pg.pn;
   // 마진은 거래명세서에 표시하지 않음(고객 서명 시 노출) — 거래명세서 목록 마진금액·마진율로 이동 (2026-11-03)
   return `<div class="cp${kind==='buy'?' buy':''}">
@@ -1566,7 +1621,7 @@ function copyHtml(pg,kind,lang,draft,costs,cols){
       <tr><td class="k">${L.biz}</td><td>${esc(S.biz_no||'')}</td></tr>
       <tr><td class="k">${L.name}</td><td>${esc(S.company_name||'')}</td></tr>
       <tr><td class="k">${L.ceo}</td><td>${esc(S.ceo||'')}${S.stamp_url?`<span class="stamp-img"><img src="${esc(stampSrc(S.stamp_url))}" alt=""></span>`:`<span class="stamp">${L.sign}</span>`}</td></tr>
-      <tr><td class="k">${L.mgr}</td><td>${esc(s.manager||'')}${emp.phone?' / '+esc(emp.phone):''}</td></tr>
+      <tr><td class="k">${L.mgr}</td><td>${esc(s.manager||'')}${emp.phone?' / '+esc(emp.phone):''}${s.ship_manager?` · ${lang==='ko'?'출하':(lang==='zh'?'出货':'Ship')} ${esc(s.ship_manager)}`:''}</td></tr>
       <tr><td class="k">${L.addr}</td><td class="ad">${esc(S.address||'')}${S.tel?'<br>'+L.tel+' '+esc(S.tel):''}</td></tr>
     </table>
   </div>
@@ -1804,7 +1859,50 @@ function renderSetting(){
       <span class="note">저장을 눌러야 반영 · 확정 전표 명세서에만 찍힘</span>`
     :tp==='sel'?`<select class="inp" id="set_${k}">${opt.map(o=>`<option ${SETTING[k]===o?'selected':''}>${o}</option>`).join('')}</select>`
     :`<input class="inp" id="set_${k}" type="${tp==='num'?'number':tp==='date'?'date':'text'}" value="${esc(SETTING[k]==null?'':SETTING[k])}">`}</div>`).join('');
-  renderLocs();renderRules();
+  renderLocs();renderRules();renderFx();renderFxPartners();
+}
+/* ── 월별 평균환율 · 외화 거래처 환율 기준 (V20261124-09) ── */
+const FX_CURS=['USD','CNY','THB','INR'];
+function renderFx(){
+  const ys=document.getElementById('fxYear');const now=new Date().getFullYear();
+  if(!ys.options.length){ys.innerHTML=[now+1,now,now-1].map(y=>`<option ${y===now?'selected':''}>${y}</option>`).join('');}
+  const y=+ys.value||now;
+  const months=Array.from({length:12},(_,i)=>`${y}-${String(i+1).padStart(2,'0')}`);
+  document.getElementById('fxBox').innerHTML=`<table class="dt" style="width:${100+FX_CURS.length*110}px"><thead><tr><th style="width:100px">월</th>${FX_CURS.map(c=>`<th class="r" style="width:110px">${c}</th>`).join('')}</tr></thead><tbody>
+    ${months.map(m=>`<tr><td>${m}</td>${FX_CURS.map(c=>`<td><input class="inp fxIn" data-ym="${m}" data-cur="${c}" value="${FXM[m+'|'+c]!=null?FXM[m+'|'+c]:''}" style="width:96px;height:24px;text-align:right"></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+async function saveFx(){
+  const ins=[],dels=[];
+  document.querySelectorAll('.fxIn').forEach(i=>{const k=i.dataset.ym+'|'+i.dataset.cur;const v=i.value.trim();const old=FXM[k];
+    if(v===''){if(old!=null)dels.push(i.dataset);return;}
+    const n=num(v);if(!(n>0))return;if(old!==n)ins.push({ym:i.dataset.ym,currency:i.dataset.cur,rate:n,updated_by:curUser||null,updated_at:new Date().toISOString()});});
+  if(!ins.length&&!dels.length){toast('바뀐 환율이 없습니다.');return;}
+  if(dels.length&&!confirm('정말 삭제하시겠습니까?'))return;
+  try{
+    if(ins.length)await api('fx_month?on_conflict=ym,currency',{method:'POST',body:JSON.stringify(ins),headers:{Prefer:'resolution=merge-duplicates,return=minimal'}});
+    for(const d of dels)await del('fx_month','ym=eq.'+d.ym+'&currency=eq.'+d.cur);
+    ins.forEach(x=>FXM[x.ym+'|'+x.currency]=x.rate);dels.forEach(d=>delete FXM[d.ym+'|'+d.cur]);
+    toast(`환율 ${ins.length}건 저장${dels.length?', '+dels.length+'건 삭제':''}`);renderFx();
+  }catch(e){alert('저장 실패: '+e.message);}
+}
+let FX_EXTRA=[];
+function renderFxPartners(){
+  const rows=PARTNERS.filter(p=>(p.currency&&p.currency!=='KRW')||p.fx_rule||FX_EXTRA.includes(p.id));
+  document.getElementById('fxPartnerTbl').innerHTML=`<table class="dt" style="width:600px"><thead><tr><th style="width:200px">거래처</th><th style="width:80px">통화</th><th style="width:100px">환율 기준</th><th class="r" style="width:100px">고정환율</th><th style="width:120px">현재 적용</th></tr></thead><tbody>
+    ${rows.map(p=>{const f=fxFor(p,new Date().toISOString().slice(0,10));return `<tr><td>${esc(p.name)}</td>
+      <td><select class="inp" style="height:24px" onchange="saveFxPartner(${p.id},'currency',this.value)">${['KRW'].concat(FX_CURS).map(c=>`<option ${c===(p.currency||'KRW')?'selected':''}>${c}</option>`).join('')}</select></td>
+      <td><select class="inp" style="height:24px" onchange="saveFxPartner(${p.id},'fx_rule',this.value)">${FX_RULES.map(r=>`<option ${r===(p.fx_rule||'전월평균')?'selected':''}>${r}</option>`).join('')}</select></td>
+      <td><input class="inp" style="height:24px;width:86px;text-align:right" value="${p.fx_fixed==null?'':p.fx_fixed}" ${(p.fx_rule||'전월평균')==='계약고정'?'':'disabled'} onchange="saveFxPartner(${p.id},'fx_fixed',this.value)"></td>
+      <td class="note">${p.currency&&p.currency!=='KRW'?(f.rate?fmt(f.rate,2)+' · '+esc(f.src):'<span style="color:#B42318">'+esc(f.src)+'</span>'):''}</td></tr>`;}).join('')||'<tr><td colspan="5" class="empty">외화 거래처가 없습니다. 위에서 거래처를 검색해 추가하세요.</td></tr>'}</tbody></table>`;
+  const ai=document.getElementById('fxPartnerAdd');
+  if(ai&&!ai._bound){ai._bound=1;attachSuggest(ai,partnerList,o=>{if(!FX_EXTRA.includes(o.p.id))FX_EXTRA.push(o.p.id);ai.value='';renderFxPartners();});}
+}
+async function saveFxPartner(id,k,v){
+  const body={updated_at:new Date().toISOString(),updated_by:curUser||null};
+  if(k==='fx_fixed')body.fx_fixed=v===''?null:num(v);else body[k]=v;
+  if(k==='currency'&&v!=='KRW'){const p=PBYID[id];if(p&&!p.fx_rule)body.fx_rule='전월평균';}
+  try{await patch('partners','id=eq.'+id,body);Object.assign(PBYID[id]||{},body);const pp=PARTNERS.find(x=>x.id===id);if(pp)Object.assign(pp,body);
+    toast('거래처 환율 기준을 저장했습니다.');renderFxPartners();}catch(e){alert('저장 실패: '+e.message);}
 }
 function pickStamp(f){
   if(!f)return;if(f.size>300000){alert('300KB 이하 이미지로 올려주세요.');return;}

@@ -3,14 +3,14 @@
    - 출하 1건(ship_schedule) → 매출 전표 초안(작성중). 직거래·LG사급이 섞이면 전표 2장(사급 = 수량만, 금액 0).
    - 중복은 DB 고유키(trade_slip_source_uq: source_type+source_id+supply_kind)로 막힌다(409 → 건너뜀).
    - 본사(KOREA) 출하 기준.
-   V20261124-08: 전표 수량 = 출하팀 확인 수량(qty_confirmed) → 검수 완료 품목은 스캔 수량 → 검수 안 된 품목은 출하지시 수량(비고 「검수 미확인」).
+   V20261124-08 / -09: 전표 수량 = 출하팀 확인 수량(qty_confirmed) → 검수 완료 품목은 스캔 수량 → 검수 안 된 품목은 출하지시 수량(비고 「검수 미확인」).
      syncAndConfirm: 출고검수 완료 확정 때 작성중 전표 수량을 다시 맞추고, 출하지시 수량과 모두 같으면 바로 확정(회의 결정 2026-11-24). */
 (function(){
   const SB_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
   const SB_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
   const H={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'};
   const ENTITY='KOREA';
-  const P_SEL='partners?select=id,name,alias1,alias2&entity=eq.';
+  const P_SEL='partners?select=id,name,alias1,alias2,currency,fx_rule,fx_fixed&entity=eq.';
 
   async function api(path,opt){
     opt=opt||{};
@@ -48,6 +48,7 @@
     M={setting:(st&&st[0])||{default_vat_pct:10,default_currency:'KRW'},locs:locs||[],
        locmap:maps.filter(m=>locIds.includes(m.location_id)),partners:pts,emps:emps,supplyYm:null};
     try{const lt=await api('stock_inventory?select=ym&order=ym.desc&limit=1');M.supplyYm=lt&&lt[0]?lt[0].ym:null;}catch(e){}
+    M.fx={};try{(await getAll('fx_month?select=ym,currency,rate')).forEach(x=>M.fx[x.ym+'|'+x.currency]=num(x.rate));}catch(e){}
     return M;
   }
   function findPartner(name){
@@ -56,6 +57,15 @@
   }
   function partnerLocation(pid){const m=M.locmap.find(x=>x.partner_id===pid);return m?m.location_id:(M.locs[0]&&M.locs[0].id)||null;}
   function emp(name){return M.emps.find(e=>e.name===name)||{};}
+  // 거래처 통화·환율 기준 (V20261124-09): 전월평균 = 전표일자 전월 평균, 계약고정 = 거래처 고정환율, 그 외는 비움(전표에서 입력)
+  function partnerFx(p,d){
+    const cur=(p&&p.currency)||M.setting.default_currency||'KRW';if(cur==='KRW')return {currency:'KRW',fx_rate:1};
+    const rule=p.fx_rule||'전월평균';
+    if(rule==='계약고정')return {currency:cur,fx_rate:num(p.fx_fixed)||null};
+    if(rule==='전월평균'){const x=new Date((d||'')+'T00:00:00');x.setDate(1);x.setMonth(x.getMonth()-1);
+      const ym=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0');return {currency:cur,fx_rate:M.fx[ym+'|'+cur]||null};}
+    return {currency:cur,fx_rate:null};
+  }
 
   async function itemInfo(codes){
     const info={},supply={};if(!codes.length)return {info,supply};
@@ -89,10 +99,10 @@
         qty:q,unit_price:pr,supply_amt:sup,vat_amt:dl?0:Math.round(sup*vp/100),source_line_id:x.id,note:lq.note};
     });
     const sup=lines.reduce((a,b)=>a+b.supply_amt,0),vat=lines.reduce((a,b)=>a+b.vat_amt,0);
-    const e=emp(s.manager);
+    const e=emp(s.manager);const fx=partnerFx(p,s.ship_date);
     const head={entity:ENTITY,slip_type:'매출',slip_date:s.ship_date,partner_id:p?p.id:null,partner_name:p?p.name:s.customer,
-      dept:e.dept||s.recv_dept||null,manager:s.manager||null,emp_no:e.emp_no||null,
-      location_id:p?partnerLocation(p.id):(M.locs[0]&&M.locs[0].id)||null,currency:M.setting.default_currency||'KRW',vat_type:'과세',
+      dept:e.dept||s.recv_dept||null,manager:s.manager||null,emp_no:e.emp_no||null,ship_manager:s.lot_completed_by||s.recv_manager||null,
+      location_id:p?partnerLocation(p.id):(M.locs[0]&&M.locs[0].id)||null,currency:fx.currency,fx_rate:fx.fx_rate,vat_type:'과세',
       status:'작성중',source_type:'출하',source_id:s.id,supply_kind:kind,supply_total:sup,vat_total:vat,total:sup+vat,created_by:by};
     try{
       const r=await post('trade_slip',head);
@@ -138,7 +148,7 @@
   async function syncAndConfirm(ship,user){
     await master();
     const out={confirmed:[],pending:[]};
-    const slips=await api('trade_slip?select=id,slip_no,status,supply_kind,partner_id,source_type&source_type=eq.출하&source_id=eq.'+ship.id+'&status=eq.작성중&order=id')||[];
+    const slips=await api('trade_slip?select=id,slip_no,status,supply_kind,partner_id,source_type,currency,fx_rate,ship_manager&source_type=eq.출하&source_id=eq.'+ship.id+'&status=eq.작성중&order=id')||[];
     if(!slips.length)return out;
     const items=await getAll(ITEM_SEL+'&ship_schedule_id=eq.'+ship.id);const IB={};items.forEach(x=>IB[x.id]=x);
     const vp=num(M.setting.default_vat_pct);
@@ -156,9 +166,12 @@
         if(lq.note)diffs.push({item_code:l.item_code,req:num(x.qty_required),qty:lq.q,unchk:lq.note==='검수 미확인'});
       }
       const su=lines.reduce((a,b)=>a+num(b.supply_amt),0),va=lines.reduce((a,b)=>a+num(b.vat_amt),0);
-      await patch('trade_slip','id=eq.'+sl.id,{supply_total:su,vat_total:va,total:su+va,updated_at:new Date().toISOString()});
+      const hp={supply_total:su,vat_total:va,total:su+va,updated_at:new Date().toISOString()};
+      if(!sl.ship_manager&&(ship.lot_completed_by||user))hp.ship_manager=ship.lot_completed_by||user;
+      await patch('trade_slip','id=eq.'+sl.id,hp);
       if(diffs.length){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'qty',diffs});continue;}
       if(!sl.partner_id){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'partner',diffs:[]});continue;}
+      if(sl.currency&&sl.currency!=='KRW'&&!(num(sl.fx_rate)>0)){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'fx',diffs:[]});continue;}
       try{const r=await api('rpc/confirm_trade_slip',{method:'POST',body:JSON.stringify({p_slip_id:sl.id,p_user:(user||'출하팀')+' (출고검수)',p_warnings:[]})});
         out.confirmed.push((r&&r.slip_no)||'');}
       catch(e){out.pending.push({slip_id:sl.id,supply_kind:sl.supply_kind,reason:'error',msg:e.message,diffs:[]});}
