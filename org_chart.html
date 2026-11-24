@@ -313,6 +313,8 @@ tr.dp-add td{background:#fafbfd;padding:6px 8px;}
 .ov-bd .dp-supc label{flex-direction:row;align-items:center;gap:6px;font-weight:600;color:#111827;font-size:12.5px;padding:2px 0;cursor:pointer;}
 .ov-bd .dp-supc input{height:auto;} .dp-supc small{color:var(--muted);font-weight:500;} tr.dp-add .rbtn{margin-right:6px;}
 .ov-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);}
+/* V20261124 업무분장: 주기별 계속 추가 */
+.fm-add{margin-top:4px;} .di-keep-msg{margin-right:auto;align-self:center;font-size:12px;color:#047857;font-weight:600;}
 @media (max-width:640px){ .fr3,.fr2{grid-template-columns:1fr;} }
 .filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
 .filter select,.filter input{height:32px;border:1px solid var(--line-dk);border-radius:2px;padding:0 9px;font-size:12px;background:#fff;font-family:'Noto Sans KR',sans-serif;}
@@ -513,7 +515,7 @@ tr.dp-add td{background:#fafbfd;padding:6px 8px;}
       </div>
       <div class="fr3"><label>순서<input type="number" id="di-sort" placeholder="같은 주기 안 순서"></label></div>
     </div>
-    <div class="ov-ft"><button class="btn" onclick="closeDutyItem()">취소</button><button class="btn btn-primary" id="diSaveBtn" onclick="saveDutyItem()">저장</button></div>
+    <div class="ov-ft"><span id="diKeepMsg" class="di-keep-msg"></span><button class="btn" onclick="closeDutyItem()">취소</button><button class="btn" id="diSaveNextBtn" onclick="saveDutyItem(true)">저장 후 계속 추가</button><button class="btn btn-primary" id="diSaveBtn" onclick="saveDutyItem()">저장</button></div>
   </div>
 </div>
 <!-- v2.0 부서 R&R -->
@@ -1548,8 +1550,9 @@ function dutyFormHtml(e, idx){
       rows += it
         ? `<td class="tw">${esc(it.timing||'')}</td><td class="c">${k+1}</td><td class="c">${esc(it.category||'')}</td><td class="tw">${esc(it.title)}</td><td class="tw">${brText(it.content)}</td><td class="tw">${esc(it.docs||'')}</td><td class="tw">${esc(it.note||'')}</td>`
         : '<td class="fm-blank"></td>'.repeat(7);
-      if(ed) rows += `<td class="c">${it ? `<button class="rbtn" onclick="openDutyItem(${it.id})">수정</button> <button class="rbtn del" onclick="delDutyItem(${it.id})">삭제</button>`
-        : `<button class="rbtn" onclick="openDutyItem(null,${e.id},'${g.cy}')">＋ 추가</button>`}</td>`;
+      const addB = `<button class="rbtn" onclick="openDutyItem(null,${e.id},'${g.cy}')">＋ 추가</button>`;
+      if(ed) rows += `<td class="c">${it ? `<button class="rbtn" onclick="openDutyItem(${it.id})">수정</button> <button class="rbtn del" onclick="delDutyItem(${it.id})">삭제</button>${k===rs.length-1?`<div class="fm-add">${addB}</div>`:''}`
+        : addB}</td>`;
       rows += '</tr>';
     });
   });
@@ -1720,10 +1723,13 @@ function openDutyItem(id, presetEmp, presetCycle){
   document.getElementById('di-docs').value = v('docs');
   document.getElementById('di-note').value = v('note');
   document.getElementById('di-sort').value = v('sort_no', 0);
+  document.getElementById('diSaveNextBtn').style.display = r ? 'none' : '';
+  document.getElementById('diKeepMsg').textContent = ''; diKeepCnt = 0;
   document.getElementById('dutyOv').classList.add('show');
   setTimeout(()=>document.getElementById('di-title').focus(),50);
 }
 function closeDutyItem(){ document.getElementById('dutyOv').classList.remove('show'); dutyEditId=null; }
+let diKeepCnt = 0;   // V20261124: 「저장 후 계속 추가」로 이번 창에서 저장한 건수
 const DI_FIELDS = {cycle:'주기',timing:'일자/시간',category:'구분',title:'업무분장',content:'업무내용',docs:'관련 문서',note:'비고',sort_no:'순서',emp_id:'담당'};
 async function sbSendRet(method, table, query, body){
   const r = await fetch(`${SB_URL}/rest/v1/${table}${query?('?'+query):''}`,{ method,
@@ -1735,7 +1741,7 @@ async function logDuty(action, item, emp, summary, before, after){
   try{ await sbSend('POST','duty_history','',{ item_id:item?item.id:null, emp_id:emp?emp.id:null, entity:DUTY_ENT, dept:emp?emp.dept:(item&&item.dept)||null,
     action, summary, before_val:before||null, after_val:after||null, changed_by:curUser, changed_at:new Date().toISOString() }); }catch(e){ console.warn('변경점 기록 실패', e); }
 }
-async function saveDutyItem(){
+async function saveDutyItem(keep){
   const num = id => { const x=parseInt(document.getElementById(id).value,10); return isNaN(x)?null:x; };
   const emp = empById(+document.getElementById('di-emp').value);
   const o = { entity:DUTY_ENT, emp_id:emp.id, dept:emp.dept,
@@ -1748,7 +1754,8 @@ async function saveDutyItem(){
   const wh = diWhenRead(o.cycle); if(wh.err){ alert(wh.err); return; }
   o.timing=wh.timing; o.cal_from=wh.cal_from; o.cal_to=wh.cal_to;
   if(!canEditEmp(emp)){ alert('이 인원의 업무를 수정할 권한이 없습니다.'); return; }
-  const btn=document.getElementById('diSaveBtn'); btn.disabled=true;
+  const btn=document.getElementById('diSaveBtn'), btn2=document.getElementById('diSaveNextBtn'); btn.disabled=true; btn2.disabled=true;
+  keep = !!keep && !dutyEditId;
   try{
     if(dutyEditId){
       const old = DUTY.items.find(x=>x.id===dutyEditId);
@@ -1761,9 +1768,18 @@ async function saveDutyItem(){
       const rows = await sbSendRet('POST','duty_item','',o);
       await logDuty('추가', rows[0], emp, `[${o.cycle}] ${o.title}`, null, o);
     }
-    closeDutyItem(); await loadDuty(true); renderDuty();
+    if(keep){
+      // 담당·주기·구분·일자/시간은 그대로 두고 내용만 비워 다음 건 입력
+      ['di-title','di-content','di-docs','di-note'].forEach(id=>document.getElementById(id).value='');
+      if(o.sort_no) document.getElementById('di-sort').value = o.sort_no+1;
+      diKeepCnt++;
+      const L = window.SMERP_I18N && SMERP_I18N.t ? SMERP_I18N.t : (x=>x);
+      document.getElementById('diKeepMsg').textContent = '✔ ' + String(L('{}건 저장됨 · 다음 업무를 입력하세요')).replace('{}', diKeepCnt);
+      await loadDuty(true); renderDuty();
+      document.getElementById('di-title').focus();
+    } else { closeDutyItem(); await loadDuty(true); renderDuty(); }
   }catch(e){ alert('저장 실패: '+e.message); }
-  finally{ btn.disabled=false; }
+  finally{ btn.disabled=false; btn2.disabled=false; }
 }
 async function delDutyItem(id){
   const r = DUTY.items.find(x=>x.id===id); if(!r) return;
