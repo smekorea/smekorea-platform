@@ -3906,9 +3906,11 @@ const CAT_COLORS={
 };
 const DAYS_KR=['일','월','화','수','목','금','토'];
 
-async function loadDiary(){
+var wfDiaryLoadedAt=0;
+async function loadDiary(quiet){
   if(!SB) return;
-  showLoading(true);
+  wfDiaryLoadedAt=Date.now();
+  if(!quiet) showLoading(true);
   try{
     // 2026-10-31 로딩 속도: 첫 1,000건과 전체 건수를 함께 받고, 나머지 묶음은 동시에 요청
     const PAGE=1000;
@@ -3937,8 +3939,17 @@ async function loadDiary(){
     diaryRecords=all;
     console.log(`[Diary] 총 ${diaryRecords.length}건 로드`);
   }catch(e){console.warn('[Diary] load error:',e);}
-  showLoading(false);
+  if(!quiet) showLoading(false);
 }
+/* V20261124-05: 다른 탭에서 돌아오면 업무일지 조용히 다시 불러오기 (1분에 한 번까지, 입력·수정 창 열려 있으면 건너뜀) */
+document.addEventListener('visibilitychange',async function(){
+  if(document.hidden||!SB||!wfSession||!wfSession.empId) return;
+  if(Date.now()-wfDiaryLoadedAt<60000) return;
+  const ov=document.getElementById('diary-modal-overlay');
+  if(ov&&ov.classList.contains('open')) return;
+  await loadDiary(true);
+  try{ renderAll(); }catch(e){}
+});
 
 function getDiaryFiltered(){
   const kw1=(document.getElementById('diary-kw1')?.value||'').trim().toLowerCase();
@@ -5928,7 +5939,17 @@ function openDiaryModalAsSchedule(date){
   document.getElementById('dm-action').value='미팅/회의';
 }
 
-function editDiary(id){
+/* V20261124-05: 수정 창을 열 때 DB 최신 내용으로 — 다른 화면(업무보고 진척현황 등)에서 고친 내용을 예전 값으로 덮어쓰지 않게 */
+async function wfFreshDiary(id){
+  if(!SB) return;
+  try{
+    const {data,error}=await SB.from('work_diary').select('*').eq('id',id).maybeSingle();
+    if(error) throw error;
+    if(data){ const i=diaryRecords.findIndex(x=>String(x.id)===String(id)); if(i>=0) diaryRecords[i]=data; else diaryRecords.push(data); }
+  }catch(e){ console.warn('[Diary] fresh error:',e); }
+}
+function editDiary(id){ wfFreshDiary(id).then(()=>_editDiaryOpen(id)); }
+function _editDiaryOpen(id){
   const r=diaryRecords.find(x=>String(x.id)===String(id));if(!r)return;
   diaryEditId=id;
   document.getElementById('diary-modal-title').textContent=t('업무일지 수정');
