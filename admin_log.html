@@ -592,6 +592,7 @@ td.center .al-pline{justify-content:center;}
     </select>
     <input type="text" id="emp-f-search" placeholder="이름·비고 검색..." oninput="renderEmpTable()" style="height:36px;border:1.5px solid var(--border);border-radius:2px;padding:0 12px;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;width:140px;">
     <div style="margin-left:auto;display:flex;gap:8px;">
+      <button class="up-btn" onclick="openPromoModal()" style="background:var(--accent2);color:#fff;">📈 진급 현황</button>
       <button class="up-btn up-btn-green" onclick="downloadEmpExcel()">⬇ 엑셀</button>
       <button class="up-btn up-btn-primary" onclick="openEmpModal()">+ 직원 등록</button>
     </div>
@@ -678,7 +679,7 @@ td.center .al-pline{justify-content:center;}
       </div>
       <div class="modal-row">
         <div class="form-group"><label>성명 <span class="req">*</span></label><input id="emp-in-name" placeholder="이름 입력"></div>
-        <div class="form-group"><label>직급 <span class="req">*</span></label><select id="emp-in-rank"><option value="대표이사">대표이사</option><option value="상무">상무</option><option value="이사">이사</option><option value="책임">책임</option><option value="선임">선임</option><option value="사원">사원</option><option value="인턴">인턴</option><option value="법인장">법인장</option><option value="부총경리">부총경리</option><option value="팀장">팀장</option><option value="과장">과장</option></select></div>
+        <div class="form-group"><label>직급 <span class="req">*</span></label><div style="display:flex;gap:6px;"><select id="emp-in-rank" onchange="empRankChg()" style="flex:1;min-width:0;"><option value="대표이사">대표이사</option><option value="상무">상무</option><option value="이사">이사</option><option value="책임">책임</option><option value="선임">선임</option><option value="사원">사원</option><option value="인턴">인턴</option><option value="법인장">법인장</option><option value="부총경리">부총경리</option><option value="팀장">팀장</option><option value="과장">과장</option></select><select id="emp-in-ranklevel" title="책임 직급 내 단계 (리더 &lt; 파트장 &lt; 실장)" style="display:none;width:96px;"><option value="">단계 없음</option><option value="리더">리더</option><option value="파트장">파트장</option><option value="실장">실장</option></select></div></div>
       </div>
       <div class="modal-row">
         <div class="form-group"><label>부서 <span class="req">*</span></label><select id="emp-in-dept" onfocus="_empDeptPrev=this.value" onchange="empDeptChanged()"></select></div>
@@ -715,6 +716,8 @@ td.center .al-pline{justify-content:center;}
       </div>
       <!-- (2026-11-10) 비고 — 이력 코멘트 -->
       <div class="form-group" style="margin-top:4px;"><label>비고 <span style="font-size:10px;color:var(--muted);font-weight:400;">(이력 코멘트 — 예: 2026-11-10 승진 면담)</span></label><textarea id="emp-in-note" rows="4" style="width:100%;resize:vertical;border:1.5px solid var(--border);border-radius:2px;padding:8px 10px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);background:var(--bg-sub);outline:none;line-height:1.5;"></textarea></div>
+      <!-- (2026-11-25) 개인 인사이력 — 조직이력(org_history)에서 이 직원 건, 보기 전용 -->
+      <div id="emp-hist-wrap" style="display:none;margin-top:10px;"><label style="font-size:12px;font-weight:700;color:var(--text);">인사 이력 <span id="emp-hist-cnt" style="color:var(--muted);font-weight:400;"></span> <span style="font-size:10px;color:var(--muted);font-weight:400;">— 수정·삭제는 조직도 › 조직 이력</span></label><div id="emp-hist" style="margin-top:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);"></div></div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-cancel" onclick="closeEmpModal()">취소</button>
@@ -1021,7 +1024,7 @@ function _empRowHtml(r, noLabel, isRetired) {
     <td><span class="badge b-gray">${r.emp_type||''}</span></td>
     <td><span class="badge ${EB[r.entity]||'b-gray'}">${r.entity||''}</span></td>
     <td style="font-weight:700;">${r.name||''}</td>
-    <td><span class="badge b-gray">${r.rank||''}</span></td>
+    <td><span class="badge b-gray">${empRankLabel(r)}</span></td>
     <td><span class="badge b-dt">${r.dept||''}</span></td>
     <td>${r.title||''}</td>
     <td>${_empNameById(r.reports_to)}</td>
@@ -1084,6 +1087,8 @@ function openEmpModal(id) {
   document.getElementById('emp-in-gender').value   = r?.gender     || '남';
   document.getElementById('emp-in-name').value     = r?.name       || '';
   document.getElementById('emp-in-rank').value      = r?.rank       || '사원';
+  document.getElementById('emp-in-ranklevel').value = r?.rank_level || ''; empRankChg();
+  empHistRender(r);
   fillEmpDeptOptions(r?.dept || '자재구매팀'); // 부서 마스터(org_dept) 기준, 법인별
   document.getElementById('emp-in-phone').value    = r?.phone      || '';
   document.getElementById('emp-in-joindate').value = r?.join_date  || '';
@@ -1148,6 +1153,7 @@ async function saveEmp() {
     entity:   document.getElementById('emp-in-entity').value,
     gender:   document.getElementById('emp-in-gender').value,
     name, rank: document.getElementById('emp-in-rank').value,
+    rank_level: document.getElementById('emp-in-rank').value==='책임' ? (document.getElementById('emp-in-ranklevel').value||null) : null,
     dept:     document.getElementById('emp-in-dept').value,
     phone:    document.getElementById('emp-in-phone').value.trim()||null,
     join_date: joinDate,
@@ -1225,7 +1231,7 @@ function downloadEmpExcel() {
   const mapRow = (r, noLabel) => ({
     'No': noLabel,
     '채용구분': r.emp_type||'', '법인': r.entity||'', '성명': r.name||'',
-    '직급': r.rank||'', '부서': r.dept||'',
+    '직급': empRankLabel(r), '부서': r.dept||'',
     '직책': r.title||'', '상위자': _empNameById(r.reports_to), '현지어/영문명': r.name_local||'',
     '성별': r.gender||'',
     '휴대폰': r.phone||'', '입사일': r.join_date||'',
@@ -1256,6 +1262,64 @@ function _empNameById(id){
   return e ? (e.name||'') : '';
 }
 
+// ── (2026-11-25) 책임 단계·개인 인사이력·진급 현황 ──
+//   책임 직급 내 단계: 리더 < 파트장 < 실장 (employees.rank_level) — 표시 「책임(실장)」
+//   진급 이력: org_history (origin '진급이관' = 2026-11-25 상무님 관리 엑셀 이관, '(연도만)'은 월 미상)
+//   2024년 차장·부장·대리·주임 → 책임·선임은 「직급개편」(진급 아님)
+function empRankLabel(r){ if(!r) return ''; return (r.rank||'')+(r.rank==='책임'&&r.rank_level?'('+r.rank_level+')':''); }
+function empRankChg(){ const lv=document.getElementById('emp-in-ranklevel'); const on=document.getElementById('emp-in-rank').value==='책임'; lv.style.display=on?'':'none'; if(!on) lv.value=''; }
+const _hEsc = v => String(v==null?'':v).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function _histDate(h){ const d=String(h.eff_date||''); if(!d) return '(예정)'; return /연도만/.test(h.content||'')?d.slice(0,4)+'년':d.slice(0,7).replace('-','.'); }
+async function _empHistOf(emp){
+  const {data,error}=await sb.from('org_history').select('*').eq('is_deleted',false).or(`emp_id.eq.${emp.id},and(emp_id.is.null,emp_name.eq."${String(emp.name||'').replace(/"/g,'')}")`);
+  if(error) throw error;
+  return (data||[]).sort((a,b)=>String(a.eff_date||'9999').localeCompare(String(b.eff_date||'9999'))||(a.id-b.id));
+}
+async function empHistRender(r){
+  const wrap=document.getElementById('emp-hist-wrap'), box=document.getElementById('emp-hist');
+  wrap.style.display=r?'':'none'; if(!r) return;
+  box.innerHTML='<div style="padding:10px;color:var(--muted);font-size:12px;">불러오는 중...</div>';
+  let hs; try{ hs=await _empHistOf(r); }catch(e){ box.innerHTML='<div style="padding:10px;color:red;font-size:12px;">이력 불러오기 오류: '+_hEsc(e.message)+'</div>'; return; }
+  if(_empEditId!==r.id) return;
+  document.getElementById('emp-hist-cnt').textContent='('+hs.length+'건)';
+  box.innerHTML=hs.length?'<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg-sub);"><th style="padding:5px 8px;text-align:left;width:70px;">발령</th><th style="padding:5px 8px;text-align:left;width:70px;">구분</th><th style="padding:5px 8px;text-align:left;">변경 전 → 후</th><th style="padding:5px 8px;text-align:left;">내용</th></tr></thead><tbody>'
+    +hs.slice().reverse().map(h=>{ const g=h.kind==='직급개편'; const fv=(h.from_value||h.to_value)?`${_hEsc(h.from_value||'')} → <b>${_hEsc(h.to_value||'')}</b>`:'';
+      return `<tr style="border-top:1px solid var(--border);${g?'color:#9ca3af;':''}"><td style="padding:5px 8px;white-space:nowrap;">${_hEsc(_histDate(h))}</td><td style="padding:5px 8px;white-space:nowrap;">${_hEsc(h.kind||'')}</td><td style="padding:5px 8px;">${fv}</td><td style="padding:5px 8px;color:var(--muted);">${_hEsc(h.content||'')}</td></tr>`; }).join('')+'</tbody></table>'
+    :'<div style="padding:10px;color:var(--muted);font-size:12px;">이력이 없습니다.</div>';
+}
+function _yrs(from,to){ if(!from) return null; const a=new Date(from), b=to?new Date(to):new Date(); return Math.max(0,(b-a)/(365.25*864e5)); }
+async function openPromoModal(){
+  let m=document.getElementById('promoModal');
+  if(!m){ m=document.createElement('div'); m.className='modal-overlay'; m.id='promoModal';
+    m.innerHTML='<div class="modal-box" style="width:1100px;"><div class="modal-hdr"><div class="modal-title">📈 진급 현황 <span style="font-size:11px;color:var(--muted);font-weight:400;">— 재직자 · 입사 후 경력 대비 진급 시점 (회색 = 2024 직급개편)</span></div><button class="modal-close" onclick="document.getElementById(\'promoModal\').classList.remove(\'show\')">✕</button></div>'
+      +'<div class="modal-body"><div style="display:flex;gap:8px;margin-bottom:10px;"><select id="promoEnt" onchange="renderPromo()" style="height:32px;"><option value="KOREA">KOREA (본사)</option><option value="SMECN">SMECN</option><option value="SMEGLOBAL">SMEGLOBAL</option><option value="GSMEIN">GSMEIN</option></select></div><div id="promoBody"></div></div></div>';
+    document.body.appendChild(m); }
+  m.classList.add('show');
+  document.getElementById('promoBody').innerHTML='<div class="loading"><div class="spinner"></div> 로딩 중...</div>';
+  const {data,error}=await sb.from('org_history').select('*').eq('is_deleted',false).in('kind',['입사','진급','직급변경','직급개편']);
+  if(error){ document.getElementById('promoBody').innerHTML='<div style="color:red;">'+_hEsc(error.message)+'</div>'; return; }
+  window._promoHist=data||[]; renderPromo();
+}
+function renderPromo(){
+  const ent=document.getElementById('promoEnt').value, H=window._promoHist||[];
+  const emps=_empData.filter(e=>e.active!==false&&e.entity===ent).sort((a,b)=>(a.emp_no||0)-(b.emp_no||0));
+  const th='padding:6px 8px;text-align:left;background:var(--bg-sub);border-bottom:1px solid var(--border);white-space:nowrap;', td='padding:6px 8px;border-top:1px solid var(--border);vertical-align:top;';
+  const rows=emps.map(e=>{
+    const hs=H.filter(h=>h.emp_id===e.id||(!h.emp_id&&h.emp_name===e.name))
+      .sort((a,b)=>String(a.eff_date||'9999').localeCompare(String(b.eff_date||'9999'))||(a.id-b.id));
+    const ent0=hs.find(h=>h.kind==='입사'&&h.to_value), ent0v=ent0?String(ent0.to_value).split('/').pop().trim():'';
+    const steps=hs.filter(h=>h.kind!=='입사');
+    const cur=empRankLabel(e), last=steps.slice(-1)[0];
+    const since=last?last.eff_date:e.join_date, yrs=_yrs(e.join_date), stay=_yrs(since);
+    const chain=(ent0v?`<span title="입사 직급">${_hEsc(ent0v)}<small style="color:var(--muted);">(입사)</small></span>`:'')
+      +steps.map(h=>{ const g=h.kind==='직급개편'; const y=_yrs(e.join_date,h.eff_date);
+        return ` → <span style="${g?'color:#9ca3af;':'font-weight:700;'}" title="${_hEsc(h.kind)}">${_hEsc(h.to_value||'')}<small style="color:var(--muted);font-weight:400;"> ${_hEsc(_histDate(h))}${g?' 개편':(y!=null&&h.eff_date>=e.join_date?' · 입사 '+y.toFixed(1)+'년':'')}</small></span>`; }).join('');
+    const promos=steps.filter(h=>h.kind!=='직급개편').length;
+    return `<tr><td style="${td}">${_hEsc(e.name)}</td><td style="${td}">${_hEsc(e.dept||'')}</td><td style="${td}white-space:nowrap;">${_hEsc(e.join_date||'')}</td><td style="${td}text-align:right;">${yrs!=null?yrs.toFixed(1)+'년':''}</td><td style="${td}"><b>${_hEsc(cur)}</b></td><td style="${td}white-space:nowrap;">${last?_hEsc(_histDate(last)):'<span style="color:var(--muted);">입사 시</span>'}</td><td style="${td}text-align:right;">${stay!=null?stay.toFixed(1)+'년':''}</td><td style="${td}text-align:center;">${promos}</td><td style="${td}font-size:12px;">${chain.replace(/^ → /,'')||'<span style="color:var(--muted);">-</span>'}</td></tr>`;
+  }).join('');
+  document.getElementById('promoBody').innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;color:#111827;"><thead><tr><th style="${th}">성명</th><th style="${th}">부서</th><th style="${th}">입사일</th><th style="${th}">근속</th><th style="${th}">현 직급</th><th style="${th}">현 직급 발령</th><th style="${th}">현 직급 경과</th><th style="${th}">진급 수</th><th style="${th}">진급 흐름</th></tr></thead><tbody>${rows||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted);">재직자가 없습니다</td></tr>'}</tbody></table></div>`;
+}
+
 // 직원 저장/퇴직 시 이력 자동 기록. old=null 이면 신규 등록.
 async function logEmpHistory(oldR, newR){
   if(!newR) return;
@@ -1278,8 +1342,8 @@ async function logEmpHistory(oldR, newR){
       rows.push({...base, kind:'이동', eff_date:today,
         from_value:[oldR.entity,oldR.dept].filter(Boolean).join(' '), to_value:[newR.entity,newR.dept].filter(Boolean).join(' '), content:'소속 변경'});
     }
-    if(isOn && (oldR.rank||'')!==(newR.rank||'')){
-      rows.push({...base, kind:'직급변경', eff_date:today, from_value:oldR.rank||'', to_value:newR.rank||'', content:'직급 변경'});
+    if(isOn && empRankLabel(oldR)!==empRankLabel(newR)){
+      rows.push({...base, kind:'직급변경', eff_date:today, from_value:empRankLabel(oldR), to_value:empRankLabel(newR), content:(oldR.rank||'')===(newR.rank||'')?'책임 단계 변경':'직급 변경'});
     }
     if(isOn && (oldR.title||'')!==(newR.title||'')){
       rows.push({...base, kind:(newR.title==='법인장'?'법인장변경':'직책변경'), eff_date:today,
