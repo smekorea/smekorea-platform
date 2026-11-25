@@ -72,3 +72,21 @@
     return of(input,init);
   };
 })();
+
+/* (V20261125-24) 휴대폰 앱(홈 화면 설치)으로 열었을 때 — SMERP 화면을 새 창 대신 같은 창에서 연다
+   (앱에서 새 창을 열면 크롬이 ✕·주소가 보이는 바깥 창으로 띄움). PC·크롬 브라우저에서는 그대로 새 창 */
+(function(){
+  var app=false;
+  try{ app=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true; }catch(e){}
+  if(!app) return;
+  var ow=window.open;
+  window.open=function(url,target,feat){
+    try{
+      if(url&&(!target||target==='_blank')){
+        var u=new URL(String(url),location.href);
+        if(u.origin===location.origin&&/\.html$/i.test(u.pathname)){ location.href=u.href; return window; }
+      }
+    }catch(e){}
+    return ow.apply(window,arguments);
+  };
+})();
