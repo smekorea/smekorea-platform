@@ -798,6 +798,17 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
 .chk-box label{padding:4px 0;}
 .ev-note{font-size:12px!important;}
 }
+/* V20261125-01: 사내기준 표 */
+.ru-table{border-collapse:collapse;font-size:13px;}
+.ru-table th{background:#DCE3EE;color:#142C52;font-weight:600;padding:8px 6px;border-right:1px solid #c5cfdc;border-bottom:1px solid #c5cfdc;top:0;z-index:5;white-space:nowrap;overflow:hidden;}
+.ru-table th.sortable{cursor:pointer;} .ru-table th.sortable:hover{background:rgba(26,86,219,.06);} .ru-table .sort-icon{margin-left:3px;font-size:10px;color:var(--accent);}
+.ru-table tbody td{padding:7px 8px;border-bottom:1px solid #e8edf5;border-right:1px solid #e8edf5;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ru-table tbody td:last-child{border-right:none;}
+.ru-table tbody tr{cursor:pointer;} .ru-table tbody tr:hover td{background:#FFF6EE;}
+.ru-table tr.ru-off td{color:#9ca3af;}
+.ru-st{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11.5px;font-weight:600;}
+.ru-st.on{background:#dcfce7;color:#166534;} .ru-st.off{background:#f1f5f9;color:#64748b;}
+.ru-upc{background:#fef9c3;color:#854d0e;}
 </style>
 </head>
 <body>
@@ -812,7 +823,7 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <span class="brand-name">업무보고</span>
   </div>
   <!-- 큰 구분(업무보고 / 지시사항)은 상단바에, 그 아래 탭 줄에는 고른 쪽의 하위 메뉴만 둔다 -->
-  <div class="mode-sw"><button class="mode-btn active" id="mode-dir" onclick="switchMode('dir')" title="사장님·상무 지시사항">지시사항</button><button class="mode-btn" id="mode-report" onclick="switchMode('report')" title="부서별 업무보고">부서별보고</button><button class="mode-btn" id="mode-task" onclick="switchMode('task')" title="법인 설립 등 기간을 정해 추진하는 과제 — 마스터·일정표·세부진척현황">추진과제</button></div>
+  <div class="mode-sw"><button class="mode-btn active" id="mode-dir" onclick="switchMode('dir')" title="사장님·상무 지시사항">지시사항</button><button class="mode-btn" id="mode-report" onclick="switchMode('report')" title="부서별 업무보고">부서별보고</button><button class="mode-btn" id="mode-task" onclick="switchMode('task')" title="법인 설립 등 기간을 정해 추진하는 과제 — 마스터·일정표·세부진척현황">추진과제</button><button class="mode-btn" id="mode-rule" onclick="switchMode('rule')" title="사내규정·사내기준 (근태·복리후생 등) — 시행일·개정이력 관리">사내기준</button></div>
   <div class="tb-spacer"></div>
   <span class="tb-user" id="tbUser"></span>
   <div class="nav-group">
@@ -846,8 +857,54 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
     <button class="tab-btn" onclick="switchTab('tkmaster')" id="tab-tkmaster">추진과제 마스터</button>
     <button class="tab-btn" onclick="switchTab('tklog')" id="tab-tklog" title="추진과제 세부과제별 활동 기록">세부진척현황</button>
   </div>
+  <div class="tabs-grp" id="tabs-rule">
+    <button class="tab-btn" onclick="switchTab('rule')" id="tab-rule">사내기준 목록</button>
+  </div>
 </div>
 <div class="crumb" id="crumb"></div>
+
+<!-- V20261125-01: 사내기준 (사내규정·기준 — 업무보고의 지시·보고와 별도 관리) -->
+<div class="tab-panel" id="panel-rule">
+  <div class="mt-wrap">
+    <div class="filter-bar">
+      <span class="fb-label">분류</span><select id="ruCat"><option value="">전체</option></select>
+      <span class="fb-label" style="margin-left:6px;">상태</span><select id="ruSt"><option value="">전체</option><option>시행중</option><option>폐지</option></select>
+      <input type="text" id="ruKw" placeholder="제목·내용 검색" style="width:170px;height:32px;" onkeydown="if(event.key==='Enter')renderRule()">
+      <button class="btn btn-primary" onclick="renderRule()">🔍 조회</button>
+      <button class="btn btn-outline" onclick="['ruCat','ruSt','ruKw'].forEach(i=>document.getElementById(i).value='');renderRule()">초기화</button>
+      <button class="btn btn-primary" id="ruAddBtn" onclick="ruOpen()" title="책임급 이상 등록·수정">＋ 사내기준 등록</button>
+      <span class="cnt-badge" id="ruCnt"></span>
+    </div>
+    <div class="tbl-wrap"><table class="ru-table" id="ruTable"><thead><tr>
+      <th class="sortable" data-k="rule_no">기준번호</th><th class="sortable" data-k="category">분류</th><th class="sortable" data-k="title">제목</th>
+      <th class="sortable" data-k="effective_date">시행일</th><th class="sortable" data-k="scope">적용범위</th><th class="sortable" data-k="basis">결정 근거</th>
+      <th class="sortable" data-k="status">상태</th><th class="sortable" data-k="rev_no">개정</th><th class="sortable" data-k="updated_at">최종수정</th><th>처리</th>
+    </tr></thead><tbody id="ruBody"></tbody></table></div>
+  </div>
+</div>
+<div class="modal-ov" id="ruOv">
+  <div class="modal" style="width:680px;">
+    <div class="modal-hd"><span id="ruTitleHd">사내기준 등록</span><button class="sp-close" onclick="ruClose()">✕</button></div>
+    <div class="modal-bd">
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">분류<span>*</span></label><select class="form-select" id="ruFmCat" onchange="ruAutoNo()"></select></div>
+        <div class="form-row"><label class="form-label">기준번호<span>*</span></label><input class="form-input" id="ruFmNo" placeholder="예: 복리-001"></div>
+      </div>
+      <div class="form-row"><label class="form-label">제목<span>*</span></label><input class="form-input" id="ruFmTitle" placeholder="예: 점심 식사 기준"></div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">시행일</label><input type="date" class="form-input" id="ruFmDate"></div>
+        <div class="form-row"><label class="form-label">적용범위</label><input class="form-input" id="ruFmScope" placeholder="본사(SMEKR)"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">결정 근거</label><input class="form-input" id="ruFmBasis" placeholder="예: 직원 투표 / 사장님 결정 / 주간회의"></div>
+        <div class="form-row"><label class="form-label">상태</label><select class="form-select" id="ruFmSt"><option>시행중</option><option>폐지</option></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">내용<span>*</span></label><textarea class="form-textarea" id="ruFmBody" style="min-height:180px;" placeholder="1. ...&#10;2. ..."></textarea></div>
+      <div class="form-row" id="ruFmNoteRow"><label class="form-label">개정 사유 <span style="color:var(--muted);font-weight:400;">— 수정하면 이전 내용이 개정이력에 남습니다</span></label><input class="form-input" id="ruFmNote" placeholder="예: 점심시간 변경"></div>
+    </div>
+    <div class="modal-ft"><button class="btn btn-red" id="ruDelBtn" onclick="ruDel()">삭제</button><span style="flex:1"></span><button class="btn btn-outline" onclick="ruClose()">취소</button><button class="btn btn-primary" onclick="ruSave()">저장</button></div>
+  </div>
+</div>
 
 <div class="tab-panel" id="panel-tkmaster">
   <div class="mt-wrap">
@@ -1829,7 +1886,7 @@ async function init(){
       else{ if(rpById[qwk]) bfWk(qwk); else showToast('연동된 주간업무 줄을 찾을 수 없습니다 (삭제되었을 수 있습니다)','err'); }
     },300);
   }
-  else{ let m=null; try{m=localStorage.getItem('report_mode');}catch(_){} if(m==='report'||m==='task') switchMode(m); }
+  else{ let m=null; try{m=localStorage.getItem('report_mode');}catch(_){} if(m==='report'||m==='task'||m==='rule') switchMode(m); }
 }
 async function loadAll(){
   try{
@@ -1902,7 +1959,7 @@ function switchTab(tab){
   renderCur();
 }
 // 현재 위치 한 줄 (v3.49)
-const MODE_LABEL={dir:'지시사항',report:'부서별보고',task:'추진과제'};
+const MODE_LABEL={dir:'지시사항',report:'부서별보고',task:'추진과제',rule:'사내기준'};
 function updCrumb(){
   const el=document.getElementById('crumb'); if(!el) return;
   const tb=document.getElementById('tab-'+curTab), tn=tb?tb.textContent.replace(/^[^\w가-힣]+/,'').trim():'';
@@ -1935,6 +1992,7 @@ function renderCur(){
   else if(curTab==='rpweek') renderRpWeek();
   else if(curTab==='rpcorp') renderCorp();
   else if(curTab==='vmhist') renderVm(true);
+  else if(curTab==='rule') renderRule();
   else renderEval();
   renderBulk();
 }
@@ -3107,13 +3165,14 @@ function dvAddDays(s,n){const d=toDate(s);d.setDate(d.getDate()+n);return ymd(d)
 
 let tkTabCur='tkmaster';
 function switchMode(mode){
-  if(curMode==='dir') dirTabCur=curTab; else if(curMode==='task') tkTabCur=curTab; else dvTabCur=curTab;
+  if(curMode==='dir') dirTabCur=curTab; else if(curMode==='task') tkTabCur=curTab; else if(curMode==='report') dvTabCur=curTab;
   curMode=mode;
   try{localStorage.setItem('report_mode',mode);}catch(_){}
-  ['dir','report','task'].forEach(m=>{ document.getElementById('mode-'+m).classList.toggle('active',mode===m); document.getElementById('tabs-'+m).classList.toggle('on',mode===m); });
-  document.body.classList.remove('md-dir','md-report','md-task'); document.body.classList.add('md-'+mode);
+  ['dir','report','task','rule'].forEach(m=>{ document.getElementById('mode-'+m).classList.toggle('active',mode===m); document.getElementById('tabs-'+m).classList.toggle('on',mode===m); });
+  document.body.classList.remove('md-dir','md-report','md-task','md-rule'); document.body.classList.add('md-'+mode);
   closePanel();
-  const go=()=>{ if(mode!=='dir'){ dvApplyDept(); dvFillFilters(); } switchTab(mode==='report'?dvTabCur:mode==='task'?tkTabCur:dirTabCur); };
+  const go=()=>{ if(mode==='report'||mode==='task'){ dvApplyDept(); dvFillFilters(); } switchTab(mode==='report'?dvTabCur:mode==='task'?tkTabCur:mode==='rule'?'rule':dirTabCur); };
+  if(mode==='rule'){ (ruLoaded?Promise.resolve():ruLoad()).then(go); return; }
   if(mode==='task'){ Promise.all([dvLoaded?null:dvLoad(),tkLoaded?null:tkLoad()]).then(go); return; }
   if(mode==='report'&&!dvLoaded){ dvLoad().then(go); return; }
   go();
@@ -5661,6 +5720,124 @@ document.addEventListener('keydown',ev=>{
 },true);
 window.addEventListener('resize',()=>{if(acInput)acClose();});
 document.addEventListener('scroll',ev=>{if(acInput&&ev.target!==document.getElementById('acDD'))document.getElementById('acDD').style.display='none';},true);
+
+/* ══════════════ 사내기준 (V20261125-01) ══════════════
+   사내규정·기준(근태·복리후생 등)은 지시·보고와 달리 완료되지 않고 계속 적용된다 → 업무보고와 분리해 관리.
+   company_rules(현재 내용) + company_rules_hist(수정 전 내용 보존). 등록·수정·삭제는 책임급 이상(상무 관리자 포함), 보기는 전 직원 */
+const RU_CATS=[['근태','근태'],['복리후생','복리'],['급여','급여'],['총무','총무'],['안전','안전'],['보안','보안'],['기타','기타']];
+const RU_RANKS=['책임','수석','부장','이사','상무','전무','부사장','사장','대표이사'];
+let ruLoaded=false, ruAll=[], ruHist={}, ruEditId=null, ruSortKey='rule_no', ruSortAsc=true;
+function ruCan(){ return !!me&&(isAdmin()||RU_RANKS.indexOf(me.rank||'')>=0||isCEO(me)); }
+async function ruLoad(){
+  try{
+    const res=await Promise.all([sbGetAll('company_rules','select=*&is_deleted=is.false&order=rule_no.asc'),sbGetAll('company_rules_hist','select=*&order=rule_id.asc,rev_no.desc')]);
+    ruAll=res[0]; ruHist={}; res[1].forEach(h=>{(ruHist[h.rule_id]=ruHist[h.rule_id]||[]).push(h);});
+    ruLoaded=true;
+  }catch(e){ ruAll=[]; showToast('사내기준 불러오기 오류: '+e.message,'err'); }
+  const cs=document.getElementById('ruCat'), cv=cs.value;
+  cs.innerHTML='<option value="">전체</option>'+RU_CATS.map(c=>`<option${c[0]===cv?' selected':''}>${c[0]}</option>`).join('');
+  document.getElementById('ruFmCat').innerHTML=RU_CATS.map(c=>`<option>${c[0]}</option>`).join('');
+  document.getElementById('ruAddBtn').style.display=ruCan()?'':'none';
+  if(!ruTable0){ ruTable0=true; document.querySelectorAll('#ruTable th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k=th.dataset.k; if(ruSortKey===k) ruSortAsc=!ruSortAsc; else{ ruSortKey=k; ruSortAsc=true; } renderRule(); }));
+    applyResize('ruTable','directive_rule_col_v1',[96,84,280,96,110,240,74,56,100,110]); }
+}
+let ruTable0=false;
+function renderRule(){
+  const c=document.getElementById('ruCat').value, st=document.getElementById('ruSt').value, kw=document.getElementById('ruKw').value.trim().toLowerCase();
+  let rows=ruAll.filter(r=>(!c||r.category===c)&&(!st||r.status===st)&&(!kw||((r.title||'')+' '+(r.body||'')+' '+(r.rule_no||'')).toLowerCase().indexOf(kw)>=0));
+  const k=ruSortKey, dir=ruSortAsc?1:-1;
+  rows.sort((a,b)=>{ const x=a[k]==null?'':a[k], y=b[k]==null?'':b[k]; return (typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y)))*dir; });
+  document.querySelectorAll('#ruTable th.sortable').forEach(th=>{ const ic=th.querySelector('.sort-icon'); if(ic) ic.remove(); if(th.dataset.k===k){ const sp=document.createElement('span'); sp.className='sort-icon'; sp.textContent=ruSortAsc?'↑':'↓'; th.insertBefore(sp,th.querySelector('.col-resizer')); } });
+  const td=todayStr(), can=ruCan();
+  document.getElementById('ruBody').innerHTML=rows.length?rows.map(r=>{
+    const off=r.status==='폐지', upc=!off&&r.effective_date&&r.effective_date>td;
+    const stb=off?'<span class="ru-st off">폐지</span>':upc?'<span class="ru-st ru-upc">시행예정</span>':'<span class="ru-st on">시행중</span>';
+    return `<tr class="${off?'ru-off':''}" onclick="ruView(${r.id})"><td>${esc(r.rule_no)}</td><td>${esc(r.category)}</td><td title="${esc(r.title)}"><b>${esc(r.title)}</b></td><td>${esc(r.effective_date||'')}</td><td>${esc(r.scope||'')}</td><td title="${esc(r.basis||'')}">${esc(r.basis||'')}</td><td>${stb}</td><td style="text-align:center;">${r.rev_no?'제'+r.rev_no+'차':'제정'}</td><td>${esc(tsDay(r.updated_at)||'')}</td>`
+      +`<td onclick="event.stopPropagation()"><button class="btn btn-outline" style="height:26px;padding:0 8px;font-size:12px;" onclick="ruPrint(${r.id})">PDF</button>${can?` <button class="btn btn-outline" style="height:26px;padding:0 8px;font-size:12px;" onclick="ruOpen(${r.id})">수정</button>`:''}</td></tr>`;
+  }).join(''):'<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:30px;">등록된 사내기준이 없습니다</td></tr>';
+  document.getElementById('ruCnt').textContent=rows.length+'건';
+}
+function ruHistHtml(id){
+  const hs=ruHist[id]||[];
+  return hs.length?hs.map(h=>{ const s=h.snapshot||{}; return `<div class="bf-log"><b>${h.rev_no?'제'+h.rev_no+'차 개정':'개정'} · ${esc(tsDay(h.changed_at)||'')}</b>${esc(h.change_note||'(사유 없음)')}<i>${esc(h.changed_name||'')}</i>\n<span style="color:#6b7280;font-size:12px;">[이전 내용] 시행일 ${esc(s.effective_date||'-')} / ${esc(s.title||'')}\n${esc(s.body||'')}</span></div>`; }).join(''):'';
+}
+function ruView(id){
+  const r=ruAll.find(x=>x.id===id); if(!r) return;
+  bfShow({head:esc(r.rule_no),sub:esc(r.category),pills:[r.status==='폐지'?'폐지':(r.effective_date&&r.effective_date>todayStr()?'시행예정':'시행중')],title:r.title,
+    cells:[['시행일',esc(r.effective_date||'')],['적용범위',esc(r.scope||'')],['결정 근거',esc(r.basis||'')],['개정',r.rev_no?'제'+r.rev_no+'차':'제정']],
+    boxes:[['내용',bfTxt(r.body)||'<div class="bf-content" style="color:#9ca3af;font-size:13px;">내용 없음</div>'],['개정이력 ('+(ruHist[id]||[]).length+')',ruHistHtml(id)]],
+    who:'등록 '+esc(r.created_name||'')+' · 최종수정 '+esc(r.updated_name||'')+' '+esc(fmtDT(r.updated_at)),
+    btns:[['PDF 출력','ruPrint('+id+')']], edit:ruCan()?()=>ruOpen(id):null});
+}
+function ruAutoNo(){
+  if(ruEditId) return;
+  const cat=document.getElementById('ruFmCat').value, pf=(RU_CATS.find(c=>c[0]===cat)||['','기타'])[1];
+  let mx=0; ruAll.concat([]).forEach(r=>{ const m=String(r.rule_no||'').match(new RegExp('^'+pf+'-(\\d+)$')); if(m) mx=Math.max(mx,+m[1]); });
+  document.getElementById('ruFmNo').value=pf+'-'+String(mx+1).padStart(3,'0');
+}
+function ruOpen(id){
+  if(!ruCan()){ showToast('사내기준 등록·수정은 책임급 이상만 할 수 있습니다','err'); return; }
+  const r=id?ruAll.find(x=>x.id===id):null; ruEditId=r?r.id:null;
+  document.getElementById('ruTitleHd').textContent=r?'사내기준 수정':'사내기준 등록';
+  document.getElementById('ruFmCat').value=r?r.category:RU_CATS[0][0];
+  document.getElementById('ruFmNo').value=r?r.rule_no:'';
+  document.getElementById('ruFmTitle').value=r?r.title:'';
+  document.getElementById('ruFmDate').value=r?(r.effective_date||''):'';
+  document.getElementById('ruFmScope').value=r?(r.scope||''):'본사(SMEKR)';
+  document.getElementById('ruFmBasis').value=r?(r.basis||''):'';
+  document.getElementById('ruFmSt').value=r?(r.status||'시행중'):'시행중';
+  document.getElementById('ruFmBody').value=r?(r.body||''):'';
+  document.getElementById('ruFmNote').value='';
+  document.getElementById('ruFmNoteRow').style.display=r?'':'none';
+  document.getElementById('ruDelBtn').style.display=r?'':'none';
+  if(!r) ruAutoNo();
+  document.getElementById('ruOv').classList.add('open');
+}
+function ruClose(){ document.getElementById('ruOv').classList.remove('open'); ruEditId=null; }
+async function ruSave(){
+  const v=x=>document.getElementById(x).value.trim();
+  const body={rule_no:v('ruFmNo'),category:v('ruFmCat'),title:v('ruFmTitle'),effective_date:v('ruFmDate')||null,scope:v('ruFmScope')||null,basis:v('ruFmBasis')||null,status:v('ruFmSt'),body:document.getElementById('ruFmBody').value.trim()};
+  if(!body.rule_no||!body.title||!body.body){ showToast('기준번호·제목·내용을 입력하세요','err'); return; }
+  if(ruAll.some(r=>r.rule_no===body.rule_no&&r.id!==ruEditId)){ showToast('같은 기준번호가 이미 있습니다','err'); return; }
+  const now=new Date().toISOString();
+  try{
+    if(ruEditId){
+      const old=ruAll.find(x=>x.id===ruEditId), keys=['rule_no','category','title','effective_date','scope','basis','status','body'];
+      if(!keys.some(k=>(old[k]||'')!==(body[k]||''))){ ruClose(); return; }
+      const rev=(old.rev_no||0)+1;
+      await sbPost('company_rules_hist',{rule_id:old.id,rev_no:rev,snapshot:keys.reduce((o,k)=>{o[k]=old[k];return o;},{rev_no:old.rev_no||0}),change_note:v('ruFmNote')||null,changed_by:me.id,changed_name:me.name,changed_at:now});
+      await sbPatch('company_rules',old.id,Object.assign(body,{rev_no:rev,updated_by:me.id,updated_name:me.name,updated_at:now}));
+    }else{
+      await sbPost('company_rules',Object.assign(body,{rev_no:0,created_by:me.id,created_name:me.name,updated_by:me.id,updated_name:me.name,created_at:now,updated_at:now}));
+    }
+    ruClose(); await ruLoad(); renderRule(); showToast('저장했습니다');
+  }catch(e){ showToast('저장 오류: '+e.message,'err'); }
+}
+async function ruDel(){
+  if(!ruEditId) return;
+  if(!confirm('정말 삭제하시겠습니까?')) return;
+  try{ await sbPatch('company_rules',ruEditId,{is_deleted:true,updated_by:me.id,updated_name:me.name,updated_at:new Date().toISOString()}); ruClose(); await ruLoad(); renderRule(); showToast('삭제했습니다'); }
+  catch(e){ showToast('삭제 오류: '+e.message,'err'); }
+}
+function ruPrint(id){
+  const r=ruAll.find(x=>x.id===id); if(!r) return;
+  const hs=(ruHist[id]||[]).slice().reverse();
+  const w=window.open('','_blank'); if(!w){ alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.'); return; }
+  const row=(k,val)=>`<tr><th>${k}</th><td>${esc(val||'-')}</td></tr>`;
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(r.rule_no)} ${esc(r.title)}</title><style>
+    body{font-family:'Noto Sans KR',sans-serif;color:#111827;margin:40px 48px;font-size:12pt;}
+    h1{font-size:20pt;text-align:center;margin:0 0 6px;} .co{text-align:center;color:#555;font-size:11pt;margin-bottom:24px;}
+    table{border-collapse:collapse;width:640px;margin:0 auto 20px;} th,td{border:1px solid #999;padding:7px 10px;font-size:11pt;text-align:left;} th{background:#f3f4f6;width:110px;}
+    .bd{white-space:pre-wrap;line-height:1.9;border:1px solid #999;padding:14px 18px;width:604px;margin:0 auto;min-height:200px;}
+    h2{font-size:12pt;width:640px;margin:24px auto 8px;} .ft{width:640px;margin:30px auto 0;text-align:right;color:#555;font-size:10pt;}
+    @media print{body{margin:18mm 16mm;}}</style></head><body>
+    <h1>${esc(r.title)}</h1><div class="co">㈜에스엠이코리아 사내기준 · ${esc(r.rule_no)}</div>
+    <table>${row('분류',r.category)}${row('시행일',r.effective_date)}${row('적용범위',r.scope)}${row('결정 근거',r.basis)}${row('상태',r.status)}${row('개정',r.rev_no?'제'+r.rev_no+'차':'제정')}</table>
+    <div class="bd">${esc(r.body||'')}</div>
+    ${hs.length?'<h2>개정이력</h2><table><tr><th>차수</th><th>일자</th><th>사유</th></tr>'+hs.map(h=>`<tr><td>제${h.rev_no}차</td><td>${esc(tsDay(h.changed_at)||'')}</td><td>${esc(h.change_note||'')}</td></tr>`).join('')+'</table>':''}
+    <div class="ft">출력일 ${esc(todayStr())}</div><script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+}
 
 init();
 </script>
