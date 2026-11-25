@@ -300,6 +300,25 @@ html body .tb-logo-text{font-size:24px!important;}
 html body .app-body{min-height:0!important;}
 html body .menu-tbl tbody tr{padding:14px 4px!important;}
 .mobile-tab{min-height:0!important;letter-spacing:-.3px;}
+/* (V20261125-20) 휴대폰 상단 넘침 정리 — 날짜 숨김, 언어 KR/EN/CN, 비밀번호 변경은 로그인 창에서 */
+html body .tb-date-txt{display:none!important;}
+html body #tbChpw{display:none!important;}
+html body .tb-lang-btn{font-size:0!important;}
+html body .tb-lang-btn::after{font-size:10px;}
+html body .tb-lang-btn[data-lang="ko"]::after{content:"KR";}
+html body .tb-lang-btn[data-lang="en"]::after{content:"EN";}
+html body .tb-lang-btn[data-lang="zh"]::after{content:"CN";}
+html body .tb-row{padding-right:6px!important;}
+html body .tb-logo{padding:0 4px 0 10px!important;}
+html body .tb-logo-text{font-size:21px!important;}
+html body .tb-datetime{padding:0 6px!important;}
+html body .tb-time-txt{font-size:12px!important;}
+html body .tb-lang{margin-right:6px!important;gap:2px!important;}
+html body .tb-lang-btn{height:24px!important;padding:0 4px!important;min-width:26px;}
+html body .tb-lang-btn::after{font-size:9.5px;}
+html body .tb-user{gap:5px!important;}
+html body .tb-user-name{font-size:11px!important;max-width:52px!important;}
+html body .tb-logout{height:28px!important;padding:0 6px!important;font-size:11px!important;}
 }
 </style>
 </head>
@@ -739,6 +758,7 @@ html body .menu-tbl tbody tr{padding:14px 4px!important;}
     <input class="popup-inp" id="pwInput" type="password" maxlength="64" autocomplete="current-password" placeholder="••••" onkeydown="if(event.key==='Enter')checkPW()">
     <div class="popup-err" id="pwError"></div>
     <button class="popup-btn" onclick="checkPW()" data-i18n="로그인">로그인</button>
+    <div style="text-align:center;margin-top:10px;"><a href="javascript:void(0)" onclick="loginAndChangePw()" style="font-size:12px;color:#1B3A6B;font-weight:700;text-decoration:underline;" data-i18n="비밀번호 변경">비밀번호 변경</a></div>
     <div id="otherUserLink" style="display:none;text-align:center;margin-top:10px;"><a href="javascript:void(0)" onclick="loginAsOther()" style="font-size:12px;color:#1B3A6B;font-weight:700;text-decoration:underline;" data-i18n="다른 사람으로 로그인">다른 사람으로 로그인</a></div>
     <div class="popup-cancel" onclick="closePW()">✕ <span data-i18n="취소">취소</span></div>
   </div>
@@ -935,7 +955,11 @@ async function refreshMe(){
   document.getElementById('tbChpw').style.display='';
   if(me.must_change){localStorage.setItem('sme_must_change','1');openChangePw(true);}else localStorage.removeItem('sme_must_change');
 }
+// (V20261125-20) 로그인 창 「비밀번호 변경」 — 입력한 법인·이름·현재 비밀번호로 로그인한 뒤 바로 새 비밀번호 입력창
+let pwChangeAfterLogin=false;
+async function loginAndChangePw(){pwChangeAfterLogin=true;try{await checkPW();}finally{pwChangeAfterLogin=false;}}
 async function personalLogin(){
+  const wantPwChange=pwChangeAfterLogin;pwChangeAfterLogin=false;
   const err=document.getElementById('pwError');const no=parseInt(document.getElementById('nameSelect').value,10);const pw=document.getElementById('pwInput').value;
   if(!no){err.textContent='⚠ '+idxT('이름을 선택해주세요');return;}
   err.textContent=idxT('로그인 중...');
@@ -954,6 +978,7 @@ async function personalLogin(){
   await idxLangAfterLogin(r.entity,r.name,r.emp_no);
   err.textContent='';closePW();writeLog(r.name,'SMERP 로그인',r.entity);
   if(r.must_change){openChangePw(true,pendingTarget);return;}
+  if(wantPwChange){openChangePw(false);document.getElementById('cpwOld').value=pw;setTimeout(()=>document.getElementById('cpwNew').focus(),120);return;}
   if(goReturn())return;
   if(pendingTarget&&canOpen(pendingTarget))handleTarget(pendingTarget,r.name);
 }
