@@ -794,6 +794,9 @@ body.ts-vresizing{cursor:row-resize;user-select:none;}
 #luMyTable th .col-resizer:hover,#luMyTable th .col-resizer.dragging{background:rgba(55,138,221,.35);}
 #luMyTable tbody td{padding:6px 8px;border-bottom:1px solid #e8edf5;border-right:1px solid #e8edf5;color:#111827;text-align:center;white-space:nowrap;overflow:hidden;}
 #luMyTable tbody td:last-child{border-right:none;} #luMyTable tr.cx td{color:#9ca3af;text-decoration:line-through;} #luMyTable tr.cx td.st{text-decoration:none;}
+.lu-close{display:inline-flex;align-items:center;gap:6px;}
+.lu-close .bd{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;background:#DCFCE7;color:#166534;} .lu-close .bd.no{background:#F3F4F6;color:#6b7280;}
+.lu-set{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 10px;font-size:12px;color:#374151;} .lu-set .k{color:#6b7280;} .lu-set .h{color:#9ca3af;font-size:11.5px;}
 .lunch-mark{margin-left:3px;line-height:0;display:inline-flex;align-items:center;}
 .lu-ico{vertical-align:-3px;flex-shrink:0;} .lu-c .s{display:flex;align-items:center;justify-content:center;gap:3px;} .lu-c.lock.on .lu-ico{opacity:.6;}
 #lunch-view{padding:14px 4px 30px;max-width:1100px;}
@@ -1398,11 +1401,12 @@ body.m-legend-on #cat-legend{display:flex;}
       <div class="lu-tblwrap" style="max-width:640px;"><table id="luMyTable"><thead><tr><th class="sortable" onclick="luMySort()" style="width:120px">배달일<span class="sort-icon" id="luMySi">↑</span></th><th style="width:70px">상태</th><th style="width:80px">금액</th><th style="width:150px">신청일시</th><th style="width:150px">취소일시</th></tr></thead><tbody id="luMyBody"></tbody></table></div>
     </div>
     <div id="lu-p-day" style="display:none;">
-      <div class="lu-nav"><button class="lu-btn" onclick="lunchDayMove(-1)">‹</button><input type="date" id="luDay" class="lu-btn" onchange="lunchDayRender()"><button class="lu-btn" onclick="lunchDayMove(1)">›</button><button class="lu-btn" onclick="lunchDayRender()">새로고침</button></div>
+      <div class="lu-nav"><button class="lu-btn" onclick="lunchDayMove(-1)">‹</button><input type="date" id="luDay" class="lu-btn" onchange="lunchDayRender()"><button class="lu-btn" onclick="lunchDayMove(1)">›</button><button class="lu-btn" onclick="lunchDayRender()">새로고침</button><button class="lu-btn pri" data-perm="v" onclick="lunchCopyText()">카톡용 복사</button></div>
       <div class="lu-cap" id="luCap"></div>
     </div>
     <div id="lu-p-mon" style="display:none;">
-      <div class="lu-nav"><button class="lu-btn" onclick="lunchMonMove(-1)">‹</button><h3 id="luMonLbl2"></h3><button class="lu-btn" onclick="lunchMonMove(1)">›</button><button class="lu-btn" onclick="lunchMonExcel()">엑셀 내보내기</button><span class="lu-sum" id="luMonSum"></span></div>
+      <div class="lu-nav"><button class="lu-btn" onclick="lunchMonMove(-1)">‹</button><h3 id="luMonLbl2"></h3><button class="lu-btn" onclick="lunchMonMove(1)">›</button><button class="lu-btn" onclick="lunchMonExcel()">엑셀 내보내기</button><span id="luClose" class="lu-close"></span><span class="lu-sum" id="luMonSum"></span></div>
+      <div class="lu-set" id="luSet"><span class="k">업체</span><input id="luSetVendor" class="lu-btn" style="width:110px;"><span class="k">단가(VAT 포함)</span><input id="luSetPrice" type="number" class="lu-btn" style="width:90px;"><button class="lu-btn" data-perm="v" onclick="lunchSaveSet()">설정 저장</button><span class="h">바꾼 단가는 이후 신청분부터 적용, 이미 신청한 건은 신청 당시 단가로 정산</span></div>
       <div class="lu-tblwrap"><table id="luMonTable"><thead id="luMonHead"></thead><tbody id="luMonBody"></tbody><tfoot id="luMonFoot"></tfoot></table></div>
     </div>
   </div>
@@ -6633,7 +6637,7 @@ async function confirmMoveCopy(){
 /* ═══ 도시락 신청 (V20261125-02) ═══
    본사(KOREA)만. 착한밥집 6,500원(VAT 포함). 배달일 전날 14:00(한국시간)까지 신청·취소, 이후 누구도 수정 불가(DB 트리거 lunch_orders_cutoff 로도 막음).
    주말·공휴일·본사 휴무(통합일정표)는 신청 불가. 월집계 = 직원×일자 집계(정산 처리는 이후) */
-const LUNCH_PRICE=6500, LUNCH_VENDOR='착한밥집';
+let LUNCH_PRICE=6500, LUNCH_VENDOR='착한밥집';   // V20261125-06: lunch_settings(관리자 설정)에서 불러옴 — 주문 건마다 당시 단가 저장
 const LUNCH_HOL={'2026-01-01':'신정','2026-02-16':'설날','2026-02-17':'설날','2026-02-18':'설날','2026-03-02':'대체공휴일','2026-05-05':'어린이날','2026-05-25':'대체공휴일','2026-06-03':'지방선거','2026-08-17':'대체공휴일','2026-09-24':'추석','2026-09-25':'추석','2026-10-05':'대체공휴일','2026-10-09':'한글날','2026-12-25':'성탄절',
   '2027-01-01':'신정','2027-02-08':'설날','2027-02-09':'대체공휴일','2027-03-01':'삼일절','2027-05-05':'어린이날','2027-05-13':'부처님오신날','2027-08-16':'대체공휴일','2027-09-14':'추석','2027-09-15':'추석','2027-09-16':'추석','2027-10-04':'대체공휴일','2027-10-11':'대체공휴일','2027-12-27':'대체공휴일'};
 const LU_DOW=['일','월','화','수','목','금','토'];
@@ -6642,7 +6646,9 @@ function luIco(w){ return '<svg class="lu-ico" width="'+w+'" height="'+w+'" view
 let lunchMine={}, lunchMonth=null, lunchMonth2=null, luSubCur='apply', luBusy=false, luMonRows=[], luSortKey='dept', luSortAsc=true, luTimer=null;
 // V20261125-03: 시범 운영 — 우선 상무(empId 2)에게만 표시. 전체 공개 시 empId 조건만 빼면 본사(KOREA) 전체
 const LUNCH_PILOT=[2];
-function lunchOk(){ return !!(wfSession&&wfSession.empId&&wfSession.entity==='KOREA'&&LUNCH_PILOT.indexOf(wfSession.empId)>=0); }
+function luAuth(){ return window.SMERP_AUTH&&SMERP_AUTH.personal?SMERP_AUTH:null; }
+// 개인 계정 로그인 = 권한 관리 「도시락 신청(lunch)」 기준 / 공통 비밀번호 로그인 = 시범 명단
+function lunchOk(){ if(!(wfSession&&wfSession.empId&&wfSession.entity==='KOREA')) return false; const A=luAuth(); return A?A.can('v','lunch'):LUNCH_PILOT.indexOf(wfSession.empId)>=0; }
 function luKstNow(){ const d=new Date(Date.now()+9*3600000); return {ymd:d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1)+'-'+p2(d.getUTCDate()), min:d.getUTCHours()*60+d.getUTCMinutes()}; }
 function luAddDay(ds,n){ const a=ds.split('-'); const d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]+n)); return d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1)+'-'+p2(d.getUTCDate()); }
 function luDow(ds){ const a=ds.split('-'); return new Date(Date.UTC(+a[0],+a[1]-1,+a[2])).getUTCDay(); }
@@ -6657,6 +6663,7 @@ function luOffName(ds){
 async function lunchInit(){
   const b=document.getElementById('tab-lunch'); if(b) b.style.display=lunchOk()?'':'none';
   if(!lunchOk()||!SB) return;
+  try{ const st=await SB.from('lunch_settings').select('vendor,price').eq('id',1).maybeSingle(); if(st.data){ LUNCH_PRICE=st.data.price||LUNCH_PRICE; LUNCH_VENDOR=st.data.vendor||LUNCH_VENDOR; } }catch(e){}
   try{
     const {data,error}=await SB.from('lunch_orders').select('order_date,status').eq('employee_id',wfSession.empId).eq('status','주문').gte('order_date',luAddDay(luKstNow().ymd,-120)).limit(1000);
     if(error) throw error;
@@ -6675,7 +6682,7 @@ function lunchOpen(){
   clearInterval(luTimer); luTimer=setInterval(()=>{ if(currentTab!=='lunch'){ clearInterval(luTimer); return; } if(luSubCur==='apply') lunchRenderApply(); },60000);
 }
 // 관리자(전체 주문현황·월집계·정산) = 박정용 상무 + 재경팀 전체
-function lunchCanMon(){ return !!wfSession&&(wfSession.dept==='재경팀'||wfSession.empId===2); }
+function lunchCanMon(a){ const A=luAuth(); if(A) return A.can(a||'v','lunch_admin'); return !!wfSession&&(wfSession.dept==='재경팀'||wfSession.empId===2); }   // 권한 관리 「도시락 관리(lunch_admin)」: v 보기·u 단가 설정·f 월 확정
 function lunchSub(k){
   luSubCur=k;
   if((k==='day'||k==='mon')&&!lunchCanMon()) k='apply';
@@ -6782,7 +6789,7 @@ async function lunchDayRender(){
   try{
     const {data,error}=await SB.from('lunch_orders').select('emp_name,dept').eq('order_date',ds).eq('status','주문').order('dept').order('emp_name').limit(500);
     if(error) throw error;
-    const rows=data||[], closed=!luOpenDay(ds), by={};
+    const rows=data||[], closed=!luOpenDay(ds), by={}; luDayRows=rows;
     rows.forEach(r=>{ (by[r.dept||'-']=by[r.dept||'-']||[]).push(r.emp_name); });
     box.innerHTML=`<div class="t1">${LUNCH_VENDOR} 도시락 주문 · ㈜에스엠이코리아</div>`
       +`<div class="t2">${ds.slice(0,4)}년 ${+ds.slice(5,7)}월 ${+ds.slice(8,10)}일 (${LU_DOW[luDow(ds)]})</div>`
@@ -6790,6 +6797,53 @@ async function lunchDayRender(){
       +`<span class="st ${closed?'done':'wait'}">${closed?'마감 완료 (전날 14:00)':'마감 전 — 변동 가능'}</span>`
       +(rows.length?`<table>${Object.keys(by).map(dp=>`<tr><td class="d">${esc2(dp)} (${by[dp].length})</td><td>${by[dp].map(esc2).join(', ')}</td></tr>`).join('')}</table>`:'<div style="color:#9ca3af;">주문 없음</div>');
   }catch(e){ box.innerHTML='불러오기 오류: '+esc2(e.message||e); }
+}
+
+// 카톡용 복사 — 주문현황을 글로 복사
+let luDayRows=[];
+function lunchCopyText(){
+  const ds=document.getElementById('luDay').value; if(!ds) return;
+  const by={}; luDayRows.forEach(r=>{ (by[r.dept||'-']=by[r.dept||'-']||[]).push(r.emp_name); });
+  const tx=`[${LUNCH_VENDOR}] ${luMd(ds)} 도시락 ${luDayRows.length}개\n㈜에스엠이코리아`+(luDayRows.length?'\n'+Object.keys(by).map(dp=>`- ${dp} ${by[dp].length}: ${by[dp].join(', ')}`).join('\n'):'');
+  const done=()=>alert('복사했습니다');
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(done).catch(()=>luCopyFallback(tx,done)); else luCopyFallback(tx,done);
+}
+function luCopyFallback(tx,cb){ const ta=document.createElement('textarea'); ta.value=tx; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); cb(); }catch(e){ prompt('복사하세요',tx); } ta.remove(); }
+// 단가·업체 설정 (도시락 관리 u)
+async function lunchSaveSet(){
+  if(!lunchCanMon('u')){ alert('설정 권한이 없습니다'); return; }
+  const v=document.getElementById('luSetVendor').value.trim(), pr=+document.getElementById('luSetPrice').value;
+  if(!v||!(pr>0)){ alert('업체와 단가를 입력하세요'); return; }
+  const {error}=await SB.from('lunch_settings').update({vendor:v,price:pr,updated_by:wfSession.empId,updated_name:wfSession.name,updated_at:new Date().toISOString()}).eq('id',1);
+  if(error){ alert('저장 오류: '+error.message); return; }
+  LUNCH_VENDOR=v; LUNCH_PRICE=pr; alert('저장했습니다');
+}
+// 월 확정 (도시락 관리 f) — 월마감 정산 기준
+let luCloseRow=null;
+async function lunchCloseLoad(){
+  try{ const {data}=await SB.from('lunch_month_close').select('*').eq('ym',lunchMonth2).maybeSingle(); luCloseRow=data||null; }catch(e){ luCloseRow=null; }
+  lunchCloseDraw();
+}
+function lunchCloseDraw(){
+  const el=document.getElementById('luClose'), canF=lunchCanMon('f'), r=luCloseRow;
+  el.innerHTML=r?`<span class="bd">확정됨 · ${esc2(r.closed_name||'')} ${luDT(r.closed_at)} · ${r.cnt}개 ${Number(r.amt||0).toLocaleString()}원</span>`+(canF?`<button class="lu-btn" data-perm="v" onclick="lunchUnclose()">확정 취소</button>`:'')
+    :`<span class="bd no">미확정</span>`+(canF?`<button class="lu-btn pri" data-perm="v" onclick="lunchClose()">이 달 확정</button>`:'');
+  const s2=document.getElementById('luSet'); s2.style.display=lunchCanMon('u')?'':'none';
+  document.getElementById('luSetVendor').value=LUNCH_VENDOR; document.getElementById('luSetPrice').value=LUNCH_PRICE;
+}
+async function lunchClose(){
+  const cnt=luMonRows.reduce((a,r)=>a+r.cnt,0), amt=luMonRows.reduce((a,r)=>a+r.amt,0);
+  const a=lunchMonth2.split('-'), last=lunchMonth2+'-'+p2(new Date(Date.UTC(+a[0],+a[1],0)).getUTCDate());
+  if(!confirm((luKstNow().ymd<last?'아직 이 달이 끝나지 않았습니다.\n':'')+lunchMonth2+' 도시락 '+cnt+'개 · '+amt.toLocaleString()+'원으로 확정할까요?')) return;
+  const {error}=await SB.from('lunch_month_close').upsert({ym:lunchMonth2,cnt:cnt,amt:amt,closed_by:wfSession.empId,closed_name:wfSession.name,closed_at:new Date().toISOString()});
+  if(error){ alert('저장 오류: '+error.message); return; }
+  lunchCloseLoad();
+}
+async function lunchUnclose(){
+  if(!confirm('확정을 취소할까요?')) return;
+  const {error}=await SB.from('lunch_month_close').delete().eq('ym',lunchMonth2);
+  if(error){ alert('저장 오류: '+error.message); return; }
+  lunchCloseLoad();
 }
 // 월집계 — 직원 × 일자 (정산 처리는 이후)
 function lunchMonMove(n){ const a=lunchMonth2.split('-'); const d=new Date(Date.UTC(+a[0],+a[1]-1+n,1)); lunchMonth2=d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1); lunchMonRender(); }
@@ -6806,7 +6860,7 @@ async function lunchMonRender(){
     all.forEach(r=>{ const k=r.employee_id; const o=by[k]=by[k]||{name:r.emp_name,dept:r.dept||'',days:{},cnt:0,amt:0}; o.days[+String(r.order_date).slice(8,10)]=1; o.cnt++; o.amt+=(r.price||LUNCH_PRICE); });
     luMonRows=Object.values(by);
   }catch(e){ luMonRows=[]; alert('불러오기 오류: '+(e.message||e)); }
-  lunchMonDraw();
+  lunchMonDraw(); lunchCloseLoad();
 }
 function lunchMonDraw(){
   const a=lunchMonth2.split('-'), y=+a[0], m=+a[1], last=new Date(Date.UTC(y,m,0)).getUTCDate();

@@ -1868,6 +1868,7 @@ async function init(){
     me=emps.find(e=>e.name===curUser)||null;
   }catch(e){ showToast('직원 정보를 불러오지 못했습니다: '+e.message,'err'); }
   if(!me) showToast('직원관리에 등록되지 않은 사용자입니다. 조회만 가능합니다.','err');
+  { const rb=document.getElementById('mode-rule'); if(rb) rb.style.display=ruVisible()?'':'none'; }
   await loadAll();
   fillFilters();
   initColResize();
@@ -1886,7 +1887,7 @@ async function init(){
       else{ if(rpById[qwk]) bfWk(qwk); else showToast('연동된 주간업무 줄을 찾을 수 없습니다 (삭제되었을 수 있습니다)','err'); }
     },300);
   }
-  else{ let m=null; try{m=localStorage.getItem('report_mode');}catch(_){} if(m==='report'||m==='task'||m==='rule') switchMode(m); }
+  else{ let m=null; try{m=localStorage.getItem('report_mode');}catch(_){} if(m==='report'||m==='task'||(m==='rule'&&ruVisible())) switchMode(m); }
 }
 async function loadAll(){
   try{
@@ -3165,6 +3166,7 @@ function dvAddDays(s,n){const d=toDate(s);d.setDate(d.getDate()+n);return ymd(d)
 
 let tkTabCur='tkmaster';
 function switchMode(mode){
+  if(mode==='rule'&&!ruVisible()) mode='dir';
   if(curMode==='dir') dirTabCur=curTab; else if(curMode==='task') tkTabCur=curTab; else if(curMode==='report') dvTabCur=curTab;
   curMode=mode;
   try{localStorage.setItem('report_mode',mode);}catch(_){}
@@ -5727,7 +5729,10 @@ document.addEventListener('scroll',ev=>{if(acInput&&ev.target!==document.getElem
 const RU_CATS=[['근태','근태'],['복리후생','복리'],['급여','급여'],['총무','총무'],['안전','안전'],['보안','보안'],['기타','기타']];
 const RU_RANKS=['책임','수석','부장','이사','상무','전무','부사장','사장','대표이사'];
 let ruLoaded=false, ruAll=[], ruHist={}, ruEditId=null, ruSortKey='rule_no', ruSortAsc=true;
-function ruCan(){ return !!me&&(isAdmin()||RU_RANKS.indexOf(me.rank||'')>=0||isCEO(me)); }
+// V20261125-06: 개인 계정 로그인이면 권한 관리(company_rules) 기준, 공통 비밀번호 로그인이면 직급 기준
+function ruAuth(){ return window.SMERP_AUTH&&SMERP_AUTH.personal?SMERP_AUTH:null; }
+function ruCan(a){ const A=ruAuth(); if(A) return a?A.can(a,'company_rules'):(A.can('c','company_rules')||A.can('u','company_rules')); return !!me&&(isAdmin()||RU_RANKS.indexOf(me.rank||'')>=0||isCEO(me)); }
+function ruVisible(){ const A=ruAuth(); if(A) return A.can('v','company_rules'); return !me||me.entity==='KOREA'; }   // 사내기준은 본사 규정 — 해외법인에는 숨김
 async function ruLoad(){
   try{
     const res=await Promise.all([sbGetAll('company_rules','select=*&is_deleted=is.false&order=rule_no.asc'),sbGetAll('company_rules_hist','select=*&order=rule_id.asc,rev_no.desc')]);
@@ -5789,7 +5794,7 @@ function ruOpen(id){
   document.getElementById('ruFmBody').value=r?(r.body||''):'';
   document.getElementById('ruFmNote').value='';
   document.getElementById('ruFmNoteRow').style.display=r?'':'none';
-  document.getElementById('ruDelBtn').style.display=r?'':'none';
+  document.getElementById('ruDelBtn').style.display=(r&&ruCan('d'))?'':'none';
   if(!r) ruAutoNo();
   document.getElementById('ruOv').classList.add('open');
 }
@@ -5814,7 +5819,7 @@ async function ruSave(){
   }catch(e){ showToast('저장 오류: '+e.message,'err'); }
 }
 async function ruDel(){
-  if(!ruEditId) return;
+  if(!ruEditId||!ruCan('d')) return;
   if(!confirm('정말 삭제하시겠습니까?')) return;
   try{ await sbPatch('company_rules',ruEditId,{is_deleted:true,updated_by:me.id,updated_name:me.name,updated_at:new Date().toISOString()}); ruClose(); await ruLoad(); renderRule(); showToast('삭제했습니다'); }
   catch(e){ showToast('삭제 오류: '+e.message,'err'); }
