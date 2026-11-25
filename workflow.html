@@ -6804,7 +6804,7 @@ function lunchOpen(){
   lunchSub(luSubCur);
   clearInterval(luTimer); luTimer=setInterval(()=>{ if(currentTab!=='lunch'){ clearInterval(luTimer); return; } if(luSubCur==='apply') lunchRenderApply(); },60000);
 }
-// 관리자(전체 주문현황·월집계·정산) = 박정용 상무 + 재경팀 전체
+// 관리자(전체 주문현황·월집계·정산·단가 설정·월 확정) = 권한 관리 「도시락 관리」 승인(f) 하나로 관리
 function lunchCanMon(a){ const A=luAuth(); if(A) return A.can(a||'f','lunch_admin');   // V20261125-15: 관리자 메뉴는 「승인」 권한자만 보임
   return !!wfSession&&(wfSession.dept==='재경팀'||wfSession.empId===2); }   // 권한 관리 「도시락 관리(lunch_admin)」: v 보기·u 단가 설정·f 월 확정
 function lunchSub(k){
@@ -6967,7 +6967,7 @@ function lunchCopyText(){
 function luCopyFallback(tx,cb){ const ta=document.createElement('textarea'); ta.value=tx; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); cb(); }catch(e){ prompt('복사하세요',tx); } ta.remove(); }
 // 단가·업체 설정 (도시락 관리 u)
 async function lunchSaveSet(){
-  if(!lunchCanMon('u')){ alert('설정 권한이 없습니다'); return; }
+  if(!lunchCanMon('f')){ alert('설정 권한이 없습니다'); return; }
   const v=document.getElementById('luSetVendor').value.trim(), pr=+document.getElementById('luSetPrice').value;
   if(!v||!(pr>0)){ alert('업체와 단가를 입력하세요'); return; }
   const {error}=await SB.from('lunch_settings').update({vendor:v,price:pr,updated_by:wfSession.empId,updated_name:wfSession.name,updated_at:new Date().toISOString()}).eq('id',1);
@@ -6984,7 +6984,7 @@ function lunchCloseDraw(){
   const el=document.getElementById('luClose'), canF=lunchCanMon('f'), r=luCloseRow;
   el.innerHTML=r?`<span class="bd">확정됨 · ${esc2(r.closed_name||'')} ${luDT(r.closed_at)} · ${r.cnt}개 ${Number(r.amt||0).toLocaleString()}원</span>`+(canF?`<button class="lu-btn" data-perm="v" onclick="lunchUnclose()">확정 취소</button>`:'')
     :`<span class="bd no">미확정</span>`+(canF?`<button class="lu-btn pri" data-perm="v" onclick="lunchClose()">이 달 확정</button>`:'');
-  const s2=document.getElementById('luSet'); s2.style.display=lunchCanMon('u')?'':'none';
+  const s2=document.getElementById('luSet'); s2.style.display=lunchCanMon('f')?'':'none';   // V20261125-16: 도시락 관리는 승인 하나로 — 단가 설정도 승인권자
   document.getElementById('luSetVendor').value=LUNCH_VENDOR; document.getElementById('luSetPrice').value=LUNCH_PRICE;
 }
 async function lunchClose(){
