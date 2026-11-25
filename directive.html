@@ -896,7 +896,8 @@ tbody tr.row-done.selected td,.mt-table tbody tr.row-done.selected td{background
         <div class="form-row"><label class="form-label">적용범위</label><input class="form-input" id="ruFmScope" placeholder="본사(SMEKR)"></div>
       </div>
       <div class="form-row-2">
-                <div class="form-row"><label class="form-label">상태</label><select class="form-select" id="ruFmSt"><option>시행중</option><option>폐지</option></select></div>
+                <div class="form-row"><label class="form-label">문서구분<span>*</span></label><div style="display:flex;gap:6px;"><select class="form-select" id="ruFmType" onchange="ruTypeChg()" style="flex:1;min-width:0;"></select><input class="form-input" id="ruFmTypeNew" placeholder="새 구분 입력 (예: 안내사항)" style="display:none;flex:1;min-width:0;"></div></div>
+        <div class="form-row"><label class="form-label">상태</label><select class="form-select" id="ruFmSt"><option>시행중</option><option>폐지</option></select></div>
       </div>
       <div class="form-row"><label class="form-label">내용<span>*</span></label><textarea class="form-textarea" id="ruFmBody" style="min-height:180px;" placeholder="1. ...&#10;2. ..."></textarea></div>
     </div>
@@ -5724,6 +5725,11 @@ document.addEventListener('scroll',ev=>{if(acInput&&ev.target!==document.getElem
 /* ══════════════ 사내기준 (V20261125-01) ══════════════
    사내규정·기준(근태·복리후생 등)은 지시·보고와 달리 완료되지 않고 계속 적용된다 → 업무보고와 분리해 관리.
    company_rules(현재 내용). 개정이력·개정차수는 사용 안 함(2026-11-25, company_rules_hist 테이블은 보존). 등록·수정·삭제는 책임급 이상(상무 관리자 포함), 보기는 전 직원 */
+const RU_TYPES0=['공지사항','알림사항','전달사항'];
+/* 문서구분 — 기본 3개 + 사내기준에 저장된 구분(등록창 「＋ 직접 추가」로 늘어남) */
+function ruTypes(){ const a=RU_TYPES0.slice(); ruAll.forEach(r=>{ if(r.doc_type&&a.indexOf(r.doc_type)<0) a.push(r.doc_type); }); return a; }
+function ruFullTitle(r){ return (r.doc_type?r.doc_type+' - ':'')+(r.title||''); }
+function ruTypeChg(){ const sel=document.getElementById('ruFmType'), inp=document.getElementById('ruFmTypeNew'); const add=sel.value==='__add'; inp.style.display=add?'':'none'; if(add){ inp.value=''; inp.focus(); } }
 const RU_CATS=[['근태','근태'],['복리후생','복리'],['급여','급여'],['총무','총무'],['안전','안전'],['보안','보안'],['기타','기타']];
 const RU_RANKS=['책임','수석','부장','이사','상무','전무','부사장','사장','대표이사'];
 let ruLoaded=false, ruAll=[], ruEditId=null, ruSortKey='rule_no', ruSortAsc=true;
@@ -5746,7 +5752,7 @@ async function ruLoad(){
 let ruTable0=false;
 function renderRule(){
   const c=document.getElementById('ruCat').value, st=document.getElementById('ruSt').value, kw=document.getElementById('ruKw').value.trim().toLowerCase();
-  let rows=ruAll.filter(r=>(!c||r.category===c)&&(!st||r.status===st)&&(!kw||((r.title||'')+' '+(r.body||'')+' '+(r.rule_no||'')).toLowerCase().indexOf(kw)>=0));
+  let rows=ruAll.filter(r=>(!c||r.category===c)&&(!st||r.status===st)&&(!kw||((r.doc_type||'')+' '+(r.title||'')+' '+(r.body||'')+' '+(r.rule_no||'')).toLowerCase().indexOf(kw)>=0));
   const k=ruSortKey, dir=ruSortAsc?1:-1;
   rows.sort((a,b)=>{ const x=a[k]==null?'':a[k], y=b[k]==null?'':b[k]; return (typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y)))*dir; });
   document.querySelectorAll('#ruTable th.sortable').forEach(th=>{ const ic=th.querySelector('.sort-icon'); if(ic) ic.remove(); if(th.dataset.k===k){ const sp=document.createElement('span'); sp.className='sort-icon'; sp.textContent=ruSortAsc?'↑':'↓'; th.insertBefore(sp,th.querySelector('.col-resizer')); } });
@@ -5754,14 +5760,14 @@ function renderRule(){
   document.getElementById('ruBody').innerHTML=rows.length?rows.map(r=>{
     const off=r.status==='폐지', upc=!off&&r.effective_date&&r.effective_date>td;
     const stb=off?'<span class="ru-st off">폐지</span>':upc?'<span class="ru-st ru-upc">시행예정</span>':'<span class="ru-st on">시행중</span>';
-    return `<tr class="${off?'ru-off':''}" onclick="ruView(${r.id})"><td>${esc(r.rule_no)}</td><td>${esc(r.category)}</td><td title="${esc(r.title)}"><b>${esc(r.title)}</b></td><td>${esc(r.effective_date||'')}</td><td>${esc(r.scope||'')}</td><td>${stb}</td><td>${esc(tsDay(r.updated_at)||'')}</td>`
+    return `<tr class="${off?'ru-off':''}" onclick="ruView(${r.id})"><td>${esc(r.rule_no)}</td><td>${esc(r.category)}</td><td title="${esc(ruFullTitle(r))}"><b>${esc(ruFullTitle(r))}</b></td><td>${esc(r.effective_date||'')}</td><td>${esc(r.scope||'')}</td><td>${stb}</td><td>${esc(tsDay(r.updated_at)||'')}</td>`
       +`<td onclick="event.stopPropagation()"><button class="btn btn-outline" style="height:26px;padding:0 8px;font-size:12px;" onclick="ruPrint(${r.id})">PDF</button>${can?` <button class="btn btn-outline" style="height:26px;padding:0 8px;font-size:12px;" onclick="ruOpen(${r.id})">수정</button>`:''}</td></tr>`;
   }).join(''):'<tr><td colspan="8" style="text-align:center;color:#9ca3af;padding:30px;">등록된 사내기준이 없습니다</td></tr>';
   document.getElementById('ruCnt').textContent=rows.length+'건';
 }
 function ruView(id){
   const r=ruAll.find(x=>x.id===id); if(!r) return;
-  bfShow({head:esc(r.rule_no),sub:esc(r.category),pills:[r.status==='폐지'?'폐지':(r.effective_date&&r.effective_date>todayStr()?'시행예정':'시행중')],title:r.title,
+  bfShow({head:esc(r.rule_no),sub:esc(r.category),pills:[r.status==='폐지'?'폐지':(r.effective_date&&r.effective_date>todayStr()?'시행예정':'시행중')],title:ruFullTitle(r),
     cells:[['시행일',esc(r.effective_date||'')],['적용범위',esc(r.scope||'')]],
     boxes:[['내용',bfTxt(r.body)||'<div class="bf-content" style="color:#9ca3af;font-size:13px;">내용 없음</div>']],
     who:'등록 '+esc(r.created_name||'')+' · 최종수정 '+esc(r.updated_name||'')+' '+esc(fmtDT(r.updated_at)),
@@ -5783,6 +5789,9 @@ function ruOpen(id){
   document.getElementById('ruFmDate').value=r?(r.effective_date||''):'';
   document.getElementById('ruFmScope').value=r?(r.scope||''):'본사(SMEKR)';
   document.getElementById('ruFmSt').value=r?(r.status||'시행중'):'시행중';
+  const tsel=document.getElementById('ruFmType');
+  tsel.innerHTML=ruTypes().map(x=>`<option>${esc(x)}</option>`).join('')+'<option value="__add">＋ 직접 추가</option>';
+  tsel.value=r&&r.doc_type?r.doc_type:RU_TYPES0[0]; document.getElementById('ruFmTypeNew').style.display='none';
   document.getElementById('ruFmBody').value=r?(r.body||''):'';
   document.getElementById('ruDelBtn').style.display=(r&&ruCan('d'))?'':'none';
   if(!r) ruAutoNo();
@@ -5791,13 +5800,15 @@ function ruOpen(id){
 function ruClose(){ document.getElementById('ruOv').classList.remove('open'); ruEditId=null; }
 async function ruSave(){
   const v=x=>document.getElementById(x).value.trim();
-  const body={rule_no:v('ruFmNo'),category:v('ruFmCat'),title:v('ruFmTitle'),effective_date:v('ruFmDate')||null,scope:v('ruFmScope')||null,status:v('ruFmSt'),body:document.getElementById('ruFmBody').value.trim()};
+  const ty=document.getElementById('ruFmType').value==='__add'?v('ruFmTypeNew'):v('ruFmType');
+  const body={doc_type:ty,rule_no:v('ruFmNo'),category:v('ruFmCat'),title:v('ruFmTitle'),effective_date:v('ruFmDate')||null,scope:v('ruFmScope')||null,status:v('ruFmSt'),body:document.getElementById('ruFmBody').value.trim()};
+  if(!body.doc_type){ showToast('문서구분을 입력하세요','err'); return; }
   if(!body.rule_no||!body.title||!body.body){ showToast('기준번호·제목·내용을 입력하세요','err'); return; }
   if(ruAll.some(r=>r.rule_no===body.rule_no&&r.id!==ruEditId)){ showToast('같은 기준번호가 이미 있습니다','err'); return; }
   const now=new Date().toISOString();
   try{
     if(ruEditId){
-      const old=ruAll.find(x=>x.id===ruEditId), keys=['rule_no','category','title','effective_date','scope','status','body'];
+      const old=ruAll.find(x=>x.id===ruEditId), keys=['doc_type','rule_no','category','title','effective_date','scope','status','body'];
       if(!keys.some(k=>(old[k]||'')!==(body[k]||''))){ ruClose(); return; }
       await sbPatch('company_rules',old.id,Object.assign(body,{updated_by:me.id,updated_name:me.name,updated_at:now}));
     }else{
@@ -5813,20 +5824,33 @@ async function ruDel(){
   catch(e){ showToast('삭제 오류: '+e.message,'err'); }
 }
 function ruPrint(id){
+  /* (2026-11-25) 사내 공지사항 양식(A안) — 큰 제목=문서구분, 문서번호·발행일자·수신 / 선람·접수·지시·게시기간 / 제목 / 본문 / 시행일자·대표이사 직인 */
   const r=ruAll.find(x=>x.id===id); if(!r) return;
   const w=window.open('','_blank'); if(!w){ alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.'); return; }
-  const row=(k,val)=>`<tr><th>${k}</th><td>${esc(val||'-')}</td></tr>`;
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(r.rule_no)} ${esc(r.title)}</title><style>
-    body{font-family:'Noto Sans KR',sans-serif;color:#111827;margin:40px 48px;font-size:12pt;}
-    h1{font-size:20pt;text-align:center;margin:0 0 6px;} .co{text-align:center;color:#555;font-size:11pt;margin-bottom:24px;}
-    table{border-collapse:collapse;width:640px;margin:0 auto 20px;} th,td{border:1px solid #999;padding:7px 10px;font-size:11pt;text-align:left;} th{background:#f3f4f6;width:110px;}
-    .bd{white-space:pre-wrap;line-height:1.9;border:1px solid #999;padding:14px 18px;width:604px;margin:0 auto;min-height:200px;}
-    h2{font-size:12pt;width:640px;margin:24px auto 8px;} .ft{width:640px;margin:30px auto 0;text-align:right;color:#555;font-size:10pt;}
-    @media print{body{margin:18mm 16mm;}}</style></head><body>
-    <h1>${esc(r.title)}</h1><div class="co">㈜에스엠이코리아 사내기준 · ${esc(r.rule_no)}</div>
-    <table>${row('분류',r.category)}${row('시행일',r.effective_date)}${row('적용범위',r.scope)}${row('상태',r.status)}</table>
+  const ymd=d=>{ if(!d) return ''; const a=String(d).slice(0,10).split('-'); return a[0]+'년 '+a[1]+'월 '+a[2]+'일'; };
+  const big=String(r.doc_type||'공지사항').split('').join(' ');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(ruFullTitle(r))}</title><style>
+    @page{size:A4;margin:16mm 15mm 16mm;} *{box-sizing:border-box;}
+    body{font-family:'Noto Sans KR',sans-serif;color:#111;margin:0;}
+    .pg{width:180mm;margin:0 auto;}
+    h1{text-align:center;font-size:24pt;letter-spacing:12pt;margin:6mm 0 4mm;font-weight:700;}
+    .dl{border-top:3px double #111;border-bottom:1px solid #111;height:5px;margin-bottom:6mm;}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:6mm;}
+    .meta td{font-size:10.5pt;padding:2px 0;vertical-align:top;} .meta td:first-child{font-weight:700;width:24mm;white-space:nowrap;}
+    .meta{flex:1;min-width:0;} .ap{border-collapse:collapse;font-size:8.5pt;flex:none;} .ap td{border:1px solid #111;height:8mm;text-align:center;padding:0 4px;}
+    .tt{margin:8mm 0 5mm;border-bottom:2px solid #111;padding:3px 4px;font-size:12.5pt;} .tt b{letter-spacing:4pt;margin-right:4px;}
+    .bd{white-space:pre-wrap;font-size:11pt;line-height:1.75;}
+    .foot{margin-top:12mm;page-break-inside:avoid;} .ef{font-size:11.5pt;}
+    .sign{text-align:right;margin-top:8mm;font-size:10.5pt;} .sign span{display:inline-block;width:42mm;border-bottom:1px solid #111;text-align:center;color:#999;}
+    </style></head><body><div class="pg">
+    <h1>${esc(big)}</h1><div class="dl"></div>
+    <div class="top"><table class="meta"><tr><td>문서 번호:</td><td>SM-${esc(r.rule_no)}호</td></tr><tr><td>발행 일자:</td><td>${esc(ymd(r.updated_at||r.created_at))}</td></tr><tr><td>수&nbsp;&nbsp;&nbsp;&nbsp;신:</td><td>${esc(r.scope||'사내')} 전직원</td></tr></table>
+    <table class="ap"><tr><td style="width:12mm">선람</td><td style="width:16mm"></td><td style="width:11mm"></td><td style="width:15mm">지시</td><td style="width:34mm"></td></tr>
+    <tr><td>접수</td><td>일자<br>시간</td><td></td><td>게시기간</td><td></td></tr></table></div>
+    <div class="tt"><b>제 목 :</b>${esc(r.title||'')}</div>
     <div class="bd">${esc(r.body||'')}</div>
-    <div class="ft">출력일 ${esc(todayStr())}</div><script>window.onload=function(){window.print();}<\/script></body></html>`);
+    <div class="foot">${r.effective_date?`<div class="ef">시행일자 : ${esc(ymd(r.effective_date))}</div>`:''}<div class="sign">대표이사: <span>직인</span></div></div>
+    </div><script>window.onload=function(){window.print();}<\/script></body></html>`);
   w.document.close();
 }
 
