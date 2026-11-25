@@ -1819,6 +1819,7 @@ function pmRenderUsers(){
 const PM_OVS=[['SMECN','SMECN'],['SMEGLOBAL','SMETH'],['GSMEIN','SMEIN']];
 function pmOvsOn(u){return u.entity==='KOREA'&&pmScopeAll();}
 function pmOvsApplies(key){return !/^(mfg_|kpi_|lunch)/.test(key)&&!['dailyclose','company_rules'].includes(key);}   // V20261125-14: 사내기준·도시락도 본사 전용
+function pmHqOnly(key){return ['company_rules','lunch','lunch_admin'].includes(key);}   // V20261125-17: 본사 전용 화면 — 해외법인 직원·역할은 「—」
 function pmOvsHas(u,ent,key){const L=u.entities||[];return L.includes(ent+'|*')||L.includes(ent+'|'+key);}
 function pmLvTable(u){
   const role=(PM.data.roles||[]).find(r=>r.id===u.role_id);const allEnt=!!(role&&role.is_admin);
@@ -1839,6 +1840,8 @@ function pmLvTable(u){
     const can={none:true,view:acts.includes('v'),edit:/[cu]/.test(acts),del:acts.includes('d')};
     const diff=!!e.o;const first=s.grp!==lastG;
     h+=`<tr class="${first?'pm-gfirst':''}">`+(first?`<td class="pm-grp" rowspan="${span[s.grp]}">${_pe(s.grp)}</td>`:'')+`<td>${_pe(s.label)}${diff?' <span class="pm-own" title="기본 권한(부서)과 다르게 설정됨">개별</span>':''}</td>`;lastG=s.grp;
+    const hqX=u.entity!=='KOREA'&&pmHqOnly(s.key);
+    if(hqX){ h+=PM_LV4.map(()=>'<td class="c"><span class="pm-na" title="본사 전용 화면">—</span></td>').join('')+'<td class="c"><span class="pm-na" title="본사 전용 화면">—</span></td>'+(ovs?PM_OVS.map(()=>'<td class="c"><span class="pm-na">—</span></td>').join(''):'')+'</tr>'; return; }
     PM_LV4.forEach(([k])=>{
       h+=`<td class="c">${can[k]?`<input type="radio" name="pmlv_${s.key}" ${lv===k?'checked':''} onchange="pmSetLv(${u.emp_no},'${s.key}','${k}')">`:'<span class="pm-na" title="이 화면에 없는 기능">—</span>'}</td>`;});
     h+=`<td class="c">${acts.includes('f')?`<input type="checkbox" ${e.p.f?'checked':''} onchange="pmSetF(${u.emp_no},'${s.key}',this.checked)">`:'<span class="pm-na">—</span>'}</td>`;
@@ -1902,6 +1905,8 @@ function pmMatrix(mode,rp,ov,empNo){
   pmScreens().forEach(s=>{
     const r=rp[s.key]||{},o=ov?ov[s.key]:null;const roleLv=pmLvOf(r,s.actions);
     h+=`<tr class="${o?'pm-ov':''}"><td>${s.grp!==lastG?_pe(s.grp):''}</td><td>${_pe(s.label)}</td>`;lastG=s.grp;
+    const rEnt=mode==='role'?(((PM.data.roles||[]).find(x=>x.id===PM.selRole)||{}).entity):(u2=>u2?(u2.entity==='KOREA'?'KOREA':'OVERSEAS'):null)((PM.data.users||[]).find(x=>x.emp_no===empNo));
+    if(pmHqOnly(s.key)&&rEnt&&rEnt!=='KOREA'){ h+=(mode==='role'?'<td style="color:#4B5563;" title="본사 전용 화면">—</td>':'<td style="color:#4B5563;">—</td><td class="center">—</td><td>—</td>')+PM_ACT.map(()=>'<td class="center det" style="color:#cbd5e1;">—</td>').join('')+'</tr>'; return; }
     if(mode==='role'){
       h+=`<td>${pmLvSelect(s.key,s.actions,roleLv,'role',false)}</td>`;
       PM_ACT.forEach(([a])=>{h+=s.actions.indexOf(a)<0?'<td class="center det" style="color:#cbd5e1;">—</td>':`<td class="center det"><input type="checkbox" data-s="${s.key}" data-a="${a}" ${r[a]?'checked':''} onchange="pmDetChange('${s.key}','role')"></td>`;});

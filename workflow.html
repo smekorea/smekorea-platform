@@ -6771,7 +6771,9 @@ let lunchMine={}, lunchMonth=null, lunchMonth2=null, luSubCur='apply', luBusy=fa
 const LUNCH_PILOT=[2];
 function luAuth(){ return window.SMERP_AUTH&&SMERP_AUTH.personal?SMERP_AUTH:null; }
 // 개인 계정 로그인 = 권한 관리 「도시락 신청(lunch)」 기준 / 공통 비밀번호 로그인 = 시범 명단
-function lunchOk(){ if(!(wfSession&&wfSession.empId&&wfSession.entity==='KOREA')) return false; const A=luAuth(); return A?A.can('v','lunch'):LUNCH_PILOT.indexOf(wfSession.empId)>=0; }
+function lunchOk(){ if(!(wfSession&&wfSession.empId&&wfSession.entity==='KOREA')) return false; const A=luAuth(); if(A) return A.can('v','lunch');
+  // V20261125-17: 공통 비밀번호 로그인 — 2026-11-30 06:30(KST) 전체 공개 전까지는 시범 명단만
+  return Date.now()>=Date.parse('2026-11-30T06:30:00+09:00')||LUNCH_PILOT.indexOf(wfSession.empId)>=0; }
 function luKstNow(){ const d=new Date(Date.now()+9*3600000); return {ymd:d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1)+'-'+p2(d.getUTCDate()), min:d.getUTCHours()*60+d.getUTCMinutes()}; }
 function luAddDay(ds,n){ const a=ds.split('-'); const d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]+n)); return d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1)+'-'+p2(d.getUTCDate()); }
 function luDow(ds){ const a=ds.split('-'); return new Date(Date.UTC(+a[0],+a[1]-1,+a[2])).getUTCDay(); }
@@ -6806,7 +6808,7 @@ function lunchOpen(){
 }
 // 관리자(전체 주문현황·월집계·정산·단가 설정·월 확정) = 권한 관리 「도시락 관리」 승인(f) 하나로 관리
 function lunchCanMon(a){ const A=luAuth(); if(A) return A.can(a||'f','lunch_admin');   // V20261125-15: 관리자 메뉴는 「승인」 권한자만 보임
-  return !!wfSession&&(wfSession.dept==='재경팀'||wfSession.empId===2); }   // 권한 관리 「도시락 관리(lunch_admin)」: v 보기·u 단가 설정·f 월 확정
+  return !!wfSession&&[1,2,3,4,7].indexOf(wfSession.empId)>=0; }   // 공통 비밀번호 로그인: 사장님·박정용·김근복·이서연·조승연   // 권한 관리 「도시락 관리(lunch_admin)」: v 보기·u 단가 설정·f 월 확정
 function lunchSub(k){
   luSubCur=k;
   if((k==='day'||k==='mon')&&!lunchCanMon()) k='apply';
