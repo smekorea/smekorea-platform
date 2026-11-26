@@ -1,3 +1,10 @@
+/* (V20261126-04) 브라우저 탭 아이콘 — 전 화면 공통 (화면에 따로 지정한 아이콘이 없을 때만) */
+(function(){try{
+  if(document.querySelector('link[rel~="icon"]'))return;
+  var cs=document.currentScript,base=cs&&cs.src?cs.src:location.href;
+  var l=document.createElement('link');l.rel='icon';l.type='image/png';l.sizes='64x64';
+  l.href=new URL('icons/favicon-64.png?v=2',base).href;document.head.appendChild(l);
+}catch(e){}})();
 /* ============================================================================
    smerp-session.js v1.1 (2026-11-23) — 개인 계정 로그인 세션 공용 (전 화면 <head> 맨 앞)
    ── DB 단 차단(RLS) 이후: DB 요청마다 「로그인한 사람」 표시(Supabase 세션 토큰)를 붙여야 자료가 나온다
