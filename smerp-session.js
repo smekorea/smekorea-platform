@@ -1,3 +1,6 @@
+/* (V20261126-11) 태국법인 코드 SMEGLOBAL → SMETH 전환 — 이 PC에 저장된 예전 값도 SMETH로 바꿔 둠 */
+(function(){try{['sme_entity','wf_session','sme_user','sme_last_login','sme_perms'].forEach(function(k){
+  var v=localStorage.getItem(k); if(v&&v.indexOf('SMEGLOBAL')>=0) localStorage.setItem(k,v.split('SMEGLOBAL').join('SMETH'));});}catch(e){}})();
 /* (V20261126-04) 브라우저 탭 아이콘 — 전 화면 공통 (화면에 따로 지정한 아이콘이 없을 때만) */
 (function(){try{
   if(document.querySelector('link[rel~="icon"]'))return;

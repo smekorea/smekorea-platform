@@ -3599,7 +3599,7 @@ async function loadTeamTodos(force){
     if(todoCanPickTeam()&&!todoTeamList.length){
       const {data:emps}=await SB.from('employees').select('entity,dept').eq('active',true);
       const seen={}; (emps||[]).forEach(r=>{ if(!r.dept) return; const k=(r.entity||'KOREA')+'|'+r.dept; if(!seen[k]){ seen[k]=1; todoTeamList.push({entity:r.entity||'KOREA',dept:r.dept}); } });
-      const ord={KOREA:0,SMECN:1,SMEGLOBAL:2,SMETH:3,GSMEIN:4};
+      const ord={KOREA:0,SMECN:1,SMETH:2,GSMEIN:3};
       todoTeamList.sort((a,b)=>((ord[a.entity]??9)-(ord[b.entity]??9))||a.dept.localeCompare(b.dept,'ko'));
     }
     const {data,error}=await SB.from('cal_todos').select('*').eq('team_entity',tm.entity).eq('team_dept',tm.dept).order('created_at',{ascending:false});
@@ -4000,7 +4000,7 @@ let corpCalRecords=[];
 const CORP_CAL={
   HQ:{ko:'한국',color:'#B3261E',flag:'<rect width="36" height="24" fill="#fff"/><g transform="rotate(33.69 18 12)"><path d="M12 12a6 6 0 0 1 12 0z" fill="#CD2E3A"/><path d="M12 12a6 6 0 0 0 12 0z" fill="#0047A0"/><circle cx="15" cy="12" r="3" fill="#CD2E3A"/><circle cx="21" cy="12" r="3" fill="#0047A0"/></g>'},
   SMECN:{ko:'중국',color:'#2E6B4F',flag:'<rect width="36" height="24" fill="#EE1C25"/><polygon fill="#FFFF00" transform="translate(7 7) scale(4)" points="0,-1 0.225,-0.309 0.951,-0.309 0.363,0.118 0.588,0.809 0,0.382 -0.588,0.809 -0.363,0.118 -0.951,-0.309 -0.225,-0.309"/>'},
-  SMEGLOBAL:{ko:'태국',color:'#1B3A6B',flag:'<rect width="36" height="24" fill="#A51931"/><rect y="4" width="36" height="16" fill="#F4F5F8"/><rect y="8" width="36" height="8" fill="#2D2A4A"/>'},
+  SMETH:{ko:'태국',color:'#1B3A6B',flag:'<rect width="36" height="24" fill="#A51931"/><rect y="4" width="36" height="16" fill="#F4F5F8"/><rect y="8" width="36" height="8" fill="#2D2A4A"/>'},
   GSMEIN:{ko:'인도',color:'#C06414',flag:'<rect width="36" height="24" fill="#fff"/><rect width="36" height="8" fill="#FF9933"/><rect y="16" width="36" height="8" fill="#138808"/><circle cx="18" cy="12" r="3" fill="none" stroke="#000080" stroke-width=".8"/>'}
 };
 const CORP_DUTY_COLOR='#5B4B8A';
@@ -4013,7 +4013,7 @@ function corpLabel(r){
   return r.title||t('휴무');
 }
 function corpColor(r){ return r.type==='당직' ? CORP_DUTY_COLOR : ((CORP_CAL[r.entity]||{}).color||'#565C64'); }
-function myCorpCode(){ return ({KOREA:'HQ',SMECN:'SMECN',SMEGLOBAL:'SMEGLOBAL',GSMEIN:'GSMEIN'})[wfSession.entity||'']||'HQ'; }
+function myCorpCode(){ return ({KOREA:'HQ',SMECN:'SMECN',SMETH:'SMETH',GSMEIN:'GSMEIN'})[wfSession.entity||'']||'HQ'; }
 async function loadCorpCalRecords(){
   if(!SB) return;
   try{
@@ -4109,7 +4109,7 @@ async function loadDirectiveCalRecords(){
       var asg = asgBy[r.id]||[];
       // 담당부서 「전체」 지시는 같은 법인 전 직원에게 보인다(야유회 등 행사·일정)
       // 법인회의 지시: 담당부서 자리에 법인 이름이 들어간다(SMEIN(N)/SMECN/SMETH/법인전체 — 2026-10-21 변경)
-      var corpOf = {'GSMEIN':'SMEIN(N)','SMECN':'SMECN','SMEGLOBAL':'SMETH'}[myEntity];
+      var corpOf = {'GSMEIN':'SMEIN(N)','SMECN':'SMECN','SMETH':'SMETH'}[myEntity];
       var corpMine = (!!corpOf && r.owner_dept===corpOf) || (r.owner_dept==='법인전체' && myEntity!=='KOREA' && !!myEntity);
       var mine = asg.length ? asg.indexOf(myId)>=0 : (corpMine || ((r.entity||'')===myEntity && ((!!myDept && r.owner_dept===myDept) || r.owner_dept==='전체')));
       var issued = (r.issuer_id===myId);
@@ -5235,8 +5235,8 @@ async function onSelectAddNew(sel, type){
      dept:<법인>:<부서>  · emp:<직원id>  · corp:<법인>
    기존 dept/person/corp 기록은 그대로 판정하고, 수정할 때 토큰으로 옮겨 표시 */
 let SHARE_EMPS=null;
-const SHARE_CORP_ORDER=['SMECN','SMEGLOBAL','GSMEIN'];
-const SHARE_CORP_SHORT={KOREA:'SMEKR',SMECN:'SMECN',SMEGLOBAL:'SMETH',GSMEIN:'SMEIN'};
+const SHARE_CORP_ORDER=['SMECN','SMETH','GSMEIN'];
+const SHARE_CORP_SHORT={KOREA:'SMEKR',SMECN:'SMECN',SMETH:'SMETH',GSMEIN:'SMEIN'};
 const SHARE_HQ_DEPT_ORDER=['대표이사','상무이사','재경팀','개발기획팀','연구소','영업팀','자재구매팀','개발구매팀','출하팀','제조팀'];
 const SHARE_RANK_ORDER=['대표이사','법인장','부총경리','상무','이사','팀장','책임','과장','선임','사원'];
 async function ensureShareEmps(force){
@@ -5395,7 +5395,7 @@ const LINK_STAGES=['공급논의','견적제출','전산등록(HSMS)','단가합
 const LINK_NUM='①②③④⑤⑥⑦⑧';
 const LINK_DEPTS=['개발기획팀','자재구매팀','개발구매팀','출하팀','제조팀'];
 const LINK_CATS=['영업','구매','품질','재고','마감','사내','기타'];
-const LINK_CORP={'SMEIN(N)':'GSMEIN','SMECN':'SMECN','SMETH':'SMEGLOBAL'};
+const LINK_CORP={'SMEIN(N)':'GSMEIN','SMECN':'SMECN','SMETH':'SMETH'};
 const LINK_LABEL={directive:'지시',project:'프로젝트',weekly:'주간업무',weekly_row:'주간업무'};
 var linkData={};          // 종류별로 불러온 목록 (창을 열 때마다 새로 읽는다)
 var linkPreset=null;      // 수정 중인 일지에 이미 걸려 있는 연동 {type,refId,stage}
@@ -7502,8 +7502,8 @@ function setWfLang(lang){
   try{ if(document.getElementById('wfsettings-view').style.display!=='none') initWfSettingsView(); }catch(e){}
 }
 
-const WF_CORP_ENTITY_MAP = { SMEKR: 'KOREA', SMEIN: 'GSMEIN', SMETH: 'SMEGLOBAL', SMECN: 'SMECN' };
-const CORP_DISPLAY_LABEL = { KOREA: 'SMEKR (본사)', GSMEIN: 'SMEIN (인도)', SMEGLOBAL: 'SMETH (태국)', SMECN: 'SMECN (중국)' };
+const WF_CORP_ENTITY_MAP = { SMEKR: 'KOREA', SMEIN: 'GSMEIN', SMETH: 'SMETH', SMECN: 'SMECN' };
+const CORP_DISPLAY_LABEL = { KOREA: 'SMEKR (본사)', GSMEIN: 'SMEIN (인도)', SMETH: 'SMETH (태국)', SMECN: 'SMECN (중국)' };
 
 async function wfLoadEmployees() {
   if (!SB) return;
