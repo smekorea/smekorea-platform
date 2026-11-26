@@ -869,6 +869,8 @@ body.ts-vresizing{cursor:row-resize;user-select:none;}
 .lu-adm{margin-left:8px;padding-left:10px;border-left:1px solid var(--border);gap:4px;height:24px;}
 .lu-info{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 14px;margin-bottom:10px;font-size:var(--fs-sm);}
 .lu-info .lu-rule{font-size:12px;color:var(--text2);}
+.lu-info .lu-sep{color:#d1d5db;}
+@media screen and (max-width:768px){ .lu-info .lu-sep{display:none;} .lu-info>span:not(.lu-rule){flex-basis:100%;} }
 .lu-nav{gap:6px;margin-bottom:8px;min-height:32px;}
 .lu-nav h3{font-size:18px;font-weight:700;min-width:0;margin:0 4px;}
 .lu-btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:var(--fs-sm);background:var(--app-bg);color:var(--text1);}
@@ -6791,7 +6793,12 @@ function luKstNow(){ const d=new Date(Date.now()+9*3600000); return {ymd:d.getUT
 function luAddDay(ds,n){ const a=ds.split('-'); const d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]+n)); return d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1)+'-'+p2(d.getUTCDate()); }
 function luDow(ds){ const a=ds.split('-'); return new Date(Date.UTC(+a[0],+a[1]-1,+a[2])).getUTCDay(); }
 // 배달일 ds 의 신청·취소 가능 여부 = 지금(한국시간) < 전날 14:00
-function luOpenDay(ds){ const k=luKstNow(), prev=luAddDay(ds,-1); return k.ymd<prev||(k.ymd===prev&&k.min<14*60); }
+// V20261126: 마감 = 배달일 직전 근무일 14:00 (월요일분 = 금요일 14:00, 연휴 다음날분 = 연휴 전 마지막 근무일) — DB lunch_deadline()과 같은 기준
+function luDeadline(ds){ let q=luAddDay(ds,-1); for(let i=0;i<20&&luOffName(q);i++) q=luAddDay(q,-1); return q; }
+function luOpenDay(ds){ const k=luKstNow(), dl=luDeadline(ds); return k.ymd<dl||(k.ymd===dl&&k.min<14*60); }
+function luDayDiff(a,b){ const pa=a.split('-'),pb=b.split('-'); return Math.round((Date.UTC(+pb[0],+pb[1]-1,+pb[2])-Date.UTC(+pa[0],+pa[1]-1,+pa[2]))/86400000); }
+// 지금 신청·취소할 수 있는 가장 가까운 배달일 (근무일)
+function luNextOpen(){ const k=luKstNow(); let d=luAddDay(k.ymd,1); for(let i=0;i<20;i++){ if(!luOffName(d)&&luOpenDay(d)) return d; d=luAddDay(d,1); } return d; }
 function luOffName(ds){
   const w=luDow(ds); if(w===0||w===6) return w===0?'일요일':'토요일';
   if(LUNCH_HOL[ds]) return LUNCH_HOL[ds];
@@ -6801,6 +6808,7 @@ function luOffName(ds){
 async function lunchInit(){
   const b=document.getElementById('tab-lunch'); if(b) b.style.display=lunchOk()?'':'none';
   if(!lunchOk()||!SB) return;
+  try{ const hq=await SB.from('kr_holidays').select('d,name').limit(500); if(hq.data&&hq.data.length){ (hq.data).forEach(r=>{ LUNCH_HOL[String(r.d).slice(0,10)]=r.name; }); } }catch(e){}
   try{ const st=await SB.from('lunch_settings').select('vendor,price').eq('id',1).maybeSingle(); if(st.data){ LUNCH_PRICE=st.data.price||LUNCH_PRICE; LUNCH_VENDOR=st.data.vendor||LUNCH_VENDOR; } }catch(e){}
   try{
     const {data,error}=await SB.from('lunch_orders').select('order_date,status').eq('employee_id',wfSession.empId).eq('status','주문').gte('order_date',luAddDay(luKstNow().ymd,-120)).limit(1000);
@@ -6812,7 +6820,7 @@ async function lunchInit(){
 function lunchOpen(){
   if(!lunchOk()){ switchTab('cal'); return; }
   const k=luKstNow();
-  if(!lunchMonth){ const nx=luAddDay(k.ymd,1); lunchMonth=nx.slice(0,7); }
+  if(!lunchMonth){ lunchMonth=luNextOpen().slice(0,7); }
   if(!lunchMonth2) lunchMonth2=k.ymd.slice(0,7);
   const canMon=lunchCanMon(); document.getElementById('luAdmGrp').style.display=canMon?'':'none';
   if((luSubCur==='mon'||luSubCur==='day')&&!canMon) luSubCur='apply';
@@ -6834,7 +6842,8 @@ function lunchSub(k){
   try{ applyI18n(); }catch(e){}
 }
 // 주문현황 기본 날짜 = 내일부터 휴무일을 건너뛴 가장 가까운 배달일
-function luNextDeliver(){ let d=luAddDay(luKstNow().ymd,1); for(let i=0;i<10&&luOffName(d);i++) d=luAddDay(d,1); return d; }
+// 주문현황 기본 날짜 = 마감이 끝나 식당에 주문할 가장 가까운 배달일 (없으면 다음 배달일)
+function luNextDeliver(){ let d=luAddDay(luKstNow().ymd,1), first=null; for(let i=0;i<20;i++){ if(!luOffName(d)){ if(!first) first=d; if(!luOpenDay(d)) return d; else break; } d=luAddDay(d,1); } return first||d; }
 function lunchMove(n){ const a=lunchMonth.split('-'); const d=new Date(Date.UTC(+a[0],+a[1]-1+n,1)); lunchMonth=d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1); lunchRenderApply(); }
 function lunchRenderApply(){
   const k=luKstNow(), a=lunchMonth.split('-'), y=+a[0], m=+a[1];
@@ -6850,20 +6859,20 @@ function lunchRenderApply(){
     else if(open){ cls+=' open'+(on?' on':''); st=on?luIco(20)+'<span class="tx">주문</span>':'<span class="tx">+ 신청</span>'; }
     else{ cls+=' lock'+(on?' on':''); st=on?luIco(20)+'<span class="tx">확정</span>':'<span class="tx">마감</span>'; }
     if(ds===k.ymd) cls+=' today';
-    h+=`<div class="${cls}"${open?` onclick="lunchToggle('${ds}')"`:''} title="${open?(on?'눌러서 취소':'눌러서 신청'):(off||'마감 (전날 14:00까지)')}"><span class="n">${d}</span><span class="s">${st}</span></div>`;
+    h+=`<div class="${cls}"${open?` onclick="lunchToggle('${ds}')"`:''} title="${open?(on?'눌러서 취소':'눌러서 신청'):(off||'마감 (전 근무일 14:00까지)')}"><span class="n">${d}</span><span class="s">${st}</span></div>`;
   }
   const tail=(7-(first+last)%7)%7; for(let i=0;i<tail;i++) h+='<div class="lu-c blank"></div>';
   document.getElementById('luGrid').innerHTML=h;
   document.getElementById('luSum').innerHTML=`이 달 <b>${cnt}</b>개 · ${(cnt*LUNCH_PRICE).toLocaleString()}원`;
-  const mb=document.getElementById('luMbar'); if(mb) mb.innerHTML=`<span>${m}월 <b>${cnt}</b>개 · <b>${(cnt*LUNCH_PRICE).toLocaleString()}</b>원</span><span class="dl">마감 전날 14:00</span>`;
+  const mb=document.getElementById('luMbar'); if(mb) mb.innerHTML=`<span>${m}월 <b>${cnt}</b>개 · <b>${(cnt*LUNCH_PRICE).toLocaleString()}</b>원</span><span class="dl">마감 전 근무일 14:00</span>`;
   if(luSubCur!=='apply'&&mb) mb.style.visibility='hidden'; else if(mb) mb.style.visibility='';
-  // 안내 줄: 다음 마감 대상일과 남은 시간
-  const nx=luAddDay(k.ymd,k.min<14*60?1:2), left=k.min<14*60?14*60-k.min:24*60-k.min+14*60;
-  const nxOff=luOffName(nx);
+  // 안내 줄 (V20261126): 「다음 배달일」·「그 날의 신청·취소 마감」·「남은 시간」·「내 신청 여부」를 이름 붙여 표시
+  const nx=luNextOpen(), dl=luDeadline(nx), left=luDayDiff(k.ymd,dl)*1440+14*60-k.min;
+  const lh=Math.floor(left/60), lm=left%60, lt=(lh>=24?Math.floor(lh/24)+'일 '+(lh%24)+'시간':lh+'시간 ')+lm+'분';
   document.getElementById('luInfo').innerHTML=`<span>${luIco(18)} <b>${LUNCH_VENDOR}</b> 도시락 ${LUNCH_PRICE.toLocaleString()}원 (VAT 포함)</span>`
-    +`<span>${esc2(luMd(nx))} 도시락: ${nxOff?'<span style="color:#C8001E;">'+esc2(nxOff)+'</span>':(lunchMine[nx]?'<b>신청됨</b>':'미신청')}</span>`
-    +`<span>신청·취소 마감까지 <b>${Math.floor(left/60)}시간 ${left%60}분</b></span>`
-    +`<span class="lu-rule">날짜를 누르면 신청, 다시 누르면 취소됩니다. 배달일 전날 오후 2시가 지나면 신청·취소할 수 없습니다.</span>`;
+    +`<span class="lu-sep">|</span><span>다음 배달일 <b>${esc2(luMd(nx))}</b> — ${lunchMine[nx]?'<b>신청됨</b>':'<span style="color:#6b7280;">미신청</span>'}</span>`
+    +`<span class="lu-sep">|</span><span>신청·취소 마감 <b>${esc2(luMd(dl))} 오후 2시</b> (${lt} 남음)</span>`
+    +`<span class="lu-rule">날짜를 누르면 신청, 다시 누르면 취소됩니다. 마감은 배달일 바로 전 근무일 오후 2시입니다 (월요일 도시락 = 금요일 오후 2시, 연휴 다음 날 = 연휴 전 마지막 근무일 오후 2시).</span>`;
 }
 function esc2(s){ return typeof escapeHtml==='function'?escapeHtml(s):String(s||''); }
 function luMd(ds){ return (+ds.slice(5,7))+'/'+(+ds.slice(8,10))+' ('+LU_DOW[luDow(ds)]+')'; }
@@ -6875,10 +6884,10 @@ async function luSave(dates,order){
 }
 async function lunchToggle(ds){
   if(luBusy) return;
-  if(!luOpenDay(ds)){ alert('신청·취소 마감(전날 14:00)이 지났습니다'); lunchRenderApply(); return; }
+  if(!luOpenDay(ds)){ alert('신청·취소 마감(전 근무일 14:00)이 지났습니다'); lunchRenderApply(); return; }
   luBusy=true; const on=!!lunchMine[ds];
   try{ await luSave([ds],!on); if(on) delete lunchMine[ds]; else lunchMine[ds]=1; luToast(luMd(ds)+' '+(on?'취소됨':'신청됨')); }
-  catch(e){ alert(String(e.message||e).indexOf('마감')>=0?'신청·취소 마감(전날 14:00)이 지났습니다':'저장 오류: '+(e.message||e)); await lunchInit(); }
+  catch(e){ alert(String(e.message||e).indexOf('마감')>=0?'신청·취소 마감(전 근무일 14:00)이 지났습니다':'저장 오류: '+(e.message||e)); await lunchInit(); }
   luBusy=false; lunchRenderApply();
 }
 async function lunchBulk(order){
@@ -6938,7 +6947,7 @@ async function lunchDayRender(){
     box.innerHTML=`<div class="t1">${LUNCH_VENDOR} 도시락 주문 · ㈜에스엠이코리아</div>`
       +`<div class="t2">${ds.slice(0,4)}년 ${+ds.slice(5,7)}월 ${+ds.slice(8,10)}일 (${LU_DOW[luDow(ds)]})</div>`
       +`<div class="t3">총<b>${rows.length}</b>개 · ${(rows.length*LUNCH_PRICE).toLocaleString()}원</div>`
-      +`<span class="st ${closed?'done':'wait'}">${closed?'마감 완료 (전날 14:00)':'마감 전 — 변동 가능'}</span>`
+      +`<span class="st ${closed?'done':'wait'}">${closed?'마감 완료 (전 근무일 14:00)':'마감 전 — 변동 가능'}</span>`
       +(rows.length?`<table>${Object.keys(by).map(dp=>`<tr><td class="d">${esc2(dp)} (${by[dp].length})</td><td>${by[dp].map(esc2).join(', ')}</td></tr>`).join('')}</table>`:'<div style="color:#9ca3af;">주문 없음</div>');
   }catch(e){ box.innerHTML='불러오기 오류: '+esc2(e.message||e); }
 }
@@ -6962,7 +6971,7 @@ function lunchNavMonth(d){
 }
 function lunchNavToday(){
   const k=luKstNow();
-  if(luSubCur==='apply'){ lunchMonth=luAddDay(k.ymd,1).slice(0,7); lunchRenderApply(); }
+  if(luSubCur==='apply'){ lunchMonth=luNextOpen().slice(0,7); lunchRenderApply(); }
   else if(luSubCur==='my'){ lunchMyMonth=k.ymd.slice(0,7); lunchMyRender(); }
   else if(luSubCur==='mon'){ lunchMonth2=k.ymd.slice(0,7); lunchMonRender(); }
   else { document.getElementById('luDay').value=luNextDeliver(); lunchDayRender(); }
@@ -6973,7 +6982,7 @@ function lunchCopyText(){
   const ds=document.getElementById('luDay').value; if(!ds) return;
   const n=luDayRows.length;
   if(!n&&!confirm('이 날 주문이 0개입니다. 그래도 복사할까요?')) return;
-  if(n&&luOpenDay(ds)&&!confirm('아직 마감(전날 14:00) 전이라 수량이 바뀔 수 있습니다. 그래도 복사할까요?')) return;
+  if(n&&luOpenDay(ds)&&!confirm('아직 마감(전 근무일 14:00) 전이라 수량이 바뀔 수 있습니다. 그래도 복사할까요?')) return;
   // V20261125-10: 에스엠이코리아 → 식당 주문 문구
   const tx=`[도시락 주문] ㈜에스엠이코리아 → ${LUNCH_VENDOR}\n${luMd(ds)} 점심 도시락 ${n}개 주문드립니다.\n12시까지 배달 부탁드립니다.`;
   const done=()=>alert('복사했습니다');
