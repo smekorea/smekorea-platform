@@ -55,7 +55,7 @@
     ts=[].slice.call(front.querySelectorAll('text')); tb=[].slice.call(back.querySelectorAll('text'));  // (V20261126-13) 앞·뒤 두 벌 — 층 옮기기 없이 투명도만 바꿔 떨림 제거
   }
   function place(ph){
-    var base=ph*2*Math.PI;
+    var base=-ph*2*Math.PI;   // (V20261126-15) 시계방향 — 앞면 글자가 오른쪽→왼쪽으로 이동
     for(var i=0;i<ts.length;i++){
       var th=L[i].a+base,c=Math.cos(th),x=R*Math.sin(th),y=RY*c,fr=c>0;
       var sx=(c<0?-1:1)*Math.max(0.03,Math.abs(c));
