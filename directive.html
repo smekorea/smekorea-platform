@@ -5832,25 +5832,30 @@ async function ruDel(){
   catch(e){ showToast('삭제 오류: '+e.message,'err'); }
 }
 function ruPrint(id){
-  /* (2026-11-25) 사내 공지사항 양식(A안) — 큰 제목=문서구분, 문서번호·발행일자·수신 / 선람·접수·지시·게시기간 / 제목 / 본문 / 시행일자·대표이사 직인 */
+  /* (2026-11-25) 사내 공지사항 양식(A안) — 큰 제목=문서구분, 문서번호·발행일자·수신 / 선람·접수·지시·게시기간 / 제목 / 본문 / 시행일자·대표이사 직인
+     (2026-11-26) 여백·간격 축소 + 본문 글자크기 자동 한 장 맞춤(11pt→최소 9pt, 0.5pt 단위) + 상단 −/＋ 버튼(인쇄 시 숨김). 자동 인쇄 대신 「인쇄」 버튼 */
   const r=ruAll.find(x=>x.id===id); if(!r) return;
   const w=window.open('','_blank'); if(!w){ alert('팝업이 차단되어 새 탭을 열 수 없습니다.\n주소창의 팝업 차단 아이콘에서 허용해주세요.'); return; }
   const ymd=d=>{ if(!d) return ''; const a=String(d).slice(0,10).split('-'); return a[0]+'년 '+a[1]+'월 '+a[2]+'일'; };
   const big=String(r.doc_type||'공지사항').split('').join(' ');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(ruFullTitle(r))}</title><style>
-    @page{size:A4;margin:16mm 15mm 16mm;} *{box-sizing:border-box;}
+    @page{size:A4;margin:10mm 13mm 10mm;} *{box-sizing:border-box;}
     body{font-family:'Noto Sans KR',sans-serif;color:#111;margin:0;}
-    .pg{width:180mm;margin:0 auto;}
-    h1{text-align:center;font-size:24pt;letter-spacing:12pt;margin:6mm 0 4mm;font-weight:700;}
-    .dl{border-top:3px double #111;border-bottom:1px solid #111;height:5px;margin-bottom:6mm;}
+    .pg{width:184mm;margin:0 auto;}
+    .tb{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;background:#f3f4f6;border-bottom:1px solid #d1d5db;margin-bottom:6mm;font-size:13px;}
+    .tb button{height:30px;min-width:34px;padding:0 10px;border:1px solid #9ca3af;background:#fff;border-radius:4px;font-size:14px;cursor:pointer;font-family:inherit;}
+    .tb .pr{background:#ea6c1c;border-color:#ea6c1c;color:#fff;font-weight:700;} .tb #fsv{min-width:52px;text-align:center;font-weight:700;} .tb #pgv{color:#6b7280;font-size:12px;}
+    @media print{.tb{display:none;}}
+    h1{text-align:center;font-size:22pt;letter-spacing:12pt;margin:0 0 3mm;font-weight:700;}
+    .dl{border-top:3px double #111;border-bottom:1px solid #111;height:5px;margin-bottom:4mm;}
     .top{display:flex;justify-content:space-between;align-items:flex-start;gap:6mm;}
     .meta td{font-size:10.5pt;padding:2px 0;vertical-align:top;} .meta td:first-child{font-weight:700;width:24mm;white-space:nowrap;}
     .meta{flex:1;min-width:0;} .ap{border-collapse:collapse;font-size:8.5pt;flex:none;} .ap td{border:1px solid #111;height:8mm;text-align:center;padding:0 4px;}
-    .tt{margin:8mm 0 5mm;border-bottom:2px solid #111;padding:3px 4px;font-size:12.5pt;} .tt b{letter-spacing:4pt;margin-right:4px;}
-    .bd{white-space:pre-wrap;font-size:11pt;line-height:1.75;}
-    .foot{margin-top:12mm;page-break-inside:avoid;} .ef{font-size:11.5pt;}
-    .sign{text-align:right;margin-top:8mm;font-size:10.5pt;} .sign span{display:inline-block;width:42mm;border-bottom:1px solid #111;text-align:center;color:#999;}
-    </style></head><body><div class="pg">
+    .tt{margin:5mm 0 3mm;border-bottom:2px solid #111;padding:3px 4px;font-size:12.5pt;} .tt b{letter-spacing:4pt;margin-right:4px;}
+    .bd{white-space:pre-wrap;font-size:11pt;line-height:1.6;}
+    .foot{margin-top:6mm;page-break-inside:avoid;} .ef{font-size:11.5pt;}
+    .sign{text-align:right;margin-top:4mm;font-size:10.5pt;} .sign span{display:inline-block;width:42mm;border-bottom:1px solid #111;text-align:center;color:#999;}
+    </style></head><body><div class="tb"><span>본문 글자크기</span><button onclick="fsSet(fs-0.5)" title="작게">−</button><span id="fsv"></span><button onclick="fsSet(fs+0.5)" title="크게">＋</button><button onclick="fsFit()">한 장 맞춤</button><span id="pgv"></span><button class="pr" onclick="window.print()">🖨 인쇄</button></div><div class="pg" id="pg">
     <h1>${esc(big)}</h1><div class="dl"></div>
     <div class="top"><table class="meta"><tr><td>문서 번호:</td><td>SM-${esc(r.rule_no)}호</td></tr><tr><td>발행 일자:</td><td>${esc(ymd(r.updated_at||r.created_at))}</td></tr><tr><td>수&nbsp;&nbsp;&nbsp;&nbsp;신:</td><td>${esc(r.scope||'사내')} 전직원</td></tr></table>
     <table class="ap"><tr><td style="width:12mm">선람</td><td style="width:16mm"></td><td style="width:11mm"></td><td style="width:15mm">지시</td><td style="width:34mm"></td></tr>
@@ -5858,7 +5863,13 @@ function ruPrint(id){
     <div class="tt"><b>제 목 :</b>${esc(r.title||'')}</div>
     <div class="bd">${esc(r.body||'')}</div>
     <div class="foot">${r.effective_date?`<div class="ef">시행일자 : ${esc(ymd(r.effective_date))}</div>`:''}<div class="sign">대표이사: <span>직인</span></div></div>
-    </div><script>window.onload=function(){window.print();}<\/script></body></html>`);
+    </div><script>
+    var fs=11, PAGE=(297-20)*96/25.4*0.985;
+    function fsApply(){ var b=document.querySelector('.bd'); b.style.fontSize=fs+'pt'; b.style.lineHeight=(1.4+(fs-9)*0.1).toFixed(2); document.getElementById('fsv').textContent=fs+'pt'; var n=Math.ceil(document.getElementById('pg').offsetHeight/PAGE); document.getElementById('pgv').textContent='약 '+n+'장'; return n; }
+    function fsSet(v){ fs=Math.max(7,Math.min(14,Math.round(v*2)/2)); fsApply(); }
+    function fsFit(){ fs=11; while(fsApply()>1&&fs>9){ fs-=0.5; } fsApply(); }
+    (document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(fsFit);
+    <\/script></body></html>`);
   w.document.close();
 }
 
