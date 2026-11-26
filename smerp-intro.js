@@ -48,7 +48,7 @@
     sp=document.createElement('div');
     sp.id='smeIntro';
     sp.innerHTML='<div class="sg no-i18n" translate="no">'+svg+'</div><div class="wm no-i18n" translate="no">SMEKOREA</div>'+
-      '<div class="ent no-i18n" translate="no"><b>SMEKR</b><i>·</i>SMECN<i>·</i>SMETH<i>·</i>SMEIN</div><div class="go no-i18n" translate="no">CLICK</div>';
+      '<div class="ent no-i18n" translate="no"><b>SMEKR</b><i>·</i>SMECN<i>·</i>SMETH<i>·</i>SMEIN</div><div class="go no-i18n" translate="no">LOGIN</div>';
     document.body.appendChild(sp);
     sp.addEventListener('click',function(){ if(typeof window.openWithPW==='function') window.openWithPW(''); });
     back=sp.querySelector('#siBack'),front=sp.querySelector('#siFront');
