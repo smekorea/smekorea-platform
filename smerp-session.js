@@ -6,7 +6,7 @@
   if(document.querySelector('link[rel~="icon"]'))return;
   var cs=document.currentScript,base=cs&&cs.src?cs.src:location.href;
   var l=document.createElement('link');l.rel='icon';l.type='image/png';l.sizes='64x64';
-  l.href=new URL('icons/favicon-64.png?v=2',base).href;document.head.appendChild(l);
+  l.href=new URL('icons/favicon-64.png?v=3',base).href;document.head.appendChild(l);
 }catch(e){}})();
 /* ============================================================================
    smerp-session.js v1.1 (2026-11-23) — 개인 계정 로그인 세션 공용 (전 화면 <head> 맨 앞)
