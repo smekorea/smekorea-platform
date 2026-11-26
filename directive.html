@@ -4398,6 +4398,12 @@ function tkCanAdmin(){ return !!me&&(canDecide()||me.dept===DV_DEPT); }
 // v3.51(B안): 추진과제 등록은 누구나(주관부서 = 본인 부서), 수정·삭제는 결재권자·개발기획팀 또는 주관부서
 function tkCanProj(p){ return !!me&&(tkCanAdmin()||!p||p.owner_dept===me.dept); }
 function tkCanEdit(t){ const pj=tkCur(); return !!me&&(tkCanAdmin()||(t&&(t.owner_id===me.id||t.owner_name===me.name||t.owner_dept===me.dept))||(!t&&pj&&pj.owner_dept===me.dept)); }
+/* V20261126-01: 활동(코멘트) 권한 확대 — 같은 분야 세부과제의 담당자·담당부서도 그 분야 모든 세부과제에 활동을 남길 수 있다.
+   담당자 칸에 「사장님/박정용/전형우」처럼 여러 이름이 있으면 한 사람씩 인정. 남이 쓴 활동 수정·세부과제/분야 수정 권한은 그대로 */
+function tkNames(s){ return String(s||'').split(/[\/,·\s]+/).filter(Boolean); }
+function tkIsOwner(t){ return !!me&&!!t&&(t.owner_id===me.id||tkNames(t.owner_name).indexOf(me.name)>=0||(!!t.owner_dept&&t.owner_dept===me.dept)); }
+function tkCanLog(t){ if(tkCanEdit(t)) return true; if(!me||!t) return false; return tkItems.some(x=>x.project_id===t.project_id&&(x.area||'')===(t.area||'')&&!x.is_deleted&&tkIsOwner(x)); }
+function tkCanLogEdit(t,lg){ if(!lg) return tkCanLog(t); if(tkCanEdit(t)) return true; return !!me&&(lg.writer_id===me.id||lg.employee_id===me.id); }
 function tkD(s){ return s?toDate(s):null; }
 function tkLate(t){ return !t.done_date&&t.status!=='완료'&&t.status!=='Drop'&&t.target_date&&t.target_date<todayStr(); }
 function tkStLabel(t){ return t.done_date||t.status==='완료'?'완료':tkLate(t)?'지연':(t.status||'준비'); }
@@ -4588,7 +4594,7 @@ function bfTask(id){
   const logs=it?(dvLogsBy[it.id]||[]).slice().sort((a,b)=>String(b.log_date||'').localeCompare(String(a.log_date||''))):[];
   const pg=(t.done_date||t.status==='완료')?100:(t.progress||0), st=tkStLabel(t);
   const btns=[];
-  if(t.dev_item_id&&tkCanEdit(t)) btns.push(['＋ 활동',`bfClose();tlOpen(null,${t.dev_item_id})`]);
+  if(t.dev_item_id&&tkCanLog(t)) btns.push(['＋ 활동',`bfClose();tlOpen(null,${t.dev_item_id})`]);
   if(t.dev_item_id) btns.push(['세부진척현황 보기',`bfClose();tkGoLog(${t.dev_item_id})`]);
   bfShow({head:'세부과제',sub:pj.name||'',pills:[st,pg+'%'],
     title:t.title||'(이름 없음)',
@@ -4725,7 +4731,7 @@ function renderTkLog(){
     if(a!==lastA){ lead+=`<td class="dv-v" rowspan="${aRows[a]}" style="vertical-align:top;"><div class="dv-stk">${esc(a||'(분야 없음)')}</div></td>`; lastA=a; }
     const pg=(t.done_date||t.status==='완료')?100:(t.progress||0);
     const itemCells=`<td class="dv-ti" rowspan="${rows}" onclick="bfTask(${t.id})" title="눌러서 내용 보기"><div class="dv-stk">${esc(t.title||'')}<span class="tk-stb tk-st-${tkStLabel(t)}" style="margin-left:4px;">${tkStLabel(t)}</span><span style="font-size:11px;color:#6b7280;margin-left:4px;">${pg}%</span></div></td><td rowspan="${rows}">${esc(t.owner_name||'')}</td>`;
-    const tail=`<td rowspan="${rows}">${ed?`<button class="btn btn-outline mt-btn" onclick="tlOpen(null,${it.id})">＋ 활동</button>`:''}</td>${tkHide?'':`<td class="tk-tl-c" rowspan="${rows}">${tkBarHtml(t,R,pj,dots)}</td>`}`;
+    const tail=`<td rowspan="${rows}">${(ed||tkCanLog(t))?`<button class="btn btn-outline mt-btn" onclick="tlOpen(null,${it.id})">＋ 활동</button>`:''}</td>${tkHide?'':`<td class="tk-tl-c" rowspan="${rows}">${tkBarHtml(t,R,pj,dots)}</td>`}`;
     if(!x.logs.length){ h+=`<tr class="g1">${lead}${itemCells}<td class="dv-d">-</td><td></td><td style="color:#9aa1ab;">활동 기록 없음</td><td></td><td></td><td></td>${tail}</tr>`; return; }
     x.logs.forEach((l,ix)=>{ n++;
       h+=`<tr class="dv-log${ix===0?' g1':''}">${ix===0?lead+itemCells:''}<td class="dv-d">${esc(l.log_date?l.log_date.slice(2).replace(/-/g,'.'):(l.date_text||'-'))}</td><td>${whoHtml(rpLogWho(l),l)}</td>
@@ -4748,7 +4754,7 @@ function tlOpen(logId,devId){
   const pj=devId?tlTask(devId).p:tkCur();
   if(!pj){ showToast('추진과제를 먼저 선택하세요','err'); return; }
   const tt=devId?tlTask(devId).t:null;
-  if(!tkCanEdit(tt)){ showToast('활동 기록은 담당자·담당부서·주관부서와 결재권자·개발기획팀만 할 수 있습니다','err'); return; }
+  if(!tkCanLogEdit(tt,lg)){ showToast(lg?'다른 사람이 쓴 활동은 수정할 수 없습니다':'활동 기록은 같은 분야 세부과제 담당자·담당부서와 결재권자·개발기획팀만 할 수 있습니다','err'); return; }
   tlEdit=lg||null; tlItemId=devId||null;
   const g=k=>document.getElementById(k);
   g('tlTitle').textContent=lg?'활동 수정':'활동 기록';
@@ -4766,7 +4772,7 @@ function tlOpen(logId,devId){
 }
 function tlFillItems(){
   const pj=tkCur(), a=document.getElementById('tlArea').value;
-  const its=tkItems.filter(t=>pj&&t.project_id===pj.id&&t.dev_item_id&&(!a||t.area===a)&&tkCanEdit(t));
+  const its=tkItems.filter(t=>pj&&t.project_id===pj.id&&t.dev_item_id&&(!a||t.area===a)&&tkCanLog(t));
   document.getElementById('tlItem').innerHTML='<option value="">세부과제 선택</option>'+its.map(t=>`<option value="${t.dev_item_id}">${a?'':esc(t.area||'')+' › '}${esc(t.title)}</option>`).join('');
   tlItemChange();
 }
@@ -5586,7 +5592,7 @@ function bfLog(id){
   const it=dvIById[l.item_id]||(dvAllI||[]).find(x=>x.id===l.item_id)||{}, tk=it.kind===TK_KIND;
   const tt=tk?tlTask(it.id):null, inCur=dvLogs.some(x=>x.id===id);
   let edit=null;
-  if(tk){ if(tkCanEdit(tt&&tt.t)) edit=()=>tlOpen(id); }
+  if(tk){ if(tkCanLogEdit(tt&&tt.t,l)) edit=()=>tlOpen(id); }
   else if(dvCanEdit()) edit=inCur?()=>dvOpenLog(id):()=>dvOpenItem(it.id);
   bfShow({head:l.log_date?bfDay(l.log_date):(l.date_text||''),pills:[tk?'추진과제':'세부 진척현황',l.done_state],
     title:it.title||'(이름 없음)',
