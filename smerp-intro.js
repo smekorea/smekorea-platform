@@ -9,10 +9,10 @@
     '#smeIntro{position:fixed;inset:0;z-index:190;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:opacity .5s;user-select:none}'+
     '#smeIntro.off{opacity:0;pointer-events:none}'+
     '#smeIntro .sg{width:312px;height:312px;margin-top:-52px;opacity:0;transform:scale(.92);transition:opacity .7s,transform 1s cubic-bezier(.2,.8,.2,1)}'+
-    '#smeIntro .wm{margin-top:30px;font-family:\'Noto Sans KR\',sans-serif;font-weight:900;font-size:21px;letter-spacing:5px;padding-left:5px;color:#000;opacity:0;transition:opacity .7s .45s}'+
-    '#smeIntro .ent{margin-top:10px;font-family:\'Noto Sans KR\',sans-serif;font-size:15.5px;letter-spacing:.3px;color:#9CA3AF;white-space:nowrap;opacity:0;transition:opacity .7s .6s}'+
+    '#smeIntro .wm{margin-top:30px;font-family:\'Noto Sans KR\',sans-serif;font-weight:900;font-size:25px;letter-spacing:6px;padding-left:6px;color:#000;opacity:0;transition:opacity .7s .45s}'+
+    '#smeIntro .ent{margin-top:10px;font-family:\'Noto Sans KR\',sans-serif;font-size:18.6px;letter-spacing:.3px;color:#9CA3AF;white-space:nowrap;opacity:0;transition:opacity .7s .6s}'+
     '#smeIntro .ent b{font-weight:400;color:#6B7280}#smeIntro .ent i{font-style:normal;margin:0 4px;color:#D1D5DB}'+
-    '#smeIntro .go{margin-top:34px;font-family:\'Noto Sans KR\',sans-serif;font-size:17px;color:#D32F2F;letter-spacing:.5px;opacity:0;transition:opacity .7s .8s}'+
+    '#smeIntro .go{margin-top:36px;font-family:\'Noto Sans KR\',sans-serif;font-size:20px;font-weight:700;color:#D32F2F;letter-spacing:4px;padding-left:4px;opacity:0;transition:opacity .7s .8s}'+
     '#smeIntro.on .sg{opacity:1;transform:none}#smeIntro.on .wm,#smeIntro.on .ent{opacity:1}#smeIntro.on .go{opacity:1;animation:siBlink 2.2s ease-in-out 1.6s infinite}'+
     '@keyframes siBlink{0%,100%{opacity:1}50%{opacity:.35}}'+
     'body.sme-intro-on .overlay{background:rgba(0,0,0,.28)}';
@@ -48,7 +48,7 @@
     sp=document.createElement('div');
     sp.id='smeIntro';
     sp.innerHTML='<div class="sg no-i18n" translate="no">'+svg+'</div><div class="wm no-i18n" translate="no">SMEKOREA</div>'+
-      '<div class="ent no-i18n" translate="no"><b>SMEKR</b><i>·</i>SMECN<i>·</i>SMETH<i>·</i>SMEIN</div><div class="go" data-i18n="클릭하여 시작">클릭하여 시작</div>';
+      '<div class="ent no-i18n" translate="no"><b>SMEKR</b><i>·</i>SMECN<i>·</i>SMETH<i>·</i>SMEIN</div><div class="go no-i18n" translate="no">CLICK</div>';
     document.body.appendChild(sp);
     sp.addEventListener('click',function(){ if(typeof window.openWithPW==='function') window.openWithPW(''); });
     back=sp.querySelector('#siBack'),front=sp.querySelector('#siFront');
