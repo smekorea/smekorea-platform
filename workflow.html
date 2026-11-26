@@ -2521,7 +2521,7 @@ var RD_LEGS={'상복공원주차장>태봉기사식당':[20,20],'새롬아이포
 var rdPlaces={}, rdLegs={};
 function rdMyName(){ return (wfSession&&wfSession.name)||''; }
 function rdNorm(x){ return String(x||'').replace(/\s+/g,'').replace(/^고성/,''); }
-function rdLegKey(a,b){ var x=rdNorm(a), y=rdNorm(b); return x<y?x+'>'+y:y+'>'+x; }   // V20261126-12 반대 방향도 같은 구간
+function rdLegKey(a,b){ var x=rdNorm(a), y=rdNorm(b); return x<y?x+'>'+y:y+'>'+x; }   // V20261126-16 반대 방향도 같은 구간
 function onActionChange(){
   var on=document.getElementById('dm-action').value==='라운딩', box=document.getElementById('dm-round-row');
   if(!box) return; box.style.display=on?'':'none';
@@ -2579,7 +2579,7 @@ async function rdLoadNames(){
       if(x.kind==='이동'&&ab.length===2){ if(x.km!=null&&x.min!=null) rdLegs[rdLegKey(ab[0],ab[1])]=[+x.km,+x.min]; else if(m) rdLegs[rdLegKey(ab[0],ab[1])]=[+m[1],+m[2]]; }
     });
   });
-  // V20261126-12 구간 거리·시간 공용 기록(wf_round_leg) — 본사 전원이 입력한 최근 값
+  // V20261126-16 구간 거리·시간 공용 기록(wf_round_leg) — 본사 전원이 입력한 최근 값
   if(SB){ try{ var lq=await SB.from('wf_round_leg').select('place_a,place_b,km,min'); ((lq&&lq.data)||[]).forEach(function(l){ if(l.km!=null||l.min!=null) rdLegs[rdLegKey(l.place_a,l.place_b)]=[l.km==null?null:+l.km,l.min==null?null:+l.min]; }); }catch(e){ console.warn('wf_round_leg',e); } }
   if(rdEmps===null&&SB){ rdEmps=[]; try{ var q=await SB.from('employees').select('name,entity').eq('active',true).order('emp_no'); rdEmps=((q&&q.data)||[]).filter(function(x){ return x.entity==='KOREA'; }).map(function(x){ return x.name; }); }catch(e){ console.warn(e); } }
   (rdEmps||[]).forEach(function(n){ names[n]=1; if(!rdOrgOf[n]) rdOrgOf[n]='SME'; });
@@ -2602,7 +2602,7 @@ function rdPlanRender(){
   document.querySelectorAll('#dm-rd-plan .rp-k').forEach(function(sel){ sel.onchange=function(){ rdPlanKeep(); rdPlanRender(); }; });
   rdSumShow();
 }
-/* V20261126-12 이동 거리·시간 — 숫자 정리 · 당일 합계 · 공용 기록 저장 */
+/* V20261126-16 이동 거리·시간 — 숫자 정리 · 당일 합계 · 공용 기록 저장 */
 function rdNum(v){ v=String(v==null?'':v).replace(/[^0-9.]/g,''); return v===''||!isFinite(+v)?null:+v; }
 function rdSum(plan){ var km=0, mi=0, n=0; (plan||[]).forEach(function(x){ if(x.kind!=='이동') return; var a=rdNum(x.km), b=rdNum(x.min); if(a!=null){ km+=a; n++; } if(b!=null){ mi+=b; n++; } }); return n?{km:Math.round(km*10)/10,min:Math.round(mi)}:null; }
 function rdSumTxt(sm){ if(!sm) return ''; var h=Math.floor(sm.min/60), m=sm.min%60; return '총 이동 '+sm.km+'km · '+(h?(h+'시간 '+(m?m+'분':'')).trim():m+'분'); }
@@ -6579,7 +6579,7 @@ async function saveDiary(){
   };
   obj.round_info = obj.action_type==='라운딩' ? rdRead() : null;   // 2026-11-03 라운딩 정보
   if(obj.round_info===false) return;
-  if(obj.round_info) rdSaveLegs(obj.round_info);   // V20261126-12 구간 거리·시간 공용 기록
+  if(obj.round_info) rdSaveLegs(obj.round_info);   // V20261126-16 구간 거리·시간 공용 기록
   if(diaryCopyOrigin){ obj.origin=diaryCopyOrigin; }
 
   // 공유 처리 (선택 공유 V20261118-05)
