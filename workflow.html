@@ -931,6 +931,13 @@ body.ts-vresizing{cursor:row-resize;user-select:none;}
 #luMonTable th.dd{background:#FDE7D3;color:#111827;border-right:1px solid #EFC39C;}
 #luMonTable th.dd.we{color:#C8001E;}
 #luMonTable tfoot td{background:#FFF4EA;}
+/* V20261126-07: 신청 달력 — 날짜는 오른쪽 위, 상태는 칸 가운데, 마감 진하게 */
+.lu-c{justify-content:flex-start;}
+.lu-c .n{align-self:flex-end;}
+.lu-c .s{flex:1;display:flex;align-items:center;justify-content:center;}
+.lu-c.lock:not(.on):not(.off) .s{color:#4B5563;font-weight:700;}
+.lu-c.off .s{font-weight:700;font-size:12px;}
+.lu-c.today .n{align-self:flex-end;}
 #luToast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;font-size:14px;font-weight:600;padding:10px 20px;border-radius:22px;opacity:0;pointer-events:none;transition:all .2s;z-index:9999;}
 #luToast.on{opacity:.92;transform:translateX(-50%) translateY(0);}
 /* 휴대폰 (V20261125-08) — 현장 직원 사용 기준: 한 손 터치, 큰 칸, 한 화면에 한 달 */
@@ -955,14 +962,13 @@ body.ts-vresizing{cursor:row-resize;user-select:none;}
   .lu-grid{border-radius:10px;}
   .lu-dh{padding:6px 0;font-size:12px;}
   .lu-c{height:auto;min-height:62px;padding:5px 2px 6px;align-items:center;}
-  .lu-c .n{font-size:14px;align-self:flex-start;margin-left:3px;}
+  .lu-c .n{font-size:14px;align-self:flex-end;margin-right:3px;}
   .lu-c .s{line-height:1;min-height:26px;}
   .lu-c .s .tx{display:none;}            /* 글자는 숨기고 아이콘·기호만 */
-  .lu-c.off:not(.we) .s .tx{display:inline;font-size:9.5px;line-height:1.2;text-align:center;word-break:keep-all;}
+  .lu-c.off .s .tx,.lu-c.lock:not(.on) .s .tx{display:inline;font-size:10.5px;font-weight:700;line-height:1.2;text-align:center;}
   .lu-c .s .lu-ico{width:26px;height:26px;}
   .lu-c.open .s::before{content:'+';font-size:22px;color:#e5e7eb;font-weight:300;}
   .lu-c.open.on .s::before{content:none;}
-  .lu-c.lock:not(.on):not(.off) .s::before{content:'·';font-size:18px;color:#d1d5db;}
   .lu-c.today .n{padding:0 6px;}
   .lu-mbar{display:flex!important;}
   .lu-cap{padding:16px 16px;max-width:none;border-radius:12px;}
@@ -6855,7 +6861,7 @@ function lunchRenderApply(){
     const ds=y+'-'+p2(m)+'-'+p2(d), on=!!lunchMine[ds], off=luOffName(ds), open=!off&&luOpenDay(ds);
     if(on) cnt++;
     let cls='lu-c', st='';
-    if(off&&!on){ cls+=' off lock'+((luDow(ds)===0||luDow(ds)===6)?' we':''); st='<span class="tx">'+esc2(off)+'</span>'; }
+    if(off&&!on){ cls+=' off lock'+((luDow(ds)===0||luDow(ds)===6)?' we':''); st='<span class="tx">휴무</span>'; }   // V20261126-07: 휴일은 「휴무」(이름은 마우스 올리면)
     else if(open){ cls+=' open'+(on?' on':''); st=on?luIco(20)+'<span class="tx">주문</span>':'<span class="tx">+ 신청</span>'; }
     else{ cls+=' lock'+(on?' on':''); st=on?luIco(20)+'<span class="tx">확정</span>':'<span class="tx">마감</span>'; }
     if(ds===k.ymd) cls+=' today';
@@ -6869,10 +6875,11 @@ function lunchRenderApply(){
   // 안내 줄 (V20261126): 「다음 배달일」·「그 날의 신청·취소 마감」·「남은 시간」·「내 신청 여부」를 이름 붙여 표시
   const nx=luNextOpen(), dl=luDeadline(nx), left=luDayDiff(k.ymd,dl)*1440+14*60-k.min;
   const lh=Math.floor(left/60), lm=left%60, lt=(lh>=24?Math.floor(lh/24)+'일 '+(lh%24)+'시간':lh+'시간 ')+lm+'분';
-  document.getElementById('luInfo').innerHTML=`<span>${luIco(18)} <b>${LUNCH_VENDOR}</b> 도시락 ${LUNCH_PRICE.toLocaleString()}원 (VAT 포함)</span>`
-    +`<span class="lu-sep">|</span><span>다음 배달일 <b>${esc2(luMd(nx))}</b> — ${lunchMine[nx]?'<b>신청됨</b>':'<span style="color:#6b7280;">미신청</span>'}</span>`
-    +`<span class="lu-sep">|</span><span>신청·취소 마감 <b>${esc2(luMd(dl))} 오후 2시</b> (${lt} 남음)</span>`
-    +`<span class="lu-rule">날짜를 누르면 신청, 다시 누르면 취소됩니다. 마감은 배달일 바로 전 근무일 오후 2시입니다 (월요일 도시락 = 금요일 오후 2시, 연휴 다음 날 = 연휴 전 마지막 근무일 오후 2시).</span>`;
+  // V20261126-07: 가격 빼고, 날짜마다 무슨 날인지 이름을 붙여 표시
+  document.getElementById('luInfo').innerHTML=`<span>${luIco(18)} 지금 신청할 수 있는 가장 빠른 도시락 <b>${esc2(luMd(nx))} 점심</b></span>`
+    +`<span class="lu-sep">|</span><span>내 신청 ${lunchMine[nx]?'<b>신청함</b>':'<span style="color:#6b7280;font-weight:600;">아직 안 함</span>'}</span>`
+    +`<span class="lu-sep">|</span><span>이 도시락 신청·취소 마감 <b>${esc2(luMd(dl))} 오후 2시까지</b> (${lt} 남음)</span>`
+    +`<span class="lu-rule">달력에서 날짜를 누르면 신청, 다시 누르면 취소됩니다. 도시락마다 배달일 바로 전 근무일 오후 2시에 마감됩니다 (월요일 도시락 = 금요일 오후 2시).</span>`;
 }
 function esc2(s){ return typeof escapeHtml==='function'?escapeHtml(s):String(s||''); }
 function luMd(ds){ return (+ds.slice(5,7))+'/'+(+ds.slice(8,10))+' ('+LU_DOW[luDow(ds)]+')'; }
