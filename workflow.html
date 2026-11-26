@@ -683,6 +683,9 @@ body.ts-vresizing{cursor:row-resize;user-select:none;}
 .rd-tbl{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;}
 .rd-tbl th{font-size:11px;font-weight:600;color:#4b5563;background:#e6f2e8;padding:5px 6px;text-align:left;border:1px solid #d3e6d6;}
 .rd-tbl td{padding:3px;border:1px solid #e3ede5;}
+.rd-tbl td.rd-na{background:#f6f8f7;}
+.rd-sum{font-size:12px;font-weight:700;color:#185FA5;}
+.brief-box .rd-sum{margin:-2px 0 8px;text-align:right;}
 .rd-tbl input{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:4px;padding:5px 6px;font-size:13px;font-family:'Noto Sans KR',sans-serif;color:#111827;background:transparent;}
 .rd-tbl input:focus{border-color:#27783C;outline:none;background:#fff;}
 .rd-tbl input.rd-sc{text-align:center;font-weight:700;}
@@ -1855,8 +1858,8 @@ body.m-legend-on #cat-legend{display:flex;}
         <button type="button" class="rd-gbtn" onclick="rdMakePlan()" title="티오프 기준으로 픽업·이동·식사·CC 도착 시간을 거꾸로 계산">기본 일정 넣기</button>
         <button type="button" class="rd-cp" onclick="rdCopyForm(this)" title="카톡에 붙여넣기 좋은 글로 복사">일정 텍스트 복사</button>
       </div>
-      <table class="rd-tbl" id="dm-rd-ptbl" data-mobile="off"><thead><tr><th style="width:12%">구분</th><th style="width:17%">시간</th><th style="width:28%">장소</th><th class="rd-mrow">기타 (주소·거리/시간)</th><th style="width:30px"></th></tr></thead><tbody id="dm-rd-plan"></tbody></table>
-      <button type="button" class="rd-add" onclick="rdPlanAdd()">＋ 일정 줄 추가</button>
+      <table class="rd-tbl" id="dm-rd-ptbl" data-mobile="off"><thead><tr><th style="width:12%">구분</th><th style="width:16%">시간</th><th style="width:26%">장소</th><th style="width:8%">거리(km)</th><th style="width:7%">시간(분)</th><th class="rd-mrow">기타 (주소 등)</th><th style="width:30px"></th></tr></thead><tbody id="dm-rd-plan"></tbody></table>
+      <button type="button" class="rd-add" onclick="rdPlanAdd()">＋ 일정 줄 추가</button> <span id="dm-rd-sum" class="rd-sum" style="margin-left:8px;"></span>
       <datalist id="dm-rd-names"></datalist><datalist id="dm-rd-courses"></datalist><datalist id="dm-rd-places"></datalist>
     </div>
     <div id="dm-task-row" style="display:none;margin-bottom:10px;padding:10px 12px;background:#eef6ff;border:1px solid rgba(55,138,221,.25);border-radius:8px;">
@@ -2518,7 +2521,7 @@ var RD_LEGS={'상복공원주차장>태봉기사식당':[20,20],'새롬아이포
 var rdPlaces={}, rdLegs={};
 function rdMyName(){ return (wfSession&&wfSession.name)||''; }
 function rdNorm(x){ return String(x||'').replace(/\s+/g,'').replace(/^고성/,''); }
-function rdLegKey(a,b){ return rdNorm(a)+'>'+rdNorm(b); }
+function rdLegKey(a,b){ var x=rdNorm(a), y=rdNorm(b); return x<y?x+'>'+y:y+'>'+x; }   // V20261126-12 반대 방향도 같은 구간
 function onActionChange(){
   var on=document.getElementById('dm-action').value==='라운딩', box=document.getElementById('dm-round-row');
   if(!box) return; box.style.display=on?'':'none';
@@ -2534,7 +2537,9 @@ function rdFill(r,keepBox){
   rdRows=(ri.players||[]).map(function(p){ return {name:p.name||'',org:p.org||'',score:p.score==null?'':String(p.score),memo:p.memo||'',pickup:!!p.pickup}; });
   if(!rdRows.length) rdRows.push({name:me,org:'SME',score:'',memo:'',pickup:false});
   while(rdRows.length<4) rdRows.push({name:'',org:'',score:'',memo:'',pickup:false});
-  rdPlan=(ri.plan||[]).map(function(x){ return {kind:x.kind||'기타',start:x.start||'',end:x.end||'',place:x.place||'',note:x.note||''}; });
+  rdPlan=(ri.plan||[]).map(function(x){ var o={kind:x.kind||'기타',start:x.start||'',end:x.end||'',place:x.place||'',note:x.note||'',km:x.km==null?'':String(x.km),min:x.min==null?'':String(x.min)};
+    if(o.kind==='이동'&&o.km===''){ var m=o.note.match(/(\d+(?:\.\d+)?)\s*km\s*\/\s*(\d+)\s*min/i); if(m){ o.km=m[1]; o.min=m[2]; o.note=o.note.replace(m[0],'').replace(/^[\s·,\/-]+|[\s·,\/-]+$/g,''); } }   // 예전 「20km / 20min」 글자 → 칸으로
+    return o; });
   var pk=rdPlan.find(function(x){ return x.kind==='픽업'; }); if(pk) document.getElementById('dm-rd-pick').value=pk.place;
   var ml=rdPlan.find(function(x){ return x.kind==='식사'; }); document.getElementById('dm-rd-meal').value=ml?ml.place:(rdPlan.length?'':'태봉기사식당');
   rdRender(); rdPlanRender();
@@ -2571,9 +2576,11 @@ async function rdLoadNames(){
     (ri.plan||[]).forEach(function(x){
       if((x.kind==='픽업'||x.kind==='식사')&&x.place){ if(x.note||!(x.place in rdPlaces)) rdPlaces[x.place]=x.note||rdPlaces[x.place]||''; }
       var m=String(x.note||'').match(/(\d+(?:\.\d+)?)\s*km\s*\/\s*(\d+)\s*min/i), ab=String(x.place||'').split('→');
-      if(x.kind==='이동'&&m&&ab.length===2) rdLegs[rdLegKey(ab[0],ab[1])]=[+m[1],+m[2]];
+      if(x.kind==='이동'&&ab.length===2){ if(x.km!=null&&x.min!=null) rdLegs[rdLegKey(ab[0],ab[1])]=[+x.km,+x.min]; else if(m) rdLegs[rdLegKey(ab[0],ab[1])]=[+m[1],+m[2]]; }
     });
   });
+  // V20261126-12 구간 거리·시간 공용 기록(wf_round_leg) — 본사 전원이 입력한 최근 값
+  if(SB){ try{ var lq=await SB.from('wf_round_leg').select('place_a,place_b,km,min'); ((lq&&lq.data)||[]).forEach(function(l){ if(l.km!=null||l.min!=null) rdLegs[rdLegKey(l.place_a,l.place_b)]=[l.km==null?null:+l.km,l.min==null?null:+l.min]; }); }catch(e){ console.warn('wf_round_leg',e); } }
   if(rdEmps===null&&SB){ rdEmps=[]; try{ var q=await SB.from('employees').select('name,entity').eq('active',true).order('emp_no'); rdEmps=((q&&q.data)||[]).filter(function(x){ return x.entity==='KOREA'; }).map(function(x){ return x.name; }); }catch(e){ console.warn(e); } }
   (rdEmps||[]).forEach(function(n){ names[n]=1; if(!rdOrgOf[n]) rdOrgOf[n]='SME'; });
   var e=escapeHtml;
@@ -2588,18 +2595,37 @@ function rdPlanRender(){
     return '<tr data-i="'+i+'"><td><select class="rp-k">'+RD_KINDS.map(function(k){ return '<option'+(k===x.kind?' selected':'')+'>'+k+'</option>'; }).join('')+'</select></td>'
       +'<td><input class="rp-t" value="'+e(rdTimeTxt(x))+'" placeholder="05:35~05:55" onblur="this.value=rdTimeTxt(rdParseT(this.value))"></td>'
       +'<td><input class="rp-p" list="dm-rd-places" value="'+e(x.place)+'" autocomplete="off" onchange="rdPlaceChg(this)"></td>'
-      +'<td class="rd-mrow"><input class="rp-n" value="'+e(x.note)+'" placeholder="기타 (주소·거리/시간)"></td>'
+      +(x.kind==='이동'?'<td><input class="rp-km" inputmode="decimal" value="'+e(x.km||'')+'" placeholder="km" oninput="rdSumShow()"></td><td><input class="rp-mi" inputmode="numeric" value="'+e(x.min||'')+'" placeholder="분" oninput="rdSumShow()"></td>':'<td class="rd-na"></td><td class="rd-na"></td>')
+      +'<td class="rd-mrow"><input class="rp-n" value="'+e(x.note)+'" placeholder="기타 (주소 등)"></td>'
       +'<td style="text-align:center;"><button type="button" class="rd-x" title="줄 삭제" onclick="rdPlanDel('+i+')">✕</button></td></tr>';
   }).join('');
+  document.querySelectorAll('#dm-rd-plan .rp-k').forEach(function(sel){ sel.onchange=function(){ rdPlanKeep(); rdPlanRender(); }; });
+  rdSumShow();
+}
+/* V20261126-12 이동 거리·시간 — 숫자 정리 · 당일 합계 · 공용 기록 저장 */
+function rdNum(v){ v=String(v==null?'':v).replace(/[^0-9.]/g,''); return v===''||!isFinite(+v)?null:+v; }
+function rdSum(plan){ var km=0, mi=0, n=0; (plan||[]).forEach(function(x){ if(x.kind!=='이동') return; var a=rdNum(x.km), b=rdNum(x.min); if(a!=null){ km+=a; n++; } if(b!=null){ mi+=b; n++; } }); return n?{km:Math.round(km*10)/10,min:Math.round(mi)}:null; }
+function rdSumTxt(sm){ if(!sm) return ''; var h=Math.floor(sm.min/60), m=sm.min%60; return '총 이동 '+sm.km+'km · '+(h?(h+'시간 '+(m?m+'분':'')).trim():m+'분'); }
+function rdSumShow(){ var el=document.getElementById('dm-rd-sum'); if(!el) return; var tmp=[];
+  document.querySelectorAll('#dm-rd-plan tr').forEach(function(tr){ var k=tr.querySelector('.rp-k'); if(!k||k.value!=='이동') return; tmp.push({kind:'이동',km:(tr.querySelector('.rp-km')||{}).value,min:(tr.querySelector('.rp-mi')||{}).value}); });
+  el.textContent=rdSumTxt(rdSum(tmp)); }
+async function rdSaveLegs(ri){
+  if(!SB||!ri||!ri.plan) return; var who=rdMyName()||null, rows={};
+  ri.plan.forEach(function(x){ if(x.kind!=='이동'||(x.km==null&&x.min==null)) return; var ab=String(x.place||'').split('→'); if(ab.length!==2) return;
+    var a=ab[0].trim(), b=ab[1].trim(); if(!a||!b) return; var key=rdLegKey(a,b); var sw=rdNorm(a)>rdNorm(b);
+    rows[key]={leg_key:key,place_a:sw?b:a,place_b:sw?a:b,km:x.km==null?null:x.km,min:x.min==null?null:x.min,updated_by:who,updated_at:new Date().toISOString()}; rdLegs[key]=[x.km==null?null:x.km,x.min==null?null:x.min]; });
+  var list=Object.keys(rows).map(function(k){ return rows[k]; }); if(!list.length) return;
+  try{ await SB.from('wf_round_leg').upsert(list,{onConflict:'leg_key'}); }catch(e){ console.warn('wf_round_leg 저장',e); }
 }
 // 시간 한 칸: 「05:35~05:55」 또는 「05:35」. 숫자만 쳐도 정리(0535 → 05:35, 0535 0555 → 05:35~05:55)
 function rdOneT(t){ t=String(t||'').replace(/[^0-9:]/g,''); var m=t.match(/^(\d{1,2}):?(\d{2})$/); if(!m) return ''; var h=+m[1], mi=+m[2]; if(h>23||mi>59) return ''; return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0'); }
 function rdParseT(v){ var parts=String(v||'').trim().split(/\s*[~\-–]\s*|\s+/).filter(Boolean); return {start:rdOneT(parts[0]),end:rdOneT(parts[1])}; }
 function rdTimeTxt(x){ return (x.start||'')+(x.end?'~'+x.end:''); }
-function rdPlanKeep(){ document.querySelectorAll('#dm-rd-plan tr').forEach(function(tr){ var x=rdPlan[+tr.dataset.i]; if(!x) return; x.kind=tr.querySelector('.rp-k').value; var tt=rdParseT(tr.querySelector('.rp-t').value); x.start=tt.start; x.end=tt.end; x.place=tr.querySelector('.rp-p').value.trim(); x.note=tr.querySelector('.rp-n').value.trim(); }); }
+function rdPlanKeep(){ document.querySelectorAll('#dm-rd-plan tr').forEach(function(tr){ var x=rdPlan[+tr.dataset.i]; if(!x) return; x.kind=tr.querySelector('.rp-k').value; var tt=rdParseT(tr.querySelector('.rp-t').value); x.start=tt.start; x.end=tt.end; x.place=tr.querySelector('.rp-p').value.trim(); x.note=tr.querySelector('.rp-n').value.trim(); var km=tr.querySelector('.rp-km'), mi=tr.querySelector('.rp-mi'); if(km){ x.km=km.value.trim(); x.min=mi.value.trim(); } }); }
 function rdPlanAdd(){ rdPlanKeep(); rdPlan.push({kind:'기타',start:'',end:'',place:'',note:''}); rdPlanRender(); }
 function rdPlanDel(i){ rdPlanKeep(); var x=rdPlan[i]; if((x.place||x.start)&&!confirm('정말 삭제하시겠습니까?')) return; rdPlan.splice(i,1); rdPlanRender(); }
-function rdPlaceChg(el){ var tr=el.closest('tr'), n=tr.querySelector('.rp-n'), k=tr.querySelector('.rp-k').value, p=el.value.trim(); if((k==='픽업'||k==='식사')&&!n.value.trim()&&rdPlaces[p]) n.value=rdPlaces[p]; }
+function rdPlaceChg(el){ var tr=el.closest('tr'), n=tr.querySelector('.rp-n'), k=tr.querySelector('.rp-k').value, p=el.value.trim(); if((k==='픽업'||k==='식사')&&!n.value.trim()&&rdPlaces[p]) n.value=rdPlaces[p];
+  if(k==='이동'){ var ab=p.split('→'), km=tr.querySelector('.rp-km'), mi=tr.querySelector('.rp-mi'); if(ab.length===2&&km&&!km.value.trim()&&!mi.value.trim()){ var l=rdLeg(ab[0],ab[1]); if(l){ km.value=l[0]==null?'':l[0]; mi.value=l[1]==null?'':l[1]; rdSumShow(); } } } }
 function rdMin(hm){ var m=String(hm||'').match(/^(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; }
 function rdHm(n){ n=((n%1440)+1440)%1440; return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); }
 function rdLeg(a,b){ return rdLegs[rdLegKey(a,b)]||null; }
@@ -2611,16 +2637,16 @@ function rdMakePlan(){
   if(tee==null){ alert('티오프 시간을 먼저 입력해주세요'); return; }
   if(!pick){ alert('픽업 장소를 입력해주세요'); return; }
   if(rdPlan.some(function(x){ return x.place||x.start; })&&!confirm('기존 일정을 새로 바꾸시겠습니까?')) return;
-  var miss=[], leg=function(a,b){ var l=rdLeg(a,b); if(!l){ miss.push(a+'→'+b); return {min:30,note:'이동시간 확인'}; } return {min:l[1],note:l[0]+'km / '+l[1]+'min'}; };
+  var miss=[], leg=function(a,b){ var l=rdLeg(a,b); if(!l||l[1]==null){ miss.push(a+'→'+b); return {min:30,note:'이동시간 확인',km:l?l[0]:null,mi:null}; } return {min:l[1],note:'',km:l[0],mi:l[1]}; };
   var arrive=Math.floor((tee-25)/5)*5, P=[];
-  var row=function(k,s,e2,p,n){ P.push({kind:k,start:s==null?'':rdHm(s),end:e2==null?'':rdHm(e2),place:p,note:n||''}); };
+  var row=function(k,s,e2,p,n,km,mi){ P.push({kind:k,start:s==null?'':rdHm(s),end:e2==null?'':rdHm(e2),place:p,note:n||'',km:km==null?'':String(km),min:mi==null?'':String(mi)}); };
   var club=/클럽하우스/.test(meal);
   if(club){ var g=leg(pick,course), ms=arrive-30, pk=ms-g.min;
-    row('픽업',pk,null,pick,rdPlaces[pick]); row('이동',pk,ms,pick+'→'+course,g.note); row('식사',ms,arrive,meal,''); }
+    row('픽업',pk,null,pick,rdPlaces[pick]); row('이동',pk,ms,pick+'→'+course,g.note,g.km,g.mi); row('식사',ms,arrive,meal,''); }
   else if(meal){ var g2=leg(meal,course), me2=arrive-g2.min, ms2=me2-30, g1=leg(pick,meal), pk2=ms2-g1.min;
-    row('픽업',pk2,null,pick,rdPlaces[pick]); row('이동',pk2,ms2,pick+'→'+meal,g1.note); row('식사',ms2,me2,meal,rdPlaces[meal]); row('이동',me2,arrive,meal+'→'+course,g2.note); row('CC착',arrive,null,course,''); }
+    row('픽업',pk2,null,pick,rdPlaces[pick]); row('이동',pk2,ms2,pick+'→'+meal,g1.note,g1.km,g1.mi); row('식사',ms2,me2,meal,rdPlaces[meal]); row('이동',me2,arrive,meal+'→'+course,g2.note,g2.km,g2.mi); row('CC착',arrive,null,course,''); }
   else { var g3=leg(pick,course), pk3=arrive-g3.min;
-    row('픽업',pk3,null,pick,rdPlaces[pick]); row('이동',pk3,arrive,pick+'→'+course,g3.note); row('CC착',arrive,null,course,''); }
+    row('픽업',pk3,null,pick,rdPlaces[pick]); row('이동',pk3,arrive,pick+'→'+course,g3.note,g3.km,g3.mi); row('CC착',arrive,null,course,''); }
   row('라운딩',tee,null,course,document.getElementById('dm-rd-route').value.trim());
   rdPlan=P; rdPlanRender();
   if(miss.length) alert('이동시간을 모르는 구간은 30분으로 넣었습니다 — 확인 후 고쳐주세요\n· '+miss.join('\n· '));
@@ -2648,7 +2674,9 @@ function rdPlanText(date,ri){
   var d=String(date||'').slice(5,10).replace('-','/'), pk=rdPickNames(ri.players||[]);
   var L=[[ri.course||'라운딩','일정',d,ri.tee||'',ri.route||''].filter(Boolean).join(' ')];
   (ri.plan||[]).forEach(function(x){ var t0=x.start+(x.end?'~'+x.end:''); var extra=x.kind==='픽업'&&pk.length?' ('+pk.join(', ')+')':'';
-    L.push([t0,x.kind,(x.place||'')+extra].filter(Boolean).join(' ')+(x.note?' — '+x.note.replace(/\n/g,' '):'')); });
+    var dm=x.kind==='이동'&&(x.km!=null||x.min!=null)?' ('+[x.km!=null?x.km+'km':'',x.min!=null?x.min+'분':''].filter(Boolean).join(' · ')+')':'';
+    L.push([t0,x.kind,(x.place||'')+extra].filter(Boolean).join(' ')+dm+(x.note?' — '+x.note.replace(/\n/g,' '):'')); });
+  var st=rdSumTxt(rdSum(ri.plan)); if(st) L.push(st);
   var nm=(ri.players||[]).map(function(p){ return p.name; }).filter(Boolean); if(nm.length) L.push('참석: '+nm.join(', '));
   return L.join('\n');
 }
@@ -2665,7 +2693,7 @@ function rdRead(quiet){
   for(var i=0;i<rdRows.length;i++){ var p=rdRows[i]; if(!p.name){ if(!quiet&&(p.score||p.org||p.memo)){ alert('이름이 빈 줄이 있습니다 (지우려면 ✕)'); return false; } continue; }
     var sc=p.score===''?null:Number(p.score); if(sc!=null&&(!isFinite(sc)||sc<30||sc>200)){ if(quiet) sc=null; else { alert(p.name+' 스코어를 확인해주세요'); return false; } }
     var o={name:p.name,org:p.org||null,score:sc,memo:p.memo||null}; if(p.pickup) o.pickup=true; players.push(o); }
-  var plan=rdPlan.filter(function(x){ return x.place||x.start||x.note; }).map(function(x){ return {kind:x.kind,start:x.start||null,end:x.end||null,place:x.place||null,note:x.note||null}; });
+  var plan=rdPlan.filter(function(x){ return x.place||x.start||x.note||x.km||x.min; }).map(function(x){ var o={kind:x.kind,start:x.start||null,end:x.end||null,place:x.place||null,note:x.note||null}; if(x.kind==='이동'){ var a=rdNum(x.km), b=rdNum(x.min); if(a!=null) o.km=a; if(b!=null) o.min=Math.round(b); } return o; });
   var ri={course:document.getElementById('dm-rd-course').value.trim()||null,tee:document.getElementById('dm-rd-tee').value||null,route:document.getElementById('dm-rd-route').value.trim()||null,players:players};
   if(plan.length) ri.plan=plan;
   return (ri.course||ri.tee||ri.route||players.length||plan.length)?ri:null;
@@ -2678,11 +2706,11 @@ function rdBriefHtml(r){
   var ri=r&&r.round_info; if(!ri) return '';
   rdBriefRec=r;
   var e=escapeHtml, info=[ri.course,ri.tee,ri.route].filter(Boolean).map(e).join(' · '), pk=rdPickNames(ri.players||[]);
-  var plan=(ri.plan||[]).map(function(x){ return '<tr><td>'+e(x.kind||'')+'</td><td style="white-space:nowrap;">'+e((x.start||'')+(x.end?'~'+x.end:''))+'</td><td>'+e(x.place||'')+(x.kind==='픽업'&&pk.length?'<div style="font-size:11px;color:#27783C;">픽업: '+e(pk.join(', '))+'</div>':'')+(x.note?'<div class="rd-mn">'+e(x.note)+'</div>':'')+'</td><td class="rd-mx" style="white-space:pre-wrap;">'+e(x.note||'')+'</td></tr>'; }).join('');
+  var plan=(ri.plan||[]).map(function(x){ return '<tr><td>'+e(x.kind||'')+'</td><td style="white-space:nowrap;">'+e((x.start||'')+(x.end?'~'+x.end:''))+'</td><td>'+e(x.place||'')+(x.kind==='픽업'&&pk.length?'<div style="font-size:11px;color:#27783C;">픽업: '+e(pk.join(', '))+'</div>':'')+(x.kind==='이동'&&(x.km!=null||x.min!=null)?'<div style="font-size:11px;color:#185FA5;">'+e([x.km!=null?x.km+'km':'',x.min!=null?x.min+'분':''].filter(Boolean).join(' · '))+'</div>':'')+(x.note?'<div class="rd-mn">'+e(x.note)+'</div>':'')+'</td><td class="rd-mx" style="white-space:pre-wrap;">'+e(x.note||'')+'</td></tr>'; }).join('');
   var rows=(ri.players||[]).map(function(p){ return '<tr><td><b>'+e(p.name||'')+'</b>'+(p.pickup?' <span style="font-size:10px;color:#27783C;">픽업</span>':'')+'</td><td>'+e(p.org||'')+(p.memo?'<div class="rd-mn">'+e(p.memo)+'</div>':'')+'</td><td class="sc">'+(p.score!=null?p.score:'-')+'</td><td class="rd-mx">'+e(p.memo||'')+'</td></tr>'; }).join('');
   return '<div class="brief-box"><div class="brief-box-h" style="display:flex;align-items:center;">⛳ 라운딩'+(info?' — '+info:'')+'<span style="flex:1"></span>'
       +(plan?'<button type="button" class="rd-cp" onclick="rdCopy(rdPlanText(rdBriefRec.date,rdBriefRec.round_info),this)">일정 텍스트 복사</button>':'')+'</div>'
-    +(plan?'<table class="brief-rd" data-mobile="off" style="margin-bottom:8px;"><thead><tr><th class="rd-w1" style="width:56px;">구분</th><th class="rd-w2" style="width:96px;">시간</th><th>장소</th><th class="rd-mx">기타</th></tr></thead><tbody>'+plan+'</tbody></table>':'')
+    +(plan?'<table class="brief-rd" data-mobile="off" style="margin-bottom:8px;"><thead><tr><th class="rd-w1" style="width:56px;">구분</th><th class="rd-w2" style="width:96px;">시간</th><th>장소</th><th class="rd-mx">기타</th></tr></thead><tbody>'+plan+'</tbody></table>'+(rdSum(ri.plan)?'<div class="rd-sum">'+e(rdSumTxt(rdSum(ri.plan)))+'</div>':''):'')
     +(rows?'<table class="brief-rd" data-mobile="off"><thead><tr><th class="rd-w4">이름</th><th>소속</th><th class="rd-w3" style="width:60px;text-align:center;">스코어</th><th class="rd-mx">비고</th></tr></thead><tbody>'+rows+'</tbody></table>':'')+'</div>';
 }
 
@@ -6551,6 +6579,7 @@ async function saveDiary(){
   };
   obj.round_info = obj.action_type==='라운딩' ? rdRead() : null;   // 2026-11-03 라운딩 정보
   if(obj.round_info===false) return;
+  if(obj.round_info) rdSaveLegs(obj.round_info);   // V20261126-12 구간 거리·시간 공용 기록
   if(diaryCopyOrigin){ obj.origin=diaryCopyOrigin; }
 
   // 공유 처리 (선택 공유 V20261118-05)
