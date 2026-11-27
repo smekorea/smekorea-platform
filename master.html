@@ -788,10 +788,10 @@ td.center .al-pline{justify-content:center;}
     <div class="tbl-wrap">
       <table id="entinfo-table">
         <thead><tr>
-          <th class="sortable" style="width:135px;" onclick="sortEntInfo('entity')">법인<span class="sort-icon" id="eis-entity"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('lg_code')">LG 코드<span class="sort-icon" id="eis-lg_code"></span></th><th class="sortable" style="width:95px;" onclick="sortEntInfo('lg_code_date')">등록일자<span class="sort-icon" id="eis-lg_code_date"></span></th><th class="sortable" style="width:170px;" onclick="sortEntInfo('company_name')">상호<span class="sort-icon" id="eis-company_name"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('biz_no')">사업자번호<span class="sort-icon" id="eis-biz_no"></span></th><th class="sortable" style="width:80px;" onclick="sortEntInfo('ceo')">대표자<span class="sort-icon" id="eis-ceo"></span></th>
+          <th class="sortable" style="width:135px;" onclick="sortEntInfo('entity')">법인<span class="sort-icon" id="eis-entity"></span></th><th class="center" style="width:60px;">구분</th><th class="sortable" style="width:120px;" onclick="sortEntInfo('lg_code')">LG 코드<span class="sort-icon" id="eis-lg_code"></span></th><th class="sortable" style="width:95px;" onclick="sortEntInfo('lg_code_date')">등록일자<span class="sort-icon" id="eis-lg_code_date"></span></th><th class="sortable" style="width:170px;" onclick="sortEntInfo('company_name')">상호<span class="sort-icon" id="eis-company_name"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('biz_no')">사업자번호<span class="sort-icon" id="eis-biz_no"></span></th><th class="sortable" style="width:80px;" onclick="sortEntInfo('ceo')">대표자<span class="sort-icon" id="eis-ceo"></span></th>
           <th class="sortable" style="width:300px;" onclick="sortEntInfo('address')">주소<span class="sort-icon" id="eis-address"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('tel')">전화<span class="sort-icon" id="eis-tel"></span></th><th class="sortable" style="width:230px;" onclick="sortEntInfo('bank_info')">입금계좌<span class="sort-icon" id="eis-bank_info"></span></th><th class="center" style="width:60px;">직인</th><th class="center" style="width:70px;">관리</th>
         </tr></thead>
-        <tbody id="entinfo-tbody"><tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+        <tbody id="entinfo-tbody"><tr><td colspan="12"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
       </table>
     </div>
     </div>
@@ -950,8 +950,8 @@ td.center .al-pline{justify-content:center;}
       </div>
       <div style="border-top:1px solid var(--border);margin:6px 0 10px;padding-top:10px;font-size:12.5px;font-weight:700;">LG 협력사 코드 <span style="font-weight:400;color:var(--muted);font-size:11px;">(LG전자가 부여한 코드)</span></div>
       <div class="modal-row">
-        <div class="form-group"><label>LG 코드</label><input id="ei-lgcode"></div>
-        <div class="form-group"><label>등록일자</label><input id="ei-lgdate" type="date"></div>
+        <div class="form-group"><label>LG HUB 코드</label><input id="ei-lgcode"></div>
+        <div class="form-group"><label>HUB 코드 등록일자</label><input id="ei-lgdate" type="date"></div>
       </div>
       <div class="modal-row" id="ei-mfg-row">
         <div class="form-group"><label>LG 제조 코드 <span style="font-weight:400;color:var(--muted);font-size:11px;">(본사)</span></label><input id="ei-lgmfg"></div>
@@ -2481,7 +2481,7 @@ function _stampSrc(u){try{return /^data:/.test(u)?u:new URL(u,location.href).hre
 async function loadEntInfo(){
   const tb=document.getElementById('entinfo-tbody');if(!tb)return;
   const [{data,error},oe]=await Promise.all([sb.from('trade_setting').select('*'),sb.from('org_entity').select('*').order('sort_no')]);
-  if(error){tb.innerHTML=`<tr><td colspan="11" style="color:red;padding:14px;">${error.message}</td></tr>`;return;}
+  if(error){tb.innerHTML=`<tr><td colspan="12" style="color:red;padding:14px;">${error.message}</td></tr>`;return;}
   _entInfo=data||[];
   if(oe&&!oe.error&&oe.data&&oe.data.length){_orgEnt=oe.data;ENT_INFO=_orgEnt.map(o=>[o.entity,`${o.name||o.entity} (${o.code||o.entity})`]);}
   _fillEntSelects();
@@ -2494,22 +2494,24 @@ async function loadEntInfo(){
     ents.sort((a,b)=>_eiSort.asc?g(a).localeCompare(g(b),'ko'):g(b).localeCompare(g(a),'ko'));}
   document.querySelectorAll('[id^="eis-"]').forEach(x=>x.textContent='');
   if(_eiSort.k){const ic=document.getElementById('eis-'+_eiSort.k);if(ic)ic.textContent=_eiSort.asc?'↑':'↓';}
+  // 구분: HUB / 제조 — 본사는 HUB·제조 LG 코드를 두 줄로 나눠 표시 (해외법인은 HUB)
+  const gb=v=>`<span class="badge b-gray" style="background:#fff;border:1px solid ${v==='제조'?'var(--point)':'var(--accent)'};color:${v==='제조'?'var(--point)':'var(--accent)'};">${v}</span>`;
   tb.innerHTML=ents.map(([e,l])=>{const r=_entInfo.find(x=>x.entity===e)||{};
-    const mfg=e==='KOREA'&&(r.lg_mfg_code||r.lg_mfg_code_date);
-    const lgc=`${e2(r.lg_code)}${mfg?`<br><span style="font-size:11px;color:var(--muted);">제조</span> ${e2(r.lg_mfg_code)}`:''}`;
-    const lgd=`${e2(r.lg_code_date)}${mfg?`<br>${e2(r.lg_mfg_code_date)}`:''}`;
-    return `<tr><td><b>${l}</b></td><td class="center" title="${e2(r.lg_code)}${mfg?' / 제조 '+e2(r.lg_mfg_code):''}">${lgc}</td><td class="center">${lgd}</td><td>${e2(r.company_name)}</td><td>${e2(r.biz_no)}</td><td>${e2(r.ceo)}</td><td title="${e2(r.address)}">${e2(r.address)}</td>
+    const mfg=e==='KOREA';
+    let h=`<tr><td><b>${l}</b></td><td class="center">${gb('HUB')}</td><td class="center" title="${e2(r.lg_code)}">${e2(r.lg_code)}</td><td class="center">${e2(r.lg_code_date)}</td><td>${e2(r.company_name)}</td><td>${e2(r.biz_no)}</td><td>${e2(r.ceo)}</td><td title="${e2(r.address)}">${e2(r.address)}</td>
       <td>${e2(r.tel)}</td><td title="${e2(r.bank_info)}">${e2(r.bank_info)}</td>
       <td class="center">${r.stamp_url?`<img src="${e2(_stampSrc(r.stamp_url))}" style="width:26px;height:26px;vertical-align:middle">`:'<span style="color:var(--muted)">-</span>'}</td>
-      <td class="center"><button class="row-btn" onclick="openEntInfoModal('${e}')">수정</button></td></tr>`;}).join('');
-  if(document.getElementById('entBody').style.display!=='none')setTimeout(()=>initColResize('entinfo-table','al_entinfo_v3'),50);
+      <td class="center"><button class="row-btn" onclick="openEntInfoModal('${e}')">수정</button></td></tr>`;
+    if(mfg)h+=`<tr><td></td><td class="center">${gb('제조')}</td><td class="center" title="${e2(r.lg_mfg_code)}">${e2(r.lg_mfg_code)}</td><td class="center">${e2(r.lg_mfg_code_date)}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    return h;}).join('');
+  if(document.getElementById('entBody').style.display!=='none')setTimeout(()=>initColResize('entinfo-table','al_entinfo_v4'),50);
 }
 let _eiSort={k:null,asc:true};
 function toggleEntSec(force){
   const b=document.getElementById('entBody');const open=force!=null?force:b.style.display==='none';
   b.style.display=open?'':'none';document.getElementById('entTg').textContent=open?'▾ 접기':'▸ 펼치기';
   try{localStorage.setItem('admin_ent_open',open?'1':'0');}catch(e){}
-  if(open&&document.querySelector('#entinfo-tbody td:not([colspan])'))setTimeout(()=>initColResize('entinfo-table','al_entinfo_v3'),30);
+  if(open&&document.querySelector('#entinfo-tbody td:not([colspan])'))setTimeout(()=>initColResize('entinfo-table','al_entinfo_v4'),30);
 }
 function sortEntInfo(k){if(_eiSort.k===k)_eiSort.asc=!_eiSort.asc;else{_eiSort.k=k;_eiSort.asc=true;}loadEntInfo();}
 function openEntInfoModal(e){
