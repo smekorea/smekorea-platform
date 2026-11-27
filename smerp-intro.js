@@ -26,7 +26,7 @@
     '#smeIntro .wm{margin-top:30px;font-family:\'Noto Sans KR\',sans-serif;font-weight:900;font-size:25px;letter-spacing:6px;padding-left:6px;color:#000;opacity:0;transition:opacity .7s .45s}'+
     '#smeIntro .ent{margin-top:10px;font-family:\'Noto Sans KR\',sans-serif;font-size:18.6px;letter-spacing:.3px;color:#9CA3AF;white-space:nowrap;opacity:0;transition:opacity .7s .6s}'+
     '#smeIntro .ent b{font-weight:400;color:#6B7280}#smeIntro .ent i{font-style:normal;margin:0 4px;color:#D1D5DB}'+
-    '#smeIntro .go{margin-top:36px;font-family:\'Noto Sans KR\',sans-serif;font-size:20px;font-weight:700;color:#D32F2F;letter-spacing:4px;padding-left:4px;opacity:0;transition:opacity .7s .8s}'+
+    '#smeIntro .go{margin-top:36px;font-family:\'Noto Sans KR\',sans-serif;font-size:20px;font-weight:700;color:#1565C0;letter-spacing:2px;padding-left:2px;opacity:0;transition:opacity .7s .8s}'+
     '#smeIntro.on .sg{opacity:1;transform:none}#smeIntro.on .wm,#smeIntro.on .ent{opacity:1}#smeIntro.on .go{opacity:1;animation:siBlink 2.2s ease-in-out 1.6s infinite}'+
     '@keyframes siBlink{0%,100%{opacity:1}50%{opacity:.35}}'+
     'body.sme-intro-on .overlay{background:rgba(0,0,0,.28)}';
@@ -62,7 +62,7 @@
     sp=document.createElement('div');
     sp.id='smeIntro';
     sp.innerHTML='<div class="sg no-i18n" translate="no">'+svg+'</div><div class="wm no-i18n" translate="no">SMEKOREA</div>'+
-      '<div class="ent no-i18n" translate="no"><b>SMEKR</b><i>·</i>SMECN<i>·</i>SMETH<i>·</i>SMEIN</div><div class="go no-i18n" translate="no">LOGIN</div>';
+      '<div class="ent no-i18n" translate="no"><b>SMEKR</b><i>·</i>SMECN<i>·</i>SMETH<i>·</i>SMEIN</div><div class="go no-i18n" translate="no">Login</div>';
     document.body.appendChild(sp);
     sp.addEventListener('click',function(){ if(typeof window.openWithPW==='function') window.openWithPW(''); });
     back=sp.querySelector('#siBack'),front=sp.querySelector('#siFront');
