@@ -2,7 +2,21 @@
 // 디자인은 휴대폰 앱 시작 화면(smerp-splash.js)과 같음. 휴대폰(768px 이하)에는 나오지 않음
 (function(){
   try{ if(!(window.matchMedia&&window.matchMedia('(min-width:769px)').matches)) return; }catch(e){ return; }
-  function authed(){ try{ return localStorage.getItem('sme_auth')==='1'; }catch(e){ return false; } }
+  // (V20261127-03) 로그인 후 12시간이 지났거나 로그인 정보(sme_token)가 없으면 로그아웃으로 보고 정리 → 지구 화면
+  var LIFE=12*3600*1000;
+  function authed(){
+    try{
+      if(localStorage.getItem('sme_auth')!=='1') return false;
+      var at=parseInt(localStorage.getItem('sme_login_at')||'0',10);
+      if(!localStorage.getItem('sme_token')||(at&&Date.now()-at>LIFE)){
+        if(typeof window.clearLogin==='function') window.clearLogin();
+        else ['sme_user','sme_auth','sme_hq_auth','sme_entity','sme_token','sme_emp_no','sme_perms','sme_private','sme_must_change','sme_login_at','wf_session'].forEach(function(k){localStorage.removeItem(k);});
+        var u=document.getElementById('tbUser'); if(u) u.style.display='none';
+        return false;
+      }
+      return true;
+    }catch(e){ return false; }
+  }
 
   var css=document.createElement('style');
   css.textContent=
