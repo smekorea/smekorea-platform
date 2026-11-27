@@ -788,10 +788,10 @@ td.center .al-pline{justify-content:center;}
     <div class="tbl-wrap">
       <table id="entinfo-table">
         <thead><tr>
-          <th class="sortable" style="width:135px;" onclick="sortEntInfo('entity')">법인<span class="sort-icon" id="eis-entity"></span></th><th class="sortable" style="width:170px;" onclick="sortEntInfo('company_name')">상호<span class="sort-icon" id="eis-company_name"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('biz_no')">사업자번호<span class="sort-icon" id="eis-biz_no"></span></th><th class="sortable" style="width:80px;" onclick="sortEntInfo('ceo')">대표자<span class="sort-icon" id="eis-ceo"></span></th>
+          <th class="sortable" style="width:135px;" onclick="sortEntInfo('entity')">법인<span class="sort-icon" id="eis-entity"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('lg_code')">LG 코드<span class="sort-icon" id="eis-lg_code"></span></th><th class="sortable" style="width:95px;" onclick="sortEntInfo('lg_code_date')">등록일자<span class="sort-icon" id="eis-lg_code_date"></span></th><th class="sortable" style="width:170px;" onclick="sortEntInfo('company_name')">상호<span class="sort-icon" id="eis-company_name"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('biz_no')">사업자번호<span class="sort-icon" id="eis-biz_no"></span></th><th class="sortable" style="width:80px;" onclick="sortEntInfo('ceo')">대표자<span class="sort-icon" id="eis-ceo"></span></th>
           <th class="sortable" style="width:300px;" onclick="sortEntInfo('address')">주소<span class="sort-icon" id="eis-address"></span></th><th class="sortable" style="width:120px;" onclick="sortEntInfo('tel')">전화<span class="sort-icon" id="eis-tel"></span></th><th class="sortable" style="width:230px;" onclick="sortEntInfo('bank_info')">입금계좌<span class="sort-icon" id="eis-bank_info"></span></th><th class="center" style="width:60px;">직인</th><th class="center" style="width:70px;">관리</th>
         </tr></thead>
-        <tbody id="entinfo-tbody"><tr><td colspan="9"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
+        <tbody id="entinfo-tbody"><tr><td colspan="11"><div class="loading"><div class="spinner"></div> 로딩 중...</div></td></tr></tbody>
       </table>
     </div>
     </div>
@@ -941,12 +941,21 @@ td.center .al-pline{justify-content:center;}
       <input type="hidden" id="ei-stamp">
       <div style="font-size:12.5px;font-weight:700;margin:0 0 8px;">법인 기본 <span style="font-weight:400;color:var(--muted);font-size:11px;">(조직도 법인 마스터와 같은 값)</span></div>
       <div class="modal-row">
-        <div class="form-group"><label>법인 코드(내부) <span class="req">*</span></label><input id="ei-entity" placeholder="예) SMEVN — 영문 대문자, 저장 후 변경 불가"></div>
+        <div class="form-group"><label>법인 코드(내부) <span class="req">*</span></label><input id="ei-entity" oninput="_eiMfgRow()" placeholder="예) SMEVN — 영문 대문자, 저장 후 변경 불가"></div>
         <div class="form-group"><label>표시 코드 <span class="req">*</span></label><input id="ei-code" placeholder="예) SMEVN"></div>
       </div>
       <div class="modal-row">
         <div class="form-group"><label>법인명 <span class="req">*</span></label><input id="ei-oname" placeholder="예) 베트남(하노이)"></div>
         <div class="form-group"><label>대표메일</label><input id="ei-email"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:6px 0 10px;padding-top:10px;font-size:12.5px;font-weight:700;">LG 협력사 코드 <span style="font-weight:400;color:var(--muted);font-size:11px;">(LG전자가 부여한 코드)</span></div>
+      <div class="modal-row">
+        <div class="form-group"><label>LG 코드</label><input id="ei-lgcode"></div>
+        <div class="form-group"><label>등록일자</label><input id="ei-lgdate" type="date"></div>
+      </div>
+      <div class="modal-row" id="ei-mfg-row">
+        <div class="form-group"><label>LG 제조 코드 <span style="font-weight:400;color:var(--muted);font-size:11px;">(본사)</span></label><input id="ei-lgmfg"></div>
+        <div class="form-group"><label>제조 코드 등록일자</label><input id="ei-lgmfgdate" type="date"></div>
       </div>
       <div style="border-top:1px solid var(--border);margin:6px 0 10px;padding-top:10px;font-size:12.5px;font-weight:700;">거래명세서 공급자 정보</div>
       <div class="modal-row">
@@ -2472,7 +2481,7 @@ function _stampSrc(u){try{return /^data:/.test(u)?u:new URL(u,location.href).hre
 async function loadEntInfo(){
   const tb=document.getElementById('entinfo-tbody');if(!tb)return;
   const [{data,error},oe]=await Promise.all([sb.from('trade_setting').select('*'),sb.from('org_entity').select('*').order('sort_no')]);
-  if(error){tb.innerHTML=`<tr><td colspan="9" style="color:red;padding:14px;">${error.message}</td></tr>`;return;}
+  if(error){tb.innerHTML=`<tr><td colspan="11" style="color:red;padding:14px;">${error.message}</td></tr>`;return;}
   _entInfo=data||[];
   if(oe&&!oe.error&&oe.data&&oe.data.length){_orgEnt=oe.data;ENT_INFO=_orgEnt.map(o=>[o.entity,`${o.name||o.entity} (${o.code||o.entity})`]);}
   _fillEntSelects();
@@ -2486,18 +2495,21 @@ async function loadEntInfo(){
   document.querySelectorAll('[id^="eis-"]').forEach(x=>x.textContent='');
   if(_eiSort.k){const ic=document.getElementById('eis-'+_eiSort.k);if(ic)ic.textContent=_eiSort.asc?'↑':'↓';}
   tb.innerHTML=ents.map(([e,l])=>{const r=_entInfo.find(x=>x.entity===e)||{};
-    return `<tr><td><b>${l}</b></td><td>${e2(r.company_name)}</td><td>${e2(r.biz_no)}</td><td>${e2(r.ceo)}</td><td title="${e2(r.address)}">${e2(r.address)}</td>
+    const mfg=e==='KOREA'&&(r.lg_mfg_code||r.lg_mfg_code_date);
+    const lgc=`${e2(r.lg_code)}${mfg?`<br><span style="font-size:11px;color:var(--muted);">제조</span> ${e2(r.lg_mfg_code)}`:''}`;
+    const lgd=`${e2(r.lg_code_date)}${mfg?`<br>${e2(r.lg_mfg_code_date)}`:''}`;
+    return `<tr><td><b>${l}</b></td><td class="center" title="${e2(r.lg_code)}${mfg?' / 제조 '+e2(r.lg_mfg_code):''}">${lgc}</td><td class="center">${lgd}</td><td>${e2(r.company_name)}</td><td>${e2(r.biz_no)}</td><td>${e2(r.ceo)}</td><td title="${e2(r.address)}">${e2(r.address)}</td>
       <td>${e2(r.tel)}</td><td title="${e2(r.bank_info)}">${e2(r.bank_info)}</td>
       <td class="center">${r.stamp_url?`<img src="${e2(_stampSrc(r.stamp_url))}" style="width:26px;height:26px;vertical-align:middle">`:'<span style="color:var(--muted)">-</span>'}</td>
       <td class="center"><button class="row-btn" onclick="openEntInfoModal('${e}')">수정</button></td></tr>`;}).join('');
-  if(document.getElementById('entBody').style.display!=='none')setTimeout(()=>initColResize('entinfo-table','al_entinfo_v2'),50);
+  if(document.getElementById('entBody').style.display!=='none')setTimeout(()=>initColResize('entinfo-table','al_entinfo_v3'),50);
 }
 let _eiSort={k:null,asc:true};
 function toggleEntSec(force){
   const b=document.getElementById('entBody');const open=force!=null?force:b.style.display==='none';
   b.style.display=open?'':'none';document.getElementById('entTg').textContent=open?'▾ 접기':'▸ 펼치기';
   try{localStorage.setItem('admin_ent_open',open?'1':'0');}catch(e){}
-  if(open&&document.querySelector('#entinfo-tbody td:not([colspan])'))setTimeout(()=>initColResize('entinfo-table','al_entinfo_v2'),30);
+  if(open&&document.querySelector('#entinfo-tbody td:not([colspan])'))setTimeout(()=>initColResize('entinfo-table','al_entinfo_v3'),30);
 }
 function sortEntInfo(k){if(_eiSort.k===k)_eiSort.asc=!_eiSort.asc;else{_eiSort.k=k;_eiSort.asc=true;}loadEntInfo();}
 function openEntInfoModal(e){
@@ -2509,9 +2521,13 @@ function openEntInfoModal(e){
   document.getElementById('entInfoTitle').textContent=isNew?'법인 추가':'법인 정보 수정 — '+((ENT_INFO.find(x=>x[0]===e)||[])[1]||e);
   [['ei-name','company_name'],['ei-bizno','biz_no'],['ei-ceo','ceo'],['ei-address','address'],['ei-tel','tel'],['ei-bank','bank_info']].forEach(([id,k])=>document.getElementById(id).value=r[k]||'');
   document.getElementById('ei-stamp').value=r.stamp_url||'';
+  [['ei-lgcode','lg_code'],['ei-lgdate','lg_code_date'],['ei-lgmfg','lg_mfg_code'],['ei-lgmfgdate','lg_mfg_code_date']].forEach(([id,k])=>document.getElementById(id).value=r[k]||'');
+  _eiMfgRow();
   _eiStampPv();
   document.getElementById('entInfoModal').classList.add('show');
 }
+// 제조 코드 칸은 본사(KOREA)만 표시
+function _eiMfgRow(){const e=document.getElementById('ei-entity').value.trim().toUpperCase();document.getElementById('ei-mfg-row').style.display=e==='KOREA'?'':'none';}
 function _eiStampPv(){const v=document.getElementById('ei-stamp').value;
   document.getElementById('ei-stamp-pv').innerHTML=v?`<img src="${_stampSrc(v)}" style="width:56px;height:56px;border:1px solid var(--border)">`:'<span style="color:var(--muted);font-size:12px;">없음</span>';}
 function pickEntStamp(f){
@@ -2535,7 +2551,10 @@ async function saveEntInfo(){
     default_vat_pct:vat===''?(isNew?0:null):Number(vat),company_name:document.getElementById('ei-name').value.trim()||null,biz_no:document.getElementById('ei-bizno').value.trim()||null,
     ceo:document.getElementById('ei-ceo').value.trim()||null,address:document.getElementById('ei-address').value.trim()||null,
     tel:document.getElementById('ei-tel').value.trim()||null,bank_info:document.getElementById('ei-bank').value.trim()||null,
-    stamp_url:document.getElementById('ei-stamp').value||null,updated_by:localStorage.getItem('sme_user')||null,updated_at:new Date().toISOString()};
+    stamp_url:document.getElementById('ei-stamp').value||null,
+    lg_code:document.getElementById('ei-lgcode').value.trim()||null,lg_code_date:document.getElementById('ei-lgdate').value||null,
+    lg_mfg_code:e==='KOREA'?(document.getElementById('ei-lgmfg').value.trim()||null):null,lg_mfg_code_date:e==='KOREA'?(document.getElementById('ei-lgmfgdate').value||null):null,
+    updated_by:localStorage.getItem('sme_user')||null,updated_at:new Date().toISOString()};
   if(body.default_vat_pct==null)delete body.default_vat_pct;
   const exists=_entInfo.some(x=>x.entity===e);
   const {error}=exists?await sb.from('trade_setting').update(body).eq('entity',e):await sb.from('trade_setting').insert(Object.assign({entity:e},body));
