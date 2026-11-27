@@ -381,6 +381,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="po_mkpn_fill.js?v=20261127"></script>
 <script>
 const SUPABASE_URL='https://muxuhrbsbrstmrrvlupw.supabase.co';
 const SUPABASE_KEY='sb_publishable_RYvQTDoDvwTuVPezpIeotg_EDSd9Wbb';
@@ -630,6 +631,7 @@ async function parseFile(){
       });
       if(_modFound){showToast(t('⚠ 엑셀 업로드는 신규만 가능합니다. 수정·취소는 [PO 조회]에서 처리하세요'),'error');clearFile();return;}
       await loadMakerLeadTimes();
+      await fillMakerPnFromMaster(curData);
       renderPreview();
     }catch(err){showToast(t('⚠ 파일 읽기 실패: ')+err.message,'error');}
   };
@@ -644,6 +646,7 @@ function validate(r){
   const e=[];
   if(!r.pono)e.push('PO No.');
   if(!r.lgpn&&!r.mkpn)e.push(t('품번'));
+  if(r.mkNeedPick&&!r.mkpn)e.push(t('메이커품번 선택'));
   if(!r.maker)e.push('Maker');
   if(!r.qty)e.push(t('수량'));
   if(!r.etd)e.push('ETD');
@@ -668,7 +671,7 @@ function renderPreview(){
     return`<tr style="${errs.length?'background:rgba(200,0,30,0.03)':''}">
       <td>${r.row}</td>
       <td>${r.entity}</td><td>${r.date}</td><td style="${!r.pono?'color:var(--accent)':''}">${r.pono||'—'}</td>
-      <td>${r.lgpn||'—'}</td><td>${r.mkpn||'—'}</td><td>${r.maker||'—'}</td>
+      <td>${r.lgpn||'—'}</td>${mkpnCell(r)}<td>${r.maker||'—'}</td>
       <td style="text-align:right">${r.qty?r.qty.toLocaleString():'—'}</td>
       <td>${r.etd||'—'}</td><td>${ltBadge}</td><td style="font-size:11px;color:var(--muted);">${expETD}</td>
       <td>${mb}</td><td>${sb}</td>

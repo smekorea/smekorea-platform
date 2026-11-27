@@ -1669,25 +1669,41 @@
   // ── 분산 계산 (미리보기용, DB 조회) ──
   async function calcDistribution(rows) {
     const result = [];
-    for (const r of rows) {
-      if (!r.entity || !r.mkpn || r.shipqty <= 0) {
+    for (let r of rows) {
+      if (!r.entity || (!r.mkpn && !r.lgpn) || r.shipqty <= 0) {
         result.push({...r, distRows:[], errMsg:'필수값 누락'});
         continue;
       }
       // 법인 + Maker P/N 기준 PO 전체 조회 (ETD 오름차순)
-      const {data: poGroup} = await sb.from('po_data')
-        .select('id, po_no, entity, qty, etd_request, item_code, lg_pn, maker')
-        .eq('entity', r.entity)
-        .eq('maker_pn', r.mkpn)
-        .order('etd_request', {ascending: true});
+      let poGroup = null;
+      if (r.mkpn) {
+        ({data: poGroup} = await sb.from('po_data')
+          .select('id, po_no, entity, qty, etd_request, item_code, lg_pn, maker, maker_pn')
+          .eq('entity', r.entity)
+          .eq('maker_pn', r.mkpn)
+          .order('etd_request', {ascending: true}));
+      }
+      // V20261127: Maker P/N으로 못 찾으면 LG P/N으로 한 번 더 조회 (PO에 메이커품번이 비었거나 다르게 들어간 경우)
+      if ((!poGroup || !poGroup.length) && r.lgpn) {
+        const {data: lgGroup} = await sb.from('po_data')
+          .select('id, po_no, entity, qty, etd_request, item_code, lg_pn, maker, maker_pn')
+          .eq('entity', r.entity)
+          .eq('lg_pn', r.lgpn)
+          .order('etd_request', {ascending: true});
+        if (lgGroup && lgGroup.length) {
+          const poMk = lgGroup.map(p => p.maker_pn).find(v => v) || r.mkpn || r.lgpn;
+          r = {...r, mkpnOrig: r.mkpn, mkpn: poMk, lgMatched: true};
+          poGroup = lgGroup;
+        }
+      }
 
       if (!poGroup || !poGroup.length) {
         // ── 원인 판별: Maker P/N 칸의 값이 실은 LG 품번인지 역조회 (B·C열 뒤바뀜 감지) ──
-        const {data: swapChk} = await sb.from('po_data')
+        const {data: swapChk} = r.mkpn ? await sb.from('po_data')
           .select('id')
           .eq('entity', r.entity)
           .eq('lg_pn', r.mkpn)
-          .limit(1);
+          .limit(1) : {data: null};
         const isSwapped = !!(swapChk && swapChk.length);
         result.push({...r, distRows:[], errMsg: isSwapped ? '품번 뒤바뀜' : '매칭 PO 없음'});
         continue;
@@ -1795,7 +1811,7 @@
         <td style="padding:8px 12px;font-size:10px;color:var(--muted);">${r.row}</td>
         <td style="padding:8px 12px;">${r.entity||'—'}</td>
         <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.lgpn||'—'}</td>
-        <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.mkpn||'—'}</td>
+        <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.mkpn||'—'}${r.lgMatched?' <span title="Maker P/N으로 못 찾아 LG P/N으로 PO를 찾았습니다" style="font-size:10px;color:#1a56db;font-weight:700;">LG매칭</span>':''}</td>
         <td style="padding:8px 12px;text-align:right;font-weight:700;">${r.shipqty?r.shipqty.toLocaleString():'—'}</td>
         <td style="padding:8px 12px;">${modeBadge}</td>
         <td style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;">${r.invoice||'—'}</td>
