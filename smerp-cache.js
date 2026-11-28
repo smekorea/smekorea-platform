@@ -4,6 +4,7 @@
    ── 저장 키에 로그인 사용자(사번·이름)를 붙여 같은 PC의 다른 사용자와 섞이지 않게 함
    ── IndexedDB를 못 쓰는 브라우저(사생활 보호 모드 등)에서는 조용히 실패 → 화면은 예전처럼 전체 조회
    사용: SmerpCache.get(key) / SmerpCache.set(key,value) / SmerpCache.del(key) / SmerpCache.user()
+        SmerpCache.clearAll() — 로그아웃 버튼 때 이 PC 저장 자료 전부 삭제 (V20261128-02)
    ══════════════════════════════════════════════════════════════ */
 (function(){
   var DB='smerp_cache', ST='kv', VER=1, dbp=null;
@@ -52,6 +53,20 @@
       });
     }catch(e){}
   }
+  /* V20261128-02 로그아웃 버튼을 누르면 이 PC의 저장 자료를 사용자 구분 없이 모두 지움 (12시간 자동 만료 때는 지우지 않음)
+     지우기가 오래 걸려도 로그아웃이 막히지 않게 최대 1.5초만 기다림 */
+  async function clearAll(){
+    const job=(async function(){
+      try{
+        var db=await open();
+        await new Promise(function(res){
+          try{ var tx=db.transaction(ST,'readwrite'); tx.objectStore(ST).clear(); tx.oncomplete=res; tx.onerror=res; tx.onabort=res; }
+          catch(e){ res(); }
+        });
+      }catch(e){}
+    })();
+    await Promise.race([job,new Promise(function(r){ setTimeout(r,1500); })]);
+  }
   function clone(v){ try{ return structuredClone(v); }catch(e){ return JSON.parse(JSON.stringify(v)); } }
-  window.SmerpCache={get:get,set:set,del:del,user:user,clone:clone};
+  window.SmerpCache={get:get,set:set,del:del,user:user,clone:clone,clearAll:clearAll};
 })();
