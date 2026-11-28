@@ -5,6 +5,7 @@
 <script src="smerp-session.js?v=2"></script>
 <script src="i18n.js?v=20261119e"></script>
 <script src="smerp-auth.js?v=3" data-screen="directive"></script>
+<script src="smerp-cache.js?v=20261128"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>업무보고 · SME Korea</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -1685,6 +1686,43 @@ async function sbGetAll(table,params){
   }
   return out;
 }
+/* ── V20261128 데이터 전송량 절감: 업무보고 표(주간업무·프로젝트·활동·계획)는 PC에 저장해 두고 바뀐 줄만 받는다 ──
+   · 처음 1회(또는 7일마다)는 전체 조회, 이후에는 updated_at(서버가 저장 때마다 기록, 트리거 zz_touch_updated_at) 이후 바뀐 줄만 조회
+   · 삭제는 is_deleted=true 로 바뀐 줄로 알 수 있고, 그래도 건수가 서버와 다르면(영구 삭제 등) 전체를 다시 받는다
+   · 저장소를 못 쓰거나 오류가 나면 예전처럼 전체 조회 */
+const DS_VER='ds1', DS_MAX_AGE=7*864e5, _dsMem={};
+function dsMaxU(rows,w){ let m=w||''; for(let i=0;i<rows.length;i++){ const u=rows[i].updated_at; if(u&&u>m) m=u; } return m; }
+function dsSort(rows,order){
+  const spec=order.split(',').map(x=>{ const a=x.split('.'); const desc=a[1]==='desc'; const nf=a.indexOf('nullsfirst')>=0?true:a.indexOf('nullslast')>=0?false:desc; return {f:a[0],desc:desc,nf:nf}; });
+  return rows.sort((x,y)=>{ for(const s of spec){ const a=x[s.f],b=y[s.f]; const an=a==null,bn=b==null; if(an&&bn) continue; if(an) return s.nf?-1:1; if(bn) return s.nf?1:-1; if(a<b) return s.desc?1:-1; if(a>b) return s.desc?-1:1; } return 0; });
+}
+async function dsHeadCount(table){
+  try{ const r=await fetch(`${SB_URL}/rest/v1/${table}?select=id&is_deleted=is.false`,{method:'HEAD',headers:sbHeaders({'Prefer':'count=exact','Range-Unit':'items','Range':'0-0'})});
+    if(!r.ok) return -1; const m=/\/(\d+)$/.exec(r.headers.get('content-range')||''); return m?+m[1]:-1; }catch(_){ return -1; }
+}
+async function dsGetAll(table,order){
+  const base='select=*&is_deleted=is.false&order='+order;
+  if(!window.SmerpCache) return sbGetAll(table,base);
+  const key='ds:'+DS_VER+':'+table+':'+order;
+  const full=async()=>{ const rows=await sbGetAll(table,base); return {at:Date.now(),wm:dsMaxU(rows),rows:rows}; };
+  let c;
+  try{
+    c=_dsMem[key]||await SmerpCache.get(key);
+    if(!c||!Array.isArray(c.rows)||!c.wm||Date.now()-c.at>DS_MAX_AGE){ c=await full(); }
+    else{
+      const d=await sbGetAll(table,'select=*&updated_at=gte.'+encodeURIComponent(c.wm)+'&order=id.asc');
+      if(d.length){
+        const m=new Map(); c.rows.forEach(r=>m.set(r.id,r));
+        d.forEach(r=>{ if(r.is_deleted!==false) m.delete(r.id); else m.set(r.id,r); });
+        c={at:c.at,wm:dsMaxU(d,c.wm),rows:dsSort(Array.from(m.values()),order)};
+      }
+      const n=await dsHeadCount(table);
+      if(n>=0&&n!==c.rows.length) c=await full();
+    }
+  }catch(e){ console.warn('[변경분 조회 실패 → 전체 조회]',table,e); return sbGetAll(table,base); }
+  _dsMem[key]=c; SmerpCache.set(key,c);
+  return SmerpCache.clone(c.rows);
+}
 async function sbPost(table,body){
   const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:sbHeaders({'Content-Type':'application/json','Prefer':'return=representation'}),body:JSON.stringify(body)});
   if(!r.ok) await sbFail(r); return r.json();
@@ -3182,10 +3220,10 @@ function switchMode(mode){
 async function dvLoad(){
   try{
     const res=await Promise.all([
-      sbGetAll('dev_projects','select=*&is_deleted=is.false&order=id.asc'),
-      sbGetAll('dev_items','select=*&is_deleted=is.false&order=sort_no.asc.nullslast,id.asc'),
-      sbGetAll('dev_logs','select=*&is_deleted=is.false&order=item_id.asc,sort_no.asc.nullslast,id.asc'),
-      sbGetAll('dev_plans','select=*&is_deleted=is.false&order=week_date.asc,id.asc')
+      dsGetAll('dev_projects','id.asc'),
+      dsGetAll('dev_items','sort_no.asc.nullslast,id.asc'),
+      dsGetAll('dev_logs','item_id.asc,sort_no.asc.nullslast,id.asc'),
+      dsGetAll('dev_plans','week_date.asc,id.asc')
     ]);
     dvAllP=res[0]; dvAllI=res[1]; dvLogs=res[2]; dvAllPlans=res[3];
     // 관리자설정 > 거래처 정보(partners)의 업체명도 선택 목록에 넣는다. 못 불러와도 화면은 그대로 쓴다
@@ -4242,12 +4280,12 @@ function rpBuildDev(){
 }
 async function rpLoad(){
   await djOrigLoad();
-  try{ rpAll=await sbGetAll('rp_weekly','select=*&is_deleted=is.false&order=id.asc'); }
+  try{ rpAll=await dsGetAll('rp_weekly','id.asc'); }
   catch(e){ rpAll=[]; showToast('주간업무 불러오기 오류: '+e.message,'err'); }
   rpById={}; rpAll.forEach(r=>{rpById[r.id]=r;});
   // v3.22: 줄마다 쌓이는 일자별 활동(업무일지 연동 포함). 못 불러와도 주간업무 표는 그대로 쓴다
   rpLogsBy={};
-  try{ (await sbGetAll('rp_weekly_logs','select=*&is_deleted=is.false&order=log_date.asc.nullsfirst,id.asc')).forEach(l=>{(rpLogsBy[l.weekly_id]=rpLogsBy[l.weekly_id]||[]).push(l);}); }
+  try{ (await dsGetAll('rp_weekly_logs','log_date.asc.nullsfirst,id.asc')).forEach(l=>{(rpLogsBy[l.weekly_id]=rpLogsBy[l.weekly_id]||[]).push(l);}); }
   catch(e){ console.warn('rp_weekly_logs:',e.message); }
 }
 async function rpRefresh(){ await rpLoad(); rpFill(); if(curTab==='rpcorp') renderCorp(); else renderRpWeek(); }

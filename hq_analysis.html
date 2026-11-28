@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <script src="smerp-session.js?v=2"></script>
 <script src="smerp-auth.js?v=3" data-screen="hq"></script>
+<script src="smerp-cache.js?v=20261128"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HQ 거래현황분석 | SMEKOREA</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -946,6 +947,72 @@ async function loadRawKeyset(tbl,tblView,cols,srcTable,out,onTick){
   return res.reduce((a,b)=>a+b,0);
 }
 
+// ══════════════════════════════════════════════════════════════
+// (V20261128) 데이터 전송량 절감 — 월 단위 PC 저장 + 바뀐 달만 다시 받기
+//   · DB 표 trade_data_version(tbl P/S, year, month, ver): 매입·매출이 입력·수정·삭제되면
+//     트리거(tdv_ins/upd/del/trunc)가 그 달의 ver 를 갱신. 'A' 줄은 메이커 별칭(maker_alias) 변경 시각
+//   · 화면을 열 때 이 표(170줄 남짓)만 받아 PC에 저장된 달과 비교 → ver 가 같은 달은 PC 자료를 쓰고,
+//     다른 달(이번 달 업로드·수정분)만 서버에서 year·month 로 받아 다시 저장
+//   · 수치는 예전과 같음 — 같은 뷰(purchase_data_v·sales_data_v)·같은 칸을 받아 같은 mapRow 로 변환
+//   · 저장소를 못 쓰거나 버전표 조회에 실패하면 예전 방식(loadRawKeyset 전체 조회)으로 자동 전환
+// ══════════════════════════════════════════════════════════════
+const HQC_VER='hq1', HQC_PAR=4;
+let _hqVer=null;
+async function hqLoadVersions(){
+  try{
+    const {data,error}=await sb.from('trade_data_version').select('tbl,year,month,ver').limit(5000);
+    if(error||!data||!data.length) return null;
+    const v={P:{},S:{},A:''};
+    data.forEach(r=>{ if(r.tbl==='A') v.A=r.ver; else if(v[r.tbl]) v[r.tbl][r.year+'|'+r.month]=r.ver; });
+    return v;
+  }catch(e){ console.warn('[버전표 조회 실패]',e); return null; }
+}
+async function hqFetchMonth(tblView,cols,y,m){
+  const rows=[]; let cursor=0;
+  while(true){
+    let page=null;
+    for(let i=0;i<RAW_RETRY;i++){
+      try{
+        const {data,error}=await sb.from(tblView).select(cols).eq('year',y).eq('month',m)
+          .gt('id',cursor).order('id',{ascending:true}).limit(RAW_PAGE);
+        if(error) throw error; page=data||[]; break;
+      }catch(err){ if(i<RAW_RETRY-1) await new Promise(r=>setTimeout(r,400*Math.pow(2,i))); }
+    }
+    if(page===null) return null;            // 실패 — 이 달은 저장하지 않음
+    for(let i=0;i<page.length;i++) rows.push(page[i]);
+    if(page.length<RAW_PAGE) break;
+    cursor=page[page.length-1].id;
+  }
+  return rows;
+}
+async function loadRawCached(tbl,tblView,cols,srcTable,out,onTick){
+  if(!window.SmerpCache) return loadRawKeyset(tbl,tblView,cols,srcTable,out,onTick);
+  if(!_hqVer) _hqVer=await hqLoadVersions();
+  if(!_hqVer) return loadRawKeyset(tbl,tblView,cols,srcTable,out,onTick);
+  const k=tbl==='purchase_data'?'P':'S', vers=_hqVer[k], months=Object.keys(vers);
+  if(!months.length) return loadRawKeyset(tbl,tblView,cols,srcTable,out,onTick);
+  let miss=0, idx=0, net=0, hit=0;
+  async function worker(){
+    while(idx<months.length){
+      const ym=months[idx++], [y,m]=ym.split('|'), want=vers[ym]+'#'+_hqVer.A+'#'+cols;
+      const key=HQC_VER+':'+k+':'+ym;
+      let c=await SmerpCache.get(key), rows=null;
+      if(c&&c.v===want&&Array.isArray(c.rows)){ rows=c.rows; hit++; }
+      else{
+        rows=await hqFetchMonth(tblView,cols,y,m);
+        if(rows===null){ miss+=RAW_PAGE; continue; }
+        net+=rows.length; SmerpCache.set(key,{v:want,rows:rows});
+      }
+      for(let i=0;i<rows.length;i++) out.push(mapRow(rows[i],srcTable));
+      if(onTick) onTick();
+    }
+  }
+  const ws=[]; for(let i=0;i<HQC_PAR;i++) ws.push(worker());
+  await Promise.all(ws);
+  console.log('[HQ 저장자료]',tbl,'저장 사용',hit+'개월','· 서버 조회',(months.length-hit)+'개월',net.toLocaleString()+'건');
+  return miss;
+}
+
 // ── (v15.43) 원본 백그라운드 로드 — 화면을 막지 않음 ──
 async function startBackgroundLoad(){
   if(_bgLoading||_fullLoaded)return;
@@ -968,8 +1035,8 @@ async function startBackgroundLoad(){
     // ⚠️ 배열 재할당([...a,...b]) 금지 — 페이지마다 전체 복사가 일어나 O(n²)가 되고,
     //    35만 건 구간에서 브라우저 "응답 없음"의 직접 원인이 됨. push로만 누적할 것.
     _rawPAll=[];_rawSAll=[];
-    const missP=await loadRawKeyset('purchase_data','purchase_data_v',RAW_COLS_P,'purchase_data',_rawPAll,upd);
-    const missS=await loadRawKeyset('sales_data','sales_data_v',RAW_COLS_S,'sales_data',_rawSAll,upd);
+    const missP=await loadRawCached('purchase_data','purchase_data_v',RAW_COLS_P,'purchase_data',_rawPAll,upd);
+    const missS=await loadRawCached('sales_data','sales_data_v',RAW_COLS_S,'sales_data',_rawSAll,upd);
     const miss=missP+missS;
     // (v15.46) 탭별 기간 분리로 rawP/rawS 는 전체 원본을 그대로 보관한다.
     rawP=_rawPAll;rawS=_rawSAll;
@@ -1016,6 +1083,7 @@ function clearWait(kind){
 function startFullLoad(){
   if(_bgLoading)return; // 백그라운드 로드 중 중복 실행 방지
   _fullLoaded=false;    // 재로드 시 다시 채울 수 있도록 초기화
+  _hqVer=null;          // (V20261128) 바뀐 달 확인용 버전표도 새로 받음
   document.getElementById('loadOverlay').classList.remove('hide');
   document.getElementById('ld-title').textContent='전체 데이터 로딩 중...';
   document.getElementById('ld-sub').innerHTML='매입·매출 전체 데이터를 불러오고 있습니다<br>잠시만 기다려 주세요';
@@ -1051,7 +1119,7 @@ async function doFullLoad(){
       document.getElementById('ld-p-cnt').textContent=`${_rawPAll.length.toLocaleString()} / ${P_TOTAL.toLocaleString()}건 (${pPct}%)`;
       document.getElementById('ld-p-bar').style.width=pPct+'%';
     };
-    const missP=await loadRawKeyset('purchase_data','purchase_data_v',RAW_COLS_P,'purchase_data',_rawPAll,updP);
+    const missP=await loadRawCached('purchase_data','purchase_data_v',RAW_COLS_P,'purchase_data',_rawPAll,updP);
     document.getElementById('ld-p-cnt').textContent=`${_rawPAll.length.toLocaleString()} / ${P_TOTAL.toLocaleString()}건 완료 (100%)`;
     document.getElementById('ld-p-bar').style.width='100%';
     document.getElementById('ld-status').textContent='매출 데이터 로드 중...';
@@ -1062,7 +1130,7 @@ async function doFullLoad(){
       document.getElementById('ld-s-cnt').textContent=`${_rawSAll.length.toLocaleString()} / ${S_TOTAL.toLocaleString()}건 (${sPct}%)`;
       document.getElementById('ld-s-bar').style.width=sPct+'%';
     };
-    const missS=await loadRawKeyset('sales_data','sales_data_v',RAW_COLS_S,'sales_data',_rawSAll,updS);
+    const missS=await loadRawCached('sales_data','sales_data_v',RAW_COLS_S,'sales_data',_rawSAll,updS);
     document.getElementById('ld-s-cnt').textContent=`${_rawSAll.length.toLocaleString()} / ${S_TOTAL.toLocaleString()}건 완료 (100%)`;
     document.getElementById('ld-s-bar').style.width='100%';
     const miss=missP+missS;

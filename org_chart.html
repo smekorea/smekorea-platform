@@ -1470,12 +1470,24 @@ const dutyEmpsOf = dept => { const dl=dutyDeptList();
 const empById = id => EMPS.find(e=>e.id===id);
 const empLabel = e => e ? `${dispName(e)} ${e.rank||''}`.trim() : '';
 
+/* V20261128 데이터 전송량 절감 — 담당 변경이력(duty_history)은 처음 한 번만 최근 500건을 받고,
+   이후 새로고침·저장 때는 id 가 더 큰(새로 생긴) 이력만 받아 앞에 붙인다. 이력 수정(PATCH) 뒤에는 dutyHistFull 로 전체 다시 받음 */
+let dutyHistFull=false;
+async function dutyHistLoad(force){
+  const all=()=>sbGet('duty_history', `select=*&entity=eq.${DUTY_ENT}&order=changed_at.desc&limit=500`);
+  if(!force||dutyHistFull||!Array.isArray(DUTY.hist)||!DUTY.hist.length){ dutyHistFull=false; return all(); }
+  const maxId=DUTY.hist.reduce((m,x)=>Math.max(m,x.id||0),0);
+  const nw=await sbGet('duty_history', `select=*&entity=eq.${DUTY_ENT}&id=gt.${maxId}&order=changed_at.desc&limit=500`);
+  if(!nw.length) return DUTY.hist;
+  const ids=new Set(nw.map(x=>x.id));
+  return nw.concat(DUTY.hist.filter(x=>!ids.has(x.id))).sort((a,b)=>String(b.changed_at||'').localeCompare(String(a.changed_at||''))||(b.id-a.id)).slice(0,500);
+}
 async function loadDuty(force){
   if(DUTY.loaded && !force) return;
   const [d,i,h,o,to,pa,sm,mk] = await Promise.all([
     sbGet('duty_dept', `select=*&entity=eq.${DUTY_ENT}`),
     sbGet('duty_item', `select=*&entity=eq.${DUTY_ENT}&is_deleted=eq.false&order=sort_no,id`),
-    sbGet('duty_history', `select=*&entity=eq.${DUTY_ENT}&order=changed_at.desc&limit=500`),
+    dutyHistLoad(force),   // V20261128: 새로고침·저장 후에는 새로 생긴 이력만 받음
     sbGet('duty_partner', `select=*&entity=eq.${DUTY_ENT}&is_deleted=eq.false&order=sort_no,id`),
     sbGet('duty_task_option', `select=*&entity=eq.${DUTY_ENT}&order=kind,sort_no,id`).catch(()=>[]),
     sbGet('partners', `select=id,name,alias1,alias2,type,entity,is_active&entity=eq.${DUTY_ENT}&order=name&limit=5000`).catch(()=>[]),
@@ -1838,7 +1850,7 @@ async function saveHistForm(){
   const btn=document.getElementById('dhSaveBtn'); btn.disabled=true;
   try{
     await sbSend('PATCH','duty_history',`id=eq.${dhEditId}`,{ changed_at:dt.toISOString(), action:act, summary:sum, changed_by:by });
-    closeHistForm(); await loadDuty(true); renderDuty();
+    closeHistForm(); dutyHistFull=true; await loadDuty(true); renderDuty();
   }catch(e){ alert('저장 실패: '+e.message); }
   finally{ btn.disabled=false; }
 }
